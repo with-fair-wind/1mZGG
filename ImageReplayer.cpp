@@ -360,7 +360,7 @@ bool ImageReplayer::GetHeaderBMP()
             memset(m_pGParam->m_SImageReplayerData.pausReplayData, 0, m_uiImageWidth * m_uiImageHeight * sizeof(unsigned short));
 
             emit SignalReplayInit(m_uiImageWidth, m_uiImageHeight);
-//            SetReplayInterval(head.dFrameRate);
+            SetReplayInterval(head.dFrameRate);
         }
         else if (m_uiImageWidth > uiWidth && m_uiImageWidth > uiHeight)
         {
@@ -396,7 +396,7 @@ void ImageReplayer::GetBMP(bool bFirstGetBMP)
     if (bValid)
     {
         /// 改变帧频
-//        SetReplayInterval(head.dFrameRate);
+        SetReplayInterval(head.dFrameRate);
 
         QMutexLocker locker(&m_pGParam->m_SImageReplayerData.qmutexReplay);
         m_pGParam->m_SImageReplayerData.sexpdispdataDisp.iYMDYear = head.uiYear;

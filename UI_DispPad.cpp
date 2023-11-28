@@ -572,6 +572,7 @@ void UI_DispPad::on_SignalClose()
 void UI_DispPad::on_SignalDrawStarMap(bool bDrawStarMap )
 {
     m_bDrawStarMap = bDrawStarMap;
+    paintImage();
 }
 
 void UI_DispPad::on_LabelMouseMove(QPoint qptPos)
