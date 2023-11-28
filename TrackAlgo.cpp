@@ -463,7 +463,7 @@ int TrackAlgo::TrackProc_GEO(sMeasuresInFrame measures, vector<sTargetInfo>& vec
 
 //	return 0;
 //}
-
+#if 1
 int TrackAlgo::GEO_Assoc4(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vector<sTargetInfo>& vectTargetInfo, pair<float, float> pairfStarSpd, float fRadius, float fThresh, sOpticParams opticparams)
 {
     double dStart = omp_get_wtime();
@@ -697,7 +697,218 @@ int TrackAlgo::GEO_Assoc4(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vector
 
     return 0;
 }
+#else
+int TrackAlgo::GEO_Assoc4(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vector<sTargetInfo>& vectTargetInfo, pair<float, float> pairfStarSpd, float fRadius, float fThresh, sOpticParams opticparams)
+{
+    double dStart = omp_get_wtime();
 
+    int iSize = vectMeasuresInputFIFO.size();
+
+    double dRadius = 50.0 / 3600.0 * pi / 180.0;
+    m_pGParam->m_SImageProcessorData.fThreshErr = m_dRaThresh;
+    m_pGParam->m_SImageProcessorData.fRadiusT = dRadius;
+
+    if (iSize >= 4)
+    {
+        if (vectMeasuresInputFIFO[iSize - 4].vectTargetMeasures.size() > 0 && vectMeasuresInputFIFO[iSize - 3].vectTargetMeasures.size() > 0 && vectMeasuresInputFIFO[iSize - 2].vectTargetMeasures.size() > 0 && vectMeasuresInputFIFO[iSize - 1].vectTargetMeasures.size() > 0)
+        {
+            vector<vector<sTargetInfo>> vectTargetInfo_temp;
+            for (int i = 0; i < m_iNumCPUCores; i++)
+            {
+                vector<sTargetInfo> vect00;
+                vectTargetInfo_temp.push_back(vect00);
+            }
+
+#pragma omp parallel for num_threads(m_iNumCPUCores)
+            for (int i = 0; i < vectMeasuresInputFIFO[iSize - 4].vectTargetMeasures.size(); i++)
+            {
+                for (int j = 0; j < vectMeasuresInputFIFO[iSize - 3].vectTargetMeasures.size(); j++)
+                {
+                    float fDx1_0 = vectMeasuresInputFIFO[iSize - 3].vectTargetMeasures.at(j).dRa - vectMeasuresInputFIFO[iSize - 4].vectTargetMeasures.at(i).dRa;
+                    float fDy1_0 = vectMeasuresInputFIFO[iSize - 3].vectTargetMeasures.at(j).dDec - vectMeasuresInputFIFO[iSize - 4].vectTargetMeasures.at(i).dDec;
+
+                    if (abs(fDx1_0) < dRadius && abs(fDy1_0) < dRadius
+                            && !(abs(fDx1_0) < m_dRaThresh && abs(fDy1_0) < m_dDecThresh))
+                    {
+                        for (int k = 0; k < vectMeasuresInputFIFO[iSize - 2].vectTargetMeasures.size(); k++)
+                        {
+                            float fDx2_1 = vectMeasuresInputFIFO[iSize - 2].vectTargetMeasures.at(k).dRa - vectMeasuresInputFIFO[iSize - 3].vectTargetMeasures.at(j).dRa;
+                            float fDy2_1 = vectMeasuresInputFIFO[iSize - 2].vectTargetMeasures.at(k).dDec - vectMeasuresInputFIFO[iSize - 3].vectTargetMeasures.at(j).dDec;
+
+                            if (abs(fDx2_1) < dRadius && abs(fDy2_1) < dRadius
+                                    && !(abs(fDx2_1) < m_dRaThresh && abs(fDy2_1) < m_dDecThresh)
+                                    && abs(fDx2_1 - fDx1_0) <= m_dRaSpdThresh && abs(fDy2_1 - fDy1_0) <= m_dDecSpdThresh)
+                            {
+                                for (int m = 0; m < vectMeasuresInputFIFO[iSize - 1].vectTargetMeasures.size(); m++)
+                                {
+                                    float fDx3_2 = vectMeasuresInputFIFO[iSize - 1].vectTargetMeasures.at(m).dRa - vectMeasuresInputFIFO[iSize - 2].vectTargetMeasures.at(k).dRa;
+                                    float fDy3_2 = vectMeasuresInputFIFO[iSize - 1].vectTargetMeasures.at(m).dDec - vectMeasuresInputFIFO[iSize - 2].vectTargetMeasures.at(k).dDec;
+
+                                    if (abs(fDx3_2) < dRadius && abs(fDy3_2) < dRadius
+                                            && !(abs(fDx3_2) < m_dRaThresh && abs(fDy3_2) < m_dDecThresh)
+                                            && abs(fDx3_2 - fDx2_1) <= m_dRaSpdThresh && abs(fDy3_2 - fDy2_1) <= m_dDecSpdThresh
+                                            && abs(fDx3_2 - fDx1_0) <= m_dRaSpdThresh && abs(fDy3_2 - fDy1_0) <= m_dDecSpdThresh)
+                                    {
+                                        sTargetInfoInFrame infoinframe0, infoinframe1, infoinframe2, infoinframe3;
+
+                                        infoinframe0.stimeFrame = vectMeasuresInputFIFO[iSize - 4].stimeFrame;
+                                        infoinframe0.ulFrameSeq = vectMeasuresInputFIFO[iSize - 4].ulFrameSeq;
+                                        infoinframe0.blobMeasure = vectMeasuresInputFIFO[iSize - 4].vectTargetMeasures.at(i);
+                                        infoinframe0.bValid = true;
+
+                                        infoinframe1.stimeFrame = vectMeasuresInputFIFO[iSize - 3].stimeFrame;
+                                        infoinframe1.ulFrameSeq = vectMeasuresInputFIFO[iSize - 3].ulFrameSeq;
+                                        infoinframe1.blobMeasure = vectMeasuresInputFIFO[iSize - 3].vectTargetMeasures.at(j);
+                                        infoinframe1.bValid = true;
+
+                                        infoinframe2.stimeFrame = vectMeasuresInputFIFO[iSize - 2].stimeFrame;
+                                        infoinframe2.ulFrameSeq = vectMeasuresInputFIFO[iSize - 2].ulFrameSeq;
+                                        infoinframe2.blobMeasure = vectMeasuresInputFIFO[iSize - 2].vectTargetMeasures.at(k);
+                                        infoinframe2.bValid = true;
+
+                                        infoinframe3.stimeFrame = vectMeasuresInputFIFO[iSize - 1].stimeFrame;
+                                        infoinframe3.ulFrameSeq = vectMeasuresInputFIFO[iSize - 1].ulFrameSeq;
+                                        infoinframe3.blobMeasure = vectMeasuresInputFIFO[iSize - 1].vectTargetMeasures.at(m);
+                                        infoinframe3.bValid = true;
+
+                                        {
+                                            sTargetInfo infoAssoc;
+
+                                            infoAssoc.vectInfoInFrame.push_back(infoinframe0);
+                                            infoAssoc.vectInfoInFrame.push_back(infoinframe1);
+                                            infoAssoc.vectInfoInFrame.push_back(infoinframe2);
+                                            infoAssoc.vectInfoInFrame.push_back(infoinframe3);
+
+                                            infoAssoc.pairfPredSpdInFrame.first = MedianFloat3(fDx1_0, fDx2_1, fDx3_2);
+                                            infoAssoc.pairfPredSpdInFrame.second = MedianFloat3(fDy1_0, fDy2_1, fDy3_2);
+
+                                            infoAssoc.pairfPredPosInFrame.first = infoinframe3.blobMeasure.dRa + infoAssoc.pairfPredSpdInFrame.first;
+                                            infoAssoc.pairfPredPosInFrame.second = infoinframe3.blobMeasure.dDec + infoAssoc.pairfPredSpdInFrame.second;
+
+                                            float fPeriod = 1.0 / m_fFrameFreq;
+                                            infoAssoc.pairfPredSpdAE.first = MedianFloat3((infoinframe1.blobMeasure.pairfPosAE.first - infoinframe0.blobMeasure.pairfPosAE.first),
+                                                                              (infoinframe2.blobMeasure.pairfPosAE.first - infoinframe1.blobMeasure.pairfPosAE.first),
+                                                                              (infoinframe3.blobMeasure.pairfPosAE.first - infoinframe2.blobMeasure.pairfPosAE.first)) / fPeriod;
+                                            infoAssoc.pairfPredSpdAE.second = MedianFloat3((infoinframe1.blobMeasure.pairfPosAE.second - infoinframe0.blobMeasure.pairfPosAE.second),
+                                                                               (infoinframe2.blobMeasure.pairfPosAE.second - infoinframe1.blobMeasure.pairfPosAE.second),
+                                                                               (infoinframe3.blobMeasure.pairfPosAE.second - infoinframe2.blobMeasure.pairfPosAE.second)) / fPeriod;
+
+                                            infoAssoc.pairfPredPosAE.first = infoinframe3.blobMeasure.pairfPosAE.first + infoAssoc.pairfPredSpdAE.first * fPeriod;
+                                            infoAssoc.pairfPredPosAE.second = infoinframe3.blobMeasure.pairfPosAE.second + infoAssoc.pairfPredSpdAE.second * fPeriod;
+
+                                            infoAssoc.fValid = 1.0;
+                                            infoAssoc.bLiving = true;
+
+//                                            if (!(abs(pairfStarSpd.second) <= 3
+//                                                    && abs(infoAssoc.pairfPredSpdInFrame.second) <= 3
+//                                                    && abs(infoAssoc.pairfPredSpdInFrame.first) >= 10))
+                                                vectTargetInfo_temp[omp_get_thread_num()].push_back(infoAssoc);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            for (int i = 0; i < m_iNumCPUCores; i++)
+            {
+                vectTargetInfo.insert(vectTargetInfo.end(), vectTargetInfo_temp[i].begin(), vectTargetInfo_temp[i].end());
+            }
+
+            /// 消除相似轨迹(所有在fThresh范围内的点及后续航迹均被压缩为1条)
+            vector<int> vectSeqRemove;
+            vector<vector<int>> vectSeqRemove_temp;
+            for (int i = 0; i < m_iNumCPUCores; i++)
+            {
+                vector<int> vect00;
+                vectSeqRemove_temp.push_back(vect00);
+            }
+
+#pragma omp parallel for num_threads(m_iNumCPUCores)
+            for (int i = 0; i < vectTargetInfo.size(); i++)
+            {
+                for (int j = i + 1; j < vectTargetInfo.size(); j++)	// j = i + 1保证了单向搜索
+                {
+                    int iSame0 = ((vectTargetInfo.at(i).vectInfoInFrame[0].blobMeasure.dRa == vectTargetInfo.at(j).vectInfoInFrame[0].blobMeasure.dRa)
+                            && (vectTargetInfo.at(i).vectInfoInFrame[0].blobMeasure.dDec == vectTargetInfo.at(j).vectInfoInFrame[0].blobMeasure.dDec)) ? 1 : 0;
+                    int iSame1 = ((vectTargetInfo.at(i).vectInfoInFrame[1].blobMeasure.dRa == vectTargetInfo.at(j).vectInfoInFrame[1].blobMeasure.dRa)
+                            && (vectTargetInfo.at(i).vectInfoInFrame[1].blobMeasure.dDec == vectTargetInfo.at(j).vectInfoInFrame[1].blobMeasure.dDec)) ? 1 : 0;
+                    int iSame2 = ((vectTargetInfo.at(i).vectInfoInFrame[2].blobMeasure.dRa == vectTargetInfo.at(j).vectInfoInFrame[2].blobMeasure.dRa)
+                            && (vectTargetInfo.at(i).vectInfoInFrame[2].blobMeasure.dDec == vectTargetInfo.at(j).vectInfoInFrame[2].blobMeasure.dDec)) ? 1 : 0;
+                    int iSame3 = ((vectTargetInfo.at(i).vectInfoInFrame[3].blobMeasure.dRa == vectTargetInfo.at(j).vectInfoInFrame[3].blobMeasure.dRa)
+                            && (vectTargetInfo.at(i).vectInfoInFrame[3].blobMeasure.dDec == vectTargetInfo.at(j).vectInfoInFrame[3].blobMeasure.dDec)) ? 1 : 0;
+                    if (iSame0 + iSame1 + iSame2 >= 1)
+                    {
+                        float f_i_Dx1_0 = vectTargetInfo.at(i).vectInfoInFrame[1].blobMeasure.dRa - vectTargetInfo.at(i).vectInfoInFrame[0].blobMeasure.dRa;
+                        float f_i_Dx2_1 = vectTargetInfo.at(i).vectInfoInFrame[2].blobMeasure.dRa - vectTargetInfo.at(i).vectInfoInFrame[1].blobMeasure.dRa;
+                        float f_i_Dx3_2 = vectTargetInfo.at(i).vectInfoInFrame[3].blobMeasure.dRa - vectTargetInfo.at(i).vectInfoInFrame[2].blobMeasure.dRa;
+                        float f_i_Dy1_0 = vectTargetInfo.at(i).vectInfoInFrame[1].blobMeasure.dDec - vectTargetInfo.at(i).vectInfoInFrame[0].blobMeasure.dDec;
+                        float f_i_Dy2_1 = vectTargetInfo.at(i).vectInfoInFrame[2].blobMeasure.dDec - vectTargetInfo.at(i).vectInfoInFrame[1].blobMeasure.dDec;
+                        float f_i_Dy3_2 = vectTargetInfo.at(i).vectInfoInFrame[3].blobMeasure.dDec - vectTargetInfo.at(i).vectInfoInFrame[2].blobMeasure.dDec;
+                        float f_i_Dx_Mean = (f_i_Dx1_0 + f_i_Dx2_1 + f_i_Dx3_2) / 3.0;
+                        float f_i_Dx_Std = pow((pow(f_i_Dx1_0 - f_i_Dx_Mean, 2.0) + pow(f_i_Dx2_1 - f_i_Dx_Mean, 2.0) + pow(f_i_Dx3_2 - f_i_Dx_Mean, 2.0)) / 3.0, 0.5);
+                        float f_i_Dy_Mean = (f_i_Dy1_0 + f_i_Dy2_1 + f_i_Dy3_2) / 3.0;
+                        float f_i_Dy_Std = pow((pow(f_i_Dy1_0 - f_i_Dy_Mean, 2.0) + pow(f_i_Dy2_1 - f_i_Dy_Mean, 2.0) + pow(f_i_Dy3_2 - f_i_Dy_Mean, 2.0)) / 3.0, 0.5);
+                        float f_i_Std = pow(pow(f_i_Dx_Std, 2.0) + pow(f_i_Dy_Std, 2.0), 0.5);
+
+
+                        float f_j_Dx1_0 = vectTargetInfo.at(j).vectInfoInFrame[1].blobMeasure.dRa - vectTargetInfo.at(j).vectInfoInFrame[0].blobMeasure.dRa;
+                        float f_j_Dx2_1 = vectTargetInfo.at(j).vectInfoInFrame[2].blobMeasure.dRa - vectTargetInfo.at(j).vectInfoInFrame[1].blobMeasure.dRa;
+                        float f_j_Dx3_2 = vectTargetInfo.at(j).vectInfoInFrame[3].blobMeasure.dRa - vectTargetInfo.at(j).vectInfoInFrame[2].blobMeasure.dRa;
+                        float f_j_Dy1_0 = vectTargetInfo.at(j).vectInfoInFrame[1].blobMeasure.dDec - vectTargetInfo.at(j).vectInfoInFrame[0].blobMeasure.dDec;
+                        float f_j_Dy2_1 = vectTargetInfo.at(j).vectInfoInFrame[2].blobMeasure.dDec - vectTargetInfo.at(j).vectInfoInFrame[1].blobMeasure.dDec;
+                        float f_j_Dy3_2 = vectTargetInfo.at(j).vectInfoInFrame[3].blobMeasure.dDec - vectTargetInfo.at(j).vectInfoInFrame[2].blobMeasure.dDec;
+                        float f_j_Dx_Mean = (f_j_Dx1_0 + f_j_Dx2_1 + f_j_Dx3_2) / 3.0;
+                        float f_j_Dx_Std = pow((pow(f_j_Dx1_0 - f_j_Dx_Mean, 2.0) + pow(f_j_Dx2_1 - f_j_Dx_Mean, 2.0) + pow(f_j_Dx3_2 - f_j_Dx_Mean, 2.0)) / 3.0, 0.5);
+                        float f_j_Dy_Mean = (f_j_Dy1_0 + f_j_Dy2_1 + f_j_Dy3_2) / 3.0;
+                        float f_j_Dy_Std = pow((pow(f_j_Dy1_0 - f_j_Dy_Mean, 2.0) + pow(f_j_Dy2_1 - f_j_Dy_Mean, 2.0) + pow(f_j_Dy3_2 - f_j_Dy_Mean, 2.0)) / 3.0, 0.5);
+                        float f_j_Std = pow(pow(f_j_Dx_Std, 2.0) + pow(f_j_Dy_Std, 2.0), 0.5);
+
+                        int iTargetRemove = f_i_Std > f_j_Std ? i : j;
+
+                        vectSeqRemove_temp[omp_get_thread_num()].push_back(j);
+                    }
+                }
+            }
+            for (int i = 0; i < m_iNumCPUCores; i++)
+            {
+                vectSeqRemove.insert(vectSeqRemove.end(), vectSeqRemove_temp[i].begin(), vectSeqRemove_temp[i].end());
+            }
+            if (vectSeqRemove.size() > 0)
+            {
+                BubbleSortReverse(vectSeqRemove);
+                if (vectSeqRemove.size() > 0)
+                {
+                    vectSeqRemove.erase(unique(vectSeqRemove.begin(), vectSeqRemove.end()), vectSeqRemove.end());
+                }
+                for (int i = 0; i < vectSeqRemove.size(); i++)
+                {
+                    if (vectTargetInfo.size() > 0)
+                    {
+                        vectTargetInfo.erase(vectTargetInfo.begin() + vectSeqRemove[i]);
+                    }
+                }
+            }
+        }
+        else
+        {
+            return 2;
+        }
+    }
+    else
+    {
+        return 1;
+    }
+
+    double dEnd = omp_get_wtime();
+    //	printf("Assoc3 using time: %.3fs.\n", dEnd - dStart);
+
+    return 0;
+}
+#endif
+
+#if 1
 int TrackAlgo::GEO_FindTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vector<sTargetInfo>& vectTargetInfo, pair<float, float> pairfStarSpd, float fRadius, float fThresh, sOpticParams opticparams)
 {
 	int iFIFOSize = vectMeasuresInputFIFO.size();
@@ -711,6 +922,8 @@ int TrackAlgo::GEO_FindTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO, v
             {
                 if (abs(vectTargetInfoTemp[i].pairfPredSpdInFrame.first) > 100
                       || abs(vectTargetInfoTemp[i].pairfPredSpdInFrame.second) > 100)
+//                if (abs(vectTargetInfoTemp[i].pairfPredSpdInFrame.first) > 50.0 / 3600.0 * pi / 180.0
+//                      || abs(vectTargetInfoTemp[i].pairfPredSpdInFrame.second) > 50.0 / 3600.0 * pi / 180.0)
                 {
                     vectTargetInfoTemp[i].bLiving = false;
                 }
@@ -729,7 +942,43 @@ int TrackAlgo::GEO_FindTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO, v
 
 	return 0;
 }
+#else
+int TrackAlgo::GEO_FindTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vector<sTargetInfo>& vectTargetInfo, pair<float, float> pairfStarSpd, float fRadius, float fThresh, sOpticParams opticparams)
+{
+    int iFIFOSize = vectMeasuresInputFIFO.size();
+    if (iFIFOSize >= 4)
+    {
+        /// 三帧关联
+        vector<sTargetInfo> vectTargetInfoTemp;
+        if (GEO_Assoc4(vectMeasuresInputFIFO, vectTargetInfoTemp, pairfStarSpd, fRadius, fThresh, opticparams) == 0)
+        {
+            for (int i = 0; i < vectTargetInfoTemp.size(); i++)
+            {
+//                if (abs(vectTargetInfoTemp[i].pairfPredSpdInFrame.first) > 100
+//                      || abs(vectTargetInfoTemp[i].pairfPredSpdInFrame.second) > 100)
+                if (abs(vectTargetInfoTemp[i].pairfPredSpdInFrame.first) > 50.0 / 3600.0 * pi / 180.0
+                      || abs(vectTargetInfoTemp[i].pairfPredSpdInFrame.second) > 50.0 / 3600.0 * pi / 180.0)
+                {
+                    vectTargetInfoTemp[i].bLiving = false;
+                }
+            }
+            vectTargetInfo = vectTargetInfoTemp;
+        }
+        else
+        {
+            return 2;
+        }
+    }
+    else
+    {
+        return 1;
+    }
 
+    return 0;
+}
+#endif
+
+#if 1
 int TrackAlgo::GEO_ReFindTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vector<sTargetInfo>& vectTargetInfo, pair<float, float> pairfStarSpd, float fRadius, float fThresh, sOpticParams opticparams)
 {
 	int iFIFOSize = vectMeasuresInputFIFO.size();
@@ -816,7 +1065,98 @@ int TrackAlgo::GEO_ReFindTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO,
 
 	return 0;
 }
+#else
+int TrackAlgo::GEO_ReFindTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vector<sTargetInfo>& vectTargetInfo, pair<float, float> pairfStarSpd, float fRadius, float fThresh, sOpticParams opticparams)
+{
+    int iFIFOSize = vectMeasuresInputFIFO.size();
+    if (iFIFOSize >= 5)
+    {
+        /// 4帧关联
+        vector<sTargetInfo> vectTargetInfoTemp;
+        if (GEO_Assoc4(vectMeasuresInputFIFO, vectTargetInfoTemp, pairfStarSpd, fRadius, fThresh, opticparams) == 0)
+        {
+            /// 消除重复轨迹
+            vector<int> vectSeqRemove;
+            vector<vector<int>> vectSeqRemove_temp;
+            for (int i = 0; i < m_iNumCPUCores; i++)
+            {
+                vector<int> vect00;
+                vectSeqRemove_temp.push_back(vect00);
+            }
 
+#pragma omp parallel for num_threads(m_iNumCPUCores)
+            for (int i = 0; i < vectTargetInfoTemp.size(); i++)
+            {
+                for (int j = 0; j < vectTargetInfo.size(); j++)
+                {
+                    if (vectTargetInfo[j].bLiving)
+                    {
+                        int iSame0 = ((vectTargetInfoTemp.at(i).vectInfoInFrame[0].blobMeasure.dRa == vectTargetInfo.at(j).vectInfoInFrame[vectTargetInfo.at(j).vectInfoInFrame.size() - 4].blobMeasure.dRa)
+                                && (vectTargetInfoTemp.at(i).vectInfoInFrame[0].blobMeasure.dDec == vectTargetInfo.at(j).vectInfoInFrame[vectTargetInfo.at(j).vectInfoInFrame.size() - 4].blobMeasure.dDec)) ? 1 : 0;
+                        int iSame1 = ((vectTargetInfoTemp.at(i).vectInfoInFrame[1].blobMeasure.dRa == vectTargetInfo.at(j).vectInfoInFrame[vectTargetInfo.at(j).vectInfoInFrame.size() - 3].blobMeasure.dRa)
+                                && (vectTargetInfoTemp.at(i).vectInfoInFrame[1].blobMeasure.dDec == vectTargetInfo.at(j).vectInfoInFrame[vectTargetInfo.at(j).vectInfoInFrame.size() - 3].blobMeasure.dDec)) ? 1 : 0;
+                        int iSame2 = ((vectTargetInfoTemp.at(i).vectInfoInFrame[2].blobMeasure.dRa == vectTargetInfo.at(j).vectInfoInFrame[vectTargetInfo.at(j).vectInfoInFrame.size() - 2].blobMeasure.dRa)
+                                && (vectTargetInfoTemp.at(i).vectInfoInFrame[2].blobMeasure.dDec == vectTargetInfo.at(j).vectInfoInFrame[vectTargetInfo.at(j).vectInfoInFrame.size() - 2].blobMeasure.dDec)) ? 1 : 0;
+                        int iSame3 = ((vectTargetInfoTemp.at(i).vectInfoInFrame[3].blobMeasure.dRa == vectTargetInfo.at(j).vectInfoInFrame[vectTargetInfo.at(j).vectInfoInFrame.size() - 1].blobMeasure.dRa)
+                                && (vectTargetInfoTemp.at(i).vectInfoInFrame[3].blobMeasure.dDec == vectTargetInfo.at(j).vectInfoInFrame[vectTargetInfo.at(j).vectInfoInFrame.size() - 1].blobMeasure.dDec)) ? 1 : 0;
+
+                        if (iSame0 + iSame1 + iSame2 + iSame3 > 0)
+                        {
+                            vectSeqRemove_temp[omp_get_thread_num()].push_back(i);
+                        }
+                    }
+                }
+            }
+            for (int i = 0; i < m_iNumCPUCores; i++)
+            {
+                vectSeqRemove.insert(vectSeqRemove.end(), vectSeqRemove_temp[i].begin(), vectSeqRemove_temp[i].end());
+            }
+            if (vectSeqRemove.size() > 0)
+            {
+                BubbleSortReverse(vectSeqRemove);
+                if (vectSeqRemove.size() > 0)
+                {
+                    vectSeqRemove.erase(unique(vectSeqRemove.begin(), vectSeqRemove.end()), vectSeqRemove.end());
+                }
+                for (int i = 0; i < vectSeqRemove.size(); i++)
+                {
+                    if (vectTargetInfoTemp.size() > 0)
+                    {
+                        vectTargetInfoTemp.erase(vectTargetInfoTemp.begin() + vectSeqRemove[i]);
+                    }
+                }
+            }
+
+            for (int i = 0; i < vectTargetInfoTemp.size(); i++)
+            {
+//                if (abs(vectTargetInfoTemp[i].pairfPredSpdInFrame.first) > 100
+//                          || abs(vectTargetInfoTemp[i].pairfPredSpdInFrame.second) > 100)
+                if (abs(vectTargetInfoTemp[i].pairfPredSpdInFrame.first) > 50.0 / 3600.0 * pi / 180.0
+                          || abs(vectTargetInfoTemp[i].pairfPredSpdInFrame.second) > 50.0 / 3600.0 * pi / 180.0)
+                {
+                    vectTargetInfoTemp[i].bLiving = false;
+                }
+                if (vectTargetInfoTemp[i].bLiving)
+                {
+                    vectTargetInfo.push_back(vectTargetInfoTemp[i]);
+                }
+            }
+        }
+        else
+        {
+            return 2;
+        }
+    }
+    else
+    {
+        return 1;
+    }
+
+    return 0;
+}
+#endif
+
+#if 1
 int TrackAlgo::GEO_TrackTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vector<sTargetInfo>& vectTargetInfo, pair<float, float> pairfStarSpd, float fRadius, float fThresh, sOpticParams opticparams, float fThreashLiving, int iNumFramesLiving, vector<pair<QString, sMeasureBlob>> vecGEOisbValidBlob)
 {
 	int iFIFOSize = vectMeasuresInputFIFO.size();    
@@ -1298,6 +1638,377 @@ int TrackAlgo::GEO_TrackTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO, 
 
 	return 0;
 }
+#else
+int TrackAlgo::GEO_TrackTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vector<sTargetInfo>& vectTargetInfo, pair<float, float> pairfStarSpd, float fRadius, float fThresh, sOpticParams opticparams, float fThreashLiving, int iNumFramesLiving, vector<pair<QString, sMeasureBlob>> vecGEOisbValidBlob)
+{
+    int iFIFOSize = vectMeasuresInputFIFO.size();
+    vector<sTargetInfoInFrame> vectValid;
+    if (iFIFOSize >= 5)
+    {
+        if (m_bFullLEO)
+        {
+            for (int i = 0; i < vectTargetInfo.size(); i++)
+            {
+                if (vectTargetInfo[i].bLiving)
+                {
+                    sMeasureBlob PreBlob;
+                    for(int j = 0; j < vecGEOisbValidBlob.size(); j++)
+                    {
+                        if(vectTargetInfo[i].qstrTargetID == vecGEOisbValidBlob[j].first)
+                        {
+                            PreBlob = vecGEOisbValidBlob[j].second;
+                            break;
+                        }
+                    }
+
+                    vector<sMeasureBlob> blobSelectTemp;
+                    vector<float> fDispTempTemp;
+                    for (int j = 0; j < m_iNumCPUCores; j++)
+                    {
+                        sMeasureBlob blob;
+                        blobSelectTemp.push_back(blob);
+                        float fDistTemp = 1000000;
+                        fDispTempTemp.push_back(fDistTemp);
+                    }
+
+                    int iNumCheck = vectTargetInfo[i].vectInfoInFrame.size() > 10 ? 10 : vectTargetInfo[i].vectInfoInFrame.size();
+                    int iNumUnValid = 0;
+                    for (int j = 0; j < iNumCheck; j++)
+                    {
+                        iNumUnValid += (!vectTargetInfo[i].vectInfoInFrame[vectTargetInfo[i].vectInfoInFrame.size()-(j+1)].bValid) ? 1 : 0;
+                    }
+                    int iNumUnValidTemp = iNumUnValid > 3 ? 3 : iNumUnValid;
+                    fThresh = fThresh + iNumUnValidTemp * 10;
+                    fThresh = 200;
+
+    #pragma omp parallel for num_threads(m_iNumCPUCores)
+                    for (int j = 0; j < vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).vectTargetMeasures.size(); j++)
+                    {
+                        float fDistX = vectTargetInfo.at(i).pairfPredPosInFrame.first - vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).vectTargetMeasures.at(j).pairfPos.first;
+                        float fDistY = vectTargetInfo.at(i).pairfPredPosInFrame.second - vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).vectTargetMeasures.at(j).pairfPos.second;
+                        float fDist = pow(pow(fDistX, 2.0) + pow(fDistY, 2.0), 0.5);
+                        float fDx = vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).vectTargetMeasures.at(j).pairfPos.first
+                                - vectTargetInfo[i].vectInfoInFrame[vectTargetInfo[i].vectInfoInFrame.size()-1].blobMeasure.pairfPos.first;
+                        float fDy = vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).vectTargetMeasures.at(j).pairfPos.second
+                                - vectTargetInfo[i].vectInfoInFrame[vectTargetInfo[i].vectInfoInFrame.size()-1].blobMeasure.pairfPos.second;
+//                        iNumUnValidTemp = iNumUnValid > 7 ? 7 : iNumUnValid;
+//                        float fSpdErrThresh = 3 + iNumUnValid;
+                        if (abs(fDistX) <= fThresh && abs(fDistY) <= fThresh
+                                && fDist <= fDispTempTemp[omp_get_thread_num()]/*
+                                && abs(fDx - vectTargetInfo.at(i).pairfPredSpdInFrame.first) < fSpdErrThresh
+                                && abs(fDy - vectTargetInfo.at(i).pairfPredSpdInFrame.second) < fSpdErrThresh*/)
+                        {
+                            blobSelectTemp[omp_get_thread_num()] = vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).vectTargetMeasures.at(j);
+                            fDispTempTemp[omp_get_thread_num()] = fDist;
+                        }
+                    }
+
+                    sMeasureBlob blobSelect;
+                    float fDistTemp = 1000000;
+                    for (int j = 0; j < m_iNumCPUCores; j++)
+                    {
+                        if (fDispTempTemp[j] < fDistTemp)
+                        {
+                            blobSelect = blobSelectTemp[j];
+                            fDistTemp = fDispTempTemp[j];
+                        }
+                    }
+
+                    sTargetInfoInFrame infoTrack;
+                    if (fDistTemp < 1000000)
+                    {
+                        bool bReUse = false;
+                        for (int m = 0; m < vectValid.size(); m++)
+                        {
+                            if (blobSelect.pairfPos.first == vectValid[m].blobMeasure.pairfPos.first
+                                    || blobSelect.pairfPos.second == vectValid[m].blobMeasure.pairfPos.second)
+                            {
+                                bReUse = true;
+                                break;
+                            }
+                        }
+                        if (!bReUse)
+                        {
+                            infoTrack.stimeFrame = vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).stimeFrame;
+                            infoTrack.ulFrameSeq = vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).ulFrameSeq;
+                            infoTrack.blobMeasure = blobSelect;
+                            infoTrack.bValid = true;
+                        }
+                        else
+                        {
+                            infoTrack.stimeFrame = vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).stimeFrame;
+                            infoTrack.ulFrameSeq = vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).ulFrameSeq;
+//                            infoTrack.blobMeasure.pairfPos = vectTargetInfo[i].pairfPredPosInFrame;
+//                            infoTrack.blobMeasure.fMaxX = infoTrack.blobMeasure.pairfPos.first + 5;
+//                            infoTrack.blobMeasure.fMinX = infoTrack.blobMeasure.pairfPos.first - 5;
+//                            infoTrack.blobMeasure.fMaxY = infoTrack.blobMeasure.pairfPos.second + 5;
+//                            infoTrack.blobMeasure.fMinY = infoTrack.blobMeasure.pairfPos.second - 5;
+//                            infoTrack.blobMeasure.fArea = 0;
+//                            infoTrack.blobMeasure.fDN = 0;
+//                            infoTrack.blobMeasure.pairfPosAE = vectTargetInfo[i].pairfPredPosAE;
+                            infoTrack.blobMeasure = PreBlob;
+                            infoTrack.bValid = false;
+                        }
+                    }
+                    else
+                    {
+                        infoTrack.stimeFrame = vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).stimeFrame;
+                        infoTrack.ulFrameSeq = vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).ulFrameSeq;
+//                        infoTrack.blobMeasure.pairfPos = vectTargetInfo[i].pairfPredPosInFrame;
+//                        infoTrack.blobMeasure.fMaxX = infoTrack.blobMeasure.pairfPos.first + 5;
+//                        infoTrack.blobMeasure.fMinX = infoTrack.blobMeasure.pairfPos.first - 5;
+//                        infoTrack.blobMeasure.fMaxY = infoTrack.blobMeasure.pairfPos.second + 5;
+//                        infoTrack.blobMeasure.fMinY = infoTrack.blobMeasure.pairfPos.second - 5;
+//                        infoTrack.blobMeasure.fArea = 0;
+//                        infoTrack.blobMeasure.fDN = 0;
+//                        infoTrack.blobMeasure.pairfPosAE = vectTargetInfo[i].pairfPredPosAE;
+                        infoTrack.blobMeasure = PreBlob;
+                        infoTrack.bValid = false;
+                    }
+                    vectTargetInfo[i].vectInfoInFrame.push_back(infoTrack);
+                    vectValid.push_back(infoTrack);
+
+                    int iSize = vectTargetInfo[i].vectInfoInFrame.size();
+                    if (iSize <= 5)
+                    {
+                        vectTargetInfo[i].pairfPredSpdInFrame.first = MedianFloat3((vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.pairfPos.first - vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.pairfPos.first),
+                                (vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.pairfPos.first - vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.pairfPos.first),
+                                (vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.pairfPos.first - vectTargetInfo[i].vectInfoInFrame[iSize - 4].blobMeasure.pairfPos.first));
+                        vectTargetInfo[i].pairfPredSpdInFrame.second = MedianFloat3((vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.pairfPos.second - vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.pairfPos.second),
+                                (vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.pairfPos.second - vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.pairfPos.second),
+                                (vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.pairfPos.second - vectTargetInfo[i].vectInfoInFrame[iSize - 4].blobMeasure.pairfPos.second));
+                    }
+                    else
+                    {
+                        vectTargetInfo[i].pairfPredSpdInFrame.first = MedianFloat5((vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.pairfPos.first - vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.pairfPos.first),
+                                (vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.pairfPos.first - vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.pairfPos.first),
+                                (vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.pairfPos.first - vectTargetInfo[i].vectInfoInFrame[iSize - 4].blobMeasure.pairfPos.first),
+                                (vectTargetInfo[i].vectInfoInFrame[iSize - 4].blobMeasure.pairfPos.first - vectTargetInfo[i].vectInfoInFrame[iSize - 5].blobMeasure.pairfPos.first),
+                                (vectTargetInfo[i].vectInfoInFrame[iSize - 5].blobMeasure.pairfPos.first - vectTargetInfo[i].vectInfoInFrame[iSize - 6].blobMeasure.pairfPos.first));
+                        vectTargetInfo[i].pairfPredSpdInFrame.second = MedianFloat5((vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.pairfPos.second - vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.pairfPos.second),
+                                (vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.pairfPos.second - vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.pairfPos.second),
+                                (vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.pairfPos.second - vectTargetInfo[i].vectInfoInFrame[iSize - 4].blobMeasure.pairfPos.second),
+                                (vectTargetInfo[i].vectInfoInFrame[iSize - 4].blobMeasure.pairfPos.second - vectTargetInfo[i].vectInfoInFrame[iSize - 5].blobMeasure.pairfPos.second),
+                                (vectTargetInfo[i].vectInfoInFrame[iSize - 5].blobMeasure.pairfPos.second - vectTargetInfo[i].vectInfoInFrame[iSize - 6].blobMeasure.pairfPos.second));
+                    }
+                    vectTargetInfo[i].pairfPredPosInFrame.first = vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.pairfPos.first + vectTargetInfo[i].pairfPredSpdInFrame.first;
+                    vectTargetInfo[i].pairfPredPosInFrame.second = vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.pairfPos.second + vectTargetInfo[i].pairfPredSpdInFrame.second;
+                    float fPeriod = 1.0 / m_fFrameFreq;
+                    vectTargetInfo[i].pairfPredSpdAE.first = MedianFloat3((vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.pairfPosAE.first - vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.pairfPosAE.first),
+                            (vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.pairfPosAE.first - vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.pairfPosAE.first),
+                            (vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.pairfPosAE.first - vectTargetInfo[i].vectInfoInFrame[iSize - 4].blobMeasure.pairfPosAE.first)) / fPeriod;
+                    vectTargetInfo[i].pairfPredSpdAE.second = MedianFloat3((vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.pairfPosAE.second - vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.pairfPosAE.second),
+                            (vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.pairfPosAE.second - vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.pairfPosAE.second),
+                            (vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.pairfPosAE.second - vectTargetInfo[i].vectInfoInFrame[iSize - 4].blobMeasure.pairfPosAE.second)) / fPeriod;
+                    vectTargetInfo[i].pairfPredPosAE.first = vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.pairfPosAE.first + vectTargetInfo[i].pairfPredSpdAE.first * fPeriod;
+                    vectTargetInfo[i].pairfPredPosAE.second = vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.pairfPosAE.second + vectTargetInfo[i].pairfPredSpdAE.second * fPeriod;
+                    vectTargetInfo[i].fValid = ((iSize - 1) * vectTargetInfo[i].fValid + (vectTargetInfo[i].vectInfoInFrame[iSize - 1].bValid ? 1 : 0)) / iSize;
+
+    //                if (vectTargetInfo[i].vectInfoInFrame.size() <= 6)
+    //                {
+    //                    float fDX = vectTargetInfo[i].vectInfoInFrame[vectTargetInfo[i].vectInfoInFrame.size()-1].blobMeasure.pairfPos.first - vectTargetInfo[i].vectInfoInFrame[vectTargetInfo[i].vectInfoInFrame.size()-2].blobMeasure.pairfPos.first;
+    //                    float fDY = vectTargetInfo[i].vectInfoInFrame[vectTargetInfo[i].vectInfoInFrame.size()-1].blobMeasure.pairfPos.second - vectTargetInfo[i].vectInfoInFrame[vectTargetInfo[i].vectInfoInFrame.size()-2].blobMeasure.pairfPos.second;
+    //                    float fDX1 = vectTargetInfo[i].vectInfoInFrame[vectTargetInfo[i].vectInfoInFrame.size()-2].blobMeasure.pairfPos.first - vectTargetInfo[i].vectInfoInFrame[vectTargetInfo[i].vectInfoInFrame.size()-3].blobMeasure.pairfPos.first;
+    //                    float fDY1 = vectTargetInfo[i].vectInfoInFrame[vectTargetInfo[i].vectInfoInFrame.size()-2].blobMeasure.pairfPos.second - vectTargetInfo[i].vectInfoInFrame[vectTargetInfo[i].vectInfoInFrame.size()-3].blobMeasure.pairfPos.second;
+    //                    vectTargetInfo[i].bLiving = !(abs(fDX - pairfStarSpd.first) < 3 && abs(fDY - pairfStarSpd.second) < 3)
+    //                            && (abs(fDX - fDX1) < 3 && abs(fDY - fDY1) < 3);
+    //                }
+
+                    vectTargetInfo[i].bLiving = vectTargetInfo[i].bLiving && (vectTargetInfo[i].pairfPredPosInFrame.first > 0 && vectTargetInfo[i].pairfPredPosInFrame.first < opticparams.iImageWidth
+                        && vectTargetInfo[i].pairfPredPosInFrame.second > 0 && vectTargetInfo[i].pairfPredPosInFrame.second < opticparams.iImageHeight);
+
+                    iNumCheck = vectTargetInfo[i].vectInfoInFrame.size() > 20 ? 20 : vectTargetInfo[i].vectInfoInFrame.size();
+                    iNumUnValid = 0;
+                    for (int j = 0; j < iNumCheck; j++)
+                    {
+                        iNumUnValid += (!vectTargetInfo[i].vectInfoInFrame[vectTargetInfo[i].vectInfoInFrame.size()-(j+1)].bValid) ? 1 : 0;
+                    }
+                    vectTargetInfo[i].bLiving = vectTargetInfo[i].bLiving && !(iNumUnValid == iNumCheck);
+
+                    if (vectTargetInfo[i].vectInfoInFrame.size() >= 2)
+                    {
+                        double dRm_1 = vectTargetInfo[i].vectInfoInFrame[vectTargetInfo[i].vectInfoInFrame.size()-1].blobMeasure.dAlpha;
+                        double dRm_0 = vectTargetInfo[i].vectInfoInFrame[vectTargetInfo[i].vectInfoInFrame.size()-2].blobMeasure.dAlpha;
+                        double dDm_1 = vectTargetInfo[i].vectInfoInFrame[vectTargetInfo[i].vectInfoInFrame.size()-1].blobMeasure.dSigma;
+                        double dDm_0 = vectTargetInfo[i].vectInfoInFrame[vectTargetInfo[i].vectInfoInFrame.size()-2].blobMeasure.dSigma;
+
+                        double dThreshold = 0.0015/(cos(dDm_0)+0.00000001)/180.0*pi;
+
+                        vectTargetInfo[i].bLiving = !(abs(dRm_0 - dRm_1) < dThreshold && abs(dDm_0 - dDm_1) < dThreshold);
+                    }
+
+                }
+            }
+        }
+        else
+        {
+            for (int i = 0; i < vectTargetInfo.size(); i++)
+            {
+                if (vectTargetInfo[i].bLiving)
+                {
+                    sMeasureBlob PreBlob;
+                    for(int j = 0; j < vecGEOisbValidBlob.size(); j++)
+                    {
+                        if(vectTargetInfo[i].qstrTargetID == vecGEOisbValidBlob[j].first)
+                        {
+                            PreBlob = vecGEOisbValidBlob[j].second;
+                            break;
+                        }
+                    }
+
+                    vector<sMeasureBlob> blobSelectTemp;
+                    vector<float> fDispTempTemp;
+                    for (int j = 0; j < m_iNumCPUCores; j++)
+                    {
+                        sMeasureBlob blob;
+                        blobSelectTemp.push_back(blob);
+                        float fDistTemp = 1000000;
+                        fDispTempTemp.push_back(fDistTemp);
+                    }
+
+                    int iNumCheck = vectTargetInfo[i].vectInfoInFrame.size() > 10 ? 10 : vectTargetInfo[i].vectInfoInFrame.size();
+                    int iNumUnValid = 0;
+                    for (int j = 0; j < iNumCheck; j++)
+                    {
+                        iNumUnValid += (!vectTargetInfo[i].vectInfoInFrame[vectTargetInfo[i].vectInfoInFrame.size()-(j+1)].bValid) ? 1 : 0;
+                    }
+                    int iNumUnValidTemp = iNumUnValid > 5 ? 5 : iNumUnValid;
+                    // Important
+//                    fThresh = fThresh + iNumUnValidTemp * 10;
+                    fThresh = 50.0 / 3600.0 * pi / 180.0;
+
+    #pragma omp parallel for num_threads(m_iNumCPUCores)
+                    for (int j = 0; j < vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).vectTargetMeasures.size(); j++)
+                    {
+                        float fDistX = vectTargetInfo.at(i).pairfPredPosInFrame.first - vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).vectTargetMeasures.at(j).dRa;
+                        float fDistY = vectTargetInfo.at(i).pairfPredPosInFrame.second - vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).vectTargetMeasures.at(j).dDec;
+                        float fDist = pow(pow(fDistX, 2.0) + pow(fDistY, 2.0), 0.5);
+                        float fDx = vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).vectTargetMeasures.at(j).dRa
+                                - vectTargetInfo[i].vectInfoInFrame[vectTargetInfo[i].vectInfoInFrame.size()-1].blobMeasure.dRa;
+                        float fDy = vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).vectTargetMeasures.at(j).dDec
+                                - vectTargetInfo[i].vectInfoInFrame[vectTargetInfo[i].vectInfoInFrame.size()-1].blobMeasure.dDec;
+//                        iNumUnValidTemp = iNumUnValid > 7 ? 7 : iNumUnValid;
+//                        float fSpdErrThresh = 5 + iNumUnValid;
+                        if (abs(fDistX) <= fThresh && abs(fDistY) <= fThresh
+                                && fDist <= fDispTempTemp[omp_get_thread_num()]
+                                && abs(fDx - vectTargetInfo.at(i).pairfPredSpdInFrame.first) < m_dRaSpdThresh
+                                && abs(fDy - vectTargetInfo.at(i).pairfPredSpdInFrame.second) < m_dDecSpdThresh)
+                        {
+                            blobSelectTemp[omp_get_thread_num()] = vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).vectTargetMeasures.at(j);
+                            fDispTempTemp[omp_get_thread_num()] = fDist;
+                        }
+                    }
+
+                    sMeasureBlob blobSelect;
+                    float fDistTemp = 1000000;
+                    for (int j = 0; j < m_iNumCPUCores; j++)
+                    {
+                        if (fDispTempTemp[j] < fDistTemp)
+                        {
+                            blobSelect = blobSelectTemp[j];
+                            fDistTemp = fDispTempTemp[j];
+                        }
+                    }
+
+                    sTargetInfoInFrame infoTrack;
+                    auto iter = vectMeasuresInputFIFO.end() - 1;
+                    if (fDistTemp < 1000000)
+                    {
+                        bool bReUse = false;
+                        for (int m = 0; m < vectValid.size(); m++)
+                        {
+                            if (blobSelect.dRa == vectValid[m].blobMeasure.dRa
+                                    || blobSelect.dDec == vectValid[m].blobMeasure.dDec)
+                            {
+                                bReUse = true;
+                                break;
+                            }
+                        }
+                        if (!bReUse)
+                        {
+                            infoTrack.stimeFrame = vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).stimeFrame;
+                            infoTrack.ulFrameSeq = vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).ulFrameSeq;
+                            infoTrack.blobMeasure = blobSelect;
+                            infoTrack.bValid = true;
+                        }
+                        else
+                        {
+                            infoTrack.stimeFrame = vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).stimeFrame;
+                            infoTrack.ulFrameSeq = vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).ulFrameSeq;
+                            infoTrack.blobMeasure = PreBlob;
+                            infoTrack.bValid = false;
+                        }
+                    }
+                    else
+                    {
+                        infoTrack.stimeFrame = vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).stimeFrame;
+                        infoTrack.ulFrameSeq = vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).ulFrameSeq;
+                        infoTrack.blobMeasure = PreBlob;
+                        infoTrack.bValid = false;
+                    }
+                    vectTargetInfo[i].vectInfoInFrame.push_back(infoTrack);
+                    vectValid.push_back(infoTrack);
+
+                    int iSize = vectTargetInfo[i].vectInfoInFrame.size();
+                    if (iSize <= 5)
+                    {
+                        vectTargetInfo[i].pairfPredSpdInFrame.first = MedianFloat3((vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.dRa - vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.dRa),
+                                (vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.dRa - vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.dRa),
+                                (vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.dRa - vectTargetInfo[i].vectInfoInFrame[iSize - 4].blobMeasure.dRa));
+                        vectTargetInfo[i].pairfPredSpdInFrame.second = MedianFloat3((vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.dDec - vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.dDec),
+                                (vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.dDec - vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.dDec),
+                                (vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.dDec - vectTargetInfo[i].vectInfoInFrame[iSize - 4].blobMeasure.dDec));
+                    }
+                    else if (iSize <= 7)
+                    {
+                        vectTargetInfo[i].pairfPredSpdInFrame.first = MedianFloat5((vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.dRa - vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.dRa),
+                                (vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.dRa - vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.dRa),
+                                (vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.dRa - vectTargetInfo[i].vectInfoInFrame[iSize - 4].blobMeasure.dRa),
+                                (vectTargetInfo[i].vectInfoInFrame[iSize - 4].blobMeasure.dRa - vectTargetInfo[i].vectInfoInFrame[iSize - 5].blobMeasure.dRa),
+                                (vectTargetInfo[i].vectInfoInFrame[iSize - 5].blobMeasure.dRa - vectTargetInfo[i].vectInfoInFrame[iSize - 6].blobMeasure.dRa));
+                        vectTargetInfo[i].pairfPredSpdInFrame.second = MedianFloat5((vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.dDec - vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.dDec),
+                                (vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.dDec - vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.dDec),
+                                (vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.dDec - vectTargetInfo[i].vectInfoInFrame[iSize - 4].blobMeasure.dDec),
+                                (vectTargetInfo[i].vectInfoInFrame[iSize - 4].blobMeasure.dDec - vectTargetInfo[i].vectInfoInFrame[iSize - 5].blobMeasure.dDec),
+                                (vectTargetInfo[i].vectInfoInFrame[iSize - 5].blobMeasure.dDec - vectTargetInfo[i].vectInfoInFrame[iSize - 6].blobMeasure.dDec));
+                    }
+                    vectTargetInfo[i].pairfPredPosInFrame.first = vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.dRa + vectTargetInfo[i].pairfPredSpdInFrame.first;
+                    vectTargetInfo[i].pairfPredPosInFrame.second = vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.dDec + vectTargetInfo[i].pairfPredSpdInFrame.second;
+                    float fPeriod = 1.0 / m_fFrameFreq;
+                    vectTargetInfo[i].pairfPredSpdAE.first = MedianFloat3((vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.pairfPosAE.first - vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.pairfPosAE.first),
+                            (vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.pairfPosAE.first - vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.pairfPosAE.first),
+                            (vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.pairfPosAE.first - vectTargetInfo[i].vectInfoInFrame[iSize - 4].blobMeasure.pairfPosAE.first)) / fPeriod;
+                    vectTargetInfo[i].pairfPredSpdAE.second = MedianFloat3((vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.pairfPosAE.second - vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.pairfPosAE.second),
+                            (vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.pairfPosAE.second - vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.pairfPosAE.second),
+                            (vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.pairfPosAE.second - vectTargetInfo[i].vectInfoInFrame[iSize - 4].blobMeasure.pairfPosAE.second)) / fPeriod;
+                    vectTargetInfo[i].pairfPredPosAE.first = vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.pairfPosAE.first + vectTargetInfo[i].pairfPredSpdAE.first * fPeriod;
+                    vectTargetInfo[i].pairfPredPosAE.second = vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.pairfPosAE.second + vectTargetInfo[i].pairfPredSpdAE.second * fPeriod;
+                    vectTargetInfo[i].fValid = ((iSize - 1) * vectTargetInfo[i].fValid + (vectTargetInfo[i].vectInfoInFrame[iSize - 1].bValid ? 1 : 0)) / iSize;
+
+//                    vectTargetInfo[i].bLiving = vectTargetInfo[i].bLiving && (vectTargetInfo[i].pairfPredPosInFrame.first > 0 && vectTargetInfo[i].pairfPredPosInFrame.first < opticparams.iImageWidth
+//                        && vectTargetInfo[i].pairfPredPosInFrame.second > 0 && vectTargetInfo[i].pairfPredPosInFrame.second < opticparams.iImageHeight);
+                    vectTargetInfo[i].bLiving = vectTargetInfo[i].bLiving && (vectTargetInfo[i].pairfPredPosInFrame.first > 0 && vectTargetInfo[i].pairfPredPosInFrame.first < (2 * pi)
+                        && vectTargetInfo[i].pairfPredPosInFrame.second > 0 && vectTargetInfo[i].pairfPredPosInFrame.second < pi/2.0);
+
+                    iNumCheck = vectTargetInfo[i].vectInfoInFrame.size() > 20 ? 20 : vectTargetInfo[i].vectInfoInFrame.size();
+                    iNumUnValid = 0;
+                    for (int j = 0; j < iNumCheck; j++)
+                    {
+                        iNumUnValid += (!vectTargetInfo[i].vectInfoInFrame[vectTargetInfo[i].vectInfoInFrame.size()-(j+1)].bValid) ? 1 : 0;
+                    }
+                    vectTargetInfo[i].bLiving = vectTargetInfo[i].bLiving && !(iNumUnValid == iNumCheck);
+                }
+            }
+        }
+    }
+    else
+    {
+        return 1;
+    }
+
+    return 0;
+}
+#endif
 
 int TrackAlgo::TrackProc_LEO(sMeasuresInFrame measures, sTargetInfo& targetInfo)
 {

@@ -103,6 +103,11 @@ void UI_CtrlPad::UIInit(void)
     ui.tableWidget_TargetInfo->setColumnWidth(5, 207);
     ui.tableWidget_TargetInfo->horizontalHeader()->setFont(QFont("song", 13));
 
+    ui.lineEdit_RaThresh->setText("5.4");
+    ui.lineEdit_DecThresh->setText("3.0");
+    ui.lineEdit_RaSpdThresh->setText("10.0");
+    ui.lineEdit_DecSpdThresh->setText("6.0");
+    changeRaDecTrackParams();
 
     LoadParams();
     m_pImageProcessor->Init_TWDW();
@@ -2504,4 +2509,34 @@ void UI_CtrlPad::on_radioButton_ZoomIn_clicked(bool checked)
 {
     if (checked)
         emit SignalZoom(2);
+}
+
+void UI_CtrlPad::changeRaDecTrackParams()
+{
+    double dRaThresh = ui.lineEdit_RaThresh->text().toDouble() / 3600.0 * pi / 180.0;
+    double dDecThresh = ui.lineEdit_DecThresh->text().toDouble() / 3600.0 * pi / 180.0;
+    double dRaSpdThresh = ui.lineEdit_RaSpdThresh->text().toDouble() / 3600.0 * pi / 180.0;
+    double dDecSpdThresh = ui.lineEdit_DecSpdThresh->text().toDouble() / 3600.0 * pi / 180.0;
+    m_pImageProcessor->setRaDecThresh(dRaThresh, dDecThresh, dRaSpdThresh, dDecSpdThresh);
+    QMessageBox::information(this, "修改Ra、Dec、RaSpd、DecSpd阈值", "修改成功");
+}
+
+void UI_CtrlPad::on_lineEdit_DecThresh_returnPressed()
+{
+    changeRaDecTrackParams();
+}
+
+void UI_CtrlPad::on_lineEdit_RaThresh_returnPressed()
+{
+    changeRaDecTrackParams();
+}
+
+void UI_CtrlPad::on_lineEdit_RaSpdThresh_returnPressed()
+{
+    changeRaDecTrackParams();
+}
+
+void UI_CtrlPad::on_lineEdit_DecSpdThresh_returnPressed()
+{
+    changeRaDecTrackParams();
 }

@@ -1513,6 +1513,9 @@ int ImageProcAlgo::Proc_Direct(void)
                                 (*iter).fAtmosP/ 100.0, (*iter).fTemp + 273, true, &dRa, &dDe, &dRm, &dDm, true);
                 blob.dAlpha = dRm;
                 blob.dSigma = dDm;
+
+                blob.dRa = blob.dAlpha;
+                blob.dDec = blob.dSigma;
 //                if (!m_pGParam->m_SImageProcessorData.bFullLEO || (m_szImageWidth==m_pGParam->m_SGrabberData.iSubWidth && m_szImageHeight==m_pGParam->m_SGrabberData.iSubHeight))
 //                    vectTargetMeasures.push_back(blob);
 //                else if (blob.pairfPos.first >= 1024 && blob.pairfPos.first <= 6144-1024
@@ -1577,6 +1580,9 @@ int ImageProcAlgo::Proc_Direct(void)
                                 (*iter).fAtmosP/ 100.0, (*iter).fTemp + 273, true, &dRa, &dDe, &dRm, &dDm, true);
                 ManualBlob.dAlpha = dRm;
                 ManualBlob.dSigma = dDm;
+
+                ManualBlob.dRa = ManualBlob.dAlpha;
+                ManualBlob.dDec = ManualBlob.dSigma;
             }
         }
 
@@ -1635,6 +1641,9 @@ int ImageProcAlgo::Proc_Direct(void)
                                 (*iter).fAtmosP/ 100.0, (*iter).fTemp + 273, true, &dRa, &dDe, &dRm, &dDm, true);
                 GEOBlob.dAlpha = dRm;
                 GEOBlob.dSigma = dDm;
+
+                GEOBlob.dRa = m_vectTargetInfo[i].pairfPredPosInFrame.first;
+                GEOBlob.dDec = m_vectTargetInfo[i].pairfPredPosInFrame.second;
 
                 vecGEOisbValidBlob.push_back(make_pair(m_vectTargetInfo[i].qstrTargetID, GEOBlob));
             }

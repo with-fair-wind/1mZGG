@@ -57,6 +57,7 @@ private:
     void on_SignalMCSetTaskChanged(void);
     QStringList FindFiles(const QString &startDir, const QStringList &filters);
     void DeleteLessFile(QStringList qstrlistFiles, int& iDelete);
+    void changeRaDecTrackParams();
 
 signals:
     void SignalCloseCuard();
@@ -115,6 +116,11 @@ private slots :
     void on_radioButton_ZoomFit_clicked(bool checked);
     void on_radioButton_ZoomOut_clicked(bool checked);
     void on_radioButton_ZoomIn_clicked(bool checked);
+
+    void on_lineEdit_DecThresh_returnPressed();
+    void on_lineEdit_RaThresh_returnPressed();
+    void on_lineEdit_RaSpdThresh_returnPressed();
+    void on_lineEdit_DecSpdThresh_returnPressed();
 
 private:
     Ui::MainWindow ui;

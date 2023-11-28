@@ -87,6 +87,7 @@ struct sTime
 /// 单帧图像中的单点测量数据(输入数据)
 struct sMeasureBlob
 {
+    string id;
     pair<float, float> pairfPos = make_pair(0, 0);	// 连通域质心位置(pixel)
     float fMaxX = 0.0;	// 连通域X方向最大(pixel)
     float fMinX = 0.0;	// 连通域X方向最小(pixel)
@@ -106,6 +107,9 @@ struct sMeasureBlob
 
     double dAlpha = 0.0;
     double dSigma = 0.0;
+
+    double dRa = 0.0;
+    double dDec = 0.0;
 };
 
 /// 单帧图像中的测量数据(输入数据)
@@ -228,7 +232,8 @@ public:
 
     void BJ2UTC(int iBJYear, int iBJMonth, int iBJDay, int iBJHour, int &iUTCYear, int &iUTCMonth, int &iUTCDay, int &iUTCHour);
     void AangleToEquator(double A, double E, double Longm, double phim, int y, int m, int d, int hour, int min, double sec, double p, double T, bool nflag, double *Ra, double *De, double *Rm, double *Dm, bool zflag);
-
+    void setRaDecThresh(const double& dRaThresh, const double& dDecThresh, const double& dRaSpdThresh, const double& dDecSpdThresh){m_dRaThresh = dRaThresh; m_dDecThresh = dDecThresh;
+                                                                                                                                   m_dRaSpdThresh = dRaSpdThresh; m_dDecSpdThresh = dDecSpdThresh;}
 
 private:
 	void BubbleSortReverse(vector<int>& vectInput);
@@ -279,6 +284,11 @@ private:
     float m_fFrameFreq;
     int m_iTargetID;
     bool m_bFullLEO;
+
+    double m_dRaThresh;
+    double m_dDecThresh;
+    double m_dRaSpdThresh;
+    double m_dDecSpdThresh;
 
     vector<sMeasureBlob> m_vectManualAddTop3blob;
 };

@@ -53,6 +53,7 @@ public:
     void CalcPointError(double dAzi, double dEle, double& dAziErr, double& dEleErr){m_pImageProc->CalcPointError(dAzi, dEle, dAziErr, dEleErr);}
     CStarMap* GetStarMap() {return m_pImageProc->GetStarMap();}
     void CalcDistortionDelta(double dPosX, double dPosY, double &dPosDx, double &dPosDy){m_pImageProc->CalcDistortionDelta(dPosX, dPosY, dPosDx, dPosDy);}
+    void setRaDecThresh(const double& dRaThresh, const double& dDecThresh, const double& dRaSpdThresh, const double& dDecSpdThresh) {m_pImageProc->setRaDecThresh(dRaThresh, dDecThresh, dRaSpdThresh, dDecSpdThresh);}
 
 private:
     static void CallBackProcess(void* pvoidThis);	// 处理线程回调

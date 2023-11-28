@@ -217,6 +217,7 @@ public:
     void CalcPointError(double dAzi, double dEle, double& dAziErr, double& dEleErr);
     CStarMap* GetStarMap() {return m_pstarmap;}
     void CalcDistortionDelta(double dPosX, double dPosY, double &dPosDx, double &dPosDy);
+    void setRaDecThresh(const double& dRaThresh, const double& dDecThresh, const double& dRaSpdThresh, const double& dDecSpdThresh) {m_pTrakcer->setRaDecThresh(dRaThresh, dDecThresh, dRaSpdThresh, dDecSpdThresh);}
 
 private:
     int InitGPU(size_t szGrabWidth, size_t szGrabHeight, int iBinning, size_t szCropWidth, size_t szCropHeight, bool bRotate);
