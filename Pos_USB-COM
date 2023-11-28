@@ -1,0 +1,10 @@
+Left-Up: ttyUSB3s  X708 Disp
+Left-Down: ttyUSB2s  X712 Servo
+Right-Up: ttyUSB1s  X711 MasterControl
+Right-Down: ttyUSB0s  X707 Exp
+
+
+X707: Exp
+X708: Disp
+X711: MasterControl
+X712: Servo
