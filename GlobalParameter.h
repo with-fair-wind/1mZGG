@@ -380,6 +380,8 @@ struct SImageReplayerData
     QString qstrTeleID = "1662";
     QString qstrTargetID = "888888";
     QString qstrStartTime = "20210101080800";
+
+    QString qstrCurFileName = "";
 };
 
 /// TrackDataStorage数据

@@ -16,6 +16,8 @@
 #include "photometry/dllphotometry.h"
 #include "starmap/starmap.h"
 #include <QMap>
+#include <unordered_map>
+#include <utility>
 
 #define  PROC_NONE		0	// 不做目标提取
 #define  PROC_DIFF		1	// 帧差目标提取	
@@ -226,6 +228,7 @@ private:
 	int Proc_None(void);
 	int Proc_Diff(void);
 	int Proc_Direct(void);
+    int Proc_DirectPy(void);
 	int AvgStdGPU16(cl_mem cmInput, double* pdAvg, double* pdStdev, size_t szImageWidth, size_t szImageHeight);
 	int AvgStdGPU8(cl_mem cmInput, double* pdAvg, double* pdStdev, size_t szImageWidth, size_t szImageHeight);
 	int MinMaxGPU16(cl_mem cmInput, double* pdMin, double* pdMax, size_t szImageWidth, size_t szImageHeight);
@@ -277,6 +280,8 @@ private:
     void ReadJBCoef(QString qstrFile, double *padJB_XCoef, double *padJB_YCoef);
     int ErodeBW(cl_mem cmInput, cl_mem cmOutput, int iHSize, size_t szImageWidth, size_t szImageHeight);
     int ErodeGray(cl_mem cmInput, cl_mem cmOutput, int iHSize, size_t szImageWidth, size_t szImageHeight);
+
+    void WriteJsonFile(bool busePosAE);
 
 
 	/// 变量
@@ -419,6 +424,8 @@ private:
     ErrorResult m_errresPonit;
     QString m_qstrErrorResultPath;
     SNetMasterControlData m_SNetMasterControlData;
+
+    std::unordered_map<std::string, sMeasureBlob> m_umapBlob;
 };
 
 #endif // IMAGEPROCALGO_H

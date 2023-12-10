@@ -418,6 +418,12 @@ void ImageReplayer::GetBMP(bool bFirstGetBMP)
         m_pGParam->m_SImageReplayerData.sexpdispdataDisp.fAtmosP = head.dAtmosP;
         m_pGParam->m_SImageReplayerData.sexpdispdataDisp.fHumidity = head.dHumidity;
 
+        int lastSlashIndex = qstrFileName.lastIndexOf('/');
+        int lastDotIndex = qstrFileName.lastIndexOf('.');
+//        QString fileNameWithoutExtension = qstrFileName.mid(lastSlashIndex + 1, lastDotIndex - lastSlashIndex - 1);
+        QString fileNameWithoutExtension = qstrFileName.left(lastDotIndex);
+        m_pGParam->m_SImageReplayerData.qstrCurFileName = fileNameWithoutExtension;
+
         if (bFirstGetBMP)
         {
             m_pGParam->m_SImageReplayerData.qstrTeleID.sprintf("%04d", head.uiTeleID);

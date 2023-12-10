@@ -501,7 +501,8 @@ int ImageProcAlgo::ProcFramePacket()
             Proc_Diff();
             break;
         case PROC_DIRECT:
-            Proc_Direct();
+//            Proc_Direct();
+            Proc_DirectPy();
             break;
         default:
             Proc_None();
@@ -566,6 +567,9 @@ int ImageProcAlgo::Proc_Rotate(void)
 #include <QDataStream>
 #include <QDateTime>
 #include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QProcess>
 int ImageProcAlgo::Proc_None(void)
 {
 	vector<sFramePacket>::iterator iter = m_vectFramePacket.end() - 1;
@@ -1234,6 +1238,387 @@ int ImageProcAlgo::Proc_Diff(void)
 //}
 
 
+void ImageProcAlgo::WriteJsonFile(bool busePosAE)
+{
+    vector<sFramePacket>::iterator iter = m_vectFramePacket.end() - 1;
+
+    QJsonObject jsonObject; // 创建一个JSON对象并设置数据
+    jsonObject.insert("imagew", static_cast<int>(m_szImageWidth));
+    jsonObject.insert("imageh", static_cast<int>(m_szImageHeight));
+    QDateTime curFrameTime(QDate(iter->stimeFrame.iYear, iter->stimeFrame.iMonth, iter->stimeFrame.iDay), QTime(iter->stimeFrame.iHour, iter->stimeFrame.iMinute, iter->stimeFrame.iSecond, iter->stimeFrame.iMillisecond));
+    jsonObject.insert("date-obs", curFrameTime.toString("yyyy-MM-ddThh:mm:ss.zzz"));
+    jsonObject.insert("bjt", true);
+    jsonObject.insert("exposure", iter->fExpTime);
+    jsonObject.insert("temperature", iter->fTemp);
+    jsonObject.insert("pressure", iter->fAtmosP * 0.01);
+    jsonObject.insert("humidity", iter->fHumidity);
+    jsonObject.insert("lon", m_pGParam->m_SObsParams.fLongitude);
+    jsonObject.insert("lat", m_pGParam->m_SObsParams.fLatitude);
+    jsonObject.insert("height", m_pGParam->m_SObsParams.fAltitude);
+    jsonObject.insert("use_point", busePosAE);
+    jsonObject.insert("point_az", iter->pairfFOVCenterAEModify.first);
+    jsonObject.insert("point_el", iter->pairfFOVCenterAEModify.second);
+    jsonObject.insert("radius", 1.5);
+    jsonObject.insert("pixscale", m_trackSettings.opticparams.fPixelScale);
+    jsonObject.insert("tweak-order", 3);
+
+    // 创建 JSON 文档
+    QJsonDocument jsonDoc(jsonObject);
+
+    // 将JSON文档写入文件
+//    QString filePath = "/home/dps/PrevFile/Settings/" + m_pGParam->m_SImageReplayerData.qstrCurFileName + "Settings.json"; // 修改为你想保存的文件路径
+    int lastDotIndex = m_pGParam->m_SImageReplayerData.qstrCurFileName.lastIndexOf('/');
+    QString qstrJsonSaveDir = m_pGParam->m_SImageReplayerData.qstrCurFileName.left(lastDotIndex) + "/Settings", filename = m_pGParam->m_SImageReplayerData.qstrCurFileName.mid(lastDotIndex + 1) + "Settings.json";
+    QDir qdirJson;
+    if (!qdirJson.exists(qstrJsonSaveDir))
+        if (qdirJson.mkpath(qstrJsonSaveDir))
+            qDebug() << "JsonSaveDir created successfully";
+
+    QFile file(qstrJsonSaveDir + "/" + filename);
+    if (!file.open(QIODevice::WriteOnly)) {
+        qDebug() << "Could not open file for writing.";
+    }
+
+    file.write(jsonDoc.toJson()); // 将JSON文档转换为字节数组并写入文件
+    file.close();
+
+    qDebug() << "JSON data has been written to file.";
+}
+
+int ImageProcAlgo::Proc_DirectPy()
+{
+    vector<sFramePacket>::iterator iter = m_vectFramePacket.end() - 1;
+    m_pGParam->m_SImageProcessorData.bFullLEO = (*iter).fExpTime < 500.0;
+    int iTime1, iTime2, iTime3, iTime4, iTime5, iTime6, iTime7, iTime8, iTime9, iTime10, iTime11, iTime12, iTime13;
+    if (m_cmRotate != NULL)
+    {
+        /// Generate Image Photometry
+        ClockOn();
+        (*iter).safImagePhotometry.pvoidBuffer = (void*)new float[m_szImageWidth * m_szImageHeight];
+        float* pafImagePhotometry = (float*)((*iter).safImagePhotometry.pvoidBuffer);
+        memset(pafImagePhotometry, 0, m_szImageWidth * m_szImageHeight * sizeof(float));
+        clEnqueueReadBuffer(m_pGpuDevMngr->cqCommandQueue, m_cmPhotometry, CL_TRUE, 0, m_szImageWidth * m_szImageHeight * sizeof(float), pafImagePhotometry, 0, NULL, NULL);
+        iTime1 = ClockOff();
+        qDebug() << "### Write Image for Photometry:" << iTime1 << "ms";
+
+        /// Avg,Std
+        ClockOn();
+        double dAvg, dStd, dAvg1, dStd1, dAvg2, dStd2, dAvg3, dStd3, dAvg4, dStd4, dAvg5, dStd5;
+        AvgStdGPU16(m_cmRemoveBadLine, &dAvg, &dStd, m_szImageWidth, m_szImageHeight);
+        (*iter).sausImageGrab.dAvg = dAvg;
+        (*iter).sausImageGrab.dStd = dStd;
+        iTime2 = ClockOff();
+        qDebug() << "### Proc AvgStd:" << iTime2 << "ms";
+
+        /// Median Filter
+        ClockOn();
+        MedianFilter16(m_cmRemoveBadLine, m_cmMedian, m_szImageWidth, m_szImageHeight, 3);  // m_cmMedian only used to display
+        iTime3 = ClockOff();
+        qDebug() << "### Proc Median:" << iTime3 << "ms";
+
+        /// ReduceSmallDN
+        ClockOn();
+        if ((m_szImageWidth==1024 && m_szImageHeight==1024))
+        {
+            ReduceSmallDN16(m_cmMedian, m_cmEnhancePre, (*iter).sausImageGrab.dAvg, (*iter).sausImageGrab.dStd, m_szImageWidth, m_szImageHeight);
+        }
+        else if (m_szImageWidth==6144 && m_szImageHeight==6144)
+        {
+            for (int r = 0; r < 6; r++)
+            {
+                for (int c = 0; c < 6; c++)
+                {
+                    /// Patch
+                    Patch16(m_cmMedian, m_cmPitchEnhance, r, c);
+
+                    /// Avg,Std
+                    AvgStdGPU16(m_cmPitchEnhance, &dAvg, &dStd, 1024, 1024);
+                    ReduceLargeDN16(m_cmPitchEnhance, m_cmPitchEnhance1, dAvg+3.0*dStd, 1024, 1024);
+                    AvgStdGPU16(m_cmPitchEnhance1, &dAvg1, &dStd1, 1024, 1024);
+                    ReduceLargeDN16(m_cmPitchEnhance1, m_cmPitchEnhance2, dAvg1+3.0*dStd1, 1024, 1024);
+                    AvgStdGPU16(m_cmPitchEnhance2, &dAvg2, &dStd2, 1024, 1024);
+
+                    /// ReduceSmallDN
+                    ReduceSmallDN16(m_cmPitchEnhance, m_cmPitchEnhance5, dAvg2, dStd2, 1024, 1024);
+
+                    /// DePatch
+                    DePatch16(m_cmPitchEnhance5, m_cmEnhancePre, r, c);
+                }
+            }
+        }
+        iTime4 = ClockOff();
+        qDebug() << "### Proc ReduceSmallDN:" << iTime4 << "ms";
+
+//        /// LCM
+//        ClockOn();
+//        LocalContrastMeasure(m_cmEnhancePre, m_cmNoStar, 3, m_szImageWidth, m_szImageHeight);
+//        iTime5 = ClockOff();
+//        qDebug() << "### Proc LCM:" << iTime5 << "ms";
+//        /// Erode Gray
+//        ErodeGray(m_cmNoStar, m_cmEnhance, 3, m_szImageWidth, m_szImageHeight);
+
+        /// LCM
+        ClockOn();
+        if (m_szImageWidth==6144 && m_szImageHeight==6144)
+        {
+            LocalContrastMeasure(m_cmEnhancePre, m_cmEnhance, 5, m_szImageWidth, m_szImageHeight);
+//            LocalContrastMeasure(m_cmEnhancePre, m_cmEnhance, 3, m_szImageWidth, m_szImageHeight);
+        }
+        else if ((m_szImageWidth==1024 && m_szImageHeight==1024))
+        {
+            clEnqueueCopyBuffer(m_pGpuDevMngr->cqCommandQueue, m_cmEnhancePre, m_cmEnhance, 0, 0, m_szImageWidth * m_szImageHeight * sizeof(unsigned short), 0, NULL, NULL);
+        }
+//        LocalContrastMeasure(m_cmEnhancePre, m_cmEnhance, 3, m_szImageWidth, m_szImageHeight);
+        iTime5 = ClockOff();
+        qDebug() << "### Proc LCM:" << iTime5 << "ms";
+
+        /// Generate Image Enhance
+        ClockOn();
+        (*iter).sausImageEnhance.pvoidBuffer = (void*)new unsigned short[m_szImageWidth * m_szImageHeight];
+        unsigned short* pausImageEnhance = (unsigned short*)((*iter).sausImageEnhance.pvoidBuffer);
+        memset(pausImageEnhance, 0, m_szImageWidth * m_szImageHeight * sizeof(unsigned short));
+        clEnqueueReadBuffer(m_pGpuDevMngr->cqCommandQueue, m_cmMedian, CL_TRUE, 0, m_szImageWidth * m_szImageHeight * sizeof(unsigned short), pausImageEnhance, 0, NULL, NULL);
+        iTime6 = ClockOff();
+        qDebug() << "### Generate Image Enhance:" << iTime6 << "ms";
+
+        /// BW
+        //****************************Pitch BW****************************//
+        ClockOn();
+        if ((m_szImageWidth==1024 && m_szImageHeight==1024)
+                || m_pGParam->m_SImageProcessorData.bFullLEO)
+        {
+            /// Avg,Std
+            AvgStdGPU16(m_cmEnhance, &dAvg, &dStd, m_szImageWidth, m_szImageHeight);
+            ReduceLargeDN16(m_cmEnhance, m_cmEnhance1, dAvg+3.0*dStd, m_szImageWidth, m_szImageHeight);
+            AvgStdGPU16(m_cmEnhance1, &dAvg1, &dStd1, m_szImageWidth, m_szImageHeight);
+            ReduceLargeDN16(m_cmEnhance1, m_cmEnhance2, dAvg1+3.0*dStd1, m_szImageWidth, m_szImageHeight);
+            AvgStdGPU16(m_cmEnhance2, &dAvg2, &dStd2, m_szImageWidth, m_szImageHeight);
+            ReduceLargeDN16(m_cmEnhance2, m_cmEnhance3, dAvg2+3.0*dStd2, m_szImageWidth, m_szImageHeight);
+            AvgStdGPU16(m_cmEnhance3, &dAvg3, &dStd3, m_szImageWidth, m_szImageHeight);
+            ReduceLargeDN16(m_cmEnhance3, m_cmEnhance4, dAvg3+3.0*dStd3, m_szImageWidth, m_szImageHeight);
+            AvgStdGPU16(m_cmEnhance4, &dAvg4, &dStd4, m_szImageWidth, m_szImageHeight);
+            ReduceLargeDN16(m_cmEnhance4, m_cmEnhance5, dAvg4+3.0*dStd4, m_szImageWidth, m_szImageHeight);
+            AvgStdGPU16(m_cmEnhance5, &dAvg5, &dStd5, m_szImageWidth, m_szImageHeight);
+            (*iter).sausImageEnhance.dAvg = dAvg5;
+            (*iter).sausImageEnhance.dStd = dStd5;
+
+            /// BW
+            Binary16(m_cmEnhance, m_cmNoStarBW, m_szImageWidth, m_szImageHeight, (unsigned short)(dAvg5 + m_fRatioStd * dStd5));
+        }
+        else if (m_szImageWidth==6144 && m_szImageHeight==6144)
+        {
+            (*iter).sausImageEnhance.dAvg = 0;
+            (*iter).sausImageEnhance.dStd = 0;
+            for (int r = 0; r < 6; r++)
+            {
+                for (int c = 0; c < 6; c++)
+                {
+                    /// Patch
+                    Patch16(m_cmEnhance, m_cmPitchEnhance, r, c);
+
+                    /// Avg,Std
+                    AvgStdGPU16(m_cmPitchEnhance, &dAvg, &dStd, 1024, 1024);
+                    ReduceLargeDN16(m_cmPitchEnhance, m_cmPitchEnhance1, dAvg+3.0*dStd, 1024, 1024);
+                    AvgStdGPU16(m_cmPitchEnhance1, &dAvg1, &dStd1, 1024, 1024);
+                    ReduceLargeDN16(m_cmPitchEnhance1, m_cmPitchEnhance2, dAvg1+3.0*dStd1, 1024, 1024);
+                    AvgStdGPU16(m_cmPitchEnhance2, &dAvg2, &dStd2, 1024, 1024);
+                    ReduceLargeDN16(m_cmPitchEnhance2, m_cmPitchEnhance3, dAvg2+3.0*dStd2, 1024, 1024);
+                    AvgStdGPU16(m_cmPitchEnhance3, &dAvg3, &dStd3, 1024, 1024);
+                    ReduceLargeDN16(m_cmPitchEnhance3, m_cmPitchEnhance4, dAvg3+3.0*dStd3, 1024, 1024);
+                    AvgStdGPU16(m_cmPitchEnhance4, &dAvg4, &dStd4, 1024, 1024);
+                    ReduceLargeDN16(m_cmPitchEnhance4, m_cmPitchEnhance5, dAvg4+3.0*dStd4, 1024, 1024);
+                    AvgStdGPU16(m_cmPitchEnhance5, &dAvg5, &dStd5, 1024, 1024);
+//                    (*iter).sausImageEnhance.dAvg += dAvg5;
+//                    (*iter).sausImageEnhance.dStd += dStd5;
+
+                    /// Gaussian Filter
+                    SubBG16(m_cmPitchEnhance, m_cmPitchEnhance1, 5.0, dAvg5, dStd5, 1.0, 1024, 1024);
+
+                    /// Avg,Std
+                    AvgStdGPU16(m_cmPitchEnhance1, &dAvg, &dStd, 1024, 1024);
+                    ReduceLargeDN16(m_cmPitchEnhance1, m_cmPitchEnhance2, dAvg+3.0*dStd, 1024, 1024);
+                    AvgStdGPU16(m_cmPitchEnhance2, &dAvg1, &dStd1, 1024, 1024);
+                    ReduceLargeDN16(m_cmPitchEnhance2, m_cmPitchEnhance3, dAvg1+3.0*dStd1, 1024, 1024);
+                    AvgStdGPU16(m_cmPitchEnhance3, &dAvg2, &dStd2, 1024, 1024);
+                    ReduceLargeDN16(m_cmPitchEnhance3, m_cmPitchEnhance4, dAvg2+3.0*dStd2, 1024, 1024);
+                    AvgStdGPU16(m_cmPitchEnhance4, &dAvg3, &dStd3, 1024, 1024);
+                    ReduceLargeDN16(m_cmPitchEnhance4, m_cmPitchEnhance5, dAvg3+3.0*dStd3, 1024, 1024);
+                    AvgStdGPU16(m_cmPitchEnhance5, &dAvg4, &dStd4, 1024, 1024);
+                    ReduceLargeDN16(m_cmPitchEnhance5, m_cmPitchEnhance, dAvg4+3.0*dStd4, 1024, 1024);
+                    AvgStdGPU16(m_cmPitchEnhance, &dAvg5, &dStd5, 1024, 1024);
+                    (*iter).sausImageEnhance.dAvg += dAvg5;
+                    (*iter).sausImageEnhance.dStd += dStd5;
+
+                    /// BW
+//                    Binary16(m_cmPitchEnhance, m_cmPitchNoStarBW, 1024, 1024, (unsigned short)(dAvg5 + ((r==0||c==0||r==5||c==5)?m_fRatioStd-1.0:m_fRatioStd) * dStd5));
+//                    Binary16(m_cmPitchEnhance1, m_cmPitchNoStarBW, 1024, 1024, (unsigned short)(dAvg5 + ((r==0||c==0||r==5||c==5)?m_fRatioStd-1.0:m_fRatioStd) * dStd5));
+                    Binary16(m_cmPitchEnhance1, m_cmPitchNoStarBW, 1024, 1024, (unsigned short)(dAvg5 + ((r==0||c==0||r==5||c==5)?m_fRatioStd:m_fRatioStd) * dStd5));
+
+                    /// DePatch
+                    DePatch8(m_cmPitchNoStarBW, m_cmNoStarBW2, r, c);
+                    /// Erode
+                    ErodeBW(m_cmNoStarBW2, m_cmNoStarBW, 3, m_szImageWidth, m_szImageHeight);
+//                    /// DePatch
+//                    DePatch8(m_cmPitchNoStarBW, m_cmNoStarBW, r, c);
+                }
+            }
+            (*iter).sausImageEnhance.dAvg /= 36.0;
+            (*iter).sausImageEnhance.dStd /= 36.0;
+        }
+        clEnqueueReadBuffer(m_pGpuDevMngr->cqCommandQueue, m_cmNoStarBW, CL_TRUE, 0, m_szImageWidth * m_szImageHeight * sizeof(unsigned char), m_paucNoStarBW, 0, NULL, NULL);
+        iTime7 = ClockOff();
+        qDebug() << "### Proc Binary:" << iTime7 << "ms";
+        //***********************************************************************//
+
+        /// Blob
+        ClockOn();
+        if (!m_blobs.empty())
+        {
+            m_pLabeler->ReleaseBlobs(m_blobs);
+        }
+//        m_pLabeler->LabelEff(m_paucNoStarBW, m_szImageWidth, m_szImageHeight, m_blobs, 0, 0, m_szImageWidth, m_szImageHeight);
+        m_pLabeler->Label(m_paucNoStarBW, m_szImageWidth, m_szImageHeight, m_blobs, 0, 0, m_szImageWidth, m_szImageHeight);
+
+        m_pLabeler->FilterByArea(m_blobs, m_iMinArea, m_iMaxArea);
+        RemoveBadPixel(m_blobs);
+        RemoveBadBlob(m_blobs);
+        m_iNumBlob = m_blobs.size();
+
+        /// Centroid
+        /// Calculate Point Error
+        float fFOVCenterAzi = (*iter).pairfFOVCenterAE.first;
+        float fFOVCenterEle = (*iter).pairfFOVCenterAE.second;
+        double dPointErrAzi = 0;
+        double dPointErrEle = 0;
+        CalcPointError(fFOVCenterAzi, fFOVCenterEle, dPointErrAzi, dPointErrEle);
+        /// FOV Center Azimuth and Elevation Modify
+        float fFOVCenterAziModify = fFOVCenterAzi - dPointErrAzi;
+        float fFOVCenterEleModify = fFOVCenterEle - dPointErrEle;
+        (*iter).pairfFOVCenterAEModify.first = fFOVCenterAziModify;
+        (*iter).pairfFOVCenterAEModify.second = fFOVCenterEleModify;
+
+        WriteJsonFile(false);
+
+
+        vector<sMeasureBlob> vectTargetMeasures;
+        if (m_blobs.size() > 0/* && m_blobs.size() < 1000*/)
+        {
+//            m_pLabeler->Centroids(pausImageEnhance, m_szImageWidth, m_szImageHeight, m_blobs, 5, 1.0, 1.0);
+//            m_pLabeler->Centroids(pausImageEnhance, m_szImageWidth, m_szImageHeight, m_blobs, 2, 1.0, 1.0);
+            int lastDotIndex = m_pGParam->m_SImageReplayerData.qstrCurFileName.lastIndexOf('/');
+            QString qstrInputSaveDir = m_pGParam->m_SImageReplayerData.qstrCurFileName.left(lastDotIndex) + "/Input", filenameInput = m_pGParam->m_SImageReplayerData.qstrCurFileName.mid(lastDotIndex + 1) + "Input.csv";
+            QDir qdir;
+            if (!qdir.exists(qstrInputSaveDir))
+                if (qdir.mkpath(qstrInputSaveDir))
+                    qDebug() << "InputSaveDir created successfully";
+            QFile file(qstrInputSaveDir + "/" + filenameInput);
+            if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+                qDebug() << "Could not open file for writing.";
+            QList<QStringList> rowDataList;
+            int blobId = 0;
+
+            m_pLabeler->Centroids(pausImageEnhance, m_szImageWidth, m_szImageHeight, m_blobs, 0, 1.0, 1.0);
+            for (Blobs::iterator iterB = m_blobs.begin(); iterB != m_blobs.end(); iterB++)
+            {
+                sMeasureBlob blob;
+                double dJBDx = 0.0, dJBDy = 0.0;
+                blob.pairfPos = pair<float, float>((*iterB).second->cx * m_iBinning, (*iterB).second->cy * m_iBinning); // cx,cy: 质心;centroid_x,centroid_y: 形心
+                CalcDistortionDelta(blob.pairfPos.first, blob.pairfPos.second, dJBDx, dJBDy);
+                blob.pairfPos.first -= dJBDx;
+                blob.pairfPos.second -= dJBDy;
+                blob.fMinX = (*iterB).second->minx * m_iBinning;
+                blob.fMinY = (*iterB).second->miny * m_iBinning;
+                blob.fMaxX = (*iterB).second->maxx * m_iBinning;
+                blob.fMaxY = (*iterB).second->maxy * m_iBinning;
+                blob.fArea = (*iterB).second->area * m_iBinning * m_iBinning;
+                blob.pairfPosAE.second = (*iter).pairfFOVCenterAE.second + (m_trackSettings.opticparams.fFOVCenterY - blob.pairfPos.second) * m_trackSettings.opticparams.fPixelScale;
+                blob.pairfPosAE.first = (*iter).pairfFOVCenterAE.first + (blob.pairfPos.first - m_trackSettings.opticparams.fFOVCenterX) * m_trackSettings.opticparams.fPixelScale / cos(blob.pairfPosAE.second / 180.0 * 3.1415926);	// 已正割补偿
+
+                //****************************************************************//
+
+                /// Calculate Target Azimuth and Elevation
+                float fDistAzi = (blob.pairfPos.first - m_pGParam->m_SOpticData.fOptCenterX) * m_pGParam->m_SOpticData.fPixelScale / cos(fFOVCenterEleModify / 180.0 * 3.1415926);
+                float fDistEle = (m_pGParam->m_SOpticData.fOptCenterY - blob.pairfPos.second) * m_pGParam->m_SOpticData.fPixelScale;
+                float fTargetAzi = fFOVCenterAziModify + fDistAzi;
+                float fTargetEle = fFOVCenterEleModify + fDistEle;
+
+                blob.fFOVCenterAziModify = fFOVCenterAziModify;
+                blob.fFOVCenterEleModify = fFOVCenterEleModify;
+                blob.fDistAzi = fDistAzi;
+                blob.fDistEle = fDistEle;
+                blob.fTargetAzi = fTargetAzi;
+                blob.fTargetEle = fTargetEle;
+                blob.dPointErrEle = dPointErrEle;
+
+                int iYear, iMonth, iDay, iHour;
+                double dRa = 0.0, dDe = 0.0;
+                double dRm = 0.0, dDm = 0.0;
+                double dA = blob.pairfPosAE.first * pi / 180;
+                double dE = blob.pairfPosAE.second * pi / 180;
+                double dLatitude = m_pGParam->m_SObsParams.fLatitude * pi / 180;
+                double dLongitude = m_pGParam->m_SObsParams.fLongitude * pi / 180;
+                BJ2UTC((*iter).stimeFrame.iYear,
+                        (*iter).stimeFrame.iMonth,
+                        (*iter).stimeFrame.iDay,
+                        (*iter).stimeFrame.iHour,
+                        iYear, iMonth, iDay, iHour);
+                m_pTrakcer->AangleToEquator(dA, dE,
+                                dLongitude, dLatitude, iYear, iMonth, iDay,
+                                iHour, (*iter).stimeFrame.iMinute,
+                                (double)(*iter).stimeFrame.iSecond + (*iter).stimeFrame.iMillisecond/1000.0,
+                                (*iter).fAtmosP/ 100.0, (*iter).fTemp + 273, true, &dRa, &dDe, &dRm, &dDm, true);
+                blob.dAlpha = dRm;
+                blob.dSigma = dDm;
+
+                blob.dRa = blob.dAlpha;
+                blob.dDec = blob.dSigma;
+
+                QStringList rowData = {QString::number(blobId), QString::fromStdString(std::to_string(blob.pairfPos.first)), QString::fromStdString(std::to_string(blob.pairfPos.second))
+                                      , "", ""};
+                rowDataList.push_back(rowData);
+                m_umapBlob.insert(std::make_pair(std::to_string(blobId), blob));
+//                if (!m_pGParam->m_SImageProcessorData.bFullLEO || (m_szImageWidth==m_pGParam->m_SGrabberData.iSubWidth && m_szImageHeight==m_pGParam->m_SGrabberData.iSubHeight))
+//                    vectTargetMeasures.push_back(blob);
+//                else if (blob.pairfPos.first >= 1024 && blob.pairfPos.first <= 6144-1024
+//                         && blob.pairfPos.second >= 1024 && blob.pairfPos.second <= 6144-1024)
+//                    vectTargetMeasures.push_back(blob);
+                vectTargetMeasures.push_back(blob);
+                blobId++;
+                //****************************************************************//
+            }
+
+            QTextStream stream(&file);
+            for (const QStringList &rowData : rowDataList)
+            {
+                    for (int i = 0; i < rowData.size(); ++i)
+                    {
+                        stream << rowData[i];
+                        if (i < rowData.size() - 1)
+                            stream << ",";
+                    }
+                    stream << "\n"; // 换行表示新的行
+            }
+            file.close();
+            qDebug() << "Data has been written to CSV file.";
+
+            QString pythonInterpreter = "/home/kk/anaconda3/envs/env_twdw_gdcl/bin/python";
+            QString pythonScript = "/home/kk/code/Python_Project/1mZGG/Source/solve.py"; // Python 脚本路径
+            QStringList functionArguments;
+            functionArguments << m_pGParam->m_SImageReplayerData.qstrCurFileName; // 函数参数，比如文件路径
+
+            QProcess pythonProcess;
+            pythonProcess.start(pythonInterpreter, QStringList() << pythonScript << functionArguments);
+
+            if (!pythonProcess.waitForStarted())
+                qDebug() << "Failed to start Python process.";
+            if (!pythonProcess.waitForFinished())
+                qDebug() << "Failed to finish Python process.";
+            QString output = pythonProcess.readAllStandardOutput();
+            qDebug() << "Python output:" << output;
+        }
+    }
+}
+
 int ImageProcAlgo::Proc_Direct(void)
 {
     vector<sFramePacket>::iterator iter = m_vectFramePacket.end() - 1;
@@ -1456,6 +1841,9 @@ int ImageProcAlgo::Proc_Direct(void)
         float fFOVCenterEleModify = fFOVCenterEle - dPointErrEle;
         (*iter).pairfFOVCenterAEModify.first = fFOVCenterAziModify;
         (*iter).pairfFOVCenterAEModify.second = fFOVCenterEleModify;
+
+        WriteJsonFile(false);
+
         vector<sMeasureBlob> vectTargetMeasures;
         if (m_blobs.size() > 0/* && m_blobs.size() < 1000*/)
         {            

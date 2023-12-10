@@ -87,7 +87,6 @@ struct sTime
 /// 单帧图像中的单点测量数据(输入数据)
 struct sMeasureBlob
 {
-    string id;
     pair<float, float> pairfPos = make_pair(0, 0);	// 连通域质心位置(pixel)
     float fMaxX = 0.0;	// 连通域X方向最大(pixel)
     float fMinX = 0.0;	// 连通域X方向最小(pixel)
