@@ -71,6 +71,9 @@ private slots :
     void on_SignalGrabData(void);
     void on_SignalReplayData(void);
 
+public slots:
+    void on_SignalDispStatus();
+
 /// 变量
 private:
     GlobalParameter* m_pGParam;	// 全局参数对象指针

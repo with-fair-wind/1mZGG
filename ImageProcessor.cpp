@@ -278,6 +278,12 @@ void ImageProcessor::on_SignalReplayData(void)
         qDebug() << "ReplayImg is processing!";
 }
 
+void ImageProcessor::on_SignalDispStatus()
+{
+    m_pImageProc->DispMemcpy();
+    emit SignalDisplay();
+}
+
 void ImageProcessor::MarkDispInfor(void)
 {
     if (m_bProcessMode)

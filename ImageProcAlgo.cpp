@@ -147,9 +147,11 @@ ImageProcAlgo::ImageProcAlgo()
     ReadBiasImage("/home/dps/IniFiles/Bias.raw");
 
     /// Read Point Error
+#if 0
     m_qstrErrorResultPath = "/home/dps/IniFiles/dSystemData.dat";
     ReadPointError(m_qstrErrorResultPath);
-
+#else
+#endif
     /// Read JBCoef
     m_dblJB_XCOEF[0] = -0.055700352357762;
     m_dblJB_XCOEF[1] = -0.005662632539437;
@@ -1259,7 +1261,7 @@ void ImageProcAlgo::WriteJsonFile(bool busePosAE)
     jsonObject.insert("point_az", iter->pairfFOVCenterAEModify.first);
     jsonObject.insert("point_el", iter->pairfFOVCenterAEModify.second);
     jsonObject.insert("radius", 1.5);
-    jsonObject.insert("pixscale", m_trackSettings.opticparams.fPixelScale);
+    jsonObject.insert("pixscale", m_trackSettings.opticparams.fPixelScale * 3600);
     jsonObject.insert("tweak-order", 3);
 
     // 创建 JSON 文档
@@ -1452,16 +1454,17 @@ int ImageProcAlgo::Proc_DirectPy()
                     /// BW
 //                    Binary16(m_cmPitchEnhance, m_cmPitchNoStarBW, 1024, 1024, (unsigned short)(dAvg5 + ((r==0||c==0||r==5||c==5)?m_fRatioStd-1.0:m_fRatioStd) * dStd5));
 //                    Binary16(m_cmPitchEnhance1, m_cmPitchNoStarBW, 1024, 1024, (unsigned short)(dAvg5 + ((r==0||c==0||r==5||c==5)?m_fRatioStd-1.0:m_fRatioStd) * dStd5));
-                    Binary16(m_cmPitchEnhance1, m_cmPitchNoStarBW, 1024, 1024, (unsigned short)(dAvg5 + ((r==0||c==0||r==5||c==5)?m_fRatioStd:m_fRatioStd) * dStd5));
+                    Binary16(m_cmPitchEnhance1, m_cmPitchNoStarBW, 1024, 1024, (unsigned short)(dAvg5 + ((r==0||c==0||r==5||c==5)?m_fRatioStd:m_fRatioStd) * dStd5));                   
 
                     /// DePatch
                     DePatch8(m_cmPitchNoStarBW, m_cmNoStarBW2, r, c);
-                    /// Erode
-                    ErodeBW(m_cmNoStarBW2, m_cmNoStarBW, 3, m_szImageWidth, m_szImageHeight);
+
 //                    /// DePatch
 //                    DePatch8(m_cmPitchNoStarBW, m_cmNoStarBW, r, c);
                 }
             }
+            /// Erode
+            ErodeBW(m_cmNoStarBW2, m_cmNoStarBW, 3, m_szImageWidth, m_szImageHeight);
             (*iter).sausImageEnhance.dAvg /= 36.0;
             (*iter).sausImageEnhance.dStd /= 36.0;
         }
@@ -1616,7 +1619,60 @@ int ImageProcAlgo::Proc_DirectPy()
             QString output = pythonProcess.readAllStandardOutput();
             qDebug() << "Python output:" << output;
         }
+        iTime8 = ClockOff();
+        qDebug() << "### Proc Blob:" << iTime8 << "ms";
+        //***********************************************************************//
+
+        DispMemcpy();
     }
+}
+
+void ImageProcAlgo::DispMemcpy()
+{
+    double dAvg = 0.0, dStd = 0.0;
+    vector<sFramePacket>::iterator iter = m_vectFramePacket.end() - 1;
+    if (m_bDispBW)
+    {
+        clEnqueueCopyBuffer(m_pGpuDevMngr->cqCommandQueue, m_cmNoStarBW, m_cmDisp, 0, 0, m_szImageWidth * m_szImageHeight * sizeof(unsigned char), 0, NULL, NULL);
+    }
+    else
+    {
+        if (m_bDispEnhance)	// 显示图像增强
+        {
+            if (m_bAutoScale)
+            {
+                AvgStdGPU16(m_cmEnhance, &dAvg, &dStd, m_szImageWidth, m_szImageHeight);
+                unsigned int uiScaleMin = dAvg - 3 * dStd < 0 ? 0 : (unsigned int)(dAvg - 3 * dStd);
+                unsigned int uiScaleMax = dAvg + 3 * dStd > 16383 ? 16383 : (unsigned int)(dAvg + 3 * dStd);
+                Short2ByteMinMaxGPU(m_cmEnhance, m_cmDisp, uiScaleMin, uiScaleMax, m_szImageWidth, m_szImageHeight);
+//                    unsigned int uiScaleMin = (*iter).sausImageEnhance.dAvg - 3 * (*iter).sausImageEnhance.dStd < 0 ? 0 : (unsigned int)((*iter).sausImageEnhance.dAvg - 3 * (*iter).sausImageEnhance.dStd);
+//                    unsigned int uiScaleMax = (*iter).sausImageEnhance.dAvg + 3 * (*iter).sausImageEnhance.dStd > 16383 ? 16383 : (unsigned int)((*iter).sausImageEnhance.dAvg + 3 * (*iter).sausImageEnhance.dStd);
+//                    Short2ByteMinMaxGPU(m_cmEnhance, m_cmDisp, uiScaleMin, uiScaleMax, m_szImageWidth, m_szImageHeight);
+            }
+            else
+            {
+                Short2ByteMinMaxGPU(m_cmEnhance, m_cmDisp, m_uiScaleMin, m_uiScaleMax, m_szImageWidth, m_szImageHeight);
+            }
+            m_pGParam->m_SImageProcessorData.fAvr = (*iter).sausImageEnhance.dAvg;
+            m_pGParam->m_SImageProcessorData.fStd = (*iter).sausImageEnhance.dStd;
+        }
+        else // 显示图像不增强
+        {
+            if (m_bAutoScale)
+            {
+                unsigned int uiScaleMin = (*iter).sausImageGrab.dAvg - 3 * (*iter).sausImageGrab.dStd < 0 ? 0 : (unsigned int)((*iter).sausImageGrab.dAvg - 3 * (*iter).sausImageGrab.dStd);
+                unsigned int uiScaleMax = (*iter).sausImageGrab.dAvg + 3 * (*iter).sausImageGrab.dStd > 16383 ? 16383 : (unsigned int)((*iter).sausImageGrab.dAvg + 3 * (*iter).sausImageGrab.dStd);
+                Short2ByteMinMaxGPU(m_cmEnhancePre, m_cmDisp, uiScaleMin, uiScaleMax, m_szImageWidth, m_szImageHeight);
+            }
+            else
+            {
+                Short2ByteMinMaxGPU(m_cmEnhancePre, m_cmDisp, m_uiScaleMin, m_uiScaleMax, m_szImageWidth, m_szImageHeight);
+            }
+            m_pGParam->m_SImageProcessorData.fAvr = (*iter).sausImageGrab.dAvg;
+            m_pGParam->m_SImageProcessorData.fStd = (*iter).sausImageGrab.dStd;
+        }
+    }
+    clEnqueueReadBuffer(m_pGpuDevMngr->cqCommandQueue, m_cmDisp, CL_TRUE, 0, m_szImageWidth * m_szImageHeight * sizeof(unsigned char), m_paucDisp, 0, NULL, NULL);
 }
 
 int ImageProcAlgo::Proc_Direct(void)

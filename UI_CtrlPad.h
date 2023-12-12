@@ -65,6 +65,7 @@ signals:
     void SignalDispFit();
     void SignalDrawStarMap(bool);
     void SignalZoom(int);
+    void SignalDispStatus();
 
 private slots :
     void on_checkBox_ImageGrab_clicked(void);
@@ -121,6 +122,9 @@ private slots :
     void on_lineEdit_RaThresh_returnPressed();
     void on_lineEdit_RaSpdThresh_returnPressed();
     void on_lineEdit_DecSpdThresh_returnPressed();
+
+    void on_horizontalSlider_ScaleUp_sliderReleased();
+    void on_horizontalSlider_ScaleDown_sliderReleased();
 
 private:
     Ui::MainWindow ui;

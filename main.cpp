@@ -128,6 +128,7 @@ int main(int argc, char *argv[])
 //        QObject::connect(&ctrlpadMain, SIGNAL(SignalDispFit()), &disppadMain, SLOT(on_Fit_clicked()));
         QObject::connect(&ctrlpadMain, SIGNAL(SignalZoom(int)), &disppadMain, SLOT(on_SignalZoom(int)));
         QObject::connect(&ctrlpadMain, SIGNAL(SignalDrawStarMap(bool)), &disppadMain, SLOT(on_SignalDrawStarMap(bool)));
+        QObject::connect(&ctrlpadMain, SIGNAL(SignalDispStatus()), &imageprocessorMain, SLOT(on_SignalDispStatus()));
         /// UI_DispPad
         QObject::connect(&disppadMain, SIGNAL(SignalManualInit()), &ctrlpadMain, SLOT(on_SignalManualInit()));
         QObject::connect(&disppadMain, SIGNAL(SignalLabelMouseClicked(QPoint)), &ctrlpadMain, SLOT(on_SignalLabelMouseClicked(QPoint)));

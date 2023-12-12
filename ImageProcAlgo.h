@@ -220,6 +220,7 @@ public:
     CStarMap* GetStarMap() {return m_pstarmap;}
     void CalcDistortionDelta(double dPosX, double dPosY, double &dPosDx, double &dPosDy);
     void setRaDecThresh(const double& dRaThresh, const double& dDecThresh, const double& dRaSpdThresh, const double& dDecSpdThresh) {m_pTrakcer->setRaDecThresh(dRaThresh, dDecThresh, dRaSpdThresh, dDecSpdThresh);}
+    void DispMemcpy();
 
 private:
     int InitGPU(size_t szGrabWidth, size_t szGrabHeight, int iBinning, size_t szCropWidth, size_t szCropHeight, bool bRotate);
@@ -282,6 +283,7 @@ private:
     int ErodeGray(cl_mem cmInput, cl_mem cmOutput, int iHSize, size_t szImageWidth, size_t szImageHeight);
 
     void WriteJsonFile(bool busePosAE);
+
 
 
 	/// 变量
