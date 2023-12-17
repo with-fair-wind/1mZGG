@@ -24,7 +24,8 @@ UI_DispPad::UI_DispPad(QWidget *parent) :
     m_uiImageHeight = 0;
     m_bDrawStarMap = false;
 
-    m_side = 480;
+//    m_side = 480;
+    m_side = ui->QImage->width();
 //    d_size = m_bHeightLonger ? m_side / (m_qptRDinImage.x() - m_qptLUinImage.x() + 1) * 100 : m_side / (m_qptRDinImage.y() - m_qptLUinImage.y() + 1) * 100;
     connect(ui->QImage, SIGNAL(LabelMouseMove(QPoint)), this, SLOT(on_LabelMouseMove(QPoint)));
     connect(ui->QImage, SIGNAL(LabelMouseDoubleClicked(QPoint)), this, SLOT(on_LabelMouseDoubleClicked(QPoint)));
