@@ -463,7 +463,7 @@ int TrackAlgo::TrackProc_GEO(sMeasuresInFrame measures, vector<sTargetInfo>& vec
 
 //	return 0;
 //}
-#if 1
+#if 0
 int TrackAlgo::GEO_Assoc4(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vector<sTargetInfo>& vectTargetInfo, pair<float, float> pairfStarSpd, float fRadius, float fThresh, sOpticParams opticparams)
 {
     double dStart = omp_get_wtime();
@@ -704,7 +704,7 @@ int TrackAlgo::GEO_Assoc4(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vector
 
     int iSize = vectMeasuresInputFIFO.size();
 
-    double dRadius = 50.0 / 3600.0 * pi / 180.0;
+    double dRadius = 10.0 / 3600.0;
     m_pGParam->m_SImageProcessorData.fThreshErr = m_dRaThresh;
     m_pGParam->m_SImageProcessorData.fRadiusT = dRadius;
 
@@ -737,7 +737,8 @@ int TrackAlgo::GEO_Assoc4(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vector
 
                             if (abs(fDx2_1) < dRadius && abs(fDy2_1) < dRadius
                                     && !(abs(fDx2_1) < m_dRaThresh && abs(fDy2_1) < m_dDecThresh)
-                                    && abs(fDx2_1 - fDx1_0) <= m_dRaSpdThresh && abs(fDy2_1 - fDy1_0) <= m_dDecSpdThresh)
+                                    && abs(fDx2_1 - fDx1_0) <= m_dRaSpdThresh && abs(fDy2_1 - fDy1_0) <= m_dDecSpdThresh
+                                    && (fDx2_1 * fDx1_0 > 0) && (fDy2_1 * fDy1_0 > 0))
                             {
                                 for (int m = 0; m < vectMeasuresInputFIFO[iSize - 1].vectTargetMeasures.size(); m++)
                                 {
@@ -747,7 +748,8 @@ int TrackAlgo::GEO_Assoc4(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vector
                                     if (abs(fDx3_2) < dRadius && abs(fDy3_2) < dRadius
                                             && !(abs(fDx3_2) < m_dRaThresh && abs(fDy3_2) < m_dDecThresh)
                                             && abs(fDx3_2 - fDx2_1) <= m_dRaSpdThresh && abs(fDy3_2 - fDy2_1) <= m_dDecSpdThresh
-                                            && abs(fDx3_2 - fDx1_0) <= m_dRaSpdThresh && abs(fDy3_2 - fDy1_0) <= m_dDecSpdThresh)
+                                            && abs(fDx3_2 - fDx1_0) <= m_dRaSpdThresh && abs(fDy3_2 - fDy1_0) <= m_dDecSpdThresh
+                                            && (fDx3_2 * fDx2_1 > 0) && (fDy3_2 * fDy2_1 > 0))
                                     {
                                         sTargetInfoInFrame infoinframe0, infoinframe1, infoinframe2, infoinframe3;
 
@@ -779,30 +781,16 @@ int TrackAlgo::GEO_Assoc4(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vector
                                             infoAssoc.vectInfoInFrame.push_back(infoinframe2);
                                             infoAssoc.vectInfoInFrame.push_back(infoinframe3);
 
-                                            infoAssoc.pairfPredSpdInFrame.first = MedianFloat3(fDx1_0, fDx2_1, fDx3_2);
-                                            infoAssoc.pairfPredSpdInFrame.second = MedianFloat3(fDy1_0, fDy2_1, fDy3_2);
+                                            infoAssoc.pairPredSpdRaDec.first = MedianFloat3(fDx1_0, fDx2_1, fDx3_2);
+                                            infoAssoc.pairPredSpdRaDec.second = MedianFloat3(fDy1_0, fDy2_1, fDy3_2);
 
-                                            infoAssoc.pairfPredPosInFrame.first = infoinframe3.blobMeasure.dRa + infoAssoc.pairfPredSpdInFrame.first;
-                                            infoAssoc.pairfPredPosInFrame.second = infoinframe3.blobMeasure.dDec + infoAssoc.pairfPredSpdInFrame.second;
-
-                                            float fPeriod = 1.0 / m_fFrameFreq;
-                                            infoAssoc.pairfPredSpdAE.first = MedianFloat3((infoinframe1.blobMeasure.pairfPosAE.first - infoinframe0.blobMeasure.pairfPosAE.first),
-                                                                              (infoinframe2.blobMeasure.pairfPosAE.first - infoinframe1.blobMeasure.pairfPosAE.first),
-                                                                              (infoinframe3.blobMeasure.pairfPosAE.first - infoinframe2.blobMeasure.pairfPosAE.first)) / fPeriod;
-                                            infoAssoc.pairfPredSpdAE.second = MedianFloat3((infoinframe1.blobMeasure.pairfPosAE.second - infoinframe0.blobMeasure.pairfPosAE.second),
-                                                                               (infoinframe2.blobMeasure.pairfPosAE.second - infoinframe1.blobMeasure.pairfPosAE.second),
-                                                                               (infoinframe3.blobMeasure.pairfPosAE.second - infoinframe2.blobMeasure.pairfPosAE.second)) / fPeriod;
-
-                                            infoAssoc.pairfPredPosAE.first = infoinframe3.blobMeasure.pairfPosAE.first + infoAssoc.pairfPredSpdAE.first * fPeriod;
-                                            infoAssoc.pairfPredPosAE.second = infoinframe3.blobMeasure.pairfPosAE.second + infoAssoc.pairfPredSpdAE.second * fPeriod;
+                                            infoAssoc.pairPredPosRaDec.first = infoinframe3.blobMeasure.dRa + infoAssoc.pairPredSpdRaDec.first;
+                                            infoAssoc.pairPredPosRaDec.second = infoinframe3.blobMeasure.dDec + infoAssoc.pairPredSpdRaDec.second;
 
                                             infoAssoc.fValid = 1.0;
                                             infoAssoc.bLiving = true;
 
-//                                            if (!(abs(pairfStarSpd.second) <= 3
-//                                                    && abs(infoAssoc.pairfPredSpdInFrame.second) <= 3
-//                                                    && abs(infoAssoc.pairfPredSpdInFrame.first) >= 10))
-                                                vectTargetInfo_temp[omp_get_thread_num()].push_back(infoAssoc);
+                                            vectTargetInfo_temp[omp_get_thread_num()].push_back(infoAssoc);
                                         }
                                     }
                                 }
@@ -838,7 +826,7 @@ int TrackAlgo::GEO_Assoc4(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vector
                             && (vectTargetInfo.at(i).vectInfoInFrame[2].blobMeasure.dDec == vectTargetInfo.at(j).vectInfoInFrame[2].blobMeasure.dDec)) ? 1 : 0;
                     int iSame3 = ((vectTargetInfo.at(i).vectInfoInFrame[3].blobMeasure.dRa == vectTargetInfo.at(j).vectInfoInFrame[3].blobMeasure.dRa)
                             && (vectTargetInfo.at(i).vectInfoInFrame[3].blobMeasure.dDec == vectTargetInfo.at(j).vectInfoInFrame[3].blobMeasure.dDec)) ? 1 : 0;
-                    if (iSame0 + iSame1 + iSame2 >= 1)
+                    if (iSame0 + iSame1 + iSame2 + iSame3 >= 1)
                     {
                         float f_i_Dx1_0 = vectTargetInfo.at(i).vectInfoInFrame[1].blobMeasure.dRa - vectTargetInfo.at(i).vectInfoInFrame[0].blobMeasure.dRa;
                         float f_i_Dx2_1 = vectTargetInfo.at(i).vectInfoInFrame[2].blobMeasure.dRa - vectTargetInfo.at(i).vectInfoInFrame[1].blobMeasure.dRa;
@@ -867,7 +855,7 @@ int TrackAlgo::GEO_Assoc4(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vector
 
                         int iTargetRemove = f_i_Std > f_j_Std ? i : j;
 
-                        vectSeqRemove_temp[omp_get_thread_num()].push_back(j);
+                        vectSeqRemove_temp[omp_get_thread_num()].push_back(iTargetRemove);
                     }
                 }
             }
@@ -908,7 +896,7 @@ int TrackAlgo::GEO_Assoc4(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vector
 }
 #endif
 
-#if 1
+#if 0
 int TrackAlgo::GEO_FindTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vector<sTargetInfo>& vectTargetInfo, pair<float, float> pairfStarSpd, float fRadius, float fThresh, sOpticParams opticparams)
 {
 	int iFIFOSize = vectMeasuresInputFIFO.size();
@@ -956,8 +944,8 @@ int TrackAlgo::GEO_FindTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO, v
             {
 //                if (abs(vectTargetInfoTemp[i].pairfPredSpdInFrame.first) > 100
 //                      || abs(vectTargetInfoTemp[i].pairfPredSpdInFrame.second) > 100)
-                if (abs(vectTargetInfoTemp[i].pairfPredSpdInFrame.first) > 50.0 / 3600.0 * pi / 180.0
-                      || abs(vectTargetInfoTemp[i].pairfPredSpdInFrame.second) > 50.0 / 3600.0 * pi / 180.0)
+                if (abs(vectTargetInfoTemp[i].pairPredSpdRaDec.first) > 1000.0 / 3600.0
+                      || abs(vectTargetInfoTemp[i].pairPredSpdRaDec.second) > 1000.0 / 3600.0)
                 {
                     vectTargetInfoTemp[i].bLiving = false;
                 }
@@ -978,7 +966,7 @@ int TrackAlgo::GEO_FindTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO, v
 }
 #endif
 
-#if 1
+#if 0
 int TrackAlgo::GEO_ReFindTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vector<sTargetInfo>& vectTargetInfo, pair<float, float> pairfStarSpd, float fRadius, float fThresh, sOpticParams opticparams)
 {
 	int iFIFOSize = vectMeasuresInputFIFO.size();
@@ -1131,8 +1119,8 @@ int TrackAlgo::GEO_ReFindTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO,
             {
 //                if (abs(vectTargetInfoTemp[i].pairfPredSpdInFrame.first) > 100
 //                          || abs(vectTargetInfoTemp[i].pairfPredSpdInFrame.second) > 100)
-                if (abs(vectTargetInfoTemp[i].pairfPredSpdInFrame.first) > 50.0 / 3600.0 * pi / 180.0
-                          || abs(vectTargetInfoTemp[i].pairfPredSpdInFrame.second) > 50.0 / 3600.0 * pi / 180.0)
+                if (abs(vectTargetInfoTemp[i].pairPredSpdRaDec.first) > 1000.0 / 3600.0
+                          || abs(vectTargetInfoTemp[i].pairPredSpdRaDec.second) > 1000.0 / 3600.0)
                 {
                     vectTargetInfoTemp[i].bLiving = false;
                 }
@@ -1156,7 +1144,7 @@ int TrackAlgo::GEO_ReFindTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO,
 }
 #endif
 
-#if 1
+#if 0
 int TrackAlgo::GEO_TrackTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vector<sTargetInfo>& vectTargetInfo, pair<float, float> pairfStarSpd, float fRadius, float fThresh, sOpticParams opticparams, float fThreashLiving, int iNumFramesLiving, vector<pair<QString, sMeasureBlob>> vecGEOisbValidBlob)
 {
 	int iFIFOSize = vectMeasuresInputFIFO.size();    
@@ -1846,16 +1834,6 @@ int TrackAlgo::GEO_TrackTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO, 
             {
                 if (vectTargetInfo[i].bLiving)
                 {
-                    sMeasureBlob PreBlob;
-                    for(int j = 0; j < vecGEOisbValidBlob.size(); j++)
-                    {
-                        if(vectTargetInfo[i].qstrTargetID == vecGEOisbValidBlob[j].first)
-                        {
-                            PreBlob = vecGEOisbValidBlob[j].second;
-                            break;
-                        }
-                    }
-
                     vector<sMeasureBlob> blobSelectTemp;
                     vector<float> fDispTempTemp;
                     for (int j = 0; j < m_iNumCPUCores; j++)
@@ -1870,29 +1848,36 @@ int TrackAlgo::GEO_TrackTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO, 
                     int iNumUnValid = 0;
                     for (int j = 0; j < iNumCheck; j++)
                     {
-                        iNumUnValid += (!vectTargetInfo[i].vectInfoInFrame[vectTargetInfo[i].vectInfoInFrame.size()-(j+1)].bValid) ? 1 : 0;
+                        if(!vectTargetInfo[i].vectInfoInFrame[vectTargetInfo[i].vectInfoInFrame.size()-(j+1)].bValid)
+                            iNumUnValid += 1;
+//                        else
+//                            break;
                     }
-                    int iNumUnValidTemp = iNumUnValid > 5 ? 5 : iNumUnValid;
+//                    int iNumUnValidTemp = iNumUnValid > 5 ? 5 : iNumUnValid;
                     // Important
 //                    fThresh = fThresh + iNumUnValidTemp * 10;
-                    fThresh = 50.0 / 3600.0 * pi / 180.0;
+//                    float fThreshRa = m_dRaThresh + iNumUnValid * pow(10, getExponent(m_dRaThresh));
+//                    float fThreshDec = m_dDecThresh + iNumUnValid * pow(10, getExponent(m_dDecThresh));
+                    float fThreshRa = m_dRaThresh + iNumUnValid * 1.5 / 3600.0;
+                    float fThreshDec = m_dDecThresh + iNumUnValid * 0.15 / 3600.0;
 
-    #pragma omp parallel for num_threads(m_iNumCPUCores)
+#pragma omp parallel for num_threads(m_iNumCPUCores)
                     for (int j = 0; j < vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).vectTargetMeasures.size(); j++)
                     {
-                        float fDistX = vectTargetInfo.at(i).pairfPredPosInFrame.first - vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).vectTargetMeasures.at(j).dRa;
-                        float fDistY = vectTargetInfo.at(i).pairfPredPosInFrame.second - vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).vectTargetMeasures.at(j).dDec;
+                        float fDistX = vectTargetInfo.at(i).pairPredPosRaDec.first - vectMeasuresInputFIFO.back().vectTargetMeasures.at(j).dRa;
+                        float fDistY = vectTargetInfo.at(i).pairPredPosRaDec.second - vectMeasuresInputFIFO.back().vectTargetMeasures.at(j).dDec;
                         float fDist = pow(pow(fDistX, 2.0) + pow(fDistY, 2.0), 0.5);
-                        float fDx = vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).vectTargetMeasures.at(j).dRa
-                                - vectTargetInfo[i].vectInfoInFrame[vectTargetInfo[i].vectInfoInFrame.size()-1].blobMeasure.dRa;
-                        float fDy = vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).vectTargetMeasures.at(j).dDec
-                                - vectTargetInfo[i].vectInfoInFrame[vectTargetInfo[i].vectInfoInFrame.size()-1].blobMeasure.dDec;
+                        float fDx = vectMeasuresInputFIFO.back().vectTargetMeasures.at(j).dRa - vectTargetInfo[i].vectInfoInFrame.back().blobMeasure.dRa;
+                        float fDy = vectMeasuresInputFIFO.back().vectTargetMeasures.at(j).dDec - vectTargetInfo[i].vectInfoInFrame.back().blobMeasure.dDec;
+
 //                        iNumUnValidTemp = iNumUnValid > 7 ? 7 : iNumUnValid;
-//                        float fSpdErrThresh = 5 + iNumUnValid;
-                        if (abs(fDistX) <= fThresh && abs(fDistY) <= fThresh
+                        float fSpdRaThresh = m_dRaSpdThresh + iNumUnValid * pow(10, getExponent(m_dRaSpdThresh));
+                        float fSpdDecThresh = m_dDecSpdThresh + iNumUnValid * pow(10, getExponent(m_dDecSpdThresh));
+                        if (abs(fDistX) <= fThreshRa && abs(fDistY) <= fThreshDec
                                 && fDist <= fDispTempTemp[omp_get_thread_num()]
-                                && abs(fDx - vectTargetInfo.at(i).pairfPredSpdInFrame.first) < m_dRaSpdThresh
-                                && abs(fDy - vectTargetInfo.at(i).pairfPredSpdInFrame.second) < m_dDecSpdThresh)
+                                && abs(fDx - vectTargetInfo.at(i).pairPredSpdRaDec.first) < fSpdRaThresh
+                                && abs(fDy - vectTargetInfo.at(i).pairPredSpdRaDec.second) < fSpdDecThresh
+                                && fDx * vectTargetInfo.at(i).pairPredSpdRaDec.first > 0 && fDy * vectTargetInfo.at(i).pairPredSpdRaDec.second > 0)
                         {
                             blobSelectTemp[omp_get_thread_num()] = vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).vectTargetMeasures.at(j);
                             fDispTempTemp[omp_get_thread_num()] = fDist;
@@ -1935,7 +1920,8 @@ int TrackAlgo::GEO_TrackTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO, 
                         {
                             infoTrack.stimeFrame = vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).stimeFrame;
                             infoTrack.ulFrameSeq = vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).ulFrameSeq;
-                            infoTrack.blobMeasure = PreBlob;
+                            infoTrack.blobMeasure.dRa = vectTargetInfo[i].pairPredPosRaDec.first;
+                            infoTrack.blobMeasure.dDec = vectTargetInfo[i].pairPredPosRaDec.second;
                             infoTrack.bValid = false;
                         }
                     }
@@ -1943,7 +1929,8 @@ int TrackAlgo::GEO_TrackTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO, 
                     {
                         infoTrack.stimeFrame = vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).stimeFrame;
                         infoTrack.ulFrameSeq = vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).ulFrameSeq;
-                        infoTrack.blobMeasure = PreBlob;
+                        infoTrack.blobMeasure.dRa = vectTargetInfo[i].pairPredPosRaDec.first;
+                        infoTrack.blobMeasure.dDec = vectTargetInfo[i].pairPredPosRaDec.second;
                         infoTrack.bValid = false;
                     }
                     vectTargetInfo[i].vectInfoInFrame.push_back(infoTrack);
@@ -1952,43 +1939,35 @@ int TrackAlgo::GEO_TrackTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO, 
                     int iSize = vectTargetInfo[i].vectInfoInFrame.size();
                     if (iSize <= 5)
                     {
-                        vectTargetInfo[i].pairfPredSpdInFrame.first = MedianFloat3((vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.dRa - vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.dRa),
+                        vectTargetInfo[i].pairPredSpdRaDec.first = MedianFloat3((vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.dRa - vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.dRa),
                                 (vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.dRa - vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.dRa),
                                 (vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.dRa - vectTargetInfo[i].vectInfoInFrame[iSize - 4].blobMeasure.dRa));
-                        vectTargetInfo[i].pairfPredSpdInFrame.second = MedianFloat3((vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.dDec - vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.dDec),
+                        vectTargetInfo[i].pairPredSpdRaDec.second = MedianFloat3((vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.dDec - vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.dDec),
                                 (vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.dDec - vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.dDec),
                                 (vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.dDec - vectTargetInfo[i].vectInfoInFrame[iSize - 4].blobMeasure.dDec));
                     }
                     else if (iSize <= 7)
                     {
-                        vectTargetInfo[i].pairfPredSpdInFrame.first = MedianFloat5((vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.dRa - vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.dRa),
+                        vectTargetInfo[i].pairPredSpdRaDec.first = MedianFloat5((vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.dRa - vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.dRa),
                                 (vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.dRa - vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.dRa),
                                 (vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.dRa - vectTargetInfo[i].vectInfoInFrame[iSize - 4].blobMeasure.dRa),
                                 (vectTargetInfo[i].vectInfoInFrame[iSize - 4].blobMeasure.dRa - vectTargetInfo[i].vectInfoInFrame[iSize - 5].blobMeasure.dRa),
                                 (vectTargetInfo[i].vectInfoInFrame[iSize - 5].blobMeasure.dRa - vectTargetInfo[i].vectInfoInFrame[iSize - 6].blobMeasure.dRa));
-                        vectTargetInfo[i].pairfPredSpdInFrame.second = MedianFloat5((vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.dDec - vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.dDec),
+                        vectTargetInfo[i].pairPredSpdRaDec.second = MedianFloat5((vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.dDec - vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.dDec),
                                 (vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.dDec - vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.dDec),
                                 (vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.dDec - vectTargetInfo[i].vectInfoInFrame[iSize - 4].blobMeasure.dDec),
                                 (vectTargetInfo[i].vectInfoInFrame[iSize - 4].blobMeasure.dDec - vectTargetInfo[i].vectInfoInFrame[iSize - 5].blobMeasure.dDec),
                                 (vectTargetInfo[i].vectInfoInFrame[iSize - 5].blobMeasure.dDec - vectTargetInfo[i].vectInfoInFrame[iSize - 6].blobMeasure.dDec));
                     }
-                    vectTargetInfo[i].pairfPredPosInFrame.first = vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.dRa + vectTargetInfo[i].pairfPredSpdInFrame.first;
-                    vectTargetInfo[i].pairfPredPosInFrame.second = vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.dDec + vectTargetInfo[i].pairfPredSpdInFrame.second;
-                    float fPeriod = 1.0 / m_fFrameFreq;
-                    vectTargetInfo[i].pairfPredSpdAE.first = MedianFloat3((vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.pairfPosAE.first - vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.pairfPosAE.first),
-                            (vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.pairfPosAE.first - vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.pairfPosAE.first),
-                            (vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.pairfPosAE.first - vectTargetInfo[i].vectInfoInFrame[iSize - 4].blobMeasure.pairfPosAE.first)) / fPeriod;
-                    vectTargetInfo[i].pairfPredSpdAE.second = MedianFloat3((vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.pairfPosAE.second - vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.pairfPosAE.second),
-                            (vectTargetInfo[i].vectInfoInFrame[iSize - 2].blobMeasure.pairfPosAE.second - vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.pairfPosAE.second),
-                            (vectTargetInfo[i].vectInfoInFrame[iSize - 3].blobMeasure.pairfPosAE.second - vectTargetInfo[i].vectInfoInFrame[iSize - 4].blobMeasure.pairfPosAE.second)) / fPeriod;
-                    vectTargetInfo[i].pairfPredPosAE.first = vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.pairfPosAE.first + vectTargetInfo[i].pairfPredSpdAE.first * fPeriod;
-                    vectTargetInfo[i].pairfPredPosAE.second = vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.pairfPosAE.second + vectTargetInfo[i].pairfPredSpdAE.second * fPeriod;
+                    vectTargetInfo[i].pairPredPosRaDec.first = vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.dRa + vectTargetInfo[i].pairPredSpdRaDec.first;
+                    vectTargetInfo[i].pairPredPosRaDec.second = vectTargetInfo[i].vectInfoInFrame[iSize - 1].blobMeasure.dDec + vectTargetInfo[i].pairPredSpdRaDec.second;
+
                     vectTargetInfo[i].fValid = ((iSize - 1) * vectTargetInfo[i].fValid + (vectTargetInfo[i].vectInfoInFrame[iSize - 1].bValid ? 1 : 0)) / iSize;
 
 //                    vectTargetInfo[i].bLiving = vectTargetInfo[i].bLiving && (vectTargetInfo[i].pairfPredPosInFrame.first > 0 && vectTargetInfo[i].pairfPredPosInFrame.first < opticparams.iImageWidth
 //                        && vectTargetInfo[i].pairfPredPosInFrame.second > 0 && vectTargetInfo[i].pairfPredPosInFrame.second < opticparams.iImageHeight);
-                    vectTargetInfo[i].bLiving = vectTargetInfo[i].bLiving && (vectTargetInfo[i].pairfPredPosInFrame.first > 0 && vectTargetInfo[i].pairfPredPosInFrame.first < (2 * pi)
-                        && vectTargetInfo[i].pairfPredPosInFrame.second > 0 && vectTargetInfo[i].pairfPredPosInFrame.second < pi/2.0);
+                    vectTargetInfo[i].bLiving = vectTargetInfo[i].bLiving && (vectTargetInfo[i].pairPredPosRaDec.first > 0 && vectTargetInfo[i].pairPredPosRaDec.first < 360.0
+                        && vectTargetInfo[i].pairPredPosRaDec.second > -90.0 && vectTargetInfo[i].pairPredPosRaDec.second < 90.0);
 
                     iNumCheck = vectTargetInfo[i].vectInfoInFrame.size() > 20 ? 20 : vectTargetInfo[i].vectInfoInFrame.size();
                     iNumUnValid = 0;
@@ -3424,6 +3403,20 @@ void TrackAlgo::AangleToEquator(double A, double E, double Longm, double phim, i
 
     *Rm = dbRm;
     *Dm = dbAngleD;
+}
+
+int TrackAlgo::getExponent(double num)
+{
+    if (num == 0)
+    {
+        return 0; // 处理特殊情况：对于零，指数部分为 0
+    }
+    else
+    {
+        double absNum = fabs(num);       // 获取数值的绝对值
+        double exponent = log10(absNum); // 获取对数值
+        return static_cast<int>(floor(exponent)); // 返回指数部分（取整）
+    }
 }
 
 double TrackAlgo::JDE(int Y, int M, int D, int hour, int min, double sec)

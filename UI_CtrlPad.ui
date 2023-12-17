@@ -817,60 +817,38 @@
            </item>
            <item row="6" column="0" colspan="3">
             <layout class="QGridLayout" name="gridLayout_2">
-             <item row="0" column="5">
+             <item row="0" column="8">
+              <widget class="QLineEdit" name="lineEdit_RaSpdThresh">
+               <property name="toolTip">
+                <string>RaSpd Thresh</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="5">
+              <widget class="QLabel" name="label">
+               <property name="text">
+                <string>恒星赤纬</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="6">
               <widget class="QLineEdit" name="lineEdit_RaThresh">
                <property name="toolTip">
                 <string>Ra Thresh</string>
                </property>
               </widget>
              </item>
-             <item row="0" column="0">
-              <widget class="QRadioButton" name="radioButton_ZoomFit">
-               <property name="font">
-                <font>
-                 <pointsize>13</pointsize>
-                </font>
-               </property>
-               <property name="text">
-                <string>全屏显示</string>
-               </property>
-              </widget>
-             </item>
-             <item row="1" column="5">
-              <widget class="QLineEdit" name="lineEdit_DecThresh">
+             <item row="1" column="8">
+              <widget class="QLineEdit" name="lineEdit_DecSpdThresh">
                <property name="toolTip">
-                <string>Dec Thresh</string>
+                <string>DecSpd Thresh</string>
                </property>
               </widget>
              </item>
-             <item row="1" column="3" colspan="2">
-              <widget class="QPushButton" name="pushButton_CleanData">
+             <item row="0" column="5">
+              <widget class="QLabel" name="label_2">
                <property name="text">
-                <string>数据清洗</string>
-               </property>
-              </widget>
-             </item>
-             <item row="0" column="1">
-              <widget class="QRadioButton" name="radioButton_ZoomOut">
-               <property name="font">
-                <font>
-                 <pointsize>13</pointsize>
-                </font>
-               </property>
-               <property name="text">
-                <string>放大显示</string>
-               </property>
-              </widget>
-             </item>
-             <item row="1" column="0">
-              <widget class="QCheckBox" name="checkBox_LooseThresh">
-               <property name="font">
-                <font>
-                 <pointsize>13</pointsize>
-                </font>
-               </property>
-               <property name="text">
-                <string>放宽阈值</string>
+                <string>恒星赤经</string>
                </property>
               </widget>
              </item>
@@ -883,6 +861,44 @@
                </property>
                <property name="text">
                 <string>强制修正</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="6">
+              <widget class="QLineEdit" name="lineEdit_DecThresh">
+               <property name="toolTip">
+                <string>Dec Thresh</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="3" colspan="2">
+              <widget class="QCheckBox" name="checkBox_Dark">
+               <property name="font">
+                <font>
+                 <pointsize>13</pointsize>
+                </font>
+               </property>
+               <property name="text">
+                <string>暗弱目标</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="3" colspan="2">
+              <widget class="QPushButton" name="pushButton_CleanData">
+               <property name="text">
+                <string>数据清洗</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="0">
+              <widget class="QCheckBox" name="checkBox_LooseThresh">
+               <property name="font">
+                <font>
+                 <pointsize>13</pointsize>
+                </font>
+               </property>
+               <property name="text">
+                <string>放宽阈值</string>
                </property>
               </widget>
              </item>
@@ -910,29 +926,41 @@
                </property>
               </widget>
              </item>
-             <item row="0" column="3" colspan="2">
-              <widget class="QCheckBox" name="checkBox_Dark">
+             <item row="0" column="1">
+              <widget class="QRadioButton" name="radioButton_ZoomOut">
                <property name="font">
                 <font>
                  <pointsize>13</pointsize>
                 </font>
                </property>
                <property name="text">
-                <string>暗弱目标</string>
+                <string>放大显示</string>
                </property>
               </widget>
              </item>
-             <item row="0" column="6">
-              <widget class="QLineEdit" name="lineEdit_RaSpdThresh">
-               <property name="toolTip">
-                <string>RaSpd Thresh</string>
+             <item row="0" column="0">
+              <widget class="QRadioButton" name="radioButton_ZoomFit">
+               <property name="font">
+                <font>
+                 <pointsize>13</pointsize>
+                </font>
+               </property>
+               <property name="text">
+                <string>全屏显示</string>
                </property>
               </widget>
              </item>
-             <item row="1" column="6">
-              <widget class="QLineEdit" name="lineEdit_DecSpdThresh">
-               <property name="toolTip">
-                <string>DecSpd Thresh</string>
+             <item row="0" column="7">
+              <widget class="QLabel" name="label_3">
+               <property name="text">
+                <string>赤经速度</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="7">
+              <widget class="QLabel" name="label_4">
+               <property name="text">
+                <string>赤纬速度</string>
                </property>
               </widget>
              </item>
@@ -1534,6 +1562,9 @@
            <property name="layoutDirection">
             <enum>Qt::LeftToRight</enum>
            </property>
+           <property name="rowCount">
+            <number>200</number>
+           </property>
            <row>
             <property name="text">
              <string>1</string>
@@ -1784,6 +1815,156 @@
              <string>50</string>
             </property>
            </row>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
+           <row/>
            <column>
             <property name="text">
              <string>目标编号</string>

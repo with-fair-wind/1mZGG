@@ -280,7 +280,7 @@ void ImageProcessor::on_SignalReplayData(void)
 
 void ImageProcessor::on_SignalDispStatus()
 {
-    m_pImageProc->DispMemcpy();
+    m_pImageProc->SetDispMem();
     emit SignalDisplay();
 }
 

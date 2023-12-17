@@ -1287,6 +1287,294 @@ void ImageProcAlgo::WriteJsonFile(bool busePosAE)
     qDebug() << "JSON data has been written to file.";
 }
 
+void ImageProcAlgo::WriteGAEGTW(vector<int> vecTarget, unsigned long long ullFrameID)
+{
+    unsigned int uiObsID = m_pGParam->m_SImageProcessorData.bProcessMode ? m_pGParam->m_SObsParams.iObsID : m_pGParam->m_SImageReplayerData.qstrTeleID.toUInt();
+    unsigned int uiImageWidth = m_pGParam->m_SGrabberData.bWindowEN ? m_pGParam->m_SGrabberData.iSubWidth : m_pGParam->m_SGrabberData.iFullWidth;
+    unsigned int uiImageHeight = m_pGParam->m_SGrabberData.bWindowEN ? m_pGParam->m_SGrabberData.iSubHeight : m_pGParam->m_SGrabberData.iFullHeight;
+    vector<sFramePacket>::iterator iter = m_vectFramePacket.begin();
+    for(; iter != m_vectFramePacket.end(); iter++)
+    {
+        if(ullFrameID == (*iter).ulFrameSeq)
+            break;
+    }
+    if(iter == m_vectFramePacket.end())
+        return;
+
+    double          (*dblSateShow)[9];
+    dblSateShow = new double[2002][9];
+    double          (*dblSateAE)[9];
+    dblSateAE = new double[2002][9];
+    int             nSateShow=0;
+    for (int iNum = 0; iNum < vecTarget.size(); iNum++)
+    {
+        int i = vecTarget[iNum];
+        int curIndex = iter != (m_vectFramePacket.end() - 1) ? 3 - ((*(m_vectFramePacket.end() - 1)).ulFrameSeq - ullFrameID) : m_vectTargetInfo[i].vectResPacket.size() - 1;
+        dblSateShow[nSateShow][0] = m_vectTargetInfo[i].vectResPacket[curIndex].blob.pairfPos.first;
+        dblSateShow[nSateShow][1] = m_vectTargetInfo[i].vectResPacket[curIndex].blob.pairfPos.second;
+        dblSateAE[nSateShow][0] = m_vectTargetInfo[i].vectResPacket[curIndex].pairfTargetPosZXDW.first;
+        dblSateAE[nSateShow][1] = m_vectTargetInfo[i].vectResPacket[curIndex].pairfTargetPosZXDW.second;
+        nSateShow++;
+    }
+
+    /// 数据赋值
+    sGXTCHeader header;
+    header.iNumTargets = 0;
+    vector<sGXTCData> vectGXTCData;
+    for (int iNum = 0; iNum < vecTarget.size(); iNum++)
+    {
+        int i = vecTarget[iNum];
+        int curIndex = iter != (m_vectFramePacket.end() - 1) ? 3 - ((*(m_vectFramePacket.end() - 1)).ulFrameSeq - ullFrameID) : m_vectTargetInfo[i].vectResPacket.size() - 1;
+
+        /// 调试信息打印
+        QString qstrAlphaDelta, qstrImagePos, qstrTargetMag;
+        qstrAlphaDelta.sprintf("(%f,%f)",
+                               m_vectTargetInfo[i].vectResPacket[curIndex].pairfTargetPosTWDW.first,
+                               m_vectTargetInfo[i].vectResPacket[curIndex].pairfTargetPosTWDW.second);
+        qstrImagePos.sprintf("(%f,%f)",
+                             m_vectTargetInfo[i].vectResPacket[curIndex].blob.pairfPos.first,
+                             m_vectTargetInfo[i].vectResPacket[curIndex].blob.pairfPos.second);
+        qstrTargetMag.sprintf("%.3f mV", m_vectTargetInfo[i].vectResPacket[curIndex].fTargetMvGDCL);
+        qDebug() << "*" << m_vectTargetInfo[i].vectResPacket[curIndex].qstrTargetID
+                 << "(Ascension,Declination):" << qstrAlphaDelta
+                 << "(ImagePosX,ImagePosY):" << qstrImagePos
+                 << "Mag:" << qstrTargetMag;
+
+        /// 输出信息格式化
+        char strDWData[300]="";
+        char strDWDataNew[300]="";
+        char strCGData[300]="";
+        char strCGDataNew[300]="";
+        char strExpTime[300] = "";
+        double dSecondAdd = (m_pGParam->m_SOpticData.fOptCenterX - m_vectTargetInfo[i].vectResPacket[curIndex].blob.pairfPos.first) * 138.11712 / 6144.0 * 0.001;
+        int nYearNew, nMonthNew, nDayNew, nHourNew, nMinuteNew;
+        double dblSecondNew;
+        TimeAddSeconds((*iter).stwdwFixData.nYear, (*iter).stwdwFixData.nMonth, (*iter).stwdwFixData.nDay, (*iter).stwdwFixData.nHour, (*iter).stwdwFixData.nMinute, (*iter).stwdwFixData.dblSecond, dSecondAdd, nYearNew, nMonthNew, nDayNew, nHourNew, nMinuteNew, dblSecondNew);
+        double dblHourNew = nHourNew + nMinuteNew/60e0 + dblSecondNew/3600e0;
+        m_pstarmap->TWDWDataNewFormat_DJ(m_vectTargetInfo[i].vectResPacket[curIndex].qstrTargetID.toUInt(),uiObsID,nYearNew,nMonthNew,nDayNew,dblHourNew,m_vectTargetInfo[i].vectResPacket[curIndex].pairfTargetPosTWDW.first,m_vectTargetInfo[i].vectResPacket[curIndex].pairfTargetPosTWDW.second,
+                                      (*iter).stwdwFixData.dblwendu-273.15,(*iter).stwdwFixData.dblshidu,(*iter).stwdwFixData.dbldqy,
+                                      m_vectTargetInfo[i].vectResPacket[curIndex].fTargetMvGDCL,
+                                      true,0,strDWData,&dblSateShow[iNum][0]);
+        ChangeGTWStr(strDWData, strDWDataNew, strExpTime);
+        m_pstarmap->GDJDataNewFormat(m_vectTargetInfo[i].vectResPacket[curIndex].qstrTargetID.toUInt(),uiObsID,nYearNew,nMonthNew,nDayNew,dblHourNew,dblSateAE[iNum][0],dblSateAE[iNum][1],
+                                     (*iter).stwdwFixData.dblwendu-273.15,(*iter).stwdwFixData.dblshidu,(*iter).stwdwFixData.dbldqy,
+                                     m_vectTargetInfo[i].vectResPacket[curIndex].fTargetMvGDCL,
+                                     m_vectTargetInfo[i].vectResPacket[curIndex].blob.fDN,
+                                     true, 0, strCGData);
+        ChangeGDJStr(strCGData, strCGDataNew);
+
+        QString qstrPASPrint;
+        qstrPASPrint.sprintf("%04d %02d %02d %02d %02d %07.4f %09.5f %09.5f %08.3f %08.3f %03d %06.2f 1",
+                          (*iter).stwdwFixData.nYear, (*iter).stwdwFixData.nMonth, (*iter).stwdwFixData.nDay,
+                          nHourNew, nMinuteNew, dblSecondNew,
+                          m_vectTargetInfo[i].vectResPacket[curIndex].pairfTargetPosTWDW.first,m_vectTargetInfo[i].vectResPacket[curIndex].pairfTargetPosTWDW.second,
+                          m_vectTargetInfo[i].vectResPacket[curIndex].blob.pairfPos.first,
+                          m_vectTargetInfo[i].vectResPacket[curIndex].blob.pairfPos.second,
+                          0, m_vectTargetInfo[i].vectResPacket[curIndex].fTargetMvGDCL);
+        QByteArray qbaPASPrint;
+        qbaPASPrint.append(qstrPASPrint);
+        char* pacPASInfo = qbaPASPrint.data();
+
+        /// 存储路径
+        QString qstrYYYY, qstrYYYYMM, qstrYYYYMMDD, qstrDatePath, qstrSub, qstrFileNameGTW, qstrFileNameGDJ, qstrFileNamePAS;
+        if (m_pGParam->m_SImageProcessorData.bProcessMode)
+        {
+            if (m_SNetMasterControlData.qstrStartTime.size() >= 14)
+            {
+                qstrYYYY = m_SNetMasterControlData.qstrStartTime.mid(0, 4);
+                qstrYYYYMM = m_SNetMasterControlData.qstrStartTime.mid(0, 6);
+                qstrYYYYMMDD = m_SNetMasterControlData.qstrStartTime.mid(0, 8);
+                qstrDatePath = qstrYYYY + "/"
+                        + qstrYYYYMM + "/"
+                        + qstrYYYYMMDD + "/";
+                qstrSub = qstrDatePath + m_SNetMasterControlData.qstrStartTime + "_" + m_SNetMasterControlData.qstrTargetID + "_" + QString::number(uiObsID) + ".DATA";
+            }
+        }
+        else
+        {
+            if (m_pGParam->m_SImageReplayerData.qstrStartTime.size() >= 14)
+            {
+                qstrYYYY = m_pGParam->m_SImageReplayerData.qstrStartTime.mid(0, 4);
+                qstrYYYYMM = m_pGParam->m_SImageReplayerData.qstrStartTime.mid(0, 6);
+                qstrYYYYMMDD = m_pGParam->m_SImageReplayerData.qstrStartTime.mid(0, 8);
+                qstrDatePath = "Replay/" + qstrYYYY + "/"
+                        + qstrYYYYMM + "/"
+                        + qstrYYYYMMDD + "/";
+                qstrSub = qstrDatePath + m_pGParam->m_SImageReplayerData.qstrStartTime + "_" + m_pGParam->m_SImageReplayerData.qstrTargetID + "_" + QString::number(uiObsID) + ".DATA";
+            }
+        }
+        if (m_qstrStorePath != m_pGParam->m_SPath.qstrDataStorePath + "/" + qstrSub)
+        {
+            m_qstrStorePath = m_pGParam->m_SPath.qstrDataStorePath + "/" + qstrSub;
+        }
+
+        QDir qDirMake;
+        if (!qDirMake.exists(m_qstrStorePath + "/GTW"))
+        {
+            qDirMake.mkpath(m_qstrStorePath + "/GTW");
+        }
+        if (!qDirMake.exists(m_qstrStorePath + "/GDJ"))
+        {
+            qDirMake.mkpath(m_qstrStorePath + "/GDJ");
+        }
+        if (!qDirMake.exists(m_qstrStorePath + "/PAS"))
+        {
+            qDirMake.mkpath(m_qstrStorePath + "/PAS");
+        }
+        if (!qDirMake.exists(m_qstrStorePath + "/GAE"))
+        {
+            qDirMake.mkpath(m_qstrStorePath + "/GAE");
+        }
+
+        /// 信息输出
+        QString qstrTaskID = m_vectTargetInfo[i].qstrTargetID;
+        QString qstrEndTime;
+        qstrEndTime.sprintf("%04d%02d%02d%02d%02d%02d",
+                            (*iter).stimeFrame.iYear,
+                            (*iter).stimeFrame.iMonth,
+                            (*iter).stimeFrame.iDay,
+                            (*iter).stimeFrame.iHour,
+                            (*iter).stimeFrame.iMinute,
+                            (*iter).stimeFrame.iSecond);
+
+        {
+            /// 数据整形
+            char strDWData[300]="";
+            char strDWDataNew[300]="";
+            char strExpTime[300]="";
+            int nYear, nMonth, nDay, nHour, nMinute, nYearNew, nMonthNew, nDayNew, nHourNew, nMinuteNew;
+            double dblSecond, dblSecondNew, dSecondAdd, dblHourNew, dblPointA, dblPointE, dblwendu, dbldqy, dblshidu;
+
+            ///******************m_vectTargetInfo[i].vectResPacket[curIndex] ******************///
+            BJ2UTC(m_vectTargetInfo[i].vectResPacket[curIndex].stimeFrame.iYear,
+                    m_vectTargetInfo[i].vectResPacket[curIndex].stimeFrame.iMonth,
+                    m_vectTargetInfo[i].vectResPacket[curIndex].stimeFrame.iDay,
+                    m_vectTargetInfo[i].vectResPacket[curIndex].stimeFrame.iHour,
+                    nYear, nMonth, nDay, nHour);
+            nMinute = m_vectTargetInfo[i].vectResPacket[curIndex].stimeFrame.iMinute;
+            dblSecond = m_vectTargetInfo[i].vectResPacket[curIndex].stimeFrame.iSecond +m_vectTargetInfo[i].vectResPacket[curIndex].stimeFrame.iMillisecond * 0.001 + m_vectTargetInfo[i].vectResPacket[curIndex].stimeFrame.iMicrosecond * 0.000001;
+            dSecondAdd = (m_pGParam->m_SOpticData.fOptCenterX - m_vectTargetInfo[i].vectResPacket[curIndex].blob.pairfPos.first) * 138.11712 / 6144.0 * 0.001;
+            TimeAddSeconds(nYear, nMonth, nDay, nHour, nMinute, dblSecond, dSecondAdd, nYearNew, nMonthNew, nDayNew, nHourNew, nMinuteNew, dblSecondNew);
+            dblHourNew = nHourNew + nMinuteNew/60e0 + dblSecondNew/3600e0;
+
+            double dAtmosErrEle1 = RefractVisual(((*(iter)).pairfFOVCenterAE.second - m_vectTargetInfo[i].vectInfoInFrame[curIndex].blobMeasure.dPointErrEle)/180.0*3.1415926,
+                                                                       (*(iter)).fAtmosP/100.0, (*(iter)).fTemp) / 3.1415926 * 180.0;
+            dblPointA = m_vectTargetInfo[i].vectResPacket[curIndex].pairfTargetPosZXDW.first;
+            dblPointE = m_vectTargetInfo[i].vectResPacket[curIndex].pairfTargetPosZXDW.second - dAtmosErrEle1;
+
+            dblwendu = m_vectTargetInfo[i].vectResPacket[curIndex].fTemp+273.15;
+            dbldqy = m_vectTargetInfo[i].vectResPacket[curIndex].fAtmosP/100.0;
+            dblshidu = m_vectTargetInfo[i].vectResPacket[curIndex].fHumidity;
+            m_pstarmap->ZXDWDataNewFormat(qstrTaskID.toUInt(),uiObsID,nYearNew,nMonthNew,nDayNew,dblHourNew,
+                                          dblPointA,dblPointE,
+                                          dblwendu-273.15,dblshidu,dbldqy, true,0,strDWData);
+            ChangeGAEStr(strDWData, strDWDataNew, strExpTime);
+            if(!curIndex)
+                GetFirstResPackTime(strDWDataNew, m_vectTargetInfo[i].qstrSaveStartTime);
+            qstrFileNameGTW = m_vectTargetInfo[i].qstrSaveStartTime + "_" + m_vectTargetInfo[i].vectResPacket[curIndex].qstrTargetID + "_" + QString::number(uiObsID) + ".GTW";
+            qstrFileNameGDJ = m_vectTargetInfo[i].qstrSaveStartTime + "_" + m_vectTargetInfo[i].vectResPacket[curIndex].qstrTargetID + "_" + QString::number(uiObsID) + ".GDJ";
+            qstrFileNamePAS = m_vectTargetInfo[i].qstrSaveStartTime + "_" + m_vectTargetInfo[i].vectResPacket[curIndex].qstrTargetID + "_" + QString::number(uiObsID) + ".PAS";
+            m_vectTargetInfo[i].qstrFileNameGAE = m_vectTargetInfo[i].qstrSaveStartTime + "_" + qstrTaskID + "_" + QString::number(uiObsID) + ".GAE";
+            {
+                sPacketGAE packet;
+                packet.qstrStorePath = m_qstrStorePath + "/GAE";
+                packet.qstrFileNameGAE = m_vectTargetInfo[i].qstrFileNameGAE;
+                packet.qstrTaskID = qstrTaskID;
+                packet.qstrObsID = QString::number(uiObsID);
+                packet.qstrStartTime = m_vectTargetInfo[i].qstrSaveStartTime;
+                packet.qstrEndTime = qstrEndTime;
+                memcpy(packet.strExpTime, strExpTime, sizeof(strExpTime));
+                memcpy(packet.strDWDataNew, strDWDataNew, sizeof(strDWDataNew));
+                if(m_vectTargetInfo[i].vectInfoInFrame[curIndex].bValid)
+                {
+                    memset(strDWDataNew, 0, sizeof(strDWDataNew));
+                    ChangeGAEStrMv(packet.strDWDataNew, strDWDataNew, m_vectTargetInfo[i].vectResPacket[curIndex].fTargetMvGDCL);
+                    WriteFile(packet.qstrStorePath,
+                              packet.qstrFileNameGAE,
+                              packet.qstrTaskID,
+                              packet.qstrObsID,
+                              packet.qstrStartTime,
+                              packet.qstrEndTime,
+                              strDWDataNew);
+                }
+            }
+            header.iNumTargets++;
+            QDate dateNow(nYearNew, nMonthNew, nDayNew);
+            int iDaysNow = dateNow.toJulianDay();
+            QDate date1970(1970, 1, 1);
+            int iDays1970 = date1970.toJulianDay();
+            int iJD1970 = iDaysNow - iDays1970;
+            header.lJMS1970 = (long)iJD1970 * 24 * 3600 * 100 + (long)(dblHourNew * 3600.0) * 100;
+            header.cMeasureStatus = m_SNetMasterControlData.bSearch ? 1 : 2;
+            header.cTaskMode = 2;
+            header.cTargetStatus = m_vectTargetInfo[i].vectResPacket[curIndex].bValid ? 1 : 2;
+            header.dTemp = dblwendu-273.15;
+            header.dAtmosP = dbldqy*100.0;
+            header.dHumidity = dblshidu*100.0;
+
+            sGXTCData data;
+            data.cMainFlag = 0xFF;
+            data.iTargetID = m_vectTargetInfo[i].qstrTargetID.toUInt();
+            data.iAzi = (int)(dblPointA * 3600.0);
+            data.iEle = (int)(dblPointE * 3600.0);
+            data.iAziSpd = (int)(m_vectTargetInfo[i].pairfPredSpdAE.first * 3600.0);
+            data.iEleSpd = (int)(m_vectTargetInfo[i].pairfPredSpdAE.second * 3600.0);
+            data.dMv = 0;
+            vectGXTCData.push_back(data);
+        }
+
+        if(m_vectTargetInfo[i].vectInfoInFrame[curIndex].bValid)
+        {
+            WriteFile(m_qstrStorePath + "/GTW",
+                      qstrFileNameGTW,
+                      qstrTaskID,
+                      QString::number(uiObsID),
+                      m_vectTargetInfo[i].qstrSaveStartTime,
+                      qstrEndTime,
+                      strDWDataNew);
+            WriteFile(m_qstrStorePath + "/GDJ",
+                      qstrFileNameGDJ,
+                      qstrTaskID,
+                      QString::number(uiObsID),
+                      m_vectTargetInfo[i].qstrSaveStartTime,
+                      qstrEndTime,
+                      strCGDataNew);
+            WritePasFile(m_qstrStorePath + "/PAS",
+                         qstrFileNamePAS,
+                         pacPASInfo);
+        }
+
+        if (m_pGParam->m_SImageProcessorData.bProcessMode)
+        {
+            if (m_vectTargetInfo[i].vectResPacket[curIndex].qstrTargetID.toUInt() == m_SNetMasterControlData.qstrTargetID.toUInt())
+            {
+                sGDCLData data;
+                QDate dateNow(nYearNew, nMonthNew, nDayNew);
+                int iDaysNow = dateNow.toJulianDay();
+                QDate date1970(1970, 1, 1);
+                int iDays1970 = date1970.toJulianDay();
+                int iJD1970 = iDaysNow - iDays1970;
+                data.lJMS1970 = (long)iJD1970 * 24 * 3600 * 100 + (long)(dblHourNew * 3600.0) * 100;
+                data.cMeasureStatus = m_SNetMasterControlData.bSearch ? 1 : 2;
+                data.iTargetID = m_vectTargetInfo[i].vectResPacket[curIndex].qstrTargetID.toUInt();
+                data.cDataFlag = 1;
+                data.iDN = (int)m_vectTargetInfo[i].vectResPacket[curIndex].blob.fDN ;
+                data.iMv = (int)(m_vectTargetInfo[i].vectResPacket[curIndex].fTargetMvGDCL * 100);
+                data.lDist = 0;
+                data.iAlpha = (int)(m_vectTargetInfo[i].vectResPacket[curIndex].pairfTargetPosTWDW.first * 3600.0);
+                data.iDelta = (int)(m_vectTargetInfo[i].vectResPacket[curIndex].pairfTargetPosTWDW.second * 3600.0);
+                data.iMvRes = 1;
+
+                char* pacSendData = new char[sizeof(sGDCLData)];
+                memcpy(pacSendData, (char*)&data, sizeof(sGDCLData));
+
+                NetExchange* pNet = (NetExchange*)m_pGParam->m_SNetExchangeData.pvoidThis;
+                pNet->SendGDCL(pacSendData, sizeof(sGDCLData));
+            }
+        }
+    }
+}
+
 int ImageProcAlgo::Proc_DirectPy()
 {
     vector<sFramePacket>::iterator iter = m_vectFramePacket.end() - 1;
@@ -1459,10 +1747,9 @@ int ImageProcAlgo::Proc_DirectPy()
                     /// DePatch
                     DePatch8(m_cmPitchNoStarBW, m_cmNoStarBW2, r, c);
 
-//                    /// DePatch
-//                    DePatch8(m_cmPitchNoStarBW, m_cmNoStarBW, r, c);
+
                 }
-            }
+            }            
             /// Erode
             ErodeBW(m_cmNoStarBW2, m_cmNoStarBW, 3, m_szImageWidth, m_szImageHeight);
             (*iter).sausImageEnhance.dAvg /= 36.0;
@@ -1524,6 +1811,7 @@ int ImageProcAlgo::Proc_DirectPy()
             for (Blobs::iterator iterB = m_blobs.begin(); iterB != m_blobs.end(); iterB++)
             {
                 sMeasureBlob blob;
+                blob.blobID = blobId;
                 double dJBDx = 0.0, dJBDy = 0.0;
                 blob.pairfPos = pair<float, float>((*iterB).second->cx * m_iBinning, (*iterB).second->cy * m_iBinning); // cx,cy: 质心;centroid_x,centroid_y: 形心
                 CalcDistortionDelta(blob.pairfPos.first, blob.pairfPos.second, dJBDx, dJBDy);
@@ -1573,18 +1861,14 @@ int ImageProcAlgo::Proc_DirectPy()
                 blob.dAlpha = dRm;
                 blob.dSigma = dDm;
 
-                blob.dRa = blob.dAlpha;
-                blob.dDec = blob.dSigma;
-
                 QStringList rowData = {QString::number(blobId), QString::fromStdString(std::to_string(blob.pairfPos.first)), QString::fromStdString(std::to_string(blob.pairfPos.second))
                                       , "", ""};
                 rowDataList.push_back(rowData);
-                m_umapBlob.insert(std::make_pair(std::to_string(blobId), blob));
+//                m_umapBlob.insert(std::make_pair(std::to_string(blobId), &blob));
 //                if (!m_pGParam->m_SImageProcessorData.bFullLEO || (m_szImageWidth==m_pGParam->m_SGrabberData.iSubWidth && m_szImageHeight==m_pGParam->m_SGrabberData.iSubHeight))
 //                    vectTargetMeasures.push_back(blob);
 //                else if (blob.pairfPos.first >= 1024 && blob.pairfPos.first <= 6144-1024
 //                         && blob.pairfPos.second >= 1024 && blob.pairfPos.second <= 6144-1024)
-//                    vectTargetMeasures.push_back(blob);
                 vectTargetMeasures.push_back(blob);
                 blobId++;
                 //****************************************************************//
@@ -1618,16 +1902,375 @@ int ImageProcAlgo::Proc_DirectPy()
                 qDebug() << "Failed to finish Python process.";
             QString output = pythonProcess.readAllStandardOutput();
             qDebug() << "Python output:" << output;
+
+            QString qstrOutputSaveDir = m_pGParam->m_SImageReplayerData.qstrCurFileName.left(lastDotIndex) + "/Output", filenameOutput = m_pGParam->m_SImageReplayerData.qstrCurFileName.mid(lastDotIndex + 1) + "Output.csv";
+            QFile outfile(qstrOutputSaveDir + "/" + filenameOutput);
+            if (!outfile.open(QIODevice::ReadOnly | QIODevice::Text))
+                qDebug() << "Could not open file for reading.";
+            QTextStream outText(&outfile);
+
+            // 读取第一行并检查处理是否成功
+            QString firstLine = outText.readLine();
+            if (!firstLine.startsWith("Success!"))
+                qDebug() << "Processing was not successful.";
+            else
+            {
+                // 如果处理成功，继续读取后续数据
+                while (!outText.atEnd())
+                {
+                    QString line = outText.readLine();
+                    QStringList fields = line.split(","); // 根据实际的分隔符进行分割
+                    int blobID = fields.at(0).toInt();
+                    if(fields.at(7) == "True")
+                    {
+                        vectTargetMeasures[blobID].bTWDW = true;
+                        vectTargetMeasures[blobID].dRa = fields.at(5).toDouble();
+                        vectTargetMeasures[blobID].dDec = fields.at(6).toDouble();
+                    }
+                    if(fields.at(10) == "True")
+                    {
+                        vectTargetMeasures[blobID].bGDCL = true;
+                        vectTargetMeasures[blobID].dDn = fields.at(8).toDouble();
+                        vectTargetMeasures[blobID].dGd = fields.at(9).toDouble();
+                    }
+                }
+            }
+            outfile.close();
         }
+
+        vector<pair<QString, sMeasureBlob>> vecGEOisbValidBlob;        
+
+        /// 向帧数据内添加恒星位置数据
+        (*iter).vectStarMeasures = vectTargetMeasures;
+        /// 测量数据打包
+        sMeasuresInFrame measuresTarget;
+        measuresTarget.fExpTime = (*iter).fExpTime;
+        measuresTarget.fFrameFreq = (*iter).fFrameFreq;
+        measuresTarget.pairfFOVCenterAE = (*iter).pairfFOVCenterAE;
+        measuresTarget.stimeFrame = (*iter).stimeFrame;
+        measuresTarget.ulFrameSeq = (*iter).ulFrameSeq;
+        measuresTarget.dTemp = (*iter).fTemp;
+        measuresTarget.dAtmosP = (*iter).fAtmosP;
+        measuresTarget.vectTargetMeasures = vectTargetMeasures;
         iTime8 = ClockOff();
         qDebug() << "### Proc Blob:" << iTime8 << "ms";
-        //***********************************************************************//
 
-        DispMemcpy();
+
+        //***********************************************************************//
+        /// 目标检测跟踪处理
+        ClockOn();
+        if (m_iTrackMode == TRACK_GEO)
+        {
+            m_pTrakcer->TrackProc_GEO(measuresTarget, m_vectTargetInfo, m_pGParam->m_SImageProcessorData.bFullLEO, vecGEOisbValidBlob);
+        }
+
+        m_pGParam->m_SImageProcessorData.uiNumMeasure = measuresTarget.vectTargetMeasures.size();
+        m_pGParam->m_SImageProcessorData.uiProcTrackMs = ClockOff();
+        iTime11 = m_pGParam->m_SImageProcessorData.uiProcTrackMs;
+        qDebug() << "### Proc Track:" << iTime11 << "ms";
+
+
+        if(m_iTrackMode != TRACK_SC && m_iTrackMode != TRACK_LEO)
+        {
+            unsigned int uiObsID = m_pGParam->m_SImageProcessorData.bProcessMode ? m_pGParam->m_SObsParams.iObsID : m_pGParam->m_SImageReplayerData.qstrTeleID.toUInt();
+
+            /// 目标刚刚完成前4帧航迹关联（当前搜索或跟踪流程第一次开始ProcessZXDW）
+            bool bAssoc4 = true;
+            for (int i = 0; i < m_vectTargetInfo.size(); i++)
+            {
+                bAssoc4 = bAssoc4 & (m_vectTargetInfo[i].vectInfoInFrame.size() == 4);
+            }
+            if (bAssoc4)
+            {
+                float fDist, fDistTemp;
+                fDist = 1000000000;
+                int iMainTargetSeq = 0;
+                for (int i = 0; i < m_vectTargetInfo.size(); i++)
+                {
+                    fDistTemp = pow(m_vectTargetInfo[i].vectInfoInFrame[m_vectTargetInfo[i].vectInfoInFrame.size()-1].blobMeasure.pairfPos.first - m_pGParam->m_SOpticData.fOptCenterX, 2.0)
+                            + pow(m_pGParam->m_SOpticData.fOptCenterY - m_vectTargetInfo[i].vectInfoInFrame[m_vectTargetInfo[i].vectInfoInFrame.size()-1].blobMeasure.pairfPos.second, 2.0);
+                    if (fDistTemp < fDist)
+                    {
+                        fDist = fDistTemp;
+                        iMainTargetSeq = i;
+                    }
+                }
+                if (fDist < 1000000000)
+                {
+                    m_iMainTargetSeq = iMainTargetSeq;
+                }
+            }
+
+            vector<int> vecAllTargetInCurFrame, vecNewTargetInCurFrame;
+            for(int i = 0; i < m_vectTargetInfo.size(); i++)
+            {
+                if(m_vectTargetInfo[i].bLiving)
+                {
+                    if(m_vectTargetInfo[i].vectInfoInFrame[m_vectTargetInfo[i].vectInfoInFrame.size() - 1].ulFrameSeq == (*iter).ulFrameSeq)
+                    {
+                        vecAllTargetInCurFrame.push_back(i);
+                        if(m_vectTargetInfo[i].vectInfoInFrame.size() == 4)
+                            vecNewTargetInCurFrame.push_back(i);
+                    }
+                }
+            }
+            if(vecNewTargetInCurFrame.size())
+            {
+                for(int iNew = 0; iNew < vecNewTargetInCurFrame.size(); iNew++)
+                {
+                    int i = vecNewTargetInCurFrame[iNew];
+                    QString qstrTargetID;
+                    qstrTargetID.sprintf("9%02d%03d", m_pGParam->m_SObsParams.iObsID % 100, i + 1);
+                    if (i == m_iMainTargetSeq && m_SNetMasterControlData.qstrTargetID != "000000")
+                    {
+                        qstrTargetID = m_pGParam->m_SImageProcessorData.bProcessMode
+                                ? m_SNetMasterControlData.qstrTargetID
+                                : m_pGParam->m_SImageReplayerData.qstrTargetID;
+                    }
+                    m_vectTargetInfo[i].qstrTargetID = qstrTargetID;
+                    ///******************第1帧 ******************///
+                    sMeasureBlob blob1 = m_vectTargetInfo[i].vectInfoInFrame[0].blobMeasure;
+                    sResPacket resPacket1;
+                    resPacket1.pairfFOVCenterAE = (*(iter - 3)).pairfFOVCenterAE;
+                    resPacket1.pairfFOVCenterAEModify = pair<float, float>(blob1.fFOVCenterAziModify, blob1.fFOVCenterEleModify);
+                    resPacket1.pairfTargetPosInFrame = blob1.pairfPos;
+                    resPacket1.pairfTargetDistAE = pair<float, float>(blob1.fDistAzi, blob1.fDistEle);
+                    resPacket1.pairfTargetPosZXDW = pair<float, float>(blob1.fTargetAzi, blob1.fTargetEle);
+                    resPacket1.blob = blob1;
+                    resPacket1.fExpTime = (*(iter - 3)).fExpTime;
+                    resPacket1.fFrameFreq = (*(iter - 3)).fFrameFreq;
+                    resPacket1.stimeFrame = (*(iter - 3)).stimeFrame;
+                    resPacket1.ulFrameSeq = (*(iter - 3)).ulFrameSeq;
+                    resPacket1.qstrTargetID = qstrTargetID;
+                    resPacket1.fTemp = (*(iter - 3)).fTemp;
+                    resPacket1.fAtmosP = (*(iter - 3)).fAtmosP;
+                    resPacket1.fHumidity = (*(iter - 3)).fHumidity;
+                    resPacket1.bValid = m_vectTargetInfo[i].vectInfoInFrame[0].bValid;
+                    resPacket1.pairfTargetPosTWDW = std::make_pair(blob1.dRa, blob1.dDec);
+                    if(blob1.bGDCL)
+                    {
+                        resPacket1.blob.fDN = blob1.dDn;
+                        resPacket1.fTargetMvGDCL = blob1.dGd;
+                    }
+
+                    ///******************第2帧 ******************///
+                    sMeasureBlob blob2 = m_vectTargetInfo[i].vectInfoInFrame[1].blobMeasure;
+                    sResPacket resPacket2;
+                    resPacket2.pairfFOVCenterAE = (*(iter - 2)).pairfFOVCenterAE;
+                    resPacket2.pairfFOVCenterAEModify = pair<float, float>(blob2.fFOVCenterAziModify, blob2.fFOVCenterEleModify);
+                    resPacket2.pairfTargetPosInFrame = blob2.pairfPos;
+                    resPacket2.pairfTargetDistAE = pair<float, float>(blob2.fDistAzi, blob2.fDistEle);
+                    resPacket2.pairfTargetPosZXDW = pair<float, float>(blob2.fTargetAzi, blob2.fTargetEle);
+                    resPacket2.blob = blob2;
+                    resPacket2.fExpTime = (*(iter - 2)).fExpTime;
+                    resPacket2.fFrameFreq = (*(iter - 2)).fFrameFreq;
+                    resPacket2.stimeFrame = (*(iter - 2)).stimeFrame;
+                    resPacket2.ulFrameSeq = (*(iter - 2)).ulFrameSeq;
+                    resPacket2.qstrTargetID = qstrTargetID;
+                    resPacket2.fTemp = (*(iter - 2)).fTemp;
+                    resPacket2.fAtmosP = (*(iter - 2)).fAtmosP;
+                    resPacket2.fHumidity = (*(iter - 2)).fHumidity;
+                    resPacket2.bValid = m_vectTargetInfo[i].vectInfoInFrame[1].bValid;
+                    resPacket2.pairfTargetPosTWDW = std::make_pair(blob2.dRa, blob2.dDec);
+                    if(blob2.bGDCL)
+                    {
+                        resPacket2.blob.fDN = blob2.dDn;
+                        resPacket2.fTargetMvGDCL = blob2.dGd;
+                    }
+                    /// Calculate Atmos Error
+
+                    ///******************第3帧 ******************///
+                    sMeasureBlob blob3 = m_vectTargetInfo[i].vectInfoInFrame[2].blobMeasure;
+                    sResPacket resPacket3;
+                    resPacket3.pairfFOVCenterAE = (*(iter - 1)).pairfFOVCenterAE;
+                    resPacket3.pairfFOVCenterAEModify = pair<float, float>(blob3.fFOVCenterAziModify, blob3.fFOVCenterEleModify);
+                    resPacket3.pairfTargetPosInFrame = blob3.pairfPos;
+                    resPacket3.pairfTargetDistAE = pair<float, float>(blob3.fDistAzi, blob3.fDistEle);
+                    resPacket3.pairfTargetPosZXDW = pair<float, float>(blob3.fTargetAzi, blob3.fTargetEle);
+                    resPacket3.blob = blob3;
+                    resPacket3.fExpTime = (*(iter - 1)).fExpTime;
+                    resPacket3.fFrameFreq = (*(iter - 1)).fFrameFreq;
+                    resPacket3.stimeFrame = (*(iter - 1)).stimeFrame;
+                    resPacket3.ulFrameSeq = (*(iter - 1)).ulFrameSeq;
+                    resPacket3.qstrTargetID = qstrTargetID;
+                    resPacket3.fTemp = (*(iter - 1)).fTemp;
+                    resPacket3.fAtmosP = (*(iter - 1)).fAtmosP;
+                    resPacket3.fHumidity = (*(iter - 1)).fHumidity;
+                    resPacket3.bValid = m_vectTargetInfo[i].vectInfoInFrame[2].bValid;
+                    resPacket3.pairfTargetPosTWDW = std::make_pair(blob3.dRa, blob3.dDec);
+                    if(blob3.bGDCL)
+                    {
+                        resPacket3.blob.fDN = blob3.dDn;
+                        resPacket3.fTargetMvGDCL = blob3.dGd;
+                    }
+                    /// Calculate Atmos Error
+
+                    m_vectTargetInfo[i].vectResPacket.push_back(resPacket1);
+                    m_vectTargetInfo[i].vectResPacket.push_back(resPacket2);
+                    m_vectTargetInfo[i].vectResPacket.push_back(resPacket3);
+
+                    m_vectTargetInfo[i].vectulFrameSeqTWDW.push_back(resPacket1.ulFrameSeq);
+                    m_vectTargetInfo[i].vectulFrameSeqTWDW.push_back(resPacket2.ulFrameSeq);
+                    m_vectTargetInfo[i].vectulFrameSeqTWDW.push_back(resPacket3.ulFrameSeq);
+
+                    //*******************************************************// Vedio标注1
+                    {
+                        QDir qDirMake;
+                        if (!qDirMake.exists(m_qstrStorePath + "/TAG"))
+                        {
+                            qDirMake.mkpath(m_qstrStorePath + "/TAG");
+                        }
+                        QString qstrTargetID = m_pGParam->m_SImageProcessorData.bProcessMode ? m_SNetMasterControlData.qstrTargetID
+                                                           : m_pGParam->m_SImageReplayerData.qstrTargetID;
+                        QString qstrTeleID = m_pGParam->m_SImageProcessorData.bProcessMode ? QString::number(m_pGParam->m_SObsParams.iObsID)
+                                                         : m_pGParam->m_SImageReplayerData.qstrTeleID;
+                        QString qstrJSTagFileName;
+                        qstrJSTagFileName.sprintf("%04d%02d%02d%02d%02d%02d%03d_%06d_%04d_%06d.tag",
+                                                  (*(iter - 3)).stimeFrame.iYear,
+                                                  (*(iter - 3)).stimeFrame.iMonth,
+                                                  (*(iter - 3)).stimeFrame.iDay,
+                                                  (*(iter - 3)).stimeFrame.iHour,
+                                                  (*(iter - 3)).stimeFrame.iMinute,
+                                                  (*(iter - 3)).stimeFrame.iSecond,
+                                                  (*(iter - 3)).stimeFrame.iMillisecond,
+                                                  qstrTargetID.toUInt(),
+                                                  qstrTeleID.toUInt(),
+                                                  (unsigned int)(*(iter - 3)).ulFrameSeq);
+                        WriteVedioTagFile(m_qstrStorePath + "/TAG", qstrJSTagFileName, resPacket1.blob, resPacket1.qstrTargetID);
+                    }
+                    //*******************************************************// Vedio标注2
+                    {
+                        QDir qDirMake;
+                        if (!qDirMake.exists(m_qstrStorePath + "/TAG"))
+                        {
+                            qDirMake.mkpath(m_qstrStorePath + "/TAG");
+                        }
+                        QString qstrTargetID = m_pGParam->m_SImageProcessorData.bProcessMode ? m_SNetMasterControlData.qstrTargetID
+                                                           : m_pGParam->m_SImageReplayerData.qstrTargetID;
+                        QString qstrTeleID = m_pGParam->m_SImageProcessorData.bProcessMode ? QString::number(m_pGParam->m_SObsParams.iObsID)
+                                                         : m_pGParam->m_SImageReplayerData.qstrTeleID;
+                        QString qstrJSTagFileName;
+                        qstrJSTagFileName.sprintf("%04d%02d%02d%02d%02d%02d%03d_%06d_%04d_%06d.tag",
+                                                  (*(iter - 2)).stimeFrame.iYear,
+                                                  (*(iter - 2)).stimeFrame.iMonth,
+                                                  (*(iter - 2)).stimeFrame.iDay,
+                                                  (*(iter - 2)).stimeFrame.iHour,
+                                                  (*(iter - 2)).stimeFrame.iMinute,
+                                                  (*(iter - 2)).stimeFrame.iSecond,
+                                                  (*(iter - 2)).stimeFrame.iMillisecond,
+                                                  qstrTargetID.toUInt(),
+                                                  qstrTeleID.toUInt(),
+                                                  (unsigned int)(*(iter - 2)).ulFrameSeq);
+                        WriteVedioTagFile(m_qstrStorePath + "/TAG", qstrJSTagFileName, resPacket2.blob, resPacket2.qstrTargetID);
+                    }
+                    //*******************************************************// Vedio标注3
+                    {
+                        QDir qDirMake;
+                        if (!qDirMake.exists(m_qstrStorePath + "/TAG"))
+                        {
+                            qDirMake.mkpath(m_qstrStorePath + "/TAG");
+                        }
+                        QString qstrTargetID = m_pGParam->m_SImageProcessorData.bProcessMode ? m_SNetMasterControlData.qstrTargetID
+                                                           : m_pGParam->m_SImageReplayerData.qstrTargetID;
+                        QString qstrTeleID = m_pGParam->m_SImageProcessorData.bProcessMode ? QString::number(m_pGParam->m_SObsParams.iObsID)
+                                                         : m_pGParam->m_SImageReplayerData.qstrTeleID;
+                        QString qstrJSTagFileName;
+                        qstrJSTagFileName.sprintf("%04d%02d%02d%02d%02d%02d%03d_%06d_%04d_%06d.tag",
+                                                  (*(iter - 1)).stimeFrame.iYear,
+                                                  (*(iter - 1)).stimeFrame.iMonth,
+                                                  (*(iter - 1)).stimeFrame.iDay,
+                                                  (*(iter - 1)).stimeFrame.iHour,
+                                                  (*(iter - 1)).stimeFrame.iMinute,
+                                                  (*(iter - 1)).stimeFrame.iSecond,
+                                                  (*(iter - 1)).stimeFrame.iMillisecond,
+                                                  qstrTargetID.toUInt(),
+                                                  qstrTeleID.toUInt(),
+                                                  (unsigned int)(*(iter - 1)).ulFrameSeq);
+                        WriteVedioTagFile(m_qstrStorePath + "/TAG", qstrJSTagFileName, resPacket3.blob, resPacket3.qstrTargetID);
+                    }
+                }
+                WriteGAEGTW(vecNewTargetInCurFrame, (*iter).ulFrameSeq - 3);
+                WriteGAEGTW(vecNewTargetInCurFrame, (*iter).ulFrameSeq - 2);
+                WriteGAEGTW(vecNewTargetInCurFrame, (*iter).ulFrameSeq - 1);
+            }
+
+            sGXTCHeader header;
+            header.iNumTargets = 0;
+            vector<sGXTCData> vectGXTCData;
+            if(vecAllTargetInCurFrame.size())
+            {
+                for(int iAll = 0; iAll < vecAllTargetInCurFrame.size(); iAll++)
+                {
+                    int i = vecAllTargetInCurFrame[iAll];
+                    ///******************当前帧******************///
+                    /// Result Packet
+                    sMeasureBlob blob = m_vectTargetInfo[i].vectInfoInFrame[m_vectTargetInfo[i].vectInfoInFrame.size()-1].blobMeasure;
+                    sResPacket resPacket;
+                    resPacket.pairfFOVCenterAE = (*iter).pairfFOVCenterAE;
+                    resPacket.pairfFOVCenterAEModify = pair<float, float>(blob.fFOVCenterAziModify, blob.fFOVCenterEleModify);
+                    resPacket.pairfTargetPosInFrame = blob.pairfPos;
+                    resPacket.pairfTargetDistAE = pair<float, float>(blob.fDistAzi, blob.fDistEle);
+                    resPacket.pairfTargetPosZXDW = pair<float, float>(blob.fTargetAzi, blob.fTargetEle);
+                    resPacket.blob = blob;
+                    resPacket.fExpTime = (*iter).fExpTime;
+                    resPacket.fFrameFreq = (*iter).fFrameFreq;
+                    resPacket.stimeFrame = (*iter).stimeFrame;
+                    resPacket.ulFrameSeq = (*iter).ulFrameSeq;
+                    resPacket.qstrTargetID = m_vectTargetInfo[i].qstrTargetID;
+                    resPacket.fTemp = (*iter).fTemp;
+                    resPacket.fAtmosP = (*iter).fAtmosP;
+                    resPacket.fHumidity = (*iter).fHumidity;
+                    resPacket.bValid = m_vectTargetInfo[i].vectInfoInFrame[m_vectTargetInfo[i].vectInfoInFrame.size()-1].bValid;
+                    resPacket.pairfTargetPosTWDW = std::make_pair(blob.dRa, blob.dDec);
+                    if(blob.bGDCL)
+                    {
+                        resPacket.blob.fDN = blob.dDn;
+                        resPacket.fTargetMvGDCL = blob.dGd;
+                    }
+                    /// Calculate Atmos Error
+                    double dAtmosErrEle = RefractVisual(((*iter).pairfFOVCenterAE.second - blob.dPointErrEle)/180.0*3.1415926,
+                                                                               (*iter).fAtmosP/100.0, (*iter).fTemp) / 3.1415926 * 180.0;
+
+                    m_vectTargetInfo[i].vectResPacket.push_back(resPacket);
+                    if (m_vectTargetInfo[i].vectulFrameSeqTWDW.size() > 100)
+                        m_vectTargetInfo[i].vectulFrameSeqTWDW.clear();
+                    m_vectTargetInfo[i].vectulFrameSeqTWDW.push_back(resPacket.ulFrameSeq);
+
+                    //*******************************************************// Vedio标注
+                    {
+                        QDir qDirMake;
+                        if (!qDirMake.exists(m_qstrStorePath + "/TAG"))
+                        {
+                            qDirMake.mkpath(m_qstrStorePath + "/TAG");
+                        }
+                        QString qstrTargetID = m_pGParam->m_SImageProcessorData.bProcessMode ? m_SNetMasterControlData.qstrTargetID
+                                                           : m_pGParam->m_SImageReplayerData.qstrTargetID;
+                        QString qstrTeleID = m_pGParam->m_SImageProcessorData.bProcessMode ? QString::number(m_pGParam->m_SObsParams.iObsID)
+                                                         : m_pGParam->m_SImageReplayerData.qstrTeleID;
+                        QString qstrJSTagFileName;
+                        qstrJSTagFileName.sprintf("%04d%02d%02d%02d%02d%02d%03d_%06d_%04d_%06d.tag",
+                                                  (*iter).stimeFrame.iYear,
+                                                  (*iter).stimeFrame.iMonth,
+                                                  (*iter).stimeFrame.iDay,
+                                                  (*iter).stimeFrame.iHour,
+                                                  (*iter).stimeFrame.iMinute,
+                                                  (*iter).stimeFrame.iSecond,
+                                                  (*iter).stimeFrame.iMillisecond,
+                                                  qstrTargetID.toUInt(),
+                                                  qstrTeleID.toUInt(),
+                                                  (unsigned int)(*iter).ulFrameSeq);
+                        WriteVedioTagFile(m_qstrStorePath + "/TAG", qstrJSTagFileName, resPacket.blob, resPacket.qstrTargetID);
+                    }
+                }
+                WriteGAEGTW(vecAllTargetInCurFrame, (*iter).ulFrameSeq);
+            }
+        }
+
+        SetDispMem();
     }
 }
 
-void ImageProcAlgo::DispMemcpy()
+void ImageProcAlgo::SetDispMem()
 {
     double dAvg = 0.0, dStd = 0.0;
     vector<sFramePacket>::iterator iter = m_vectFramePacket.end() - 1;

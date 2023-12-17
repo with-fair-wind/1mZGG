@@ -87,6 +87,7 @@ struct sTime
 /// 单帧图像中的单点测量数据(输入数据)
 struct sMeasureBlob
 {
+    unsigned blobID = 0;
     pair<float, float> pairfPos = make_pair(0, 0);	// 连通域质心位置(pixel)
     float fMaxX = 0.0;	// 连通域X方向最大(pixel)
     float fMinX = 0.0;	// 连通域X方向最小(pixel)
@@ -107,8 +108,12 @@ struct sMeasureBlob
     double dAlpha = 0.0;
     double dSigma = 0.0;
 
-    double dRa = 0.0;
-    double dDec = 0.0;
+    bool bTWDW = false;
+    double dRa = 0.0;   //度
+    double dDec = 0.0;  //度
+    bool bGDCL = false;
+    double dDn = 0.0;
+    double dGd = 0.0;
 };
 
 /// 单帧图像中的测量数据(输入数据)
@@ -171,11 +176,14 @@ struct sTargetInfo
 	pair<float, float> pairfPredPosAE;	// 目标结合望远镜方位、俯仰角预测位置,量纲为"°"
 	pair<float, float> pairfPredSpdInFrame;	// 目标帧内预测速度,量纲为"pixel/frame"
 	pair<float, float> pairfPredSpdAE;	// 目标结合望远镜方位、俯仰角预测速度,量纲为"°/s"
+
+    pair<float, float> pairPredSpdRaDec;
+    pair<float, float> pairPredPosRaDec;
+
     float fValid = 1.0;	// 目标存在性分数(0~1.0,无测量占比)
     bool bLiving = false;	// 目标是否存活
     vector<unsigned long> vectulFrameSeqTWDW;
     vector<unsigned long> vectulFrameSeqStore;
-    pair<float, float> pairfLastRmDm;
 };
 
 /// GEO模式的设置参数
@@ -233,6 +241,7 @@ public:
     void AangleToEquator(double A, double E, double Longm, double phim, int y, int m, int d, int hour, int min, double sec, double p, double T, bool nflag, double *Ra, double *De, double *Rm, double *Dm, bool zflag);
     void setRaDecThresh(const double& dRaThresh, const double& dDecThresh, const double& dRaSpdThresh, const double& dDecSpdThresh){m_dRaThresh = dRaThresh; m_dDecThresh = dDecThresh;
                                                                                                                                    m_dRaSpdThresh = dRaSpdThresh; m_dDecSpdThresh = dDecSpdThresh;}
+    int getExponent(double num);
 
 private:
 	void BubbleSortReverse(vector<int>& vectInput);
@@ -264,6 +273,7 @@ private:
     double JDE(int Y, int M, int D, int hour, int min, double sec); // 计算简约儒略日，输入世界时，J2000
     double Nut1(double t0);                                         // 求黄经章动，输入简约儒略日
     double Nut2(double t0);                                         // 求倾角章动函数，输入简约儒略日
+
     /// 变量
 private:
     GlobalParameter *m_pGParam;

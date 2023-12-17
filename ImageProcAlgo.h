@@ -201,7 +201,9 @@ public:
     }
     void SetDark(bool bDark) {
         m_bDark = bDark;
-        if (!bDark)
+//        if (!bDark)
+//            m_fRatioStd = 2.5;
+        if (bDark)
             m_fRatioStd = 2.5;
     }
     void SetStdRatio(float fRatio) {
@@ -220,7 +222,7 @@ public:
     CStarMap* GetStarMap() {return m_pstarmap;}
     void CalcDistortionDelta(double dPosX, double dPosY, double &dPosDx, double &dPosDy);
     void setRaDecThresh(const double& dRaThresh, const double& dDecThresh, const double& dRaSpdThresh, const double& dDecSpdThresh) {m_pTrakcer->setRaDecThresh(dRaThresh, dDecThresh, dRaSpdThresh, dDecSpdThresh);}
-    void DispMemcpy();
+    void SetDispMem();
 
 private:
     int InitGPU(size_t szGrabWidth, size_t szGrabHeight, int iBinning, size_t szCropWidth, size_t szCropHeight, bool bRotate);
@@ -283,6 +285,7 @@ private:
     int ErodeGray(cl_mem cmInput, cl_mem cmOutput, int iHSize, size_t szImageWidth, size_t szImageHeight);
 
     void WriteJsonFile(bool busePosAE);
+    void WriteGAEGTW(vector<int> vecTarget, unsigned long long ullFrameID);
 
 
 
@@ -427,7 +430,7 @@ private:
     QString m_qstrErrorResultPath;
     SNetMasterControlData m_SNetMasterControlData;
 
-    std::unordered_map<std::string, sMeasureBlob> m_umapBlob;
+    std::unordered_map<std::string, sMeasureBlob *> m_umapBlob;
 };
 
 #endif // IMAGEPROCALGO_H
