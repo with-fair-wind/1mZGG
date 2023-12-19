@@ -50,11 +50,6 @@ private:
     void UpdataUIParams(void);
     void LoadParams(void);
     void WriteParams(void);
-    void on_SignalMCSetExp(float fExpTime);
-    void on_SignalMCSetTrackMode(int iIndexComboTrackMode);
-    void on_SignalMCSetTrack(bool bTrack);
-    void on_SignalMCSetImageSave(bool bImageSave);
-    void on_SignalMCSetTaskChanged(void);
     QStringList FindFiles(const QString &startDir, const QStringList &filters);
     void DeleteLessFile(QStringList qstrlistFiles, int& iDelete);
     void changeRaDecTrackParams();
@@ -66,8 +61,22 @@ signals:
     void SignalDrawStarMap(bool);
     void SignalZoom(int);
     void SignalDispStatus();
+    void SignalAddImage();
 
-private slots :
+private slots:
+    void on_SignalMCSetExp(float fExpTime);
+    void on_SignalMCSetTrackMode(int iIndexComboTrackMode);
+    void on_SignalMCSetTrack(bool bTrack);
+    void on_SignalMCSetImageSave(bool bImageSave);
+    void on_SignalMCSetTaskChanged(void);
+    void on_SignalMsgPrint(QString);
+    void on_SignalChangeUITrackMode(int iMode);  // iMode==0：切换为‘...（全帧）’;iMode==1：切换为‘...（开窗）’;iMode==2：图像宽高不匹配
+    void on_SignalDisplay(void);
+    void on_SignalMCSet(float fExpTime, int iIndexComboTrackMode, bool bTrack, bool bImageSave);
+    void on_SignalManualInit(void);
+    void on_SignalLabelMouseClicked(float fClickX, float fClickY);
+
+private slots:
     void on_checkBox_ImageGrab_clicked(void);
     void on_pushButton_SavePathBrowse_clicked(void);
     void on_checkBox_MatchTimeSave_clicked(void);
@@ -101,12 +110,6 @@ private slots :
     void on_checkBox_MCCtrl_clicked(void);
     void on_pushButton_TrainCam_clicked(void);
     void on_UITimerOut(void);
-    void on_SignalMsgPrint(QString);
-    void on_SignalChangeUITrackMode(int iMode);  // iMode==0：切换为‘...（全帧）’;iMode==1：切换为‘...（开窗）’;iMode==2：图像宽高不匹配
-    void on_SignalDisplay(void);
-    void on_SignalMCSet(float fExpTime, int iIndexComboTrackMode, bool bTrack, bool bImageSave);
-    void on_SignalManualInit(void);
-    void on_SignalLabelMouseClicked(QPoint qptPos);
     void on_checkBox_Dark_clicked(bool checked);
     void on_checkBox_DispBW_clicked(bool checked);
     void on_comboBox_ThreshBW_currentIndexChanged(int index);
@@ -117,14 +120,24 @@ private slots :
     void on_radioButton_ZoomFit_clicked(bool checked);
     void on_radioButton_ZoomOut_clicked(bool checked);
     void on_radioButton_ZoomIn_clicked(bool checked);
+    void on_horizontalSlider_ScaleUp_sliderReleased();
+    void on_horizontalSlider_ScaleDown_sliderReleased();
 
     void on_lineEdit_DecThresh_returnPressed();
     void on_lineEdit_RaThresh_returnPressed();
     void on_lineEdit_RaSpdThresh_returnPressed();
     void on_lineEdit_DecSpdThresh_returnPressed();
+    void on_pushButton_PythonExE_clicked();
+    void on_pushButton_pyPath_clicked();
 
-    void on_horizontalSlider_ScaleUp_sliderReleased();
-    void on_horizontalSlider_ScaleDown_sliderReleased();
+    void on_lineEdit_AddFrameNum_returnPressed();
+    void on_pushButton_AddRePeat_clicked();
+    void on_checkBox_LockDisp_clicked(bool checked);
+    void on_checkBox_TrackAlgorithm_clicked(bool checked);
+
+public slots:
+    void on_SignalAddEnding();
+    void on_SignalAddProc(int iSeqCut, int iNumTotal);
 
 private:
     Ui::MainWindow ui;
@@ -148,6 +161,8 @@ private:
     QString m_qstrPathReplay;
     bool m_bMCCtrlSetting;
     bool m_bParamsLoading;
+
+    pair<float, float> pairPosManual;
 };
 
 #endif // MAINWINDOW_H

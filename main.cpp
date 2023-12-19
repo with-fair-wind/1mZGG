@@ -112,11 +112,14 @@ int main(int argc, char *argv[])
         QObject::connect(&imageprocessorMain, SIGNAL(SignalDisplay()), &disppadsMain, SLOT(on_SignalDisplay()));
 
         QObject::connect(&imageprocessorMain, SIGNAL(SignalDisplay()), &ctrlpadMain, SLOT(on_SignalDisplay()));
+        QObject::connect(&imageprocessorMain, &ImageProcessor::SignalAddEnding, &ctrlpadMain, &UI_CtrlPad::on_SignalAddEnding);
 
         /// ImageReplayer信号连接
         QObject::connect(&imagereplayerMain, SIGNAL(SignalReplayData()), &imageprocessorMain, SLOT(on_SignalReplayData()));
         QObject::connect(&imagereplayerMain, SIGNAL(SignalReplayInit(unsigned int, unsigned int)), &imageprocessorMain, SLOT(on_SignalReplayInit(unsigned int, unsigned int)));
         QObject::connect(&imagereplayerMain, SIGNAL(SignalChangeUITrackMode(int)), &ctrlpadMain, SLOT(on_SignalChangeUITrackMode(int)));
+        QObject::connect(&imagereplayerMain, &ImageReplayer::SignalAddEnding, &ctrlpadMain, &UI_CtrlPad::on_SignalAddEnding);
+        QObject::connect(&imagereplayerMain, &ImageReplayer::SignalAddProc, &ctrlpadMain, &UI_CtrlPad::on_SignalAddProc);
         /// DataProcessor信号连接
 //        QObject::connect(&dataprocessorMain, SIGNAL(SignalDisplay()), &ctrlpadMain, SLOT(on_SignalDisplay()));
         /// MyLog信号连接
@@ -129,9 +132,10 @@ int main(int argc, char *argv[])
         QObject::connect(&ctrlpadMain, SIGNAL(SignalZoom(int)), &disppadMain, SLOT(on_SignalZoom(int)));
         QObject::connect(&ctrlpadMain, SIGNAL(SignalDrawStarMap(bool)), &disppadMain, SLOT(on_SignalDrawStarMap(bool)));
         QObject::connect(&ctrlpadMain, SIGNAL(SignalDispStatus()), &imageprocessorMain, SLOT(on_SignalDispStatus()));
+        QObject::connect(&ctrlpadMain, &UI_CtrlPad::SignalAddImage, &imagereplayerMain, &ImageReplayer::on_SignalAddImage);
         /// UI_DispPad
         QObject::connect(&disppadMain, SIGNAL(SignalManualInit()), &ctrlpadMain, SLOT(on_SignalManualInit()));
-        QObject::connect(&disppadMain, SIGNAL(SignalLabelMouseClicked(QPoint)), &ctrlpadMain, SLOT(on_SignalLabelMouseClicked(QPoint)));
+        QObject::connect(&disppadMain, SIGNAL(SignalLabelMouseClicked(float, float)), &ctrlpadMain, SLOT(on_SignalLabelMouseClicked(float, float)));
         QObject::connect(&disppadMain, SIGNAL(SignalCropDisp(bool)), &disppadsMain, SLOT(on_SignalCropDisp(bool)));
 
         QObject::connect(&app, &QCoreApplication::aboutToQuit, [&]() {

@@ -18,7 +18,9 @@ ImageReplayer::ImageReplayer(void)
     m_pqtimerReplay->start(m_iReplayInterval);
     m_pGParam->m_SImageReplayerData.pausReplayData = NULL;
 }
+#include <QCoreApplication>
 #include <QDebug>
+#include <QElapsedTimer>
 ImageReplayer::~ImageReplayer()
 {
     SetPause();
@@ -125,6 +127,7 @@ bool ImageReplayer::SetReplayPath(QString qstrReplayPath)
             {
                 if (GetHeaderBMP())
                 {
+//                    m_bImageValid = true;
                     GetBMP(true);
                 }
             }
@@ -490,6 +493,80 @@ void ImageReplayer::on_qtimerReplay_timeout(void)
 QString ImageReplayer::GetReplayPath(void)
 {
     return m_qstrReplayPath;
+}
+
+void ImageReplayer::on_SignalAddImage()
+{
+    m_uiSeqCurrent = 0;
+
+    m_pGParam->m_SAddImage.uiCurNum = 0;
+    m_pGParam->m_SAddImage.bNextImg = true;
+    m_pGParam->m_SAddImage.uiAllImgNum = m_qstrlistReplayFileName.size();
+    m_pGParam->m_SAddImage.uiProduceNum = m_pGParam->m_SAddImage.uiAllImgNum / m_pGParam->m_SAddImage.uiAddFrameNum;
+
+    m_pGParam->m_SAddImage.qstrSavePath = m_qstrReplayPath + "/Add";
+    QDir qdirImg(m_pGParam->m_SAddImage.qstrSavePath);
+    if(qdirImg.exists())
+        qdirImg.removeRecursively();
+
+    if(m_pGParam->m_SAddImage.uiProduceNum < 1)
+        emit SignalAddEnding();
+
+    if(m_pGParam->m_SAddImage.bAddRepeat)
+    {
+        CreatDir(m_pGParam->m_SAddImage.qstrSavePath);
+
+        for(unsigned int i = 0; i < (m_pGParam->m_SAddImage.uiProduceNum); i++)
+        {
+            unsigned int j = 0;
+            if (m_pGParam->m_qstrImageFormat == "bmp")
+            {
+                while(true)
+                {
+                    if(j >= m_pGParam->m_SAddImage.uiAddFrameNum)
+                        break;
+                    if(m_pGParam->m_SAddImage.bNextImg)
+                    {
+                        m_pGParam->m_SAddImage.bNextImg = false;
+
+                        if(!i && !j)
+                            GetBMP(true);
+                        else
+                            GetBMP(false);
+
+                        j++;
+                        m_uiSeqCurrent++;
+
+                        emit SignalAddProc(m_uiSeqCurrent, m_qstrlistReplayFileName.size());
+                    }
+                    else
+                    {
+                        QElapsedTimer timer;
+                        timer.start();
+                        while (timer.elapsed() < 100)
+                            QCoreApplication::processEvents();
+
+                    }
+                }
+            }
+        }
+    }
+}
+
+void ImageReplayer::CreatDir(QString qstrPath)
+{
+    QDir dir(qstrPath);
+    if(!dir.exists())
+    {
+        bool ismkdir = QDir().mkdir(qstrPath);
+        if(!ismkdir)
+            qDebug() << "Create path fail" << endl;
+        else
+            qDebug() << "Create fullpath success" << endl;
+    }
+    else
+        qDebug() << "fullpath exist" << endl;
+
 }
 
 

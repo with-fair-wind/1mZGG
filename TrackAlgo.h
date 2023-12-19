@@ -222,6 +222,7 @@ public:
 	/// 计算恒星速度
 	int CalcStarSpd(sMeasuresInFrame measures, pair<float, float>& pairfSpd, pair<float, float>& pairfSpd_AE, int& iNumMost);
 	/// 跟踪器的检测跟踪过程,循环压入测量数据
+    int TrackProc_RaDec(sMeasuresInFrame measures, vector<sTargetInfo>& vectTargetInfo, bool bFullLEO);	// 必须在CalcStarSpd()后调用
     int TrackProc_GEO(sMeasuresInFrame measures, vector<sTargetInfo>& vectTargetInfo, bool bFullLEO, vector<pair<QString, sMeasureBlob>> vecGEOisbValidBlob);	// 必须在CalcStarSpd()后调用
 	int TrackProc_LEO(sMeasuresInFrame measures, sTargetInfo& targetInfo);	
     int TrackProc_SC(sMeasuresInFrame measures, sTargetInfo& targetInfo);
@@ -247,6 +248,10 @@ private:
 	void BubbleSortReverse(vector<int>& vectInput);
 	void FindMost(vector<pair<int, int>> vectInput, pair<int, int>& pairMost, int& iNumMost);
 	int CalcStarSpd(vector<sMeasuresInFrame> vectMeasuresInputFIFO, float fRatioFOV, float fRadius, float fThresh, sOpticParams opticparams, pair<float, float>& pairfSpd, pair<float, float>& pairfSpd_AE, int& iNumMost);
+    int RaDec_Assoc4(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vector<sTargetInfo>& vectTargetInfo);
+    int RaDec_FindTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vector<sTargetInfo>& vectTargetInfo);
+    int RaDec_ReFindTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vector<sTargetInfo>& vectTargetInfo);
+    int RaDec_TrackTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vector<sTargetInfo>& vectTargetInfo, float fThresh, sOpticParams opticparams);
     int GEO_Assoc4(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vector<sTargetInfo>& vectTargetInfo, pair<float, float> pairfStarSpd, float fRadius, float fThresh, sOpticParams opticparams);
 	int GEO_FindTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vector<sTargetInfo>& vectTargetInfo, pair<float, float> pairfStarSpd, float fRadius, float fThresh, sOpticParams opticparams);
 	int GEO_ReFindTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vector<sTargetInfo>& vectTargetInfo, pair<float, float> pairfStarSpd, float fRadius, float fThreshd, sOpticParams opticparams);

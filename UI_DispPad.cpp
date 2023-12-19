@@ -604,25 +604,33 @@ void UI_DispPad::on_LabelMouseClicked(QPoint qptPos)
     double dSizePercent = d_size / 100.0;
     float fClickX = qptPos.x() / dSizePercent + m_qptLUinImage.x();
     float fClickY = qptPos.y() / dSizePercent + m_qptLUinImage.y();
-    emit SignalLabelMouseClicked(QPoint(fClickX,fClickY));
+    emit SignalLabelMouseClicked(fClickX, fClickY);
 }
 
 void UI_DispPad::on_LabelRightDoubleClicked(QPoint qptPos)
 {
     if (m_uiImageWidth == m_pGParam->m_SGrabberData.iFullWidth && m_uiImageHeight == m_pGParam->m_SGrabberData.iFullHeight)
     {
-        if (m_uiZoomCtrl == 0)
+        if(m_pGParam->m_bDispMode)
         {
-            m_uiZoom = 0;
+            if (m_uiZoomCtrl == 0)
+            {
+                m_uiZoom = 0;
+            }
+            else if (m_uiZoomCtrl == 1)
+            {
+                if (++m_uiZoom > 2)
+                    m_uiZoom = 2;
+            }
+            else if (m_uiZoomCtrl == 2)
+            {
+                if (--m_uiZoom < 0)
+                    m_uiZoom = 0;
+            }
         }
-        else if (m_uiZoomCtrl == 1)
+        else
         {
             if (++m_uiZoom > 2)
-                m_uiZoom = 2;
-        }
-        else if (m_uiZoomCtrl == 2)
-        {
-            if (--m_uiZoom < 0)
                 m_uiZoom = 0;
         }
 

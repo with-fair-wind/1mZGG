@@ -312,6 +312,8 @@ struct SImageProcessorData
     bool bProcessMode = true;
     bool bProcessing = false;
     bool bWindowEN = false;
+
+    bool bTrackAlgorithm = false; // 是否使用赤经赤纬坐标系
 };
 
 /// DataProcessor数据
@@ -400,6 +402,24 @@ struct SLog
     void* pvoidThis = NULL;
 };
 
+/// TrackParams
+struct STrackParams
+{
+    QString qstrExEPath = "/home/kk/anaconda3/envs/env_twdw_gdcl/bin/python";
+    QString qstrPYPath = "/home/kk/code/Python_Project/1mZGG/Source/solve.py";
+};
+
+struct SAddImage
+{
+    QString qstrSavePath = "";
+    unsigned int uiAllImgNum = 0;
+    unsigned int uiAddFrameNum = 10;
+    unsigned int uiProduceNum = 0;
+    bool bAddRepeat = false;
+    unsigned int uiCurNum = 0;
+    bool bNextImg = false;
+};
+
 /// Class GlobalParameter
 class GlobalParameter
 {
@@ -435,6 +455,9 @@ public:
     SObsParams m_SObsParams;
     bool m_bDebugEN;
     QString m_qstrImageFormat;
+    STrackParams m_STrackParams;
+    SAddImage m_SAddImage;
+    bool m_bDispMode = true;
 };
 
 #endif // GLOBALPARAMETER_H

@@ -64,6 +64,7 @@ signals:
     void SignalSend(void);  // 送显信号
     void SignalTrackData(void);	// 提取到跟踪数据信号
     void SignalGrabDataRotate(void);
+    void SignalAddEnding();
 
 private slots :
     void on_SignalGrabInit(unsigned int uiGrabWidth, unsigned int uiGrabHeight);    // 开启图像采集后,Grabber会发出此信号,用于InitProc(PROC_NONE,...)

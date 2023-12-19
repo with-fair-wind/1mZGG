@@ -47,7 +47,7 @@ private slots:
 
 signals:
     void SignalManualInit(void);
-    void SignalLabelMouseClicked(QPoint qptPos);
+    void SignalLabelMouseClicked(float fClickX, float fClickY);
     void SignalCropDisp(bool);
 
 

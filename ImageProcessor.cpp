@@ -139,8 +139,17 @@ void ImageProcessor::CallBackProcess(void* pvoidThis)
                 if (pausReplay)   delete []  pausReplay;
             }
 
-            emit pThis->SignalTrackData();
-            emit pThis->SignalDisplay();
+            if (!pThis->m_pGParam->m_SAddImage.bAddRepeat)
+            {
+                emit pThis->SignalTrackData();
+                emit pThis->SignalDisplay();
+            }
+            else
+            {
+                if(pThis->m_pGParam->m_SAddImage.uiCurNum / pThis->m_pGParam->m_SAddImage.uiAddFrameNum == pThis->m_pGParam->m_SAddImage.uiProduceNum)
+                    emit pThis->SignalAddEnding();
+            }
+
             pThis->m_pGParam->m_SImageProcessorData.bProcessing = false;
             std::chrono::high_resolution_clock::time_point endTime = std::chrono::high_resolution_clock::now();	///////////////////////////
             std::chrono::milliseconds timeInterval = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - beginTime);	///////////////////////////

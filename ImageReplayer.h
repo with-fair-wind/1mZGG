@@ -35,6 +35,7 @@ private:
     void GetBMP(bool bFirstGetBMP);
     void SetReplayInterval(char* pacFrameFrequency);	// 设置播放帧间隔
     void SetReplayInterval(double dFrameFrequency);
+    void CreatDir(QString qstrPath);
 
 //    void GenerateHeader(void);
 //    void WriteHeader(char* pacBuffer);
@@ -47,6 +48,11 @@ signals:
     void SignalReplayData(void);	// 回放信号(ImageProcessor接收)
     void SignalReplayInit(unsigned int uiGrabWidth, unsigned int uiGrabHeight);
     void SignalChangeUITrackMode(int iMode);  // iMode==0：切换为‘无处理（全帧）’;iMode==1：切换为‘无处理（开窗）’;iMode==2：图像宽高不匹配
+    void SignalAddEnding();
+    void SignalAddProc(int iSeqCut, int iNumTotal);
+
+public slots:
+    void on_SignalAddImage();
 
 /// 变量
 private:

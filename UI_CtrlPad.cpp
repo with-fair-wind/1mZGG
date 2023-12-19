@@ -103,11 +103,17 @@ void UI_CtrlPad::UIInit(void)
     ui.tableWidget_TargetInfo->setColumnWidth(5, 207);
     ui.tableWidget_TargetInfo->horizontalHeader()->setFont(QFont("song", 13));
 
+    ui.lineEdit_PythonExE->setText(m_pGParam->m_STrackParams.qstrExEPath);
+    ui.lineEdit_pyPath->setText(m_pGParam->m_STrackParams.qstrPYPath);
     ui.lineEdit_RaThresh->setText("0.2");
     ui.lineEdit_DecThresh->setText("0.2");
     ui.lineEdit_RaSpdThresh->setText("2");
     ui.lineEdit_DecSpdThresh->setText("1");
-    changeRaDecTrackParams();
+    changeRaDecTrackParams();    
+    ui.lineEdit_AddFrameNum->setText(QString::number(m_pGParam->m_SAddImage.uiAddFrameNum));
+    ui.checkBox_LockDisp->setChecked(true);
+    ui.checkBox_TrackAlgorithm->setChecked(false);
+    ui.groupBox_3->setEnabled(false);
 
     LoadParams();
     m_pImageProcessor->Init_TWDW();
@@ -2156,9 +2162,12 @@ void UI_CtrlPad::on_SignalManualInit()
     }
 }
 
-void UI_CtrlPad::on_SignalLabelMouseClicked(QPoint qptPos)
+void UI_CtrlPad::on_SignalLabelMouseClicked(float fClickX, float fClickY)
 {
-    QString qstrPrint = QStringLiteral("用户点击图像位置为: ( ") + QString::number((int)qptPos.x()) + " , " + QString::number((int)qptPos.y()) + " )";
+    QString qstrPrint = QStringLiteral("用户点击图像位置为: ( ") + QString::number((int)fClickX) + " , " + QString::number((int)fClickY) + " )";
+    ui.lineEdit_TargetXPos->setText(QString::number(fClickX, 'f', 4));
+    ui.lineEdit_TargetYPos->setText(QString::number(fClickY, 'f', 4));
+    pairPosManual = make_pair(fClickX, fClickY);
     m_pLog->InfoMsg(qstrPrint);
 }
 
@@ -2326,6 +2335,9 @@ void UI_CtrlPad::on_checkBox_MCCtrl_clicked()
         ui.checkBox_MatchTimeSave->setEnabled(false);
         ui.checkBox_ImageSave->setEnabled(false);
         ui.pushButton_SavePathBrowse->setEnabled(false);
+        ui.lineEdit_AddProc->setEnabled(false);
+        ui.lineEdit_AddFrameNum->setEnabled(false);
+        ui.pushButton_AddRePeat->setEnabled(false);
         m_pLog->InfoMsg(QStringLiteral("用户选定数据处理系统受主控系统控制."));
     }
     else
@@ -2349,6 +2361,9 @@ void UI_CtrlPad::on_checkBox_MCCtrl_clicked()
         ui.checkBox_MatchTimeSave->setEnabled(true);
         ui.checkBox_ImageSave->setEnabled(true);
         ui.pushButton_SavePathBrowse->setEnabled(true);
+        ui.lineEdit_AddProc->setEnabled(true);
+        ui.lineEdit_AddFrameNum->setEnabled(true);
+        ui.pushButton_AddRePeat->setEnabled(true);
         m_pLog->InfoMsg(QStringLiteral("用户选定数据处理系统不受主控系统控制."));
     }
 
@@ -2557,3 +2572,78 @@ void UI_CtrlPad::on_lineEdit_DecSpdThresh_returnPressed()
     changeRaDecTrackParams();
 }
 
+
+void UI_CtrlPad::on_pushButton_PythonExE_clicked()
+{
+    m_pGParam->m_STrackParams.qstrExEPath = QFileDialog::getOpenFileName(nullptr, "选择python解释器", "/home", "All Files (*);;Text Files (*.txt)");
+    ui.lineEdit_PythonExE->setText(m_pGParam->m_STrackParams.qstrExEPath);
+}
+
+void UI_CtrlPad::on_pushButton_pyPath_clicked()
+{
+    m_pGParam->m_STrackParams.qstrPYPath = QFileDialog::getOpenFileName(nullptr, "选择py脚本文件", "/home", "python Files (*.py))");
+    ui.lineEdit_pyPath->setText(m_pGParam->m_STrackParams.qstrPYPath);
+}
+
+void UI_CtrlPad::on_lineEdit_AddFrameNum_returnPressed()
+{
+    if(ui.lineEdit_AddFrameNum->text().toUInt() > 0)
+    {
+        if(QMessageBox::question(this, "询问", "是否修改叠加帧数？", QMessageBox::Yes, QMessageBox::No) == QMessageBox::Yes)
+            m_pGParam->m_SAddImage.uiAddFrameNum = ui.lineEdit_AddFrameNum->text().toUInt();
+    }
+    else
+    {
+         QMessageBox::warning(this, QStringLiteral("警告"), QStringLiteral("“叠加帧数”输入错误,修改失败.\n仅允许设置为>0的整数."));
+    }
+    ui.lineEdit_AddFrameNum->setText(QString::number(m_pGParam->m_SAddImage.uiAddFrameNum));
+}
+
+void UI_CtrlPad::on_pushButton_AddRePeat_clicked()
+{
+    if(QMessageBox::question(this, QStringLiteral("询问"), QStringLiteral("是否叠加"), QMessageBox::Yes, QMessageBox::No) == QMessageBox::Yes)
+    {
+        m_pGParam->m_SAddImage.bAddRepeat = true;
+        ui.pushButton_Next->setEnabled(false);
+        ui.pushButton_Pause->setEnabled(false);
+        ui.pushButton_Previous->setEnabled(false);
+        ui.pushButton_NextAuto->setEnabled(false);
+        ui.pushButton_PreviousAuto->setEnabled(false);
+        ui.lineEdit_ImagePlayPath->setEnabled(false);
+        ui.pushButton_PlayPathBrowse->setEnabled(false);
+        ui.pushButton_AddRePeat->setEnabled(false);
+    }
+    emit SignalAddImage();
+}
+
+void UI_CtrlPad::on_SignalAddEnding()
+{
+    m_pGParam->m_SAddImage.bAddRepeat = false;
+    ui.pushButton_Next->setEnabled(true);
+    ui.pushButton_Pause->setEnabled(true);
+    ui.pushButton_Previous->setEnabled(true);
+    ui.pushButton_NextAuto->setEnabled(true);
+    ui.pushButton_PreviousAuto->setEnabled(true);
+    ui.lineEdit_ImagePlayPath->setEnabled(true);
+    ui.pushButton_PlayPathBrowse->setEnabled(true);
+    ui.pushButton_AddRePeat->setEnabled(true);
+}
+
+void UI_CtrlPad::on_SignalAddProc(int iSeqCut, int iNumTotal)
+{
+    ui.lineEdit_AddProc->setText(QString("%1 / %2").arg(iSeqCut).arg(iNumTotal));
+}
+
+void UI_CtrlPad::on_checkBox_LockDisp_clicked(bool checked)
+{
+    m_pGParam->m_bDispMode = checked;
+    ui.radioButton_ZoomIn->setEnabled(checked);
+    ui.radioButton_ZoomFit->setEnabled(checked);
+    ui.radioButton_ZoomOut->setEnabled(checked);
+}
+
+void UI_CtrlPad::on_checkBox_TrackAlgorithm_clicked(bool checked)
+{
+    m_pGParam->m_SImageProcessorData.bTrackAlgorithm = checked;
+    ui.groupBox_3->setEnabled(checked);
+}

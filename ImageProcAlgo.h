@@ -18,6 +18,7 @@
 #include <QMap>
 #include <unordered_map>
 #include <utility>
+#include "ImageCode.h"
 
 #define  PROC_NONE		0	// 不做目标提取
 #define  PROC_DIFF		1	// 帧差目标提取	
@@ -124,17 +125,17 @@ public:
 
 struct sFramePacket
 {
-	sTime stimeFrame;	// 当前帧曝光中心时刻
-	unsigned long ulFrameSeq = 0;	// 帧序号
-	pair<float, float> pairfFOVCenterAE = pair<float, float>(0, 0);	// 视场中心对应的方位、俯仰角(°)
+    sTime stimeFrame;	// 当前帧曝光中心时刻
+    unsigned long ulFrameSeq = 0;	// 帧序号
+    pair<float, float> pairfFOVCenterAE = pair<float, float>(0, 0);	// 视场中心对应的方位、俯仰角(°)
     pair<float, float> pairfFOVCenterAEModify = pair<float, float>(0, 0);	// Modified视场中心对应的方位、俯仰角(°)
     float fExpTime = 0;	// 曝光时间(ms)
-	float fFrameFreq = 0;	// 帧频(Hz)
-	sImageData sausImageGrab;	// 采集图像数据
-	sImageData sausImageEnhance;	// 增强图像数据
+    float fFrameFreq = 0;	// 帧频(Hz)
+    sImageData sausImageGrab;	// 采集图像数据
+    sImageData sausImageEnhance;	// 增强图像数据
     sImageData safImagePhotometry; // 光度测量图像
-	vector<sMeasureBlob> vectStarMeasures;	// 单帧图像中的恒星位置测量值(用于恒星速度计算与天文定位,可能包含杂波)
-	vector<sMeasureBlob> vectTargetMeasures;	// 单帧图像中的目标位置测量值(用于目标检测与跟踪,可能包含杂波)
+    vector<sMeasureBlob> vectStarMeasures;	// 单帧图像中的恒星位置测量值(用于恒星速度计算与天文定位,可能包含杂波)
+    vector<sMeasureBlob> vectTargetMeasures;	// 单帧图像中的目标位置测量值(用于目标检测与跟踪,可能包含杂波)
     float fTemp;
     float fAtmosP;
     float fHumidity;
@@ -151,6 +152,29 @@ struct sPacketGAE
     QString qstrEndTime;
     char strExpTime[300] = "";  // Compare to GTW
     char strDWDataNew[300] = "";
+};
+
+struct SStorageParams
+{
+    sTime stimeFrame;
+    pair<float, float> pairfAziEleRecv;
+    float fTemp;
+    float fAtmosP;
+    float fHumidity;
+};
+
+struct sAddImagePacket
+{
+    QString qstrFileName = "";
+    SStorageParams sstorageParams;
+    unsigned short* pausImage = nullptr;
+    double dFrameFrequencyCurrent = 0.0;
+    double dExposureTimeCurrent = 0.0;
+    ~sAddImagePacket()
+    {
+        if(pausImage)
+            delete [] pausImage;
+    }
 };
 
 class ImageProcAlgo
@@ -223,6 +247,9 @@ public:
     void CalcDistortionDelta(double dPosX, double dPosY, double &dPosDx, double &dPosDy);
     void setRaDecThresh(const double& dRaThresh, const double& dDecThresh, const double& dRaSpdThresh, const double& dDecSpdThresh) {m_pTrakcer->setRaDecThresh(dRaThresh, dDecThresh, dRaSpdThresh, dDecSpdThresh);}
     void SetDispMem();
+    void RunPyPro(QString pythonInterpreter, QString pythonScript, QStringList functionArguments);
+    int AddImage(unsigned int uiAddFrameNum);
+    void StorageAddImgFrame();
 
 private:
     int InitGPU(size_t szGrabWidth, size_t szGrabHeight, int iBinning, size_t szCropWidth, size_t szCropHeight, bool bRotate);
@@ -231,7 +258,7 @@ private:
 	int Proc_None(void);
 	int Proc_Diff(void);
 	int Proc_Direct(void);
-    int Proc_DirectPy(void);
+    int Proc_RaDec(void);
 	int AvgStdGPU16(cl_mem cmInput, double* pdAvg, double* pdStdev, size_t szImageWidth, size_t szImageHeight);
 	int AvgStdGPU8(cl_mem cmInput, double* pdAvg, double* pdStdev, size_t szImageWidth, size_t szImageHeight);
 	int MinMaxGPU16(cl_mem cmInput, double* pdMin, double* pdMax, size_t szImageWidth, size_t szImageHeight);
@@ -265,7 +292,9 @@ private:
     int ReduceSmallDN16(cl_mem cmInput, cl_mem cmOutput, float fAvr, float fStd, size_t szImageWidth, size_t szImageHeight);
     int Patch16(cl_mem cmInput, cl_mem cmOutput, int r, int c);
     int DePatch8(cl_mem cmInput, cl_mem cmOutput, int r, int c);
-    int DePatch16(cl_mem cmInput, cl_mem cmOutput, int r, int c);    
+    int DePatch16(cl_mem cmInput, cl_mem cmOutput, int r, int c);
+    int ImageOverlay(cl_mem cmIn, cl_mem cmOut, size_t szImageWidth, size_t szImageHeight);
+    int ImgAvg(cl_mem cmIn, cl_mem cmOut, size_t szImageWidth, size_t szImageHeight, unsigned int uiAddFrameNum);
     double RefractVisual(const double vAlt, const double pressure, const double temperature);
     void TimeAddSeconds(int iYear, int iMonth, int iDay, int iHour, int iMinute, double dSecond, double dSecondAdd, int &iYearNew, int &iMonthNew, int &iDayNew, int &iHourNew, int &iMinuteNew, double &dSecondNew);
     void LoadStarLib_TWDW();
@@ -341,6 +370,8 @@ private:
     cl_kernel m_ckPatch16;
     cl_kernel m_ckDePatch8;
     cl_kernel m_ckDePatch16;
+    cl_kernel m_ckImageOverlay;
+    cl_kernel m_ckImgAvg;
 	cl_mem m_cmGrab;	// 显存-采集图像
     cl_mem m_cmOri;	// 显存-原始图像
     cl_mem m_cmRemoveBadLine;
@@ -377,6 +408,8 @@ private:
     cl_mem m_cmPitchEnhance4;
     cl_mem m_cmPitchEnhance5;
     cl_mem m_cmPitchNoStarBW;
+    cl_mem m_cmOverlay;
+    cl_mem m_cmImgAvg;
 	/// 连通域参数
 	Labeler* m_pLabeler;	// 连通域计算
 	Blobs m_blobs;	// 连通域计算结果
@@ -431,6 +464,8 @@ private:
     SNetMasterControlData m_SNetMasterControlData;
 
     std::unordered_map<std::string, sMeasureBlob *> m_umapBlob;
+    double* m_pausImgOverlayInit;
+    sAddImagePacket *m_pausAddImgFrame = nullptr;
 };
 
 #endif // IMAGEPROCALGO_H
