@@ -139,6 +139,8 @@ void ImageProcessor::CallBackProcess(void* pvoidThis)
                 if (pausReplay)   delete []  pausReplay;
             }
 
+            pThis->m_pGParam->m_bDispFirst = true;
+
             if (!pThis->m_pGParam->m_SAddImage.bAddRepeat)
             {
                 emit pThis->SignalTrackData();

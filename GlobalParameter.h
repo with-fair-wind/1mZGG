@@ -475,6 +475,7 @@ public:
     STrackParams m_STrackParams;
     SAddImage m_SAddImage;
     bool m_bDispMode = true;
+    bool m_bDispFirst = false;
 };
 
 #endif // GLOBALPARAMETER_H

@@ -513,7 +513,8 @@ void UI_CtrlPad::on_pushButton_Next_clicked(void)
 void UI_CtrlPad::on_checkBox_EnhanceDisp_clicked()
 {
     m_pImageProcessor->SetDispEnhance(ui.checkBox_EnhanceDisp->isChecked());
-    emit SignalDispStatus();
+    if(m_pGParam->m_bDispFirst)
+        emit SignalDispStatus();
 }
 
 void UI_CtrlPad::on_lineEdit_BlobDown_returnPressed(void)
@@ -2249,7 +2250,8 @@ void UI_CtrlPad::on_lineEdit_ScaleDown_returnPressed()
     ui.horizontalSlider_ScaleUp->setValue(uiScaleMax);
     ui.horizontalSlider_ScaleDown->setEnabled(!bAutoScale);
     ui.horizontalSlider_ScaleDown->setValue(uiScaleMin);
-    emit SignalDispStatus();
+    if(m_pGParam->m_bDispFirst)
+        emit SignalDispStatus();
 }
 
 void UI_CtrlPad::on_lineEdit_ScaleUp_returnPressed()
@@ -2275,7 +2277,8 @@ void UI_CtrlPad::on_lineEdit_ScaleUp_returnPressed()
     ui.horizontalSlider_ScaleUp->setValue(uiScaleMax);
     ui.horizontalSlider_ScaleDown->setEnabled(!bAutoScale);
     ui.horizontalSlider_ScaleDown->setValue(uiScaleMin);
-    emit SignalDispStatus();
+    if(m_pGParam->m_bDispFirst)
+        emit SignalDispStatus();
 }
 
 void UI_CtrlPad::on_horizontalSlider_ScaleDown_sliderMoved(int position)
@@ -2323,12 +2326,14 @@ void UI_CtrlPad::on_horizontalSlider_ScaleUp_sliderMoved(int position)
 
 void UI_CtrlPad::on_horizontalSlider_ScaleUp_sliderReleased()
 {
-    emit SignalDispStatus();
+    if(m_pGParam->m_bDispFirst)
+        emit SignalDispStatus();
 }
 
 void UI_CtrlPad::on_horizontalSlider_ScaleDown_sliderReleased()
 {
-    emit SignalDispStatus();
+    if(m_pGParam->m_bDispFirst)
+        emit SignalDispStatus();
 }
 
 void UI_CtrlPad::on_checkBox_DrawStarMap_clicked()
@@ -2430,7 +2435,8 @@ void UI_CtrlPad::on_checkBox_Dark_clicked(bool checked)
 void UI_CtrlPad::on_checkBox_DispBW_clicked(bool checked)
 {
     m_pImageProcessor->SetDispBW(checked);
-    emit SignalDispStatus();
+    if(m_pGParam->m_bDispFirst)
+        emit SignalDispStatus();
 }
 
 void UI_CtrlPad::on_comboBox_ThreshBW_currentIndexChanged(int index)
