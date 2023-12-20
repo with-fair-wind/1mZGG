@@ -515,6 +515,8 @@ int ImageProcAlgo::InputFramePacket(sFramePacket sPacket)
                     delete m_pausAddImgFrame;
                 m_pausAddImgFrame = new sAddImagePacket;
                 m_pausAddImgFrame->pausImage = new unsigned short[m_szImageWidth * m_szImageHeight * sizeof(unsigned short)];
+                m_pausAddImgFrame->sstorageParams.dExposureTime = sInputPacket.fExpTime;
+                m_pausAddImgFrame->sstorageParams.dFrameFrequency = sInputPacket.fFrameFreq;
                 m_pausAddImgFrame->sstorageParams.stimeFrame = sInputPacket.stimeFrame;
                 m_pausAddImgFrame->sstorageParams.pairfAziEleRecv = sInputPacket.pairfFOVCenterAE;
                 m_pausAddImgFrame->sstorageParams.fTemp = sInputPacket.fTemp;
@@ -1608,7 +1610,7 @@ int ImageProcAlgo::Proc_RaDec()
 
             QStringList functionArguments;
             functionArguments << m_pGParam->m_SImageReplayerData.qstrCurFileName; // 函数参数，比如文件路径
-            RunPyPro(m_pGParam->m_STrackParams.qstrExEPath, m_pGParam->m_STrackParams.qstrPYPath, functionArguments);
+            RunPyPro(m_pGParam->m_STrackParams.qstrExEPath, m_pGParam->m_STrackParams.qstrPYPath + "/solve.py", functionArguments);
 
             QString qstrOutputSaveDir = m_pGParam->m_SImageReplayerData.qstrCurFileName.left(lastDotIndex) + "/Output", filenameOutput = m_pGParam->m_SImageReplayerData.qstrCurFileName.mid(lastDotIndex + 1) + "Output.csv";
             QFile outfile(qstrOutputSaveDir + "/" + filenameOutput);
@@ -3418,8 +3420,8 @@ void ImageProcAlgo::StorageAddImgFrame()
         head.dDist = 0;
 //      head.dFocal = head.dPixelScaleX / tan(pThis->m_pGParam->m_SOpticData.fPixelScale/180.0*3.1415926) * 0.001;
         head.dFocal = 0.0;
-        head.dFrameRate = m_pausAddImgFrame->dFrameFrequencyCurrent;
-        head.dExposure = m_pausAddImgFrame->dExposureTimeCurrent;
+        head.dFrameRate = m_pausAddImgFrame->sstorageParams.dFrameFrequency;
+        head.dExposure = m_pausAddImgFrame->sstorageParams.dExposureTime;
         head.uiWidth = m_szImageWidth;
         head.uiHeight = m_szImageHeight;
         head.uiPixelColor = 1;

@@ -115,6 +115,32 @@ void UI_CtrlPad::UIInit(void)
     ui.checkBox_TrackAlgorithm->setChecked(false);
     ui.groupBox_3->setEnabled(false);
 
+    QVector<QPair<QString, QString>> data = {
+            {"x", "0.0"},
+            {"y", "0.0"},
+            {"xmin", "0.0"},
+            {"xmax", "0.0"},
+            {"ymin", "0.0"},
+            {"ymax", "0.0"},
+            {"area", "0.0"},
+            {"flux", "0.0"},
+            {"magIns", "0.0"}
+        };
+    ui.tableWidget_SourceInfo->setColumnCount(2);
+    ui.tableWidget_SourceInfo->setHorizontalHeaderLabels(QStringList() << "参数" << "数值");
+    ui.tableWidget_SourceInfo->setRowCount(data.size());
+    ui.tableWidget_SourceInfo->horizontalHeader()->setStretchLastSection(true);
+
+    for (int row = 0; row < data.size(); ++row)
+    {
+            QTableWidgetItem *keyItem = new QTableWidgetItem(data[row].first);
+            QTableWidgetItem *valueItem = new QTableWidgetItem(data[row].second);
+            ui.tableWidget_SourceInfo->setItem(row, 0, keyItem);
+            ui.tableWidget_SourceInfo->setItem(row, 1, valueItem);
+    }
+    ui.tableWidget_SourceInfo->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    LoadPYFiles(m_pGParam->m_STrackParams.qstrPYPath);
+
     LoadParams();
     m_pImageProcessor->Init_TWDW();
 }
@@ -2167,7 +2193,7 @@ void UI_CtrlPad::on_SignalLabelMouseClicked(float fClickX, float fClickY)
     QString qstrPrint = QStringLiteral("用户点击图像位置为: ( ") + QString::number((int)fClickX) + " , " + QString::number((int)fClickY) + " )";
     ui.lineEdit_TargetXPos->setText(QString::number(fClickX, 'f', 4));
     ui.lineEdit_TargetYPos->setText(QString::number(fClickY, 'f', 4));
-    pairPosManual = make_pair(fClickX, fClickY);
+    m_pairPosManual = make_pair(fClickX, fClickY);
     m_pLog->InfoMsg(qstrPrint);
 }
 
@@ -2581,8 +2607,23 @@ void UI_CtrlPad::on_pushButton_PythonExE_clicked()
 
 void UI_CtrlPad::on_pushButton_pyPath_clicked()
 {
-    m_pGParam->m_STrackParams.qstrPYPath = QFileDialog::getOpenFileName(nullptr, "选择py脚本文件", "/home", "python Files (*.py))");
+    m_pGParam->m_STrackParams.qstrPYPath = QFileDialog::getExistingDirectory(nullptr, "选择py脚本文件路径", "/home");
     ui.lineEdit_pyPath->setText(m_pGParam->m_STrackParams.qstrPYPath);
+    LoadPYFiles(m_pGParam->m_STrackParams.qstrPYPath);
+}
+
+void UI_CtrlPad::LoadPYFiles(QString PYPath)
+{
+    QDir qDirPy(PYPath);
+    if(qDirPy.exists())
+    {
+        ui.comboBox_pyFIles->clear();
+        m_pGParam->m_STrackParams.qListPYFile.clear();
+        m_pGParam->m_STrackParams.qListPYFile = qDirPy.entryList(QStringList("*.py"), QDir::Files | QDir::Readable, QDir::Name);
+
+        for (QString& cur : m_pGParam->m_STrackParams.qListPYFile)
+            ui.comboBox_pyFIles->addItem(cur);
+    }
 }
 
 void UI_CtrlPad::on_lineEdit_AddFrameNum_returnPressed()
@@ -2646,4 +2687,66 @@ void UI_CtrlPad::on_checkBox_TrackAlgorithm_clicked(bool checked)
 {
     m_pGParam->m_SImageProcessorData.bTrackAlgorithm = checked;
     ui.groupBox_3->setEnabled(checked);
+}
+
+void UI_CtrlPad::LoadSource()
+{
+    QFileInfo fileInfo(m_pGParam->m_SImageReplayerData.qstrCurFileName);
+    QString fileName = fileInfo.fileName(); // 获取文件名
+    QString absolutePath = fileInfo.absolutePath(); // 获取文件的绝对路径（目录路径）
+    QString sourceFile = absolutePath + "/Sources/" + fileName + "Sources.csv";
+    QFile outfile(sourceFile);
+    if (!outfile.open(QIODevice::ReadOnly | QIODevice::Text))
+        qDebug() << "Could not open file for reading.";
+    QTextStream outText(&outfile);
+
+    // 读取第一行并检查处理是否成功
+    QString firstLine = outText.readLine();
+    if (!firstLine.startsWith("Successful"))
+        qDebug() << "Processing was not successful.";
+    else
+    {
+        QString line = outText.readLine();
+        QStringList fields = line.split(",");
+        for (int row = 0; row < fields.size(); row++)
+        {
+            QTableWidgetItem *valueItem = new QTableWidgetItem(fields[row]);
+            ui.tableWidget_SourceInfo->setItem(row, 1, valueItem);
+        }
+    }
+}
+
+void UI_CtrlPad::on_pushButton_ManualSource_clicked()
+{
+    QString pythonScript = m_pGParam->m_STrackParams.qstrPYPath + "/extract.py";
+    QStringList functionArguments;
+    functionArguments << m_pGParam->m_SImageReplayerData.qstrCurFileName << QString::fromStdString(std::to_string((int)m_pairPosManual.first)) << QString::fromStdString(std::to_string((int)m_pairPosManual.second)); // 函数参数，比如文件路径
+    QProcess pythonProcess;
+    pythonProcess.start(m_pGParam->m_STrackParams.qstrExEPath, QStringList() << pythonScript << functionArguments);
+    if (!pythonProcess.waitForStarted())
+        qDebug() << "Failed to start Python process.";
+    if (!pythonProcess.waitForFinished())
+        qDebug() << "Failed to finish Python process.";
+    QString output = pythonProcess.readAllStandardOutput();
+    qDebug() << "Python output:" << output;
+    LoadSource();
+}
+
+void UI_CtrlPad::on_checkBox_SourceInfoEN_clicked(bool checked)
+{
+    if (ui.checkBox_SourceInfoEN->isChecked())
+    {
+        ui.tableWidget_SourceInfo->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::SelectedClicked);
+        ui.tableWidget_SourceInfo->setFrameShape(QFrame::NoFrame);
+    }
+    else
+    {
+        ui.tableWidget_SourceInfo->setEditTriggers(QAbstractItemView::NoEditTriggers);
+        ui.tableWidget_SourceInfo->setFrameShape(QFrame::StyledPanel);
+    }
+}
+
+void UI_CtrlPad::on_pushButton_SourceInfoSet_clicked()
+{
+
 }

@@ -53,6 +53,8 @@ private:
     QStringList FindFiles(const QString &startDir, const QStringList &filters);
     void DeleteLessFile(QStringList qstrlistFiles, int& iDelete);
     void changeRaDecTrackParams();
+    void LoadSource();
+    void LoadPYFiles(QString PYPath);
 
 signals:
     void SignalCloseCuard();
@@ -134,6 +136,9 @@ private slots:
     void on_pushButton_AddRePeat_clicked();
     void on_checkBox_LockDisp_clicked(bool checked);
     void on_checkBox_TrackAlgorithm_clicked(bool checked);
+    void on_pushButton_ManualSource_clicked();
+    void on_checkBox_SourceInfoEN_clicked(bool checked);
+    void on_pushButton_SourceInfoSet_clicked();
 
 public slots:
     void on_SignalAddEnding();
@@ -162,7 +167,7 @@ private:
     bool m_bMCCtrlSetting;
     bool m_bParamsLoading;
 
-    pair<float, float> pairPosManual;
+    pair<float, float> m_pairPosManual;
 };
 
 #endif // MAINWINDOW_H

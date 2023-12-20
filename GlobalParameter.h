@@ -406,7 +406,8 @@ struct SLog
 struct STrackParams
 {
     QString qstrExEPath = "/home/kk/anaconda3/envs/env_twdw_gdcl/bin/python";
-    QString qstrPYPath = "/home/kk/code/Python_Project/1mZGG/Source/solve.py";
+    QString qstrPYPath = "/home/kk/code/Python_Project/1mZGG/Source";
+    QStringList qListPYFile;
 };
 
 struct SAddImage

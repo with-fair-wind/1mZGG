@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1335</width>
+    <width>978</width>
     <height>1308</height>
    </rect>
   </property>
@@ -906,44 +906,40 @@
          </item>
         </layout>
        </item>
+       <item row="0" column="1">
+        <widget class="QTextEdit" name="textEdit_TrackInfo">
+         <property name="font">
+          <font>
+           <family>Times New Roman</family>
+           <pointsize>11</pointsize>
+          </font>
+         </property>
+         <property name="toolTip">
+          <string>配置文件参数设置框</string>
+         </property>
+         <property name="frameShape">
+          <enum>QFrame::StyledPanel</enum>
+         </property>
+         <property name="frameShadow">
+          <enum>QFrame::Sunken</enum>
+         </property>
+         <property name="readOnly">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
       </layout>
      </widget>
     </item>
     <item row="0" column="1" rowspan="5">
-     <layout class="QVBoxLayout" name="verticalLayout">
-      <item>
-       <widget class="QTextEdit" name="textEdit_TrackInfo">
-        <property name="font">
-         <font>
-          <family>Times New Roman</family>
-          <pointsize>11</pointsize>
-         </font>
-        </property>
-        <property name="toolTip">
-         <string>配置文件参数设置框</string>
-        </property>
-        <property name="frameShape">
-         <enum>QFrame::StyledPanel</enum>
-        </property>
-        <property name="frameShadow">
-         <enum>QFrame::Sunken</enum>
-        </property>
-        <property name="readOnly">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QTextEdit" name="textEdit_BlobInfo"/>
-      </item>
-     </layout>
+     <layout class="QVBoxLayout" name="verticalLayout"/>
     </item>
     <item row="1" column="0">
      <widget class="QGroupBox" name="groupBox_3">
       <property name="title">
        <string>目标检测与跟踪参数设置</string>
       </property>
-      <layout class="QGridLayout" name="gridLayout_14">
+      <layout class="QGridLayout" name="gridLayout_14" columnminimumwidth="1,1">
        <item row="0" column="0">
         <layout class="QGridLayout" name="gridLayout">
          <item row="0" column="0">
@@ -1086,7 +1082,7 @@
             </widget>
            </item>
            <item>
-            <widget class="QCheckBox" name="checkBox_ManualSource">
+            <widget class="QPushButton" name="pushButton_ManualSource">
              <property name="text">
               <string>手动提源</string>
              </property>
@@ -1105,6 +1101,9 @@
            </item>
            <item>
             <widget class="QLineEdit" name="lineEdit_pyPath"/>
+           </item>
+           <item>
+            <widget class="QComboBox" name="comboBox_pyFIles"/>
            </item>
            <item>
             <spacer name="horizontalSpacer_10">
@@ -1206,7 +1205,7 @@
             </spacer>
            </item>
            <item>
-            <widget class="QCheckBox" name="checkBox_BlobInfoEN">
+            <widget class="QCheckBox" name="checkBox_SourceInfoEN">
              <property name="toolTip">
               <string>激活配置文件编辑框</string>
              </property>
@@ -1216,39 +1215,7 @@
             </widget>
            </item>
            <item>
-            <widget class="QPushButton" name="pushButton_BlobInfoReFresh">
-             <property name="minimumSize">
-              <size>
-               <width>50</width>
-               <height>30</height>
-              </size>
-             </property>
-             <property name="maximumSize">
-              <size>
-               <width>30</width>
-               <height>16777215</height>
-              </size>
-             </property>
-             <property name="toolTip">
-              <string>配置文件参数刷新与加载</string>
-             </property>
-             <property name="text">
-              <string/>
-             </property>
-             <property name="icon">
-              <iconset resource="MainWindow.qrc">
-               <normaloff>:/Icon/Icon/clock.png</normaloff>:/Icon/Icon/clock.png</iconset>
-             </property>
-             <property name="iconSize">
-              <size>
-               <width>23</width>
-               <height>23</height>
-              </size>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QPushButton" name="pushButton_BlobInfoSet">
+            <widget class="QPushButton" name="pushButton_SourceInfoSet">
              <property name="minimumSize">
               <size>
                <width>50</width>
@@ -1311,6 +1278,9 @@
           </layout>
          </item>
         </layout>
+       </item>
+       <item row="0" column="1">
+        <widget class="QTableWidget" name="tableWidget_SourceInfo"/>
        </item>
       </layout>
      </widget>
@@ -1532,7 +1502,14 @@
             </widget>
            </item>
            <item>
-            <widget class="QLineEdit" name="lineEdit_ImagePlayPath"/>
+            <widget class="QLineEdit" name="lineEdit_ImagePlayPath">
+             <property name="minimumSize">
+              <size>
+               <width>175</width>
+               <height>0</height>
+              </size>
+             </property>
+            </widget>
            </item>
            <item>
             <spacer name="horizontalSpacer_3">

@@ -161,6 +161,8 @@ struct SStorageParams
     float fTemp;
     float fAtmosP;
     float fHumidity;
+    double dExposureTime;
+    double dFrameFrequency;
 };
 
 struct sAddImagePacket
@@ -168,8 +170,6 @@ struct sAddImagePacket
     QString qstrFileName = "";
     SStorageParams sstorageParams;
     unsigned short* pausImage = nullptr;
-    double dFrameFrequencyCurrent = 0.0;
-    double dExposureTimeCurrent = 0.0;
     ~sAddImagePacket()
     {
         if(pausImage)
