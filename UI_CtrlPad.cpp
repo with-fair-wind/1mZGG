@@ -32,6 +32,16 @@ UI_CtrlPad::UI_CtrlPad(QWidget *parent)
 
     ui.checkBox_MCCtrl->setChecked(true);
     on_checkBox_MCCtrl_clicked();
+
+    m_pyObj = new WorkerObject;
+    connect(this, &UI_CtrlPad::SignalExtract, m_pyObj, &WorkerObject::doPythonWork);
+    connect(m_pyObj, &WorkerObject::SignalPyEnding, this, [=](){
+        QFileInfo fileInfo(m_pGParam->m_SImageReplayerData.qstrCurFileName);
+        QString fileName = fileInfo.fileName(); // 获取文件名
+        QString absolutePath = fileInfo.absolutePath(); // 获取文件的绝对路径（目录路径）
+        QString sourceFile = absolutePath + "/Sources/" + fileName + "Sources.csv";
+        LoadSource(sourceFile);
+    });
 }
 #include <QDebug>
 UI_CtrlPad::~UI_CtrlPad()
@@ -2689,13 +2699,9 @@ void UI_CtrlPad::on_checkBox_TrackAlgorithm_clicked(bool checked)
     ui.groupBox_3->setEnabled(checked);
 }
 
-void UI_CtrlPad::LoadSource()
+void UI_CtrlPad::LoadSource(QString fileName)
 {
-    QFileInfo fileInfo(m_pGParam->m_SImageReplayerData.qstrCurFileName);
-    QString fileName = fileInfo.fileName(); // 获取文件名
-    QString absolutePath = fileInfo.absolutePath(); // 获取文件的绝对路径（目录路径）
-    QString sourceFile = absolutePath + "/Sources/" + fileName + "Sources.csv";
-    QFile outfile(sourceFile);
+    QFile outfile(fileName);
     if (!outfile.open(QIODevice::ReadOnly | QIODevice::Text))
         qDebug() << "Could not open file for reading.";
     QTextStream outText(&outfile);
@@ -2721,15 +2727,7 @@ void UI_CtrlPad::on_pushButton_ManualSource_clicked()
     QString pythonScript = m_pGParam->m_STrackParams.qstrPYPath + "/extract.py";
     QStringList functionArguments;
     functionArguments << m_pGParam->m_SImageReplayerData.qstrCurFileName << QString::fromStdString(std::to_string((int)m_pairPosManual.first)) << QString::fromStdString(std::to_string((int)m_pairPosManual.second)); // 函数参数，比如文件路径
-    QProcess pythonProcess;
-    pythonProcess.start(m_pGParam->m_STrackParams.qstrExEPath, QStringList() << pythonScript << functionArguments);
-    if (!pythonProcess.waitForStarted())
-        qDebug() << "Failed to start Python process.";
-    if (!pythonProcess.waitForFinished())
-        qDebug() << "Failed to finish Python process.";
-    QString output = pythonProcess.readAllStandardOutput();
-    qDebug() << "Python output:" << output;
-    LoadSource();
+    emit SignalExtract(pythonScript, functionArguments);
 }
 
 void UI_CtrlPad::on_checkBox_SourceInfoEN_clicked(bool checked)
@@ -2748,5 +2746,42 @@ void UI_CtrlPad::on_checkBox_SourceInfoEN_clicked(bool checked)
 
 void UI_CtrlPad::on_pushButton_SourceInfoSet_clicked()
 {
+    for(int row = 0; row < ui.tableWidget_SourceInfo->rowCount(); ++row)
+    {
+        QString key = ui.tableWidget_SourceInfo->item(row, 0)->text();
+        QString value = ui.tableWidget_SourceInfo->item(row, 1)->text();
 
+        if (key == "x") {
+            m_pGParam->m_STrackParams.sblobParams.posx = value.toFloat();
+        } else if (key == "y") {
+            m_pGParam->m_STrackParams.sblobParams.posy = value.toFloat();
+        } else if (key == "xmin") {
+            m_pGParam->m_STrackParams.sblobParams.fMinX = value.toFloat();
+        } else if (key == "xmax") {
+            m_pGParam->m_STrackParams.sblobParams.fMaxX = value.toFloat();
+        } else if (key == "ymin") {
+            m_pGParam->m_STrackParams.sblobParams.fMinY = value.toFloat();
+        } else if (key == "ymax") {
+            m_pGParam->m_STrackParams.sblobParams.fMaxY = value.toFloat();
+        } else if (key == "area") {
+            m_pGParam->m_STrackParams.sblobParams.fArea = value.toFloat();
+        } else if (key == "flux") {
+            m_pGParam->m_STrackParams.sblobParams.fDN = value.toFloat();
+        } else if (key == "magIns") {
+            m_pGParam->m_STrackParams.sblobParams.fMagIns = value.toFloat();
+        }
+    }
+    QMessageBox::information(this, "源设置", "已设置源数据");
+}
+
+void UI_CtrlPad::on_checkBox_AddManualSource_clicked(bool checked)
+{
+    m_pGParam->m_STrackParams.bUseManualSource = checked;
+}
+
+void UI_CtrlPad::on_pushButton_SourcePath_clicked()
+{
+    QString qstrSourcePath = QFileDialog::getOpenFileName(nullptr, "选择提源数据", "/home", "CSV Files (*.csv)");
+    ui.lineEdit_SourcePath->setText(qstrSourcePath);
+    LoadSource(qstrSourcePath);
 }

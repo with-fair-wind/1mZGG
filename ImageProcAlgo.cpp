@@ -1511,7 +1511,7 @@ int ImageProcAlgo::Proc_RaDec()
         WriteJsonFile(false);
 
         vector<sMeasureBlob> vectTargetMeasures;
-        if (m_blobs.size() > 0/* && m_blobs.size() < 1000*/)
+        if (m_blobs.size())
         {
 //            m_pLabeler->Centroids(pausImageEnhance, m_szImageWidth, m_szImageHeight, m_blobs, 5, 1.0, 1.0);
 //            m_pLabeler->Centroids(pausImageEnhance, m_szImageWidth, m_szImageHeight, m_blobs, 2, 1.0, 1.0);
@@ -1536,7 +1536,7 @@ int ImageProcAlgo::Proc_RaDec()
                 blob.pairfPos = pair<float, float>((*iterB).second->cx * m_iBinning, (*iterB).second->cy * m_iBinning); // cx,cy: 质心;centroid_x,centroid_y: 形心
                 CalcDistortionDelta(blob.pairfPos.first, blob.pairfPos.second, dJBDx, dJBDy);
                 blob.pairfPos.first -= dJBDx;
-                blob.pairfPos.second -= dJBDy;
+                blob.pairfPos.second -= dJBDy;                               
                 blob.fMinX = (*iterB).second->minx * m_iBinning;
                 blob.fMinY = (*iterB).second->miny * m_iBinning;
                 blob.fMaxX = (*iterB).second->maxx * m_iBinning;
@@ -1641,13 +1641,111 @@ int ImageProcAlgo::Proc_RaDec()
                         vectTargetMeasures[blobID].bGDCL = true;
                         vectTargetMeasures[blobID].dDn = fields.at(8).toDouble();
                         vectTargetMeasures[blobID].dGd = fields.at(9).toDouble();
+                        vectTargetMeasures[blobID].fDN = vectTargetMeasures[blobID].dDn;
                     }
                 }
             }
             outfile.close();
         }
 
-        vector<pair<QString, sMeasureBlob>> vecGEOisbValidBlob;        
+        if(m_pGParam->m_STrackParams.bUseManualSource)
+        {
+            sMeasureBlob ManualSource;
+            const SBlobParams& sourceinfo = m_pGParam->m_STrackParams.sblobParams;
+            if(!vectTargetMeasures.empty())
+                ManualSource.blobID = vectTargetMeasures.back().blobID + 1;
+            ManualSource.pairfPos = make_pair(sourceinfo.posx, sourceinfo.posy);
+            ManualSource.fMinX = sourceinfo.fMinX;
+            ManualSource.fMinY = sourceinfo.fMinY;
+            ManualSource.fMaxX = sourceinfo.fMaxX;
+            ManualSource.fMaxY = sourceinfo.fMaxY;
+            ManualSource.fArea = sourceinfo.fArea;
+            ManualSource.fDN = sourceinfo.fDN;
+            ManualSource.dDn = sourceinfo.fDN;
+
+            ManualSource.pairfPosAE.second = (*iter).pairfFOVCenterAE.second + (m_trackSettings.opticparams.fFOVCenterY - ManualSource.pairfPos.second) * m_trackSettings.opticparams.fPixelScale;
+            ManualSource.pairfPosAE.first = (*iter).pairfFOVCenterAE.first + (ManualSource.pairfPos.first - m_trackSettings.opticparams.fFOVCenterX) * m_trackSettings.opticparams.fPixelScale / cos(ManualSource.pairfPosAE.second / 180.0 * 3.1415926);
+
+            /// Calculate Target Azimuth and Elevation
+            float fDistAzi = (ManualSource.pairfPos.first - m_pGParam->m_SOpticData.fOptCenterX) * m_pGParam->m_SOpticData.fPixelScale / cos(fFOVCenterEleModify / 180.0 * 3.1415926);
+            float fDistEle = (m_pGParam->m_SOpticData.fOptCenterY - ManualSource.pairfPos.second) * m_pGParam->m_SOpticData.fPixelScale;
+            float fTargetAzi = fFOVCenterAziModify + fDistAzi;
+            float fTargetEle = fFOVCenterEleModify + fDistEle;
+
+            ManualSource.fFOVCenterAziModify = fFOVCenterAziModify;
+            ManualSource.fFOVCenterEleModify = fFOVCenterEleModify;
+            ManualSource.fDistAzi = fDistAzi;
+            ManualSource.fDistEle = fDistEle;
+            ManualSource.fTargetAzi = fTargetAzi;
+            ManualSource.fTargetEle = fTargetEle;
+            ManualSource.dPointErrEle = dPointErrEle;
+
+            int iYear, iMonth, iDay, iHour;
+            double dRa = 0.0, dDe = 0.0;
+            double dRm = 0.0, dDm = 0.0;
+            double dA = ManualSource.pairfPosAE.first * pi / 180;
+            double dE = ManualSource.pairfPosAE.second * pi / 180;
+            double dLatitude = m_pGParam->m_SObsParams.fLatitude * pi / 180;
+            double dLongitude = m_pGParam->m_SObsParams.fLongitude * pi / 180;
+            BJ2UTC((*iter).stimeFrame.iYear,
+                    (*iter).stimeFrame.iMonth,
+                    (*iter).stimeFrame.iDay,
+                    (*iter).stimeFrame.iHour,
+                    iYear, iMonth, iDay, iHour);
+            m_pTrakcer->AangleToEquator(dA, dE,
+                            dLongitude, dLatitude, iYear, iMonth, iDay,
+                            iHour, (*iter).stimeFrame.iMinute,
+                            (double)(*iter).stimeFrame.iSecond + (*iter).stimeFrame.iMillisecond/1000.0,
+                            (*iter).fAtmosP/ 100.0, (*iter).fTemp + 273, true, &dRa, &dDe, &dRm, &dDm, true);
+            ManualSource.dAlpha = dRm;
+            ManualSource.dSigma = dDm;
+
+            QStringList functionArguments;
+            functionArguments << m_pGParam->m_SImageReplayerData.qstrCurFileName << QString::fromStdString(std::to_string(sourceinfo.posx)) << QString::fromStdString(std::to_string(sourceinfo.posy)) << QString::fromStdString(std::to_string(sourceinfo.fMagIns)); // 函数参数，比如文件路径
+            RunPyPro(m_pGParam->m_STrackParams.qstrExEPath, m_pGParam->m_STrackParams.qstrPYPath + "/CalSourceRaDecMag.py", functionArguments);
+
+            QFileInfo fileInfo(m_pGParam->m_SImageReplayerData.qstrCurFileName);
+            QString fileName = fileInfo.fileName(); // 获取文件名
+            QString absolutePath = fileInfo.absolutePath(); // 获取文件的绝对路径（目录路径）
+
+            QString RaDecFile = absolutePath + "/Sources/" + fileName + "RaDecKB.csv";
+            QString MagFile = absolutePath + "/Sources/" + fileName + "Mag.csv";
+
+            QFile outfile(RaDecFile);
+            if (!outfile.open(QIODevice::ReadOnly | QIODevice::Text))
+                qDebug() << "Could not open file for reading.";
+            QTextStream outText(&outfile);
+
+            QString firstLine = outText.readLine();
+            if (!firstLine.startsWith("celestial"))
+                qDebug() << "Processing was not successful.";
+            else
+            {
+                ManualSource.bTWDW = true;
+                QString line = outText.readLine();
+                QStringList fields = line.split(",");
+                ManualSource.dRa = fields[0].toDouble();
+                ManualSource.dDec = fields[1].toDouble();
+            }
+            outfile.close();
+            outfile.setFileName(MagFile);
+            if (!outfile.open(QIODevice::ReadOnly | QIODevice::Text))
+                qDebug() << "Could not open file for reading.";
+            outText.setDevice(&outfile);
+            firstLine = outText.readLine();
+            if (!firstLine.startsWith("magnitude"))
+                qDebug() << "Processing was not successful.";
+            else
+            {
+                ManualSource.bGDCL = true;
+                QString line = outText.readLine();
+                QStringList fields = line.split(",");
+                ManualSource.dGd = fields[0].toDouble();
+            }
+
+            vectTargetMeasures.clear();
+            vectTargetMeasures.push_back(ManualSource);
+        }
 
         /// 向帧数据内添加恒星位置数据
         (*iter).vectStarMeasures = vectTargetMeasures;
@@ -1661,9 +1759,15 @@ int ImageProcAlgo::Proc_RaDec()
         measuresTarget.dTemp = (*iter).fTemp;
         measuresTarget.dAtmosP = (*iter).fAtmosP;
         measuresTarget.vectTargetMeasures = vectTargetMeasures;
-        iTime8 = ClockOff();
-        qDebug() << "### Proc Blob:" << iTime8 << "ms";
 
+        m_pGParam->m_SDataProcessorData.iTWDWTime = ClockOff();
+        iTime8 = m_pGParam->m_SDataProcessorData.iTWDWTime;
+        qDebug() << "### Proc Blob & TWDW_GDCL:" << iTime8 << "ms";
+
+        ClockOn();
+        TWDWTimeDeal();
+        iTime9 = ClockOff();
+        qDebug() << "### Proc TWDWData Deal:" << iTime9 << "ms";
 
         //***********************************************************************//
         /// 目标检测跟踪处理
@@ -1675,10 +1779,11 @@ int ImageProcAlgo::Proc_RaDec()
 
         m_pGParam->m_SImageProcessorData.uiNumMeasure = measuresTarget.vectTargetMeasures.size();
         m_pGParam->m_SImageProcessorData.uiProcTrackMs = ClockOff();
-        iTime11 = m_pGParam->m_SImageProcessorData.uiProcTrackMs;
-        qDebug() << "### Proc Track:" << iTime11 << "ms";
+        iTime10 = m_pGParam->m_SImageProcessorData.uiProcTrackMs;
+        qDebug() << "### Proc Track:" << iTime10 << "ms";
 
-
+        /// 生成GAE、GTW、GDJ文件
+        ClockOn();
         if(m_iTrackMode != TRACK_SC && m_iTrackMode != TRACK_LEO)
         {
             unsigned int uiObsID = m_pGParam->m_SImageProcessorData.bProcessMode ? m_pGParam->m_SObsParams.iObsID : m_pGParam->m_SImageReplayerData.qstrTeleID.toUInt();
@@ -1974,8 +2079,15 @@ int ImageProcAlgo::Proc_RaDec()
                 WriteGAEGTW(vecAllTargetInCurFrame, (*iter).ulFrameSeq);
             }
         }
+        m_pGParam->m_SDataProcessorData.iTWDWTime = ClockOff();
+        iTime11 = m_pGParam->m_SDataProcessorData.iTWDWTime;
+        qDebug() << "### Proc GAE & GTW & GDL :" << iTime11 << "ms";
 
+        ClockOn();
         SetDispMem();
+        iTime12 = ClockOff();
+        qDebug() << "### Proc Disp:" << iTime12 << "ms";
+        m_pGParam->m_SImageProcessorData.iProcTime += iTime1 + iTime2 + iTime3 + iTime4 + iTime5 + iTime6 + iTime7 + iTime8 + iTime9 + iTime10 + iTime11 + iTime12;
     }
 }
 
@@ -3445,8 +3557,6 @@ void ImageProcAlgo::StorageAddImgFrame()
 void ImageProcAlgo::WriteGAEGTW(vector<int> vecTarget, unsigned long long ullFrameID)
 {
     unsigned int uiObsID = m_pGParam->m_SImageProcessorData.bProcessMode ? m_pGParam->m_SObsParams.iObsID : m_pGParam->m_SImageReplayerData.qstrTeleID.toUInt();
-    unsigned int uiImageWidth = m_pGParam->m_SGrabberData.bWindowEN ? m_pGParam->m_SGrabberData.iSubWidth : m_pGParam->m_SGrabberData.iFullWidth;
-    unsigned int uiImageHeight = m_pGParam->m_SGrabberData.bWindowEN ? m_pGParam->m_SGrabberData.iSubHeight : m_pGParam->m_SGrabberData.iFullHeight;
     vector<sFramePacket>::iterator iter = m_vectFramePacket.begin();
     for(; iter != m_vectFramePacket.end(); iter++)
     {
@@ -3465,8 +3575,6 @@ void ImageProcAlgo::WriteGAEGTW(vector<int> vecTarget, unsigned long long ullFra
     {
         int i = vecTarget[iNum];
         int curIndex = iter != (m_vectFramePacket.end() - 1) ? 3 - ((*(m_vectFramePacket.end() - 1)).ulFrameSeq - ullFrameID) : m_vectTargetInfo[i].vectResPacket.size() - 1;
-        dblSateShow[nSateShow][0] = m_vectTargetInfo[i].vectResPacket[curIndex].blob.pairfPos.first;
-        dblSateShow[nSateShow][1] = m_vectTargetInfo[i].vectResPacket[curIndex].blob.pairfPos.second;
         dblSateAE[nSateShow][0] = m_vectTargetInfo[i].vectResPacket[curIndex].pairfTargetPosZXDW.first;
         dblSateAE[nSateShow][1] = m_vectTargetInfo[i].vectResPacket[curIndex].pairfTargetPosZXDW.second;
         nSateShow++;
@@ -3697,35 +3805,6 @@ void ImageProcAlgo::WriteGAEGTW(vector<int> vecTarget, unsigned long long ullFra
             WritePasFile(m_qstrStorePath + "/PAS",
                          qstrFileNamePAS,
                          pacPASInfo);
-        }
-
-        if (m_pGParam->m_SImageProcessorData.bProcessMode)
-        {
-            if (m_vectTargetInfo[i].vectResPacket[curIndex].qstrTargetID.toUInt() == m_SNetMasterControlData.qstrTargetID.toUInt())
-            {
-                sGDCLData data;
-                QDate dateNow(nYearNew, nMonthNew, nDayNew);
-                int iDaysNow = dateNow.toJulianDay();
-                QDate date1970(1970, 1, 1);
-                int iDays1970 = date1970.toJulianDay();
-                int iJD1970 = iDaysNow - iDays1970;
-                data.lJMS1970 = (long)iJD1970 * 24 * 3600 * 100 + (long)(dblHourNew * 3600.0) * 100;
-                data.cMeasureStatus = m_SNetMasterControlData.bSearch ? 1 : 2;
-                data.iTargetID = m_vectTargetInfo[i].vectResPacket[curIndex].qstrTargetID.toUInt();
-                data.cDataFlag = 1;
-                data.iDN = (int)m_vectTargetInfo[i].vectResPacket[curIndex].blob.fDN ;
-                data.iMv = (int)(m_vectTargetInfo[i].vectResPacket[curIndex].fTargetMvGDCL * 100);
-                data.lDist = 0;
-                data.iAlpha = (int)(m_vectTargetInfo[i].vectResPacket[curIndex].pairfTargetPosTWDW.first * 3600.0);
-                data.iDelta = (int)(m_vectTargetInfo[i].vectResPacket[curIndex].pairfTargetPosTWDW.second * 3600.0);
-                data.iMvRes = 1;
-
-                char* pacSendData = new char[sizeof(sGDCLData)];
-                memcpy(pacSendData, (char*)&data, sizeof(sGDCLData));
-
-                NetExchange* pNet = (NetExchange*)m_pGParam->m_SNetExchangeData.pvoidThis;
-                pNet->SendGDCL(pacSendData, sizeof(sGDCLData));
-            }
         }
     }
 }
@@ -5423,6 +5502,39 @@ void ImageProcAlgo::ChangeGAEStrMv(char *pacOldStr, char *pacNewStr, float fMv)
         }
     }
     memcpy(pacNewStr, qstrNewStr.toLocal8Bit().data(), qstrNewStr.size());
+}
+
+void ImageProcAlgo::TWDWTimeDeal()
+{
+    auto iter = m_vectFramePacket.end() - 1;
+    int nYear, nMonth, nDay, nHour, nMinute, nYearNew, nMonthNew, nDayNew, nHourNew, nMinuteNew;
+    double dblSecond, dblSecondNew, dSecondAdd, dblHour, dblHourNew, dblPointA, dblPointE, dblwendu, dbldqy, dblshidu;
+    BJ2UTC((*iter).stimeFrame.iYear,
+            (*iter).stimeFrame.iMonth,
+            (*iter).stimeFrame.iDay,
+            (*iter).stimeFrame.iHour,
+            nYear, nMonth, nDay, nHour);
+    nMinute = (*iter).stimeFrame.iMinute;
+    dblSecond = (*iter).stimeFrame.iSecond + (*iter).stimeFrame.iMillisecond * 0.001 + (*iter).stimeFrame.iMicrosecond * 0.000001;
+    dblHour = nHour + nMinute/60e0 + dblSecond/3600e0;
+    dblPointA = (*iter).pairfFOVCenterAEModify.first;
+    dblPointE = (*iter).pairfFOVCenterAEModify.second;
+    dblwendu = (*iter).fTemp+273.15;
+    dbldqy = (*iter).fAtmosP/100.0;
+    dblshidu = (*iter).fHumidity;
+
+    (*iter).stwdwFixData.nYear = nYear;
+    (*iter).stwdwFixData.nMonth = nMonth;
+    (*iter).stwdwFixData.nDay = nDay;
+    (*iter).stwdwFixData.nHour = nHour;
+    (*iter).stwdwFixData.nMinute = nMinute;
+    (*iter).stwdwFixData.dblHour = dblHour;
+    (*iter).stwdwFixData.dblPointA = dblPointA;
+    (*iter).stwdwFixData.dblPointE = dblPointE;
+    (*iter).stwdwFixData.dblwendu = dblwendu;
+    (*iter).stwdwFixData.dbldqy = dbldqy;
+    (*iter).stwdwFixData.dblshidu = dblshidu;
+    (*iter).stwdwFixData.dblSecond = dblSecond;
 }
 
 void ImageProcAlgo::TWDataDeal(unsigned long long ullFrameID)

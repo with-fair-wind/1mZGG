@@ -315,8 +315,7 @@ private:
 
     void WriteJsonFile(bool busePosAE);
     void WriteGAEGTW(vector<int> vecTarget, unsigned long long ullFrameID);
-
-
+    void TWDWTimeDeal();
 
 	/// 变量
 private:

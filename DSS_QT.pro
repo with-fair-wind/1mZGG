@@ -48,6 +48,7 @@ SOURCES += \
     UI_DispPad.cpp \
     UI_DispPadS.cpp \
     UI_InitDlg.cpp \
+    WorkerObject.cpp \
         main.cpp \
     SingleApplication.cpp \
     GlobalParameter.cpp \
@@ -102,6 +103,7 @@ HEADERS += \
     UI_DispPadS.h \
     UI_DistCurve.h \
     UI_InitDlg.h \
+    WorkerObject.h \
     mpolyfit.h \
     mfft.h \
     getperiod.h \

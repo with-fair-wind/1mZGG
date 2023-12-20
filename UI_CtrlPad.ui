@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>978</width>
+    <width>975</width>
     <height>1308</height>
    </rect>
   </property>
@@ -906,111 +906,46 @@
          </item>
         </layout>
        </item>
-       <item row="0" column="1">
-        <widget class="QTextEdit" name="textEdit_TrackInfo">
-         <property name="font">
-          <font>
-           <family>Times New Roman</family>
-           <pointsize>11</pointsize>
-          </font>
-         </property>
-         <property name="toolTip">
-          <string>配置文件参数设置框</string>
-         </property>
-         <property name="frameShape">
-          <enum>QFrame::StyledPanel</enum>
-         </property>
-         <property name="frameShadow">
-          <enum>QFrame::Sunken</enum>
-         </property>
-         <property name="readOnly">
-          <bool>true</bool>
-         </property>
-        </widget>
-       </item>
       </layout>
      </widget>
     </item>
-    <item row="0" column="1" rowspan="5">
-     <layout class="QVBoxLayout" name="verticalLayout"/>
+    <item row="0" column="1">
+     <widget class="QTextEdit" name="textEdit_TrackInfo">
+      <property name="minimumSize">
+       <size>
+        <width>300</width>
+        <height>0</height>
+       </size>
+      </property>
+      <property name="font">
+       <font>
+        <family>Times New Roman</family>
+        <pointsize>11</pointsize>
+       </font>
+      </property>
+      <property name="toolTip">
+       <string>配置文件参数设置框</string>
+      </property>
+      <property name="frameShape">
+       <enum>QFrame::StyledPanel</enum>
+      </property>
+      <property name="frameShadow">
+       <enum>QFrame::Sunken</enum>
+      </property>
+      <property name="readOnly">
+       <bool>true</bool>
+      </property>
+     </widget>
     </item>
     <item row="1" column="0">
      <widget class="QGroupBox" name="groupBox_3">
       <property name="title">
        <string>目标检测与跟踪参数设置</string>
       </property>
-      <layout class="QGridLayout" name="gridLayout_14" columnminimumwidth="1,1">
+      <layout class="QGridLayout" name="gridLayout_14">
        <item row="0" column="0">
         <layout class="QGridLayout" name="gridLayout">
-         <item row="0" column="0">
-          <layout class="QHBoxLayout" name="horizontalLayout_6">
-           <item>
-            <widget class="QLabel" name="label_5">
-             <property name="text">
-              <string>执行路径</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QLineEdit" name="lineEdit_PythonExE"/>
-           </item>
-           <item>
-            <spacer name="horizontalSpacer_9">
-             <property name="orientation">
-              <enum>Qt::Horizontal</enum>
-             </property>
-             <property name="sizeHint" stdset="0">
-              <size>
-               <width>40</width>
-               <height>20</height>
-              </size>
-             </property>
-            </spacer>
-           </item>
-           <item>
-            <widget class="QPushButton" name="pushButton_PythonExE">
-             <property name="minimumSize">
-              <size>
-               <width>50</width>
-               <height>30</height>
-              </size>
-             </property>
-             <property name="maximumSize">
-              <size>
-               <width>50</width>
-               <height>30</height>
-              </size>
-             </property>
-             <property name="font">
-              <font>
-               <family>微软雅黑</family>
-               <pointsize>12</pointsize>
-               <weight>50</weight>
-               <italic>false</italic>
-               <bold>false</bold>
-              </font>
-             </property>
-             <property name="toolTip">
-              <string>图像存储路径选择</string>
-             </property>
-             <property name="text">
-              <string/>
-             </property>
-             <property name="icon">
-              <iconset resource="MainWindow.qrc">
-               <normaloff>:/Icon/Resources/doc.png</normaloff>:/Icon/Resources/doc.png</iconset>
-             </property>
-             <property name="iconSize">
-              <size>
-               <width>23</width>
-               <height>23</height>
-              </size>
-             </property>
-            </widget>
-           </item>
-          </layout>
-         </item>
-         <item row="2" column="0">
+         <item row="3" column="0">
           <layout class="QHBoxLayout" name="horizontalLayout_8">
            <item>
             <widget class="QLabel" name="label_2">
@@ -1021,6 +956,12 @@
            </item>
            <item>
             <widget class="QLineEdit" name="lineEdit_RaThresh">
+             <property name="maximumSize">
+              <size>
+               <width>100</width>
+               <height>16777215</height>
+              </size>
+             </property>
              <property name="toolTip">
               <string>Ra Thresh</string>
              </property>
@@ -1035,23 +976,16 @@
            </item>
            <item>
             <widget class="QLineEdit" name="lineEdit_RaSpdThresh">
+             <property name="maximumSize">
+              <size>
+               <width>100</width>
+               <height>16777215</height>
+              </size>
+             </property>
              <property name="toolTip">
               <string>RaSpd Thresh</string>
              </property>
             </widget>
-           </item>
-           <item>
-            <spacer name="horizontalSpacer">
-             <property name="orientation">
-              <enum>Qt::Horizontal</enum>
-             </property>
-             <property name="sizeHint" stdset="0">
-              <size>
-               <width>40</width>
-               <height>20</height>
-              </size>
-             </property>
-            </spacer>
            </item>
            <item>
             <widget class="QLabel" name="label_9">
@@ -1100,10 +1034,14 @@
             </widget>
            </item>
            <item>
-            <widget class="QLineEdit" name="lineEdit_pyPath"/>
-           </item>
-           <item>
-            <widget class="QComboBox" name="comboBox_pyFIles"/>
+            <widget class="QLineEdit" name="lineEdit_pyPath">
+             <property name="minimumSize">
+              <size>
+               <width>300</width>
+               <height>0</height>
+              </size>
+             </property>
+            </widget>
            </item>
            <item>
             <spacer name="horizontalSpacer_10">
@@ -1117,6 +1055,9 @@
               </size>
              </property>
             </spacer>
+           </item>
+           <item>
+            <widget class="QComboBox" name="comboBox_pyFIles"/>
            </item>
            <item>
             <widget class="QPushButton" name="pushButton_pyPath">
@@ -1142,7 +1083,7 @@
               </font>
              </property>
              <property name="toolTip">
-              <string>图像存储路径选择</string>
+              <string>python文件路径选择</string>
              </property>
              <property name="text">
               <string/>
@@ -1161,7 +1102,157 @@
            </item>
           </layout>
          </item>
-         <item row="3" column="0">
+         <item row="0" column="0">
+          <layout class="QHBoxLayout" name="horizontalLayout_6">
+           <item>
+            <widget class="QLabel" name="label_5">
+             <property name="text">
+              <string>执行路径</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLineEdit" name="lineEdit_PythonExE">
+             <property name="minimumSize">
+              <size>
+               <width>300</width>
+               <height>0</height>
+              </size>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <spacer name="horizontalSpacer_9">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>40</width>
+               <height>20</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+           <item>
+            <widget class="QPushButton" name="pushButton_PythonExE">
+             <property name="minimumSize">
+              <size>
+               <width>50</width>
+               <height>30</height>
+              </size>
+             </property>
+             <property name="maximumSize">
+              <size>
+               <width>50</width>
+               <height>30</height>
+              </size>
+             </property>
+             <property name="font">
+              <font>
+               <family>微软雅黑</family>
+               <pointsize>12</pointsize>
+               <weight>50</weight>
+               <italic>false</italic>
+               <bold>false</bold>
+              </font>
+             </property>
+             <property name="toolTip">
+              <string>python解释器路径选择</string>
+             </property>
+             <property name="text">
+              <string/>
+             </property>
+             <property name="icon">
+              <iconset resource="MainWindow.qrc">
+               <normaloff>:/Icon/Resources/doc.png</normaloff>:/Icon/Resources/doc.png</iconset>
+             </property>
+             <property name="iconSize">
+              <size>
+               <width>23</width>
+               <height>23</height>
+              </size>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </item>
+         <item row="2" column="0">
+          <layout class="QHBoxLayout" name="horizontalLayout_10">
+           <item>
+            <widget class="QLabel" name="label_11">
+             <property name="text">
+              <string>提源数据</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLineEdit" name="lineEdit_SourcePath">
+             <property name="minimumSize">
+              <size>
+               <width>300</width>
+               <height>0</height>
+              </size>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <spacer name="horizontalSpacer_11">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>40</width>
+               <height>20</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+           <item>
+            <widget class="QPushButton" name="pushButton_SourcePath">
+             <property name="minimumSize">
+              <size>
+               <width>50</width>
+               <height>30</height>
+              </size>
+             </property>
+             <property name="maximumSize">
+              <size>
+               <width>50</width>
+               <height>30</height>
+              </size>
+             </property>
+             <property name="font">
+              <font>
+               <family>微软雅黑</family>
+               <pointsize>12</pointsize>
+               <weight>50</weight>
+               <italic>false</italic>
+               <bold>false</bold>
+              </font>
+             </property>
+             <property name="toolTip">
+              <string>提源数据路径选择</string>
+             </property>
+             <property name="text">
+              <string/>
+             </property>
+             <property name="icon">
+              <iconset resource="MainWindow.qrc">
+               <normaloff>:/Icon/Resources/doc.png</normaloff>:/Icon/Resources/doc.png</iconset>
+             </property>
+             <property name="iconSize">
+              <size>
+               <width>23</width>
+               <height>23</height>
+              </size>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </item>
+         <item row="4" column="0">
           <layout class="QHBoxLayout" name="horizontalLayout_9">
            <item>
             <widget class="QLabel" name="label">
@@ -1172,6 +1263,18 @@
            </item>
            <item>
             <widget class="QLineEdit" name="lineEdit_DecThresh">
+             <property name="minimumSize">
+              <size>
+               <width>0</width>
+               <height>0</height>
+              </size>
+             </property>
+             <property name="maximumSize">
+              <size>
+               <width>100</width>
+               <height>16777215</height>
+              </size>
+             </property>
              <property name="toolTip">
               <string>Dec Thresh</string>
              </property>
@@ -1186,8 +1289,34 @@
            </item>
            <item>
             <widget class="QLineEdit" name="lineEdit_DecSpdThresh">
+             <property name="maximumSize">
+              <size>
+               <width>100</width>
+               <height>16777215</height>
+              </size>
+             </property>
              <property name="toolTip">
               <string>DecSpd Thresh</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <spacer name="horizontalSpacer">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>120</width>
+               <height>20</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+           <item>
+            <widget class="QCheckBox" name="checkBox_AddManualSource">
+             <property name="text">
+              <string>强制添加源</string>
              </property>
             </widget>
            </item>
@@ -1198,7 +1327,7 @@
              </property>
              <property name="sizeHint" stdset="0">
               <size>
-               <width>40</width>
+               <width>100</width>
                <height>20</height>
               </size>
              </property>
@@ -1207,7 +1336,7 @@
            <item>
             <widget class="QCheckBox" name="checkBox_SourceInfoEN">
              <property name="toolTip">
-              <string>激活配置文件编辑框</string>
+              <string>激活提源数据编辑框</string>
              </property>
              <property name="text">
               <string/>
@@ -1229,7 +1358,7 @@
               </size>
              </property>
              <property name="toolTip">
-              <string>配置文件参数设置</string>
+              <string>提源数据参数设置</string>
              </property>
              <property name="text">
               <string/>
@@ -1246,43 +1375,21 @@
              </property>
             </widget>
            </item>
-           <item>
-            <spacer name="horizontalSpacer_8">
-             <property name="font">
-              <font>
-               <family>微软雅黑</family>
-               <pointsize>12</pointsize>
-               <weight>50</weight>
-               <italic>false</italic>
-               <bold>false</bold>
-              </font>
-             </property>
-             <property name="orientation">
-              <enum>Qt::Horizontal</enum>
-             </property>
-             <property name="sizeHint" stdset="0">
-              <size>
-               <width>18</width>
-               <height>20</height>
-              </size>
-             </property>
-            </spacer>
-           </item>
-           <item>
-            <widget class="QCheckBox" name="checkBox_AddManualSource">
-             <property name="text">
-              <string>强制添加源</string>
-             </property>
-            </widget>
-           </item>
           </layout>
          </item>
         </layout>
        </item>
-       <item row="0" column="1">
-        <widget class="QTableWidget" name="tableWidget_SourceInfo"/>
-       </item>
       </layout>
+     </widget>
+    </item>
+    <item row="1" column="1" rowspan="2">
+     <widget class="QTableWidget" name="tableWidget_SourceInfo">
+      <property name="minimumSize">
+       <size>
+        <width>300</width>
+        <height>0</height>
+       </size>
+      </property>
      </widget>
     </item>
     <item row="2" column="0">
@@ -1425,7 +1532,7 @@
              </property>
              <property name="maximumSize">
               <size>
-               <width>203</width>
+               <width>16777215</width>
                <height>16777215</height>
               </size>
              </property>
@@ -1895,7 +2002,7 @@
       </layout>
      </widget>
     </item>
-    <item row="3" column="0">
+    <item row="3" column="0" colspan="2">
      <widget class="QTableWidget" name="tableWidget_TargetInfo">
       <property name="font">
        <font>
@@ -2340,7 +2447,7 @@
       </column>
      </widget>
     </item>
-    <item row="4" column="0">
+    <item row="4" column="0" colspan="2">
      <widget class="QTextEdit" name="textEdit_Log">
       <property name="font">
        <font>

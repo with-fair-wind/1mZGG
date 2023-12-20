@@ -403,11 +403,27 @@ struct SLog
 };
 
 /// TrackParams
+
+struct SBlobParams
+{
+    float posx = 0.0;
+    float posy = 0.0;
+    float fMaxX = 0.0;	// 连通域X方向最大(pixel)
+    float fMinX = 0.0;	// 连通域X方向最小(pixel)
+    float fMaxY = 0.0;	// 连通域Y方向最大(pixel)
+    float fMinY = 0.0;	// 连通域Y方向最小(pixel)
+    float fArea = 0.0;	// 连通域面积(pixel^2)
+    float fDN = 0.0;	// 连通域灰度和(DN)
+    float fMagIns = 0.0;	// 连通域仪器星等
+};
+
 struct STrackParams
 {
     QString qstrExEPath = "/home/kk/anaconda3/envs/env_twdw_gdcl/bin/python";
     QString qstrPYPath = "/home/kk/code/Python_Project/1mZGG/Source";
     QStringList qListPYFile;
+    SBlobParams sblobParams;
+    bool bUseManualSource = false;
 };
 
 struct SAddImage

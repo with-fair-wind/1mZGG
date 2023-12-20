@@ -30,7 +30,7 @@
 #include "MyLog.h"
 #include "UI_DistCurve.h"
 #include "getperiod.h"
-
+#include <WorkerObject.h>
 
 class UI_CtrlPad : public QMainWindow
 {
@@ -53,7 +53,7 @@ private:
     QStringList FindFiles(const QString &startDir, const QStringList &filters);
     void DeleteLessFile(QStringList qstrlistFiles, int& iDelete);
     void changeRaDecTrackParams();
-    void LoadSource();
+    void LoadSource(QString fileName);
     void LoadPYFiles(QString PYPath);
 
 signals:
@@ -64,6 +64,7 @@ signals:
     void SignalZoom(int);
     void SignalDispStatus();
     void SignalAddImage();
+    void SignalExtract(QString pythonScript, QStringList functionArguments);
 
 private slots:
     void on_SignalMCSetExp(float fExpTime);
@@ -139,6 +140,8 @@ private slots:
     void on_pushButton_ManualSource_clicked();
     void on_checkBox_SourceInfoEN_clicked(bool checked);
     void on_pushButton_SourceInfoSet_clicked();
+    void on_checkBox_AddManualSource_clicked(bool checked);
+    void on_pushButton_SourcePath_clicked();
 
 public slots:
     void on_SignalAddEnding();
@@ -168,6 +171,7 @@ private:
     bool m_bParamsLoading;
 
     pair<float, float> m_pairPosManual;
+    WorkerObject *m_pyObj;
 };
 
 #endif // MAINWINDOW_H
