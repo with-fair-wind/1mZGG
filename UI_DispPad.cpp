@@ -207,41 +207,69 @@ void UI_DispPad::paintImage()
         {
             vector<sTargetInfo> vectInfo;
             m_pImageProcessor->GetVectTargetTWDWInfo(vectInfo);
-            int iNumFrames = m_pImageProcessor->GetNumFrames();
-            if (iNumFrames >= 4)
+            if(m_pGParam->m_STrackParams.bUseManualSource)
             {
-                for (int i = 0; i < vectInfo.size(); i++)
+                if(!vectInfo.empty())
                 {
-                    sTargetInfo info = vectInfo[i];
-                    if (info.bLiving)
+                    sMeasureBlob source = vectInfo.back().vectInfoInFrame.back().blobMeasure;
+                    if(vectInfo.back().vectInfoInFrame.back().bValid)
                     {
-                        sTargetInfoInFrame infoInFrame;
-                        infoInFrame = info.vectInfoInFrame[info.vectInfoInFrame.size()-1];
-
-                        sMeasureBlob blob = infoInFrame.blobMeasure;
                         float fRectLeft, fRectWidth, fRectUp, fRectHeight;
-                        if (info.vectInfoInFrame[info.vectInfoInFrame.size()-1].bValid
-                                || info.vectInfoInFrame[info.vectInfoInFrame.size()-2].bValid
-                                || info.vectInfoInFrame[info.vectInfoInFrame.size()-3].bValid)
-                        {
-                            fRectLeft = blob.fMinX-m_qptLUinImage.x()-30;
-                            fRectWidth = blob.fMaxX-blob.fMinX+60;
-                            fRectUp = blob.fMinY-m_qptLUinImage.y()-30;
-                            fRectHeight = blob.fMaxY-blob.fMinY+60;
+                        fRectLeft = source.fMinX-m_qptLUinImage.x()-30;
+                        fRectWidth = source.fMaxX-source.fMinX+60;
+                        fRectUp = source.fMinY-m_qptLUinImage.y()-30;
+                        fRectHeight = source.fMaxY-source.fMinY+60;
 
-                            pqpainterDraw->setPen(QPen(Qt::green, 2, Qt::SolidLine));
-                            pqpainterDraw->drawRect(QRect(fRectLeft * dSizePercent, fRectUp * dSizePercent, fRectWidth * dSizePercent, fRectHeight * dSizePercent));
-                            pqpainterDraw->setPen(QPen(Qt::green, 1, Qt::SolidLine));
-                            QFont qfontMag = pqpainterDraw->font();
-                            qfontMag.setPixelSize(18);
-                            pqpainterDraw->setFont(qfontMag);
-                            pqpainterDraw->drawText((int)((fRectLeft) * dSizePercent),
-                                                    (int)((fRectUp-10) * dSizePercent),
-                                                    info.qstrTargetID);
+                        pqpainterDraw->setPen(QPen(Qt::green, 2, Qt::SolidLine));
+                        pqpainterDraw->drawRect(QRect(fRectLeft * dSizePercent, fRectUp * dSizePercent, fRectWidth * dSizePercent, fRectHeight * dSizePercent));
+                        pqpainterDraw->setPen(QPen(Qt::green, 1, Qt::SolidLine));
+                        QFont qfontMag = pqpainterDraw->font();
+                        qfontMag.setPixelSize(18);
+                        pqpainterDraw->setFont(qfontMag);
+                        pqpainterDraw->drawText((int)((fRectLeft) * dSizePercent),
+                                                (int)((fRectUp-10) * dSizePercent),
+                                                vectInfo.back().qstrTargetID);
+                    }
+                }
+            }
+            else
+            {
+                int iNumFrames = m_pImageProcessor->GetNumFrames();
+                if (iNumFrames >= 4)
+                {
+                    for (int i = 0; i < vectInfo.size(); i++)
+                    {
+                        sTargetInfo info = vectInfo[i];
+                        if (info.bLiving)
+                        {
+                            sTargetInfoInFrame infoInFrame;
+                            infoInFrame = info.vectInfoInFrame[info.vectInfoInFrame.size()-1];
+
+                            sMeasureBlob blob = infoInFrame.blobMeasure;
+                            float fRectLeft, fRectWidth, fRectUp, fRectHeight;
+                            if (info.vectInfoInFrame[info.vectInfoInFrame.size()-1].bValid
+                                    || info.vectInfoInFrame[info.vectInfoInFrame.size()-2].bValid
+                                    || info.vectInfoInFrame[info.vectInfoInFrame.size()-3].bValid)
+                            {
+                                fRectLeft = blob.fMinX-m_qptLUinImage.x()-30;
+                                fRectWidth = blob.fMaxX-blob.fMinX+60;
+                                fRectUp = blob.fMinY-m_qptLUinImage.y()-30;
+                                fRectHeight = blob.fMaxY-blob.fMinY+60;
+
+                                pqpainterDraw->setPen(QPen(Qt::green, 2, Qt::SolidLine));
+                                pqpainterDraw->drawRect(QRect(fRectLeft * dSizePercent, fRectUp * dSizePercent, fRectWidth * dSizePercent, fRectHeight * dSizePercent));
+                                pqpainterDraw->setPen(QPen(Qt::green, 1, Qt::SolidLine));
+                                QFont qfontMag = pqpainterDraw->font();
+                                qfontMag.setPixelSize(18);
+                                pqpainterDraw->setFont(qfontMag);
+                                pqpainterDraw->drawText((int)((fRectLeft) * dSizePercent),
+                                                        (int)((fRectUp-10) * dSizePercent),
+                                                        info.qstrTargetID);
+                            }
                         }
                     }
                 }
-            }            
+            }
         }
         else if (iProcMode == PROC_DIRECT && iTrackMode == TRACK_MANUAL)
         {

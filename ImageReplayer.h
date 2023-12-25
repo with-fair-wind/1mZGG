@@ -26,6 +26,7 @@ public:
     bool SetPause(void);
     QString GetReplayPath(void);
     bool GetImageValid(void) { return m_bImageValid; }
+    unsigned GetCurImgID(){return m_uiSeqCurrent;}
 
 private:
     static void CallBackReplay(void* pvoidThis);	// 回放线程回调

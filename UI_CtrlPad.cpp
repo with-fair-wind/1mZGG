@@ -26,22 +26,16 @@ UI_CtrlPad::UI_CtrlPad(QWidget *parent)
     m_pImageProcessor->SetScale(bAutoScale, uiScaleUp, uiScaleDown);
     m_pImageProcessor->SetDispEnhance(ui.checkBox_EnhanceDisp->isChecked());
     m_pImageProcessor->SetCenterMode(!(ui.comboBox_TrackMode_2->currentIndex() == 1));
-    m_qtimerUI = new QTimer(this);
-    connect(m_qtimerUI, SIGNAL(timeout()), this, SLOT(on_UITimerOut()));
-    m_qtimerUI->start(100);
+//    m_qtimerUI = new QTimer(this);
+//    connect(m_qtimerUI, SIGNAL(timeout()), this, SLOT(on_UITimerOut()));
+//    m_qtimerUI->start(100);
 
     ui.checkBox_MCCtrl->setChecked(true);
     on_checkBox_MCCtrl_clicked();
 
     m_pyObj = new WorkerObject;
     connect(this, &UI_CtrlPad::SignalExtract, m_pyObj, &WorkerObject::doPythonWork);
-    connect(m_pyObj, &WorkerObject::SignalPyEnding, this, [=](){
-        QFileInfo fileInfo(m_pGParam->m_SImageReplayerData.qstrCurFileName);
-        QString fileName = fileInfo.fileName(); // 获取文件名
-        QString absolutePath = fileInfo.absolutePath(); // 获取文件的绝对路径（目录路径）
-        QString sourceFile = absolutePath + "/Sources/" + fileName + "Sources.csv";
-        LoadSource(sourceFile);
-    });
+    connect(m_pyObj, &WorkerObject::SignalPyEnding, this, &UI_CtrlPad::on_SignalPyEnding);
 }
 #include <QDebug>
 UI_CtrlPad::~UI_CtrlPad()
@@ -112,51 +106,73 @@ void UI_CtrlPad::UIInit(void)
     ui.tableWidget_TargetInfo->setColumnWidth(4, 80);
     ui.tableWidget_TargetInfo->setColumnWidth(5, 207);
     ui.tableWidget_TargetInfo->horizontalHeader()->setFont(QFont("song", 13));
+    ui.checkBox_DispBW->setEnabled(m_pGParam->m_bDebugBW);
 
     ui.lineEdit_PythonExE->setText(m_pGParam->m_STrackParams.qstrExEPath);
-    ui.lineEdit_pyPath->setText(m_pGParam->m_STrackParams.qstrPYPath);
-    ui.lineEdit_RaThresh->setText("0.2");
-    ui.lineEdit_DecThresh->setText("0.2");
-    ui.lineEdit_RaSpdThresh->setText("2");
-    ui.lineEdit_DecSpdThresh->setText("1");
-    changeRaDecTrackParams();    
+    ui.lineEdit_pyPath->setText(m_pGParam->m_STrackParams.qstrPYPath);  
     ui.lineEdit_AddFrameNum->setText(QString::number(m_pGParam->m_SAddImage.uiAddFrameNum));
-    ui.checkBox_LockDisp->setChecked(true);
+    on_checkBox_LockDisp_clicked(false);
     ui.checkBox_TrackAlgorithm->setChecked(false);
     ui.groupBox_3->setEnabled(false);
+    ui.pushButton_LoadSourceDispInfo->setEnabled(true);
+    ui.pushButton_ManualSource->setEnabled(false);
+    ui.lineEdit_ReplayFrames->setReadOnly(true);
+    ui.checkBox_AddManualSource->setEnabled(false);
+    ui.tableWidget_SourceDisp->setEnabled(false);
+    ui.tableWidget_SourceProRes->setEnabled(false);
+    ui.stackedWidget->setCurrentIndex(0);
 
-    QVector<QPair<QString, QString>> data = {
-            {"x", "0.0"},
-            {"y", "0.0"},
-            {"xmin", "0.0"},
-            {"xmax", "0.0"},
-            {"ymin", "0.0"},
-            {"ymax", "0.0"},
-            {"area", "0.0"},
-            {"flux", "0.0"},
-            {"magIns", "0.0"}
-        };
-    ui.tableWidget_SourceInfo->setColumnCount(2);
-    ui.tableWidget_SourceInfo->setHorizontalHeaderLabels(QStringList() << "参数" << "数值");
-    ui.tableWidget_SourceInfo->setRowCount(data.size());
-    ui.tableWidget_SourceInfo->horizontalHeader()->setStretchLastSection(true);
+    QVector<QStringList> data(9, QStringList("0.0"));
+    InitTable(data, ui.tableWidget_SourceInfo, QStringList{"数值"}, QStringList{"x", "y", "xmin", "xmax", "ymin", "ymax", "area", "flux", "magIns"}, false);
+    data = QVector<QStringList>(4, QStringList("nan"));
+    InitTable(data, ui.tableWidget_SourceDisp, QStringList{"数值"}, QStringList{"叠加帧ID" ,"叠加帧数" ,"原圈次起始ID", "原圈次结束ID"}, false);
+    data = QVector<QStringList>(3, QStringList("nan"));
+    InitTable(data, ui.tableWidget_SourceProRes, QStringList{"数值"}, QStringList{"Ra" ,"Dec" ,"Mag"}, false);
+    data = {{"2", "0.2"},
+            {"1.5", "0.5"},
+            {"0.36", "0.36"}};
+    InitTable(data, ui.tableWidget_RaDecTrack, QStringList{"赤经" ,"赤纬"}, QStringList{"目标阈值" ,"阈值因子" ,"速度因子"}, true);
+    data = {{"100", "100"},
+            {"0.2", "0.2"},
+            {"2", "1"}};
+    InitTable(data, ui.tableWidget_RaDecAssoc, QStringList{"赤经" ,"赤纬"}, QStringList{"速度波门" ,"恒星阈值" ,"速度阈值"}, true);
 
-    for (int row = 0; row < data.size(); ++row)
-    {
-            QTableWidgetItem *keyItem = new QTableWidgetItem(data[row].first);
-            QTableWidgetItem *valueItem = new QTableWidgetItem(data[row].second);
-            ui.tableWidget_SourceInfo->setItem(row, 0, keyItem);
-            ui.tableWidget_SourceInfo->setItem(row, 1, valueItem);
-    }
-    ui.tableWidget_SourceInfo->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    SetRaDecTrackParams();
     LoadPYFiles(m_pGParam->m_STrackParams.qstrPYPath);
 
     LoadParams();
     m_pImageProcessor->Init_TWDW();
 }
 
-void UI_CtrlPad::on_UITimerOut(void)
+void UI_CtrlPad::InitTable(const QVector<QStringList> &data, QTableWidget*& table, QStringList ColLabel, QStringList RowLabel, bool bChange)
 {
+    table->setRowCount(RowLabel.count());
+    table->setVerticalHeaderLabels(RowLabel);
+    table->setColumnCount(ColLabel.size());
+    table->setHorizontalHeaderLabels(ColLabel);
+    table->setRowCount(data.size());
+    table->horizontalHeader()->setStretchLastSection(true);
+
+    for (int row = 0; row < data.size(); ++row)
+    {
+        for(int col = 0; col < data[row].size(); col++)
+        {
+            QTableWidgetItem *valueItem = new QTableWidgetItem(data[row][col]);
+            table->setItem(row, col, valueItem);
+        }
+    }
+    if(bChange)
+        table->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::SelectedClicked);
+    else
+        table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+}
+
+void UI_CtrlPad::ShowSourceDisp(unsigned id)
+{
+    ui.tableWidget_SourceDisp->setItem(0, 0, new QTableWidgetItem(QString::number(m_mapSourceDisp[id].uiAddFrameID)));
+    ui.tableWidget_SourceDisp->setItem(1, 0, new QTableWidgetItem(QString::number(m_mapSourceDisp[id].uiAddnum)));
+    ui.tableWidget_SourceDisp->setItem(2, 0, new QTableWidgetItem(QString::number(m_mapSourceDisp[id].pairBgEnd.first)));
+    ui.tableWidget_SourceDisp->setItem(3, 0, new QTableWidgetItem(QString::number(m_mapSourceDisp[id].pairBgEnd.second)));
 }
 
 void UI_CtrlPad::keyPressEvent(QKeyEvent* event)
@@ -367,7 +383,19 @@ void UI_CtrlPad::on_pushButton_PlayPathBrowse_clicked(void)
                 else if (m_pGParam->m_qstrImageFormat == "bmp")
                     QMessageBox::warning(NULL, QStringLiteral("警告"), QStringLiteral("浏览路径中无有效图像文件(.bmp)."));
             }
+            ui.lineEdit_ReplayFrames->setText(QString::number(m_pGParam->m_SAddImage.uiAllImgNum));
             ui.lineEdit_ImagePlayPath->setText(m_qstrPathReplay);
+
+            QDir directory(m_qstrPathReplay);
+            if(directory.exists("SourceInfo.txt"))
+            {
+                ui.pushButton_LoadSourceDispInfo->setEnabled(true);
+                ui.pushButton_ManualSource->setEnabled(false);
+            }
+            else
+            {
+                ui.pushButton_ManualSource->setEnabled(false);
+            }
         }
         else
         {
@@ -547,7 +575,7 @@ void UI_CtrlPad::on_lineEdit_BlobDown_returnPressed(void)
             ui.lineEdit_BlobUp->setText(QString::number(uiBlobUp));
         }
     }
-
+    m_pLog->InfoMsg(QString("用户已修改Blob低值为%1").arg(uiBlobDown));
     m_pImageProcessor->SetBlobAreaLimit(uiBlobDown, uiBlobUp);
 }
 
@@ -581,7 +609,7 @@ void UI_CtrlPad::on_lineEdit_BlobUp_returnPressed(void)
             ui.lineEdit_BlobUp->setText(QString::number(uiBlobUp));
         }
     }
-
+    m_pLog->InfoMsg(QString("用户已修改Blob高值为%1").arg(uiBlobUp));
     m_pImageProcessor->SetBlobAreaLimit(uiBlobDown, uiBlobUp);
 }
 
@@ -1904,22 +1932,11 @@ void UI_CtrlPad::on_SignalDisplay()
     {
         vector<sTargetInfo> vectInfo;
         m_pImageProcessor->GetVectTargetTWDWInfo(vectInfo);
-        int iNumFrames = m_pImageProcessor->GetNumFrames();
-        if (iNumFrames >= 4)
+        if(m_pGParam->m_STrackParams.bUseManualSource)
         {
-            if (vectInfo.size() > 0)
+            if(!vectInfo.empty())
             {
-                ui.tableWidget_TargetInfo->clear();
-                QStringList qstrlistTitle = {"目标编号", "图像位置", "轴系定位 / °", "天文定位 / °", "光度 / mV", "测量时间"};
-                ui.tableWidget_TargetInfo->setHorizontalHeaderLabels(qstrlistTitle);
-                ui.tableWidget_TargetInfo->horizontalHeader()->setFont(QFont("song", 13));
-            }
-//            int iSize = vectInfo.size() > 50 ? 50 : vectInfo.size();
-            int iSize = vectInfo.size();
-            for (int i = 0; i < iSize; i++)
-            {
-                sTargetInfo info = vectInfo[i];
-
+                sTargetInfo info = vectInfo.back();
                 if (info.bLiving)
                 {
                     QString qstrTargetID, qstrPosXY, qstrZXDW, qstrTWDW, qstrTargetMag, qstrTime;
@@ -1942,19 +1959,77 @@ void UI_CtrlPad::on_SignalDisplay()
                                      resPacket.stimeFrame.iSecond,
                                      resPacket.stimeFrame.iMillisecond);
 
-                    ui.tableWidget_TargetInfo->setItem(i, 0, new QTableWidgetItem(qstrTargetID));
-                    ui.tableWidget_TargetInfo->setItem(i, 1, new QTableWidgetItem(qstrPosXY));
-                    ui.tableWidget_TargetInfo->setItem(i, 2, new QTableWidgetItem(qstrZXDW));
-                    ui.tableWidget_TargetInfo->setItem(i, 3, new QTableWidgetItem(qstrTWDW));
-                    ui.tableWidget_TargetInfo->setItem(i, 4, new QTableWidgetItem(qstrTargetMag));
-                    ui.tableWidget_TargetInfo->setItem(i, 5, new QTableWidgetItem(qstrTime));
+                    ui.tableWidget_TargetInfo->setItem(0, 0, new QTableWidgetItem(qstrTargetID));
+                    ui.tableWidget_TargetInfo->setItem(0, 1, new QTableWidgetItem(qstrPosXY));
+                    ui.tableWidget_TargetInfo->setItem(0, 2, new QTableWidgetItem(qstrZXDW));
+                    ui.tableWidget_TargetInfo->setItem(0, 3, new QTableWidgetItem(qstrTWDW));
+                    ui.tableWidget_TargetInfo->setItem(0, 4, new QTableWidgetItem(qstrTargetMag));
+                    ui.tableWidget_TargetInfo->setItem(0, 5, new QTableWidgetItem(qstrTime));
                     for (int j = 0; j < 6; j++)
                     {
-                        ui.tableWidget_TargetInfo->item(i, j)->setTextAlignment(Qt::AlignCenter);
+                        ui.tableWidget_TargetInfo->item(0, j)->setTextAlignment(Qt::AlignCenter);
                         if (resPacket.bValid)
-                            ui.tableWidget_TargetInfo->item(i, j)->setForeground(QBrush(QColor(18, 18, 110)));
+                            ui.tableWidget_TargetInfo->item(0, j)->setForeground(QBrush(QColor(18, 18, 110)));
                         else
-                            ui.tableWidget_TargetInfo->item(i, j)->setForeground(QBrush(QColor(128, 128, 128)));
+                            ui.tableWidget_TargetInfo->item(0, j)->setForeground(QBrush(QColor(128, 128, 128)));
+                    }
+                }
+            }
+        }
+        else
+        {
+            int iNumFrames = m_pImageProcessor->GetNumFrames();
+            if (iNumFrames >= 4)
+            {
+                if (vectInfo.size() > 0)
+                {
+                    ui.tableWidget_TargetInfo->clear();
+                    QStringList qstrlistTitle = {"目标编号", "图像位置", "轴系定位 / °", "天文定位 / °", "光度 / mV", "测量时间"};
+                    ui.tableWidget_TargetInfo->setHorizontalHeaderLabels(qstrlistTitle);
+                    ui.tableWidget_TargetInfo->horizontalHeader()->setFont(QFont("song", 13));
+                }
+    //            int iSize = vectInfo.size() > 50 ? 50 : vectInfo.size();
+                int iSize = vectInfo.size();
+                for (int i = 0; i < iSize; i++)
+                {
+                    sTargetInfo info = vectInfo[i];
+
+                    if (info.bLiving)
+                    {
+                        QString qstrTargetID, qstrPosXY, qstrZXDW, qstrTWDW, qstrTargetMag, qstrTime;
+                        sResPacket resPacket = info.vectResPacket[info.vectResPacket.size() - 1];
+                        qstrTargetID = info.qstrTargetID;
+                        std::pair<float,float> pairfPosXY = resPacket.pairfTargetPosInFrame;
+                        qstrPosXY.sprintf("%d, %d", (unsigned int)(pairfPosXY.first), (unsigned int)(pairfPosXY.second));
+                        std::pair<float,float> pairfZXDW = resPacket.pairfTargetPosZXDW;
+                        qstrZXDW.sprintf("%.4f, %.4f", pairfZXDW.first, pairfZXDW.second);
+                        std::pair<float,float> pairfTWDW = resPacket.pairfTargetPosTWDW;
+                        qstrTWDW.sprintf("%.4f, %.4f", pairfTWDW.first, pairfTWDW.second);
+                        float fTargetMag = resPacket.fTargetMvGDCL;
+                        qstrTargetMag = QString::number(fTargetMag, 'f', 2);
+                        qstrTime.sprintf("%04d-%02d-%02d  %02d:%02d:%02d.%03d",
+                                         resPacket.stimeFrame.iYear,
+                                         resPacket.stimeFrame.iMonth,
+                                         resPacket.stimeFrame.iDay,
+                                         resPacket.stimeFrame.iHour,
+                                         resPacket.stimeFrame.iMinute,
+                                         resPacket.stimeFrame.iSecond,
+                                         resPacket.stimeFrame.iMillisecond);
+
+                        ui.tableWidget_TargetInfo->setItem(i, 0, new QTableWidgetItem(qstrTargetID));
+                        ui.tableWidget_TargetInfo->setItem(i, 1, new QTableWidgetItem(qstrPosXY));
+                        ui.tableWidget_TargetInfo->setItem(i, 2, new QTableWidgetItem(qstrZXDW));
+                        ui.tableWidget_TargetInfo->setItem(i, 3, new QTableWidgetItem(qstrTWDW));
+                        ui.tableWidget_TargetInfo->setItem(i, 4, new QTableWidgetItem(qstrTargetMag));
+                        ui.tableWidget_TargetInfo->setItem(i, 5, new QTableWidgetItem(qstrTime));
+                        for (int j = 0; j < 6; j++)
+                        {
+                            ui.tableWidget_TargetInfo->item(i, j)->setTextAlignment(Qt::AlignCenter);
+                            if (resPacket.bValid)
+                                ui.tableWidget_TargetInfo->item(i, j)->setForeground(QBrush(QColor(18, 18, 110)));
+                            else
+                                ui.tableWidget_TargetInfo->item(i, j)->setForeground(QBrush(QColor(128, 128, 128)));
+                        }
                     }
                 }
             }
@@ -2232,10 +2307,7 @@ void UI_CtrlPad::on_lineEdit_ScaleDown_returnPressed()
     bool bAutoScale = ui.checkBox_AutoScale->isChecked();
     unsigned int uiScaleMax = ui.lineEdit_ScaleUp->text().toUInt();
     unsigned int uiScaleMin = ui.lineEdit_ScaleDown->text().toUInt();
-    if (uiScaleMin >= 0 && uiScaleMin <= 16384 && uiScaleMax >= 0 && uiScaleMax <= 16384 && uiScaleMax > uiScaleMin)
-    {
-    }
-    else
+    if (!(uiScaleMin >= 0 && uiScaleMin <= 16384 && uiScaleMax >= 0 && uiScaleMax <= 16384 && uiScaleMax > uiScaleMin))
     {
         QMessageBox::warning(NULL, QStringLiteral("警告"), QStringLiteral("输入值超限."));
         uiScaleMax = 5000;
@@ -2252,6 +2324,7 @@ void UI_CtrlPad::on_lineEdit_ScaleDown_returnPressed()
     ui.horizontalSlider_ScaleDown->setValue(uiScaleMin);
     if(m_pGParam->m_bDispFirst)
         emit SignalDispStatus();
+    m_pLog->InfoMsg(QString("用户已修改拉伸低值为%1").arg(uiScaleMin));
 }
 
 void UI_CtrlPad::on_lineEdit_ScaleUp_returnPressed()
@@ -2259,10 +2332,7 @@ void UI_CtrlPad::on_lineEdit_ScaleUp_returnPressed()
     bool bAutoScale = ui.checkBox_AutoScale->isChecked();
     unsigned int uiScaleMax = ui.lineEdit_ScaleUp->text().toUInt();
     unsigned int uiScaleMin = ui.lineEdit_ScaleDown->text().toUInt();
-    if (uiScaleMin >= 0 && uiScaleMin <= 16384 && uiScaleMax >= 0 && uiScaleMax <= 16384 && uiScaleMax > uiScaleMin)
-    {
-    }
-    else
+    if (!(uiScaleMin >= 0 && uiScaleMin <= 16384 && uiScaleMax >= 0 && uiScaleMax <= 16384 && uiScaleMax > uiScaleMin))
     {
         QMessageBox::warning(NULL, QStringLiteral("警告"), QStringLiteral("输入值超限."));
         uiScaleMax = 5000;
@@ -2279,6 +2349,7 @@ void UI_CtrlPad::on_lineEdit_ScaleUp_returnPressed()
     ui.horizontalSlider_ScaleDown->setValue(uiScaleMin);
     if(m_pGParam->m_bDispFirst)
         emit SignalDispStatus();
+    m_pLog->InfoMsg(QString("用户已修改拉伸高值为%1").arg(uiScaleMax));
 }
 
 void UI_CtrlPad::on_horizontalSlider_ScaleDown_sliderMoved(int position)
@@ -2286,10 +2357,7 @@ void UI_CtrlPad::on_horizontalSlider_ScaleDown_sliderMoved(int position)
     unsigned int uiScaleMin = position;
     bool bAutoScale = ui.checkBox_AutoScale->isChecked();
     unsigned int uiScaleMax = ui.lineEdit_ScaleUp->text().toUInt();
-    if (uiScaleMax > uiScaleMin)
-    {
-    }
-    else
+    if (uiScaleMax <= uiScaleMin)
     {
         uiScaleMin = uiScaleMax - 1;
         ui.horizontalSlider_ScaleDown->setValue(uiScaleMin);
@@ -2300,6 +2368,7 @@ void UI_CtrlPad::on_horizontalSlider_ScaleDown_sliderMoved(int position)
     ui.lineEdit_ScaleDown->setEnabled(!bAutoScale);
     ui.horizontalSlider_ScaleUp->setEnabled(!bAutoScale);
     ui.horizontalSlider_ScaleDown->setEnabled(!bAutoScale);
+    m_pLog->InfoMsg(QString("用户已修改拉伸低值为%1").arg(uiScaleMin));
 }
 
 void UI_CtrlPad::on_horizontalSlider_ScaleUp_sliderMoved(int position)
@@ -2307,10 +2376,7 @@ void UI_CtrlPad::on_horizontalSlider_ScaleUp_sliderMoved(int position)
     unsigned int uiScaleMax = position;
     bool bAutoScale = ui.checkBox_AutoScale->isChecked();
     unsigned int uiScaleMin = ui.lineEdit_ScaleDown->text().toUInt();
-    if (uiScaleMax > uiScaleMin)
-    {
-    }
-    else
+    if (uiScaleMax <= uiScaleMin)
     {
         uiScaleMax = uiScaleMin + 1;
         ui.horizontalSlider_ScaleUp->setValue(uiScaleMax);
@@ -2321,6 +2387,7 @@ void UI_CtrlPad::on_horizontalSlider_ScaleUp_sliderMoved(int position)
     ui.lineEdit_ScaleDown->setEnabled(!bAutoScale);
     ui.horizontalSlider_ScaleUp->setEnabled(!bAutoScale);
     ui.horizontalSlider_ScaleDown->setEnabled(!bAutoScale);
+    m_pLog->InfoMsg(QString("用户已修改拉伸高值为%1").arg(uiScaleMax));
 }
 
 
@@ -2429,7 +2496,13 @@ void UI_CtrlPad::on_pushButton_TrainCam_clicked()
 
 void UI_CtrlPad::on_checkBox_Dark_clicked(bool checked)
 {
-    m_pImageProcessor->SetDark(checked);
+    if(checked)
+        m_pImageProcessor->SetDark(checked);
+    else
+    {
+        float fRatio = ui.comboBox_ThreshBW->currentText().toFloat();
+        m_pImageProcessor->SetStdRatio(fRatio);
+    }
 }
 
 void UI_CtrlPad::on_checkBox_DispBW_clicked(bool checked)
@@ -2441,24 +2514,9 @@ void UI_CtrlPad::on_checkBox_DispBW_clicked(bool checked)
 
 void UI_CtrlPad::on_comboBox_ThreshBW_currentIndexChanged(int index)
 {
-    float fRatio = 5.0;
-    switch (index) {
-        case 0:
-            fRatio = 5.0;
-            break;
-        case 1:
-            fRatio = 6.0;
-            break;
-        case 2:
-            fRatio = 7.0;
-            break;
-        case 3:
-            fRatio = 8.0;
-            break;
-        default:
-            break;
-    }
+    float fRatio = ui.comboBox_ThreshBW->currentText().toFloat();
     m_pImageProcessor->SetStdRatio(fRatio);
+    m_pLog->InfoMsg(QString("用户修改BW阈值%1").arg(fRatio));
 }
 
 void UI_CtrlPad::on_checkBox_LooseThresh_clicked(bool checked)
@@ -2584,37 +2642,6 @@ void UI_CtrlPad::on_radioButton_ZoomIn_clicked(bool checked)
         emit SignalZoom(2);
 }
 
-void UI_CtrlPad::changeRaDecTrackParams()
-{
-    double dRaThresh = ui.lineEdit_RaThresh->text().toDouble() / 3600.0;
-    double dDecThresh = ui.lineEdit_DecThresh->text().toDouble() / 3600.0;
-    double dRaSpdThresh = ui.lineEdit_RaSpdThresh->text().toDouble() / 3600.0;
-    double dDecSpdThresh = ui.lineEdit_DecSpdThresh->text().toDouble() / 3600.0;
-    m_pImageProcessor->setRaDecThresh(dRaThresh, dDecThresh, dRaSpdThresh, dDecSpdThresh);
-    QMessageBox::information(this, "修改Ra、Dec、RaSpd、DecSpd阈值", "修改成功");
-}
-
-void UI_CtrlPad::on_lineEdit_DecThresh_returnPressed()
-{
-    changeRaDecTrackParams();
-}
-
-void UI_CtrlPad::on_lineEdit_RaThresh_returnPressed()
-{
-    changeRaDecTrackParams();
-}
-
-void UI_CtrlPad::on_lineEdit_RaSpdThresh_returnPressed()
-{
-    changeRaDecTrackParams();
-}
-
-void UI_CtrlPad::on_lineEdit_DecSpdThresh_returnPressed()
-{
-    changeRaDecTrackParams();
-}
-
-
 void UI_CtrlPad::on_pushButton_PythonExE_clicked()
 {
     m_pGParam->m_STrackParams.qstrExEPath = QFileDialog::getOpenFileName(nullptr, "选择python解释器", "/home", "All Files (*);;Text Files (*.txt)");
@@ -2630,15 +2657,38 @@ void UI_CtrlPad::on_pushButton_pyPath_clicked()
 
 void UI_CtrlPad::LoadPYFiles(QString PYPath)
 {
+    ui.comboBox_pyFIles->clear();
+    m_pGParam->m_STrackParams.qListPYFile.clear();
     QDir qDirPy(PYPath);
     if(qDirPy.exists())
     {
-        ui.comboBox_pyFIles->clear();
-        m_pGParam->m_STrackParams.qListPYFile.clear();
         m_pGParam->m_STrackParams.qListPYFile = qDirPy.entryList(QStringList("*.py"), QDir::Files | QDir::Readable, QDir::Name);
 
         for (QString& cur : m_pGParam->m_STrackParams.qListPYFile)
             ui.comboBox_pyFIles->addItem(cur);
+    }
+}
+
+void UI_CtrlPad::LoadSourceDisp(QString fileName)
+{
+    m_mapSourceDisp.clear();
+    QFile file(fileName);
+    if(file.open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        QTextStream out(&file);
+        while(!out.atEnd())
+        {
+            QString line = out.readLine();
+            QStringList fields = line.split(" ");
+            m_mapSourceDisp.insert(std::make_pair(fields[0].toUInt(), SSourceDisp(fields[0].toUInt(), fields[1].toUInt(), fields[2].toUInt(), fields[3].toUInt())));
+        }
+        ui.pushButton_LoadSourceDispInfo->setEnabled(false);
+        ui.pushButton_ManualSource->setEnabled(true);
+        QMessageBox::information(this, "通知", "加载Add/SourceInfo.txt成功");
+    }
+    else
+    {
+        QMessageBox::information(this, "警告", "加载Add/SourceInfo.txt失败");
     }
 }
 
@@ -2691,6 +2741,53 @@ void UI_CtrlPad::on_SignalAddProc(int iSeqCut, int iNumTotal)
     ui.lineEdit_AddProc->setText(QString("%1 / %2").arg(iSeqCut).arg(iNumTotal));
 }
 
+void UI_CtrlPad::on_SignelSourceProRes(int sourceIndex, unsigned proFrameID)
+{
+    SSourceDisp ssourceDisp;
+    if(sourceIndex == -1)
+    {
+        for(auto &cur : m_mapSourceDisp)
+        {
+            if(proFrameID >= cur.second.pairBgEnd.first && proFrameID <= cur.second.pairBgEnd.second)
+            {
+                ssourceDisp = cur.second;
+                break;
+            }
+        }
+    }
+    else
+        ssourceDisp = m_pGParam->m_STrackParams.vecSource[sourceIndex].first;
+
+    ui.tableWidget_SourceDisp->setItem(0, 0, new QTableWidgetItem(QString::number(ssourceDisp.uiAddFrameID)));
+    ui.tableWidget_SourceDisp->setItem(1, 0, new QTableWidgetItem(QString::number(ssourceDisp.uiAddnum)));
+    ui.tableWidget_SourceDisp->setItem(2, 0, new QTableWidgetItem(QString::number(ssourceDisp.pairBgEnd.first)));
+    ui.tableWidget_SourceDisp->setItem(3, 0, new QTableWidgetItem(QString::number(ssourceDisp.pairBgEnd.second)));
+
+    ui.tableWidget_SourceProRes->setItem(0, 0, new QTableWidgetItem(sourceIndex == -1 ? "nan" : QString::fromStdString(std::to_string(ssourceDisp.dRa))));
+    ui.tableWidget_SourceProRes->setItem(1, 0, new QTableWidgetItem(sourceIndex == -1 ? "nan" : QString::fromStdString(std::to_string(ssourceDisp.dDec))));
+    ui.tableWidget_SourceProRes->setItem(2, 0, new QTableWidgetItem(sourceIndex == -1 ? "nan" : QString::fromStdString(std::to_string(ssourceDisp.dMag))));
+}
+
+void UI_CtrlPad::on_SignalPyEnding()
+{
+    QFileInfo fileInfo(m_pGParam->m_SImageReplayerData.qstrCurFileName);
+    QString fileName = fileInfo.fileName(); // 获取文件名
+    QString absolutePath = fileInfo.absolutePath(); // 获取文件的绝对路径（目录路径）
+    QString sourceFile = absolutePath + "/Sources/" + fileName + "Sources.csv";
+
+    QFile file(absolutePath + "/Sources/" + fileName + "Disp.txt");
+    unsigned tmp = m_pImageReplayer->GetCurImgID();
+    if(file.open(QIODevice::WriteOnly | QIODevice::Text))
+    {
+        QTextStream out(&file);
+        out << m_mapSourceDisp[tmp].uiAddFrameID << " " << m_mapSourceDisp[tmp].uiAddnum << " " << m_mapSourceDisp[tmp].pairBgEnd.first << " " << m_mapSourceDisp[tmp].pairBgEnd.second;
+        file.close();
+    }
+
+    ShowSourceDisp(tmp);
+    LoadSource(sourceFile);
+}
+
 void UI_CtrlPad::on_checkBox_LockDisp_clicked(bool checked)
 {
     m_pGParam->m_bDispMode = checked;
@@ -2703,19 +2800,35 @@ void UI_CtrlPad::on_checkBox_TrackAlgorithm_clicked(bool checked)
 {
     m_pGParam->m_SImageProcessorData.bTrackAlgorithm = checked;
     ui.groupBox_3->setEnabled(checked);
+    ui.checkBox_AddManualSource->setEnabled(checked);
 }
 
 void UI_CtrlPad::LoadSource(QString fileName)
 {
     QFile outfile(fileName);
     if (!outfile.open(QIODevice::ReadOnly | QIODevice::Text))
-        qDebug() << "Could not open file for reading.";
+    {
+        QMessageBox::warning(this, "警告", "无法打开数据源文件, 提源失败!");
+        for(int row = 0; row < ui.tableWidget_SourceInfo->rowCount(); ++row)
+        {
+            QTableWidgetItem *valueItem = new QTableWidgetItem("0.0");
+            ui.tableWidget_SourceInfo->setItem(row, 0, valueItem);
+        }
+        return;
+    }
     QTextStream outText(&outfile);
 
     // 读取第一行并检查处理是否成功
     QString firstLine = outText.readLine();
     if (!firstLine.startsWith("Successful"))
-        qDebug() << "Processing was not successful.";
+    {
+        QMessageBox::warning(this, "警告", "提源失败!");
+        for(int row = 0; row < ui.tableWidget_SourceInfo->rowCount(); ++row)
+        {
+            QTableWidgetItem *valueItem = new QTableWidgetItem("0.0");
+            ui.tableWidget_SourceInfo->setItem(row, 0, valueItem);
+        }
+    }
     else
     {
         QString line = outText.readLine();
@@ -2723,8 +2836,9 @@ void UI_CtrlPad::LoadSource(QString fileName)
         for (int row = 0; row < fields.size(); row++)
         {
             QTableWidgetItem *valueItem = new QTableWidgetItem(fields[row]);
-            ui.tableWidget_SourceInfo->setItem(row, 1, valueItem);
+            ui.tableWidget_SourceInfo->setItem(row, 0, valueItem);
         }
+        QMessageBox::information(this, "恭喜", "提源成功!");
     }
 }
 
@@ -2752,42 +2866,140 @@ void UI_CtrlPad::on_checkBox_SourceInfoEN_clicked(bool checked)
 
 void UI_CtrlPad::on_pushButton_SourceInfoSet_clicked()
 {
+    SSourceParams ssourceparams;
     for(int row = 0; row < ui.tableWidget_SourceInfo->rowCount(); ++row)
     {
-        QString key = ui.tableWidget_SourceInfo->item(row, 0)->text();
-        QString value = ui.tableWidget_SourceInfo->item(row, 1)->text();
+        QString key = ui.tableWidget_SourceInfo->verticalHeaderItem(row)->text();
+        QString value = ui.tableWidget_SourceInfo->item(row, 0)->text();
 
         if (key == "x") {
-            m_pGParam->m_STrackParams.sblobParams.posx = value.toFloat();
+            ssourceparams.posx = value.toFloat();
         } else if (key == "y") {
-            m_pGParam->m_STrackParams.sblobParams.posy = value.toFloat();
+            ssourceparams.posy = value.toFloat();
         } else if (key == "xmin") {
-            m_pGParam->m_STrackParams.sblobParams.fMinX = value.toFloat();
+            ssourceparams.fMinX = value.toFloat();
         } else if (key == "xmax") {
-            m_pGParam->m_STrackParams.sblobParams.fMaxX = value.toFloat();
+            ssourceparams.fMaxX = value.toFloat();
         } else if (key == "ymin") {
-            m_pGParam->m_STrackParams.sblobParams.fMinY = value.toFloat();
+            ssourceparams.fMinY = value.toFloat();
         } else if (key == "ymax") {
-            m_pGParam->m_STrackParams.sblobParams.fMaxY = value.toFloat();
+            ssourceparams.fMaxY = value.toFloat();
         } else if (key == "area") {
-            m_pGParam->m_STrackParams.sblobParams.fArea = value.toFloat();
+            ssourceparams.fArea = value.toFloat();
         } else if (key == "flux") {
-            m_pGParam->m_STrackParams.sblobParams.fDN = value.toFloat();
+            ssourceparams.fDN = value.toFloat();
         } else if (key == "magIns") {
-            m_pGParam->m_STrackParams.sblobParams.fMagIns = value.toFloat();
+            ssourceparams.fMagIns = value.toFloat();
         }
     }
-    QMessageBox::information(this, "源设置", "已设置源数据");
+
+//    unsigned curImgID = m_pImageReplayer->GetCurImgID();
+    unsigned curImgID = ui.tableWidget_SourceDisp->item(0, 0)->text().toUInt();
+
+    if(m_pGParam->m_STrackParams.vecSource.empty())
+        m_pGParam->m_STrackParams.vecSource.push_back(std::make_pair(m_mapSourceDisp[curImgID], ssourceparams));
+    else
+    {
+        if(curImgID == m_pGParam->m_STrackParams.vecSource.back().first.uiAddFrameID)
+            m_pGParam->m_STrackParams.vecSource.back().second = ssourceparams;
+        else
+            m_pGParam->m_STrackParams.vecSource.push_back(std::make_pair(m_mapSourceDisp[curImgID], ssourceparams));
+    }
+    ui.comboBox_nowAddFrames->addItem(QString("%1~%2帧").arg(m_mapSourceDisp[curImgID].pairBgEnd.first).arg(m_mapSourceDisp[curImgID].pairBgEnd.second));
+    QMessageBox::information(this, "源设置", QString("已设置第%1~%2帧的源数据").arg(m_mapSourceDisp[curImgID].pairBgEnd.first).arg(m_mapSourceDisp[curImgID].pairBgEnd.second));
 }
 
 void UI_CtrlPad::on_checkBox_AddManualSource_clicked(bool checked)
 {
     m_pGParam->m_STrackParams.bUseManualSource = checked;
+    ui.tableWidget_SourceDisp->setEnabled(checked);
+    ui.tableWidget_SourceProRes->setEnabled(checked);
 }
 
 void UI_CtrlPad::on_pushButton_SourcePath_clicked()
 {
-    QString qstrSourcePath = QFileDialog::getOpenFileName(nullptr, "选择提源数据", "/home", "CSV Files (*.csv)");
+    QString qstrSourcePath = QFileDialog::getOpenFileName(nullptr, "选择提源数据", m_qstrSourcePath, "CSV Files (*.csv)");
     ui.lineEdit_SourcePath->setText(qstrSourcePath);
+
+    QFileInfo fileInfo(qstrSourcePath);
+    QString selectedDir = fileInfo.absolutePath();
+    m_qstrSourcePath = selectedDir;
+
+    int lastSlashIndex = qstrSourcePath.lastIndexOf('S');
+    QString qstrDispPath = qstrSourcePath.left(lastSlashIndex);
+    QFile file(qstrDispPath + "Disp.txt");
+    if(file.open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        QTextStream out(&file);
+        QString line = out.readLine();
+        QStringList qlist = line.split(" ");
+        QTableWidgetItem *valueItem1 = new QTableWidgetItem(qlist[0]);
+        ui.tableWidget_SourceDisp->setItem(0, 0, valueItem1);
+        QTableWidgetItem *valueItem2 = new QTableWidgetItem(qlist[1]);
+        ui.tableWidget_SourceDisp->setItem(1, 0, valueItem2);
+        QTableWidgetItem *valueItem3 = new QTableWidgetItem(qlist[2]);
+        ui.tableWidget_SourceDisp->setItem(2, 0, valueItem3);
+        QTableWidgetItem *valueItem4 = new QTableWidgetItem(qlist[3]);
+        ui.tableWidget_SourceDisp->setItem(3, 0, valueItem4);
+        file.close();
+    }
+
+    QDir directory(qstrSourcePath);
+    directory.cdUp();
+    directory.cdUp();
+    QString parentDir = directory.absolutePath();
+    LoadSourceDisp(parentDir + "/SourceInfo.txt");
+
     LoadSource(qstrSourcePath);
+}
+
+void UI_CtrlPad::on_pushButton_ClearSource_clicked()
+{
+    m_pGParam->m_STrackParams.vecSource.clear();
+    ui.comboBox_nowAddFrames->clear();
+    QMessageBox::information(this, "通知", "已清空所有源数据设置");
+}
+
+void UI_CtrlPad::on_pushButton_LoadSourceDispInfo_clicked()
+{
+    LoadSourceDisp(m_qstrPathReplay + "/SourceInfo.txt");
+}
+
+void UI_CtrlPad::on_pushButton_TransTable_clicked()
+{
+    ui.stackedWidget->setCurrentIndex(ui.stackedWidget->currentIndex() ? 0 : 1);
+}
+
+void UI_CtrlPad::SetRaDecTrackParams()
+{
+    for(int row = 0; row < ui.tableWidget_RaDecAssoc->rowCount(); ++row)
+    {
+        QString key = ui.tableWidget_RaDecAssoc->verticalHeaderItem(row)->text();
+        QString raVal = ui.tableWidget_RaDecAssoc->item(row, 0)->text();
+        QString decVal = ui.tableWidget_RaDecAssoc->item(row, 1)->text();
+        if (key == "速度波门")
+            m_pGParam->m_STrackParams.sRaDecTrackParams.dAssoc_Radius = std::make_pair(raVal.toFloat(), decVal.toFloat());
+         else if (key == "恒星阈值")
+            m_pGParam->m_STrackParams.sRaDecTrackParams.dAssoc_Thresh = std::make_pair(raVal.toFloat(), decVal.toFloat());
+         else if (key == "速度阈值")
+            m_pGParam->m_STrackParams.sRaDecTrackParams.dAssoc_SpdThresh = std::make_pair(raVal.toFloat(), decVal.toFloat());
+    }
+    for(int row = 0; row < ui.tableWidget_RaDecTrack->rowCount(); ++row)
+    {
+        QString key = ui.tableWidget_RaDecTrack->verticalHeaderItem(row)->text();
+        QString raVal = ui.tableWidget_RaDecTrack->item(row, 0)->text();
+        QString decVal = ui.tableWidget_RaDecTrack->item(row, 1)->text();
+        if (key == "目标阈值")
+            m_pGParam->m_STrackParams.sRaDecTrackParams.dTrack_Thresh = std::make_pair(raVal.toFloat(), decVal.toFloat());
+         else if (key == "阈值因子")
+            m_pGParam->m_STrackParams.sRaDecTrackParams.dTrack_Factor = std::make_pair(raVal.toFloat(), decVal.toFloat());
+         else if (key == "速度因子")
+            m_pGParam->m_STrackParams.sRaDecTrackParams.dTrack_SpdFactor = std::make_pair(raVal.toFloat(), decVal.toFloat());
+    }
+}
+
+void UI_CtrlPad::on_pushButton_LoadTableParams_clicked()
+{
+    SetRaDecTrackParams();
+    QMessageBox::information(this, "惯性坐标系运动跟踪参数设置", "设置成功");
 }

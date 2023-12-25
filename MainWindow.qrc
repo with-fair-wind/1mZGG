@@ -72,5 +72,12 @@
         <file>Resources/DistErr.png</file>
         <file>Resources/detect.png</file>
         <file>Resources/curve.png</file>
+        <file>Resources/lock.png</file>
+        <file>Resources/star.png</file>
+        <file>Resources/加载.png</file>
+        <file>Resources/溯源.png</file>
+        <file>Resources/ic_清空.png</file>
+        <file>Resources/更新.png</file>
+        <file>Resources/切换.png</file>
     </qresource>
 </RCC>

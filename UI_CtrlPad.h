@@ -31,6 +31,7 @@
 #include "UI_DistCurve.h"
 #include "getperiod.h"
 #include <WorkerObject.h>
+#include <QString>
 
 class UI_CtrlPad : public QMainWindow
 {
@@ -52,9 +53,13 @@ private:
     void WriteParams(void);
     QStringList FindFiles(const QString &startDir, const QStringList &filters);
     void DeleteLessFile(QStringList qstrlistFiles, int& iDelete);
-    void changeRaDecTrackParams();
+
+    void SetRaDecTrackParams();
     void LoadSource(QString fileName);
     void LoadPYFiles(QString PYPath);
+    void LoadSourceDisp(QString fileName);
+    void InitTable(const QVector<QStringList>& data, QTableWidget*& table, QStringList ColLabel, QStringList RowLabel, bool bChange);
+    void ShowSourceDisp(unsigned id);
 
 signals:
     void SignalCloseCuard();
@@ -79,73 +84,83 @@ private slots:
     void on_SignalManualInit(void);
     void on_SignalLabelMouseClicked(float fClickX, float fClickY);
 
+public slots:
+    void on_SignalAddEnding();
+    void on_SignalAddProc(int iSeqCut, int iNumTotal);
+    void on_SignelSourceProRes(int sourceIndex, unsigned proFrameID);
+    void on_SignalPyEnding();
+
 private slots:
     void on_checkBox_ImageGrab_clicked(void);
+    void on_checkBox_MCCtrl_clicked(void);
+    void on_checkBox_TrackProc_clicked(bool bChecked);
+    void on_checkBox_DistValid_clicked(void);
+    void on_checkBox_SpdValid_clicked(void);
+    void on_comboBox_TrackMode_2_activated(int);
+    ///
+    void on_checkBox_EnhanceDisp_clicked(void);
+    void on_checkBox_AutoScale_clicked(void);
+    void on_lineEdit_ScaleDown_returnPressed(void);
+    void on_horizontalSlider_ScaleDown_sliderMoved(int position);
+    void on_horizontalSlider_ScaleDown_sliderReleased();
+    void on_lineEdit_ScaleUp_returnPressed(void);
+    void on_horizontalSlider_ScaleUp_sliderMoved(int position);
+    void on_horizontalSlider_ScaleUp_sliderReleased();
+    ///
+    void on_lineEdit_BlobDown_returnPressed(void);
+    void on_lineEdit_BlobUp_returnPressed(void);
+    void on_checkBox_TrackSave_clicked(void);
+    void on_checkBox_DrawStarMap_clicked(void);
+    ///
+    void on_checkBox_TrackInfoEN_clicked(void);
+    void on_pushButton_TrackParamsRefresh_clicked(void);
+    void on_pushButton_TrackParamsSet_clicked(void);
+    void on_comboBox_TrackMode_activated(int);
+    void on_pushButton_TrainCam_clicked(void);
+    ///
+    void on_comboBox_ThreshBW_currentIndexChanged(int index);
+    void on_checkBox_Dark_clicked(bool checked);
+     void on_pushButton_CleanData_clicked();
+    void on_comboBox_FrameFreq_currentIndexChanged(int index);
+    ///
+    void on_checkBox_LockDisp_clicked(bool checked);
+    void on_radioButton_ZoomFit_clicked(bool checked);
+    void on_radioButton_ZoomOut_clicked(bool checked);
+    void on_radioButton_ZoomIn_clicked(bool checked);
+    ///
+    void on_checkBox_TrackAlgorithm_clicked(bool checked);
+    void on_checkBox_AddManualSource_clicked(bool checked);
+    void on_checkBox_LooseThresh_clicked(bool checked);
+    void on_checkBox_ForceRePoint_clicked(bool checked);
+    void on_checkBox_DispBW_clicked(bool checked);
+    /// RaDecTrack
+    void on_pushButton_PythonExE_clicked();
+    void on_pushButton_pyPath_clicked();
+    void on_pushButton_TransTable_clicked();
+    void on_pushButton_LoadTableParams_clicked();
+    /// Source
+    void on_pushButton_SourcePath_clicked();
+    void on_pushButton_SourceInfoSet_clicked();
+    void on_pushButton_ManualSource_clicked();
+    void on_pushButton_ClearSource_clicked();
+    void on_pushButton_LoadSourceDispInfo_clicked();
+    void on_checkBox_SourceInfoEN_clicked(bool checked);
+    /// Replayer
     void on_pushButton_SavePathBrowse_clicked(void);
     void on_checkBox_MatchTimeSave_clicked(void);
     void on_checkBox_ImageSave_clicked(void);
     void on_pushButton_PlayPathBrowse_clicked(void);
+    void on_pushButton_DistCurve_clicked(void);
+    void on_pushButton_DistCurve_2_clicked(void);
     void on_pushButton_Previous_clicked(void);
     void on_pushButton_PreviousAuto_clicked(void);
     void on_pushButton_Pause_clicked(void);
     void on_pushButton_NextAuto_clicked(void);
     void on_pushButton_Next_clicked(void);
-    void on_checkBox_EnhanceDisp_clicked(void);
-    void on_lineEdit_BlobDown_returnPressed(void);
-    void on_lineEdit_BlobUp_returnPressed(void);
-    void on_comboBox_TrackMode_activated(int);
-    void on_pushButton_TrackParamsRefresh_clicked(void);
-    void on_pushButton_TrackParamsSet_clicked(void);
-    void on_checkBox_TrackSave_clicked(void);
-    void on_checkBox_TrackInfoEN_clicked(void);
-    void on_checkBox_DistValid_clicked(void);
-    void on_checkBox_SpdValid_clicked(void);
-    void on_checkBox_TrackProc_clicked(bool bChecked);
-    void on_pushButton_DistCurve_clicked(void);
-    void on_pushButton_DistCurve_2_clicked(void);
-    void on_checkBox_AutoScale_clicked(void);
-    void on_lineEdit_ScaleDown_returnPressed(void);
-    void on_lineEdit_ScaleUp_returnPressed(void);
-    void on_horizontalSlider_ScaleDown_sliderMoved(int position);
-    void on_horizontalSlider_ScaleUp_sliderMoved(int position);
-    void on_checkBox_DrawStarMap_clicked(void);
-    void on_comboBox_TrackMode_2_activated(int);
-    void on_checkBox_MCCtrl_clicked(void);
-    void on_pushButton_TrainCam_clicked(void);
-    void on_UITimerOut(void);
-    void on_checkBox_Dark_clicked(bool checked);
-    void on_checkBox_DispBW_clicked(bool checked);
-    void on_comboBox_ThreshBW_currentIndexChanged(int index);
-    void on_checkBox_LooseThresh_clicked(bool checked);
-    void on_checkBox_ForceRePoint_clicked(bool checked);
-    void on_comboBox_FrameFreq_currentIndexChanged(int index);
-    void on_pushButton_CleanData_clicked();
-    void on_radioButton_ZoomFit_clicked(bool checked);
-    void on_radioButton_ZoomOut_clicked(bool checked);
-    void on_radioButton_ZoomIn_clicked(bool checked);
-    void on_horizontalSlider_ScaleUp_sliderReleased();
-    void on_horizontalSlider_ScaleDown_sliderReleased();
-
-    void on_lineEdit_DecThresh_returnPressed();
-    void on_lineEdit_RaThresh_returnPressed();
-    void on_lineEdit_RaSpdThresh_returnPressed();
-    void on_lineEdit_DecSpdThresh_returnPressed();
-    void on_pushButton_PythonExE_clicked();
-    void on_pushButton_pyPath_clicked();
-
     void on_lineEdit_AddFrameNum_returnPressed();
     void on_pushButton_AddRePeat_clicked();
-    void on_checkBox_LockDisp_clicked(bool checked);
-    void on_checkBox_TrackAlgorithm_clicked(bool checked);
-    void on_pushButton_ManualSource_clicked();
-    void on_checkBox_SourceInfoEN_clicked(bool checked);
-    void on_pushButton_SourceInfoSet_clicked();
-    void on_checkBox_AddManualSource_clicked(bool checked);
-    void on_pushButton_SourcePath_clicked();
 
-public slots:
-    void on_SignalAddEnding();
-    void on_SignalAddProc(int iSeqCut, int iNumTotal);
+
 
 private:
     Ui::MainWindow ui;
@@ -172,6 +187,9 @@ private:
 
     pair<float, float> m_pairPosManual;
     WorkerObject *m_pyObj;
+    unsigned m_sourceID;
+    std::map<unsigned, SSourceDisp> m_mapSourceDisp;
+    QString m_qstrSourcePath = "/home";
 };
 
 #endif // MAINWINDOW_H

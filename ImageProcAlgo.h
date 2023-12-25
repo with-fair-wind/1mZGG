@@ -245,11 +245,11 @@ public:
     void CalcPointError(double dAzi, double dEle, double& dAziErr, double& dEleErr);
     CStarMap* GetStarMap() {return m_pstarmap;}
     void CalcDistortionDelta(double dPosX, double dPosY, double &dPosDx, double &dPosDy);
-    void setRaDecThresh(const double& dRaThresh, const double& dDecThresh, const double& dRaSpdThresh, const double& dDecSpdThresh) {m_pTrakcer->setRaDecThresh(dRaThresh, dDecThresh, dRaSpdThresh, dDecSpdThresh);}
     void SetDispMem();
     void RunPyPro(QString pythonInterpreter, QString pythonScript, QStringList functionArguments);
     int AddImage(unsigned int uiAddFrameNum);
     void StorageAddImgFrame();
+    int GetSourceIndex(){return m_SourceIndex;}
 
 private:
     int InitGPU(size_t szGrabWidth, size_t szGrabHeight, int iBinning, size_t szCropWidth, size_t szCropHeight, bool bRotate);
@@ -465,6 +465,7 @@ private:
     std::unordered_map<std::string, sMeasureBlob *> m_umapBlob;
     double* m_pausImgOverlayInit;
     sAddImagePacket *m_pausAddImgFrame = nullptr;
+    int m_SourceIndex = -1;
 };
 
 #endif // IMAGEPROCALGO_H

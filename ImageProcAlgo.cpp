@@ -507,25 +507,29 @@ int ImageProcAlgo::InputFramePacket(sFramePacket sPacket)
 		memcpy((unsigned short*)sInputPacket.sausImageGrab.pvoidBuffer, (unsigned short*)sPacket.sausImageGrab.pvoidBuffer, m_szGrabWidth * m_szGrabHeight * sizeof(unsigned short));
         m_fExpTime = sPacket.fExpTime;
         {
-            m_vectFramePacket.push_back(sInputPacket);
+            m_vectFramePacket.push_back(sInputPacket);           
 
-            if (m_pGParam->m_SAddImage.bAddRepeat && (m_pGParam->m_SAddImage.uiCurNum % m_pGParam->m_SAddImage.uiAddFrameNum) == m_pGParam->m_SAddImage.uiAddFrameNum / 2)
-            {
-                if(m_pausAddImgFrame)
-                    delete m_pausAddImgFrame;
-                m_pausAddImgFrame = new sAddImagePacket;
-                m_pausAddImgFrame->pausImage = new unsigned short[m_szImageWidth * m_szImageHeight * sizeof(unsigned short)];
-                m_pausAddImgFrame->sstorageParams.dExposureTime = sInputPacket.fExpTime;
-                m_pausAddImgFrame->sstorageParams.dFrameFrequency = sInputPacket.fFrameFreq;
-                m_pausAddImgFrame->sstorageParams.stimeFrame = sInputPacket.stimeFrame;
-                m_pausAddImgFrame->sstorageParams.pairfAziEleRecv = sInputPacket.pairfFOVCenterAE;
-                m_pausAddImgFrame->sstorageParams.fTemp = sInputPacket.fTemp;
-                m_pausAddImgFrame->sstorageParams.fHumidity = sInputPacket.fHumidity;
-                m_pausAddImgFrame->sstorageParams.fAtmosP = sInputPacket.fAtmosP;
-                QString qstrAddFrameID = QString("%1").arg(m_pGParam->m_SAddImage.uiCurNum / m_pGParam->m_SAddImage.uiAddFrameNum + 1).rightJustified(5, '0');
-                m_pausAddImgFrame->qstrFileName = m_pGParam->m_SAddImage.qstrSavePath + "/" + qstrAddFrameID + ".bmp";
+            if (m_pGParam->m_SAddImage.bAddRepeat)
+            {                
+                bool bready = m_pGParam->m_SAddImage.bLastImg ? (m_pGParam->m_SAddImage.uiCurNum - m_pGParam->m_SAddImage.uiAddFrameNum * (m_pGParam->m_SAddImage.uiProduceNum - 1) == m_pGParam->m_SAddImage.uiRestNum / 2)
+                                                              : (m_pGParam->m_SAddImage.uiCurNum % m_pGParam->m_SAddImage.uiAddFrameNum) == m_pGParam->m_SAddImage.uiAddFrameNum / 2;
+                if(bready)
+                {
+                    if(m_pausAddImgFrame)
+                        delete m_pausAddImgFrame;
+                    m_pausAddImgFrame = new sAddImagePacket;
+                    m_pausAddImgFrame->pausImage = new unsigned short[m_szImageWidth * m_szImageHeight * sizeof(unsigned short)];
+                    m_pausAddImgFrame->sstorageParams.dExposureTime = sInputPacket.fExpTime;
+                    m_pausAddImgFrame->sstorageParams.dFrameFrequency = sInputPacket.fFrameFreq;
+                    m_pausAddImgFrame->sstorageParams.stimeFrame = sInputPacket.stimeFrame;
+                    m_pausAddImgFrame->sstorageParams.pairfAziEleRecv = sInputPacket.pairfFOVCenterAE;
+                    m_pausAddImgFrame->sstorageParams.fTemp = sInputPacket.fTemp;
+                    m_pausAddImgFrame->sstorageParams.fHumidity = sInputPacket.fHumidity;
+                    m_pausAddImgFrame->sstorageParams.fAtmosP = sInputPacket.fAtmosP;
+                    QString qstrAddFrameID = QString("%1").arg(m_pGParam->m_SAddImage.uiCurNum / m_pGParam->m_SAddImage.uiAddFrameNum + 1).rightJustified(5, '0');
+                    m_pausAddImgFrame->qstrFileName = m_pGParam->m_SAddImage.qstrSavePath + "/" + qstrAddFrameID + ".bmp";
+                }
             }
-
             qDebug() << "### Copy Image Buffer:" << ClockOff() << "ms";
             Proc_Rotate();
         }
@@ -601,6 +605,14 @@ int ImageProcAlgo::Proc_Rotate(void)
         {
             clEnqueueWriteBuffer(m_pGpuDevMngr->cqCommandQueue, m_cmGrab, CL_TRUE, 0, m_szGrabWidth * m_szGrabHeight * sizeof(unsigned short), pausGrab, 0, NULL, NULL);
             Binning16(m_cmGrab, m_cmOri, m_szGrabWidth, m_szGrabHeight, m_iBinning);
+        }
+
+        if (m_pGParam->m_SAddImage.bAddRepeat)
+        {
+            AddImage(m_pGParam->m_SAddImage.bLastImg ? m_pGParam->m_SAddImage.uiRestNum : m_pGParam->m_SAddImage.uiAddFrameNum);
+            m_pGParam->m_SAddImage.bNextImg = true;
+            m_ulFrameSeq++;
+            return 0;
         }
 
         /// Rotate
@@ -1474,13 +1486,6 @@ int ImageProcAlgo::Proc_RaDec()
         qDebug() << "### Proc Binary:" << iTime7 << "ms";
         //***********************************************************************//
 
-        if (m_pGParam->m_SAddImage.bAddRepeat)
-        {
-            AddImage(m_pGParam->m_SAddImage.uiAddFrameNum);
-            m_pGParam->m_SAddImage.bNextImg = true;
-            return 0;
-        }
-
         /// Blob
         ClockOn();
         if (!m_blobs.empty())
@@ -1650,101 +1655,124 @@ int ImageProcAlgo::Proc_RaDec()
 
         if(m_pGParam->m_STrackParams.bUseManualSource)
         {
-            sMeasureBlob ManualSource;
-            const SBlobParams& sourceinfo = m_pGParam->m_STrackParams.sblobParams;
-            if(!vectTargetMeasures.empty())
-                ManualSource.blobID = vectTargetMeasures.back().blobID + 1;
-            ManualSource.pairfPos = make_pair(sourceinfo.posx, sourceinfo.posy);
-            ManualSource.fMinX = sourceinfo.fMinX;
-            ManualSource.fMinY = sourceinfo.fMinY;
-            ManualSource.fMaxX = sourceinfo.fMaxX;
-            ManualSource.fMaxY = sourceinfo.fMaxY;
-            ManualSource.fArea = sourceinfo.fArea;
-            ManualSource.fDN = sourceinfo.fDN;
-            ManualSource.dDn = sourceinfo.fDN;
-
-            ManualSource.pairfPosAE.second = (*iter).pairfFOVCenterAE.second + (m_trackSettings.opticparams.fFOVCenterY - ManualSource.pairfPos.second) * m_trackSettings.opticparams.fPixelScale;
-            ManualSource.pairfPosAE.first = (*iter).pairfFOVCenterAE.first + (ManualSource.pairfPos.first - m_trackSettings.opticparams.fFOVCenterX) * m_trackSettings.opticparams.fPixelScale / cos(ManualSource.pairfPosAE.second / 180.0 * 3.1415926);
-
-            /// Calculate Target Azimuth and Elevation
-            float fDistAzi = (ManualSource.pairfPos.first - m_pGParam->m_SOpticData.fOptCenterX) * m_pGParam->m_SOpticData.fPixelScale / cos(fFOVCenterEleModify / 180.0 * 3.1415926);
-            float fDistEle = (m_pGParam->m_SOpticData.fOptCenterY - ManualSource.pairfPos.second) * m_pGParam->m_SOpticData.fPixelScale;
-            float fTargetAzi = fFOVCenterAziModify + fDistAzi;
-            float fTargetEle = fFOVCenterEleModify + fDistEle;
-
-            ManualSource.fFOVCenterAziModify = fFOVCenterAziModify;
-            ManualSource.fFOVCenterEleModify = fFOVCenterEleModify;
-            ManualSource.fDistAzi = fDistAzi;
-            ManualSource.fDistEle = fDistEle;
-            ManualSource.fTargetAzi = fTargetAzi;
-            ManualSource.fTargetEle = fTargetEle;
-            ManualSource.dPointErrEle = dPointErrEle;
-
-            int iYear, iMonth, iDay, iHour;
-            double dRa = 0.0, dDe = 0.0;
-            double dRm = 0.0, dDm = 0.0;
-            double dA = ManualSource.pairfPosAE.first * pi / 180;
-            double dE = ManualSource.pairfPosAE.second * pi / 180;
-            double dLatitude = m_pGParam->m_SObsParams.fLatitude * pi / 180;
-            double dLongitude = m_pGParam->m_SObsParams.fLongitude * pi / 180;
-            BJ2UTC((*iter).stimeFrame.iYear,
-                    (*iter).stimeFrame.iMonth,
-                    (*iter).stimeFrame.iDay,
-                    (*iter).stimeFrame.iHour,
-                    iYear, iMonth, iDay, iHour);
-            m_pTrakcer->AangleToEquator(dA, dE,
-                            dLongitude, dLatitude, iYear, iMonth, iDay,
-                            iHour, (*iter).stimeFrame.iMinute,
-                            (double)(*iter).stimeFrame.iSecond + (*iter).stimeFrame.iMillisecond/1000.0,
-                            (*iter).fAtmosP/ 100.0, (*iter).fTemp + 273, true, &dRa, &dDe, &dRm, &dDm, true);
-            ManualSource.dAlpha = dRm;
-            ManualSource.dSigma = dDm;
-
-            QStringList functionArguments;
-            functionArguments << m_pGParam->m_SImageReplayerData.qstrCurFileName << QString::fromStdString(std::to_string(sourceinfo.posx)) << QString::fromStdString(std::to_string(sourceinfo.posy)) << QString::fromStdString(std::to_string(sourceinfo.fMagIns)); // 函数参数，比如文件路径
-            RunPyPro(m_pGParam->m_STrackParams.qstrExEPath, m_pGParam->m_STrackParams.qstrPYPath + "/CalSourceRaDecMag.py", functionArguments);
-
-            QFileInfo fileInfo(m_pGParam->m_SImageReplayerData.qstrCurFileName);
-            QString fileName = fileInfo.fileName(); // 获取文件名
-            QString absolutePath = fileInfo.absolutePath(); // 获取文件的绝对路径（目录路径）
-
-            QString RaDecFile = absolutePath + "/Sources/" + fileName + "RaDecKB.csv";
-            QString MagFile = absolutePath + "/Sources/" + fileName + "Mag.csv";
-
-            QFile outfile(RaDecFile);
-            if (!outfile.open(QIODevice::ReadOnly | QIODevice::Text))
-                qDebug() << "Could not open file for reading.";
-            QTextStream outText(&outfile);
-
-            QString firstLine = outText.readLine();
-            if (!firstLine.startsWith("celestial"))
-                qDebug() << "Processing was not successful.";
-            else
+            SSourceParams sourceinfo;
+            bool bfind = false;
+            size_t i = 0;
+            for(; i < m_pGParam->m_STrackParams.vecSource.size(); i++)
             {
-                ManualSource.bTWDW = true;
-                QString line = outText.readLine();
-                QStringList fields = line.split(",");
-                ManualSource.dRa = fields[0].toDouble();
-                ManualSource.dDec = fields[1].toDouble();
-            }
-            outfile.close();
-            outfile.setFileName(MagFile);
-            if (!outfile.open(QIODevice::ReadOnly | QIODevice::Text))
-                qDebug() << "Could not open file for reading.";
-            outText.setDevice(&outfile);
-            firstLine = outText.readLine();
-            if (!firstLine.startsWith("magnitude"))
-                qDebug() << "Processing was not successful.";
-            else
-            {
-                ManualSource.bGDCL = true;
-                QString line = outText.readLine();
-                QStringList fields = line.split(",");
-                ManualSource.dGd = fields[0].toDouble();
+                if(iter->ulFrameSeq >= m_pGParam->m_STrackParams.vecSource[i].first.pairBgEnd.first && iter->ulFrameSeq <= m_pGParam->m_STrackParams.vecSource[i].first.pairBgEnd.second)
+                {
+                    sourceinfo = m_pGParam->m_STrackParams.vecSource[i].second;
+                    bfind = true;
+                    break;
+                }
             }
 
-            vectTargetMeasures.clear();
-            vectTargetMeasures.push_back(ManualSource);
+            if(bfind)
+            {
+                m_SourceIndex = i;
+                sMeasureBlob ManualSource;
+                if(!vectTargetMeasures.empty())
+                    ManualSource.blobID = vectTargetMeasures.back().blobID + 1;
+                ManualSource.pairfPos = make_pair(sourceinfo.posx, sourceinfo.posy);
+                ManualSource.fMinX = sourceinfo.fMinX;
+                ManualSource.fMinY = sourceinfo.fMinY;
+                ManualSource.fMaxX = sourceinfo.fMaxX;
+                ManualSource.fMaxY = sourceinfo.fMaxY;
+                ManualSource.fArea = sourceinfo.fArea;
+                ManualSource.fDN = sourceinfo.fDN;
+                ManualSource.dDn = sourceinfo.fDN;
+
+                ManualSource.pairfPosAE.second = (*iter).pairfFOVCenterAE.second + (m_trackSettings.opticparams.fFOVCenterY - ManualSource.pairfPos.second) * m_trackSettings.opticparams.fPixelScale;
+                ManualSource.pairfPosAE.first = (*iter).pairfFOVCenterAE.first + (ManualSource.pairfPos.first - m_trackSettings.opticparams.fFOVCenterX) * m_trackSettings.opticparams.fPixelScale / cos(ManualSource.pairfPosAE.second / 180.0 * 3.1415926);
+
+                /// Calculate Target Azimuth and Elevation
+                float fDistAzi = (ManualSource.pairfPos.first - m_pGParam->m_SOpticData.fOptCenterX) * m_pGParam->m_SOpticData.fPixelScale / cos(fFOVCenterEleModify / 180.0 * 3.1415926);
+                float fDistEle = (m_pGParam->m_SOpticData.fOptCenterY - ManualSource.pairfPos.second) * m_pGParam->m_SOpticData.fPixelScale;
+                float fTargetAzi = fFOVCenterAziModify + fDistAzi;
+                float fTargetEle = fFOVCenterEleModify + fDistEle;
+
+                ManualSource.fFOVCenterAziModify = fFOVCenterAziModify;
+                ManualSource.fFOVCenterEleModify = fFOVCenterEleModify;
+                ManualSource.fDistAzi = fDistAzi;
+                ManualSource.fDistEle = fDistEle;
+                ManualSource.fTargetAzi = fTargetAzi;
+                ManualSource.fTargetEle = fTargetEle;
+                ManualSource.dPointErrEle = dPointErrEle;
+
+                int iYear, iMonth, iDay, iHour;
+                double dRa = 0.0, dDe = 0.0;
+                double dRm = 0.0, dDm = 0.0;
+                double dA = ManualSource.pairfPosAE.first * pi / 180;
+                double dE = ManualSource.pairfPosAE.second * pi / 180;
+                double dLatitude = m_pGParam->m_SObsParams.fLatitude * pi / 180;
+                double dLongitude = m_pGParam->m_SObsParams.fLongitude * pi / 180;
+                BJ2UTC((*iter).stimeFrame.iYear,
+                        (*iter).stimeFrame.iMonth,
+                        (*iter).stimeFrame.iDay,
+                        (*iter).stimeFrame.iHour,
+                        iYear, iMonth, iDay, iHour);
+                m_pTrakcer->AangleToEquator(dA, dE,
+                                dLongitude, dLatitude, iYear, iMonth, iDay,
+                                iHour, (*iter).stimeFrame.iMinute,
+                                (double)(*iter).stimeFrame.iSecond + (*iter).stimeFrame.iMillisecond/1000.0,
+                                (*iter).fAtmosP/ 100.0, (*iter).fTemp + 273, true, &dRa, &dDe, &dRm, &dDm, true);
+                ManualSource.dAlpha = dRm;
+                ManualSource.dSigma = dDm;
+
+                QStringList functionArguments;
+                functionArguments << m_pGParam->m_SImageReplayerData.qstrCurFileName << QString::fromStdString(std::to_string(sourceinfo.posx)) << QString::fromStdString(std::to_string(sourceinfo.posy)) << QString::fromStdString(std::to_string(sourceinfo.fMagIns)); // 函数参数，比如文件路径
+                RunPyPro(m_pGParam->m_STrackParams.qstrExEPath, m_pGParam->m_STrackParams.qstrPYPath + "/CalSourceRaDecMag.py", functionArguments);
+
+                QFileInfo fileInfo(m_pGParam->m_SImageReplayerData.qstrCurFileName);
+                QString fileName = fileInfo.fileName(); // 获取文件名
+                QString absolutePath = fileInfo.absolutePath(); // 获取文件的绝对路径（目录路径）
+
+                QString RaDecFile = absolutePath + "/Sources/" + fileName + "RaDecKB.csv";
+                QString MagFile = absolutePath + "/Sources/" + fileName + "Mag.csv";
+
+                QFile outfile(RaDecFile);
+                if (!outfile.open(QIODevice::ReadOnly | QIODevice::Text))
+                    qDebug() << "Could not open file for reading.";
+                QTextStream outText(&outfile);
+
+                QString firstLine = outText.readLine();
+                if (!firstLine.startsWith("celestial"))
+                    qDebug() << "Processing was not successful.";
+                else
+                {
+                    ManualSource.bTWDW = true;
+                    QString line = outText.readLine();
+                    QStringList fields = line.split(",");
+                    ManualSource.dRa = fields[0].toDouble();
+                    ManualSource.dDec = fields[1].toDouble();
+                    m_pGParam->m_STrackParams.vecSource[i].first.dRa = ManualSource.dRa;
+                    m_pGParam->m_STrackParams.vecSource[i].first.dDec = ManualSource.dDec;
+                }
+                outfile.close();
+                outfile.setFileName(MagFile);
+                if (!outfile.open(QIODevice::ReadOnly | QIODevice::Text))
+                    qDebug() << "Could not open file for reading.";
+                outText.setDevice(&outfile);
+                firstLine = outText.readLine();
+                if (!firstLine.startsWith("magnitude"))
+                    qDebug() << "Processing was not successful.";
+                else
+                {
+                    ManualSource.bGDCL = true;
+                    QString line = outText.readLine();
+                    QStringList fields = line.split(",");
+                    ManualSource.dGd = fields[0].toDouble();
+                    m_pGParam->m_STrackParams.vecSource[i].first.dMag = ManualSource.dGd;
+                }
+                vectTargetMeasures.clear();
+                vectTargetMeasures.push_back(ManualSource);
+            }
+            else
+            {
+                m_SourceIndex = -1;
+                vectTargetMeasures.clear();
+            }
         }
 
         /// 向帧数据内添加恒星位置数据
@@ -1774,7 +1802,10 @@ int ImageProcAlgo::Proc_RaDec()
         ClockOn();
         if (m_iTrackMode == TRACK_GEO)
         {
-            m_pTrakcer->TrackProc_RaDec(measuresTarget, m_vectTargetInfo, m_pGParam->m_SImageProcessorData.bFullLEO);
+            if(m_pGParam->m_STrackParams.bUseManualSource)
+                m_pTrakcer->PushManualSource(measuresTarget, m_vectTargetInfo);
+            else
+                m_pTrakcer->TrackProc_RaDec(measuresTarget, m_vectTargetInfo, m_pGParam->m_SImageProcessorData.bFullLEO);
         }
 
         m_pGParam->m_SImageProcessorData.uiNumMeasure = measuresTarget.vectTargetMeasures.size();
@@ -1787,6 +1818,38 @@ int ImageProcAlgo::Proc_RaDec()
         if(m_iTrackMode != TRACK_SC && m_iTrackMode != TRACK_LEO)
         {
             unsigned int uiObsID = m_pGParam->m_SImageProcessorData.bProcessMode ? m_pGParam->m_SObsParams.iObsID : m_pGParam->m_SImageReplayerData.qstrTeleID.toUInt();
+
+            /// 存储路径
+            QString qstrYYYY, qstrYYYYMM, qstrYYYYMMDD, qstrDatePath, qstrSub, qstrFileNameGAE;
+            if (m_pGParam->m_SImageProcessorData.bProcessMode)
+            {
+                if (m_SNetMasterControlData.qstrStartTime.size() >= 14)
+                {
+                    qstrYYYY = m_SNetMasterControlData.qstrStartTime.mid(0, 4);
+                    qstrYYYYMM = m_SNetMasterControlData.qstrStartTime.mid(0, 6);
+                    qstrYYYYMMDD = m_SNetMasterControlData.qstrStartTime.mid(0, 8);
+                    qstrDatePath = qstrYYYY + "/"
+                            + qstrYYYYMM + "/"
+                            + qstrYYYYMMDD + "/";
+                    qstrSub = qstrDatePath + m_SNetMasterControlData.qstrStartTime + "_" + m_SNetMasterControlData.qstrTargetID + "_" + QString::number(uiObsID) + ".DATA";
+//                        qstrFileNameGAE = m_pGParam->m_SNetMasterControlData.qstrStartTime + "_" + qstrTargetID + "_" + QString::number(uiObsID) + ".GAE";
+                }
+            }
+            else
+            {
+                if (m_pGParam->m_SImageReplayerData.qstrStartTime.size() >= 14)
+                {
+                    qstrYYYY = m_pGParam->m_SImageReplayerData.qstrStartTime.mid(0, 4);
+                    qstrYYYYMM = m_pGParam->m_SImageReplayerData.qstrStartTime.mid(0, 6);
+                    qstrYYYYMMDD = m_pGParam->m_SImageReplayerData.qstrStartTime.mid(0, 8);
+                    qstrDatePath = "Replay/" + qstrYYYY + "/"
+                            + qstrYYYYMM + "/"
+                            + qstrYYYYMMDD + "/";
+                    qstrSub = qstrDatePath + m_pGParam->m_SImageReplayerData.qstrStartTime + "_" + m_pGParam->m_SImageReplayerData.qstrTargetID + "_" + QString::number(uiObsID) + ".DATA";
+                }
+            }
+            if (m_qstrStorePath != m_pGParam->m_SPath.qstrDataStorePath + "/" + qstrSub)
+                m_qstrStorePath = m_pGParam->m_SPath.qstrDataStorePath + "/" + qstrSub;
 
             /// 目标刚刚完成前4帧航迹关联（当前搜索或跟踪流程第一次开始ProcessZXDW）
             bool bAssoc4 = true;
@@ -1828,194 +1891,203 @@ int ImageProcAlgo::Proc_RaDec()
                     }
                 }
             }
-            if(vecNewTargetInCurFrame.size())
+            if(!m_pGParam->m_STrackParams.bUseManualSource)
             {
-                for(int iNew = 0; iNew < vecNewTargetInCurFrame.size(); iNew++)
+                if(vecNewTargetInCurFrame.size())
                 {
-                    int i = vecNewTargetInCurFrame[iNew];
-                    QString qstrTargetID;
-                    qstrTargetID.sprintf("9%02d%03d", m_pGParam->m_SObsParams.iObsID % 100, i + 1);
-                    if (i == m_iMainTargetSeq && m_SNetMasterControlData.qstrTargetID != "000000")
+                    for(int iNew = 0; iNew < vecNewTargetInCurFrame.size(); iNew++)
                     {
-                        qstrTargetID = m_pGParam->m_SImageProcessorData.bProcessMode
-                                ? m_SNetMasterControlData.qstrTargetID
-                                : m_pGParam->m_SImageReplayerData.qstrTargetID;
-                    }
-                    m_vectTargetInfo[i].qstrTargetID = qstrTargetID;
-                    ///******************第1帧 ******************///
-                    sMeasureBlob blob1 = m_vectTargetInfo[i].vectInfoInFrame[0].blobMeasure;
-                    sResPacket resPacket1;
-                    resPacket1.pairfFOVCenterAE = (*(iter - 3)).pairfFOVCenterAE;
-                    resPacket1.pairfFOVCenterAEModify = pair<float, float>(blob1.fFOVCenterAziModify, blob1.fFOVCenterEleModify);
-                    resPacket1.pairfTargetPosInFrame = blob1.pairfPos;
-                    resPacket1.pairfTargetDistAE = pair<float, float>(blob1.fDistAzi, blob1.fDistEle);
-                    resPacket1.pairfTargetPosZXDW = pair<float, float>(blob1.fTargetAzi, blob1.fTargetEle);
-                    resPacket1.blob = blob1;
-                    resPacket1.fExpTime = (*(iter - 3)).fExpTime;
-                    resPacket1.fFrameFreq = (*(iter - 3)).fFrameFreq;
-                    resPacket1.stimeFrame = (*(iter - 3)).stimeFrame;
-                    resPacket1.ulFrameSeq = (*(iter - 3)).ulFrameSeq;
-                    resPacket1.qstrTargetID = qstrTargetID;
-                    resPacket1.fTemp = (*(iter - 3)).fTemp;
-                    resPacket1.fAtmosP = (*(iter - 3)).fAtmosP;
-                    resPacket1.fHumidity = (*(iter - 3)).fHumidity;
-                    resPacket1.bValid = m_vectTargetInfo[i].vectInfoInFrame[0].bValid;
-                    resPacket1.pairfTargetPosTWDW = std::make_pair(blob1.dRa, blob1.dDec);
-                    if(blob1.bGDCL)
-                    {
-                        resPacket1.blob.fDN = blob1.dDn;
-                        resPacket1.fTargetMvGDCL = blob1.dGd;
-                    }
-
-                    ///******************第2帧 ******************///
-                    sMeasureBlob blob2 = m_vectTargetInfo[i].vectInfoInFrame[1].blobMeasure;
-                    sResPacket resPacket2;
-                    resPacket2.pairfFOVCenterAE = (*(iter - 2)).pairfFOVCenterAE;
-                    resPacket2.pairfFOVCenterAEModify = pair<float, float>(blob2.fFOVCenterAziModify, blob2.fFOVCenterEleModify);
-                    resPacket2.pairfTargetPosInFrame = blob2.pairfPos;
-                    resPacket2.pairfTargetDistAE = pair<float, float>(blob2.fDistAzi, blob2.fDistEle);
-                    resPacket2.pairfTargetPosZXDW = pair<float, float>(blob2.fTargetAzi, blob2.fTargetEle);
-                    resPacket2.blob = blob2;
-                    resPacket2.fExpTime = (*(iter - 2)).fExpTime;
-                    resPacket2.fFrameFreq = (*(iter - 2)).fFrameFreq;
-                    resPacket2.stimeFrame = (*(iter - 2)).stimeFrame;
-                    resPacket2.ulFrameSeq = (*(iter - 2)).ulFrameSeq;
-                    resPacket2.qstrTargetID = qstrTargetID;
-                    resPacket2.fTemp = (*(iter - 2)).fTemp;
-                    resPacket2.fAtmosP = (*(iter - 2)).fAtmosP;
-                    resPacket2.fHumidity = (*(iter - 2)).fHumidity;
-                    resPacket2.bValid = m_vectTargetInfo[i].vectInfoInFrame[1].bValid;
-                    resPacket2.pairfTargetPosTWDW = std::make_pair(blob2.dRa, blob2.dDec);
-                    if(blob2.bGDCL)
-                    {
-                        resPacket2.blob.fDN = blob2.dDn;
-                        resPacket2.fTargetMvGDCL = blob2.dGd;
-                    }
-                    /// Calculate Atmos Error
-
-                    ///******************第3帧 ******************///
-                    sMeasureBlob blob3 = m_vectTargetInfo[i].vectInfoInFrame[2].blobMeasure;
-                    sResPacket resPacket3;
-                    resPacket3.pairfFOVCenterAE = (*(iter - 1)).pairfFOVCenterAE;
-                    resPacket3.pairfFOVCenterAEModify = pair<float, float>(blob3.fFOVCenterAziModify, blob3.fFOVCenterEleModify);
-                    resPacket3.pairfTargetPosInFrame = blob3.pairfPos;
-                    resPacket3.pairfTargetDistAE = pair<float, float>(blob3.fDistAzi, blob3.fDistEle);
-                    resPacket3.pairfTargetPosZXDW = pair<float, float>(blob3.fTargetAzi, blob3.fTargetEle);
-                    resPacket3.blob = blob3;
-                    resPacket3.fExpTime = (*(iter - 1)).fExpTime;
-                    resPacket3.fFrameFreq = (*(iter - 1)).fFrameFreq;
-                    resPacket3.stimeFrame = (*(iter - 1)).stimeFrame;
-                    resPacket3.ulFrameSeq = (*(iter - 1)).ulFrameSeq;
-                    resPacket3.qstrTargetID = qstrTargetID;
-                    resPacket3.fTemp = (*(iter - 1)).fTemp;
-                    resPacket3.fAtmosP = (*(iter - 1)).fAtmosP;
-                    resPacket3.fHumidity = (*(iter - 1)).fHumidity;
-                    resPacket3.bValid = m_vectTargetInfo[i].vectInfoInFrame[2].bValid;
-                    resPacket3.pairfTargetPosTWDW = std::make_pair(blob3.dRa, blob3.dDec);
-                    if(blob3.bGDCL)
-                    {
-                        resPacket3.blob.fDN = blob3.dDn;
-                        resPacket3.fTargetMvGDCL = blob3.dGd;
-                    }
-                    /// Calculate Atmos Error
-
-                    m_vectTargetInfo[i].vectResPacket.push_back(resPacket1);
-                    m_vectTargetInfo[i].vectResPacket.push_back(resPacket2);
-                    m_vectTargetInfo[i].vectResPacket.push_back(resPacket3);
-
-                    m_vectTargetInfo[i].vectulFrameSeqTWDW.push_back(resPacket1.ulFrameSeq);
-                    m_vectTargetInfo[i].vectulFrameSeqTWDW.push_back(resPacket2.ulFrameSeq);
-                    m_vectTargetInfo[i].vectulFrameSeqTWDW.push_back(resPacket3.ulFrameSeq);
-
-                    //*******************************************************// Vedio标注1
-                    {
-                        QDir qDirMake;
-                        if (!qDirMake.exists(m_qstrStorePath + "/TAG"))
+                        int i = vecNewTargetInCurFrame[iNew];
+                        QString qstrTargetID;
+                        qstrTargetID.sprintf("9%02d%03d", m_pGParam->m_SObsParams.iObsID % 100, i + 1);
+                        if (i == m_iMainTargetSeq && m_SNetMasterControlData.qstrTargetID != "000000")
                         {
-                            qDirMake.mkpath(m_qstrStorePath + "/TAG");
+                            qstrTargetID = m_pGParam->m_SImageProcessorData.bProcessMode
+                                    ? m_SNetMasterControlData.qstrTargetID
+                                    : m_pGParam->m_SImageReplayerData.qstrTargetID;
                         }
-                        QString qstrTargetID = m_pGParam->m_SImageProcessorData.bProcessMode ? m_SNetMasterControlData.qstrTargetID
-                                                           : m_pGParam->m_SImageReplayerData.qstrTargetID;
-                        QString qstrTeleID = m_pGParam->m_SImageProcessorData.bProcessMode ? QString::number(m_pGParam->m_SObsParams.iObsID)
-                                                         : m_pGParam->m_SImageReplayerData.qstrTeleID;
-                        QString qstrJSTagFileName;
-                        qstrJSTagFileName.sprintf("%04d%02d%02d%02d%02d%02d%03d_%06d_%04d_%06d.tag",
-                                                  (*(iter - 3)).stimeFrame.iYear,
-                                                  (*(iter - 3)).stimeFrame.iMonth,
-                                                  (*(iter - 3)).stimeFrame.iDay,
-                                                  (*(iter - 3)).stimeFrame.iHour,
-                                                  (*(iter - 3)).stimeFrame.iMinute,
-                                                  (*(iter - 3)).stimeFrame.iSecond,
-                                                  (*(iter - 3)).stimeFrame.iMillisecond,
-                                                  qstrTargetID.toUInt(),
-                                                  qstrTeleID.toUInt(),
-                                                  (unsigned int)(*(iter - 3)).ulFrameSeq);
-                        WriteVedioTagFile(m_qstrStorePath + "/TAG", qstrJSTagFileName, resPacket1.blob, resPacket1.qstrTargetID);
-                    }
-                    //*******************************************************// Vedio标注2
-                    {
-                        QDir qDirMake;
-                        if (!qDirMake.exists(m_qstrStorePath + "/TAG"))
+                        m_vectTargetInfo[i].qstrTargetID = qstrTargetID;
+                        ///******************第1帧 ******************///
+                        sMeasureBlob blob1 = m_vectTargetInfo[i].vectInfoInFrame[0].blobMeasure;
+                        sResPacket resPacket1;
+                        resPacket1.pairfFOVCenterAE = (*(iter - 3)).pairfFOVCenterAE;
+                        resPacket1.pairfFOVCenterAEModify = pair<float, float>(blob1.fFOVCenterAziModify, blob1.fFOVCenterEleModify);
+                        resPacket1.pairfTargetPosInFrame = blob1.pairfPos;
+                        resPacket1.pairfTargetDistAE = pair<float, float>(blob1.fDistAzi, blob1.fDistEle);
+                        resPacket1.pairfTargetPosZXDW = pair<float, float>(blob1.fTargetAzi, blob1.fTargetEle);
+                        resPacket1.blob = blob1;
+                        resPacket1.fExpTime = (*(iter - 3)).fExpTime;
+                        resPacket1.fFrameFreq = (*(iter - 3)).fFrameFreq;
+                        resPacket1.stimeFrame = (*(iter - 3)).stimeFrame;
+                        resPacket1.ulFrameSeq = (*(iter - 3)).ulFrameSeq;
+                        resPacket1.qstrTargetID = qstrTargetID;
+                        resPacket1.fTemp = (*(iter - 3)).fTemp;
+                        resPacket1.fAtmosP = (*(iter - 3)).fAtmosP;
+                        resPacket1.fHumidity = (*(iter - 3)).fHumidity;
+                        resPacket1.bValid = m_vectTargetInfo[i].vectInfoInFrame[0].bValid;
+                        resPacket1.pairfTargetPosTWDW = std::make_pair(blob1.dRa, blob1.dDec);
+                        if(blob1.bGDCL)
                         {
-                            qDirMake.mkpath(m_qstrStorePath + "/TAG");
+                            resPacket1.blob.fDN = blob1.dDn;
+                            resPacket1.fTargetMvGDCL = blob1.dGd;
                         }
-                        QString qstrTargetID = m_pGParam->m_SImageProcessorData.bProcessMode ? m_SNetMasterControlData.qstrTargetID
-                                                           : m_pGParam->m_SImageReplayerData.qstrTargetID;
-                        QString qstrTeleID = m_pGParam->m_SImageProcessorData.bProcessMode ? QString::number(m_pGParam->m_SObsParams.iObsID)
-                                                         : m_pGParam->m_SImageReplayerData.qstrTeleID;
-                        QString qstrJSTagFileName;
-                        qstrJSTagFileName.sprintf("%04d%02d%02d%02d%02d%02d%03d_%06d_%04d_%06d.tag",
-                                                  (*(iter - 2)).stimeFrame.iYear,
-                                                  (*(iter - 2)).stimeFrame.iMonth,
-                                                  (*(iter - 2)).stimeFrame.iDay,
-                                                  (*(iter - 2)).stimeFrame.iHour,
-                                                  (*(iter - 2)).stimeFrame.iMinute,
-                                                  (*(iter - 2)).stimeFrame.iSecond,
-                                                  (*(iter - 2)).stimeFrame.iMillisecond,
-                                                  qstrTargetID.toUInt(),
-                                                  qstrTeleID.toUInt(),
-                                                  (unsigned int)(*(iter - 2)).ulFrameSeq);
-                        WriteVedioTagFile(m_qstrStorePath + "/TAG", qstrJSTagFileName, resPacket2.blob, resPacket2.qstrTargetID);
-                    }
-                    //*******************************************************// Vedio标注3
-                    {
-                        QDir qDirMake;
-                        if (!qDirMake.exists(m_qstrStorePath + "/TAG"))
+
+                        ///******************第2帧 ******************///
+                        sMeasureBlob blob2 = m_vectTargetInfo[i].vectInfoInFrame[1].blobMeasure;
+                        sResPacket resPacket2;
+                        resPacket2.pairfFOVCenterAE = (*(iter - 2)).pairfFOVCenterAE;
+                        resPacket2.pairfFOVCenterAEModify = pair<float, float>(blob2.fFOVCenterAziModify, blob2.fFOVCenterEleModify);
+                        resPacket2.pairfTargetPosInFrame = blob2.pairfPos;
+                        resPacket2.pairfTargetDistAE = pair<float, float>(blob2.fDistAzi, blob2.fDistEle);
+                        resPacket2.pairfTargetPosZXDW = pair<float, float>(blob2.fTargetAzi, blob2.fTargetEle);
+                        resPacket2.blob = blob2;
+                        resPacket2.fExpTime = (*(iter - 2)).fExpTime;
+                        resPacket2.fFrameFreq = (*(iter - 2)).fFrameFreq;
+                        resPacket2.stimeFrame = (*(iter - 2)).stimeFrame;
+                        resPacket2.ulFrameSeq = (*(iter - 2)).ulFrameSeq;
+                        resPacket2.qstrTargetID = qstrTargetID;
+                        resPacket2.fTemp = (*(iter - 2)).fTemp;
+                        resPacket2.fAtmosP = (*(iter - 2)).fAtmosP;
+                        resPacket2.fHumidity = (*(iter - 2)).fHumidity;
+                        resPacket2.bValid = m_vectTargetInfo[i].vectInfoInFrame[1].bValid;
+                        resPacket2.pairfTargetPosTWDW = std::make_pair(blob2.dRa, blob2.dDec);
+                        if(blob2.bGDCL)
                         {
-                            qDirMake.mkpath(m_qstrStorePath + "/TAG");
+                            resPacket2.blob.fDN = blob2.dDn;
+                            resPacket2.fTargetMvGDCL = blob2.dGd;
                         }
-                        QString qstrTargetID = m_pGParam->m_SImageProcessorData.bProcessMode ? m_SNetMasterControlData.qstrTargetID
-                                                           : m_pGParam->m_SImageReplayerData.qstrTargetID;
-                        QString qstrTeleID = m_pGParam->m_SImageProcessorData.bProcessMode ? QString::number(m_pGParam->m_SObsParams.iObsID)
-                                                         : m_pGParam->m_SImageReplayerData.qstrTeleID;
-                        QString qstrJSTagFileName;
-                        qstrJSTagFileName.sprintf("%04d%02d%02d%02d%02d%02d%03d_%06d_%04d_%06d.tag",
-                                                  (*(iter - 1)).stimeFrame.iYear,
-                                                  (*(iter - 1)).stimeFrame.iMonth,
-                                                  (*(iter - 1)).stimeFrame.iDay,
-                                                  (*(iter - 1)).stimeFrame.iHour,
-                                                  (*(iter - 1)).stimeFrame.iMinute,
-                                                  (*(iter - 1)).stimeFrame.iSecond,
-                                                  (*(iter - 1)).stimeFrame.iMillisecond,
-                                                  qstrTargetID.toUInt(),
-                                                  qstrTeleID.toUInt(),
-                                                  (unsigned int)(*(iter - 1)).ulFrameSeq);
-                        WriteVedioTagFile(m_qstrStorePath + "/TAG", qstrJSTagFileName, resPacket3.blob, resPacket3.qstrTargetID);
+                        /// Calculate Atmos Error
+
+                        ///******************第3帧 ******************///
+                        sMeasureBlob blob3 = m_vectTargetInfo[i].vectInfoInFrame[2].blobMeasure;
+                        sResPacket resPacket3;
+                        resPacket3.pairfFOVCenterAE = (*(iter - 1)).pairfFOVCenterAE;
+                        resPacket3.pairfFOVCenterAEModify = pair<float, float>(blob3.fFOVCenterAziModify, blob3.fFOVCenterEleModify);
+                        resPacket3.pairfTargetPosInFrame = blob3.pairfPos;
+                        resPacket3.pairfTargetDistAE = pair<float, float>(blob3.fDistAzi, blob3.fDistEle);
+                        resPacket3.pairfTargetPosZXDW = pair<float, float>(blob3.fTargetAzi, blob3.fTargetEle);
+                        resPacket3.blob = blob3;
+                        resPacket3.fExpTime = (*(iter - 1)).fExpTime;
+                        resPacket3.fFrameFreq = (*(iter - 1)).fFrameFreq;
+                        resPacket3.stimeFrame = (*(iter - 1)).stimeFrame;
+                        resPacket3.ulFrameSeq = (*(iter - 1)).ulFrameSeq;
+                        resPacket3.qstrTargetID = qstrTargetID;
+                        resPacket3.fTemp = (*(iter - 1)).fTemp;
+                        resPacket3.fAtmosP = (*(iter - 1)).fAtmosP;
+                        resPacket3.fHumidity = (*(iter - 1)).fHumidity;
+                        resPacket3.bValid = m_vectTargetInfo[i].vectInfoInFrame[2].bValid;
+                        resPacket3.pairfTargetPosTWDW = std::make_pair(blob3.dRa, blob3.dDec);
+                        if(blob3.bGDCL)
+                        {
+                            resPacket3.blob.fDN = blob3.dDn;
+                            resPacket3.fTargetMvGDCL = blob3.dGd;
+                        }
+                        /// Calculate Atmos Error
+
+                        m_vectTargetInfo[i].vectResPacket.push_back(resPacket1);
+                        m_vectTargetInfo[i].vectResPacket.push_back(resPacket2);
+                        m_vectTargetInfo[i].vectResPacket.push_back(resPacket3);
+
+                        m_vectTargetInfo[i].vectulFrameSeqTWDW.push_back(resPacket1.ulFrameSeq);
+                        m_vectTargetInfo[i].vectulFrameSeqTWDW.push_back(resPacket2.ulFrameSeq);
+                        m_vectTargetInfo[i].vectulFrameSeqTWDW.push_back(resPacket3.ulFrameSeq);
+
+                        //*******************************************************// Vedio标注1
+                        {
+                            QDir qDirMake;
+                            if (!qDirMake.exists(m_qstrStorePath + "/TAG"))
+                            {
+                                qDirMake.mkpath(m_qstrStorePath + "/TAG");
+                            }
+                            QString qstrTargetID = m_pGParam->m_SImageProcessorData.bProcessMode ? m_SNetMasterControlData.qstrTargetID
+                                                               : m_pGParam->m_SImageReplayerData.qstrTargetID;
+                            QString qstrTeleID = m_pGParam->m_SImageProcessorData.bProcessMode ? QString::number(m_pGParam->m_SObsParams.iObsID)
+                                                             : m_pGParam->m_SImageReplayerData.qstrTeleID;
+                            QString qstrJSTagFileName;
+                            qstrJSTagFileName.sprintf("%04d%02d%02d%02d%02d%02d%03d_%06d_%04d_%06d.tag",
+                                                      (*(iter - 3)).stimeFrame.iYear,
+                                                      (*(iter - 3)).stimeFrame.iMonth,
+                                                      (*(iter - 3)).stimeFrame.iDay,
+                                                      (*(iter - 3)).stimeFrame.iHour,
+                                                      (*(iter - 3)).stimeFrame.iMinute,
+                                                      (*(iter - 3)).stimeFrame.iSecond,
+                                                      (*(iter - 3)).stimeFrame.iMillisecond,
+                                                      qstrTargetID.toUInt(),
+                                                      qstrTeleID.toUInt(),
+                                                      (unsigned int)(*(iter - 3)).ulFrameSeq);
+                            WriteVedioTagFile(m_qstrStorePath + "/TAG", qstrJSTagFileName, resPacket1.blob, resPacket1.qstrTargetID);
+                        }
+                        //*******************************************************// Vedio标注2
+                        {
+                            QDir qDirMake;
+                            if (!qDirMake.exists(m_qstrStorePath + "/TAG"))
+                            {
+                                qDirMake.mkpath(m_qstrStorePath + "/TAG");
+                            }
+                            QString qstrTargetID = m_pGParam->m_SImageProcessorData.bProcessMode ? m_SNetMasterControlData.qstrTargetID
+                                                               : m_pGParam->m_SImageReplayerData.qstrTargetID;
+                            QString qstrTeleID = m_pGParam->m_SImageProcessorData.bProcessMode ? QString::number(m_pGParam->m_SObsParams.iObsID)
+                                                             : m_pGParam->m_SImageReplayerData.qstrTeleID;
+                            QString qstrJSTagFileName;
+                            qstrJSTagFileName.sprintf("%04d%02d%02d%02d%02d%02d%03d_%06d_%04d_%06d.tag",
+                                                      (*(iter - 2)).stimeFrame.iYear,
+                                                      (*(iter - 2)).stimeFrame.iMonth,
+                                                      (*(iter - 2)).stimeFrame.iDay,
+                                                      (*(iter - 2)).stimeFrame.iHour,
+                                                      (*(iter - 2)).stimeFrame.iMinute,
+                                                      (*(iter - 2)).stimeFrame.iSecond,
+                                                      (*(iter - 2)).stimeFrame.iMillisecond,
+                                                      qstrTargetID.toUInt(),
+                                                      qstrTeleID.toUInt(),
+                                                      (unsigned int)(*(iter - 2)).ulFrameSeq);
+                            WriteVedioTagFile(m_qstrStorePath + "/TAG", qstrJSTagFileName, resPacket2.blob, resPacket2.qstrTargetID);
+                        }
+                        //*******************************************************// Vedio标注3
+                        {
+                            QDir qDirMake;
+                            if (!qDirMake.exists(m_qstrStorePath + "/TAG"))
+                            {
+                                qDirMake.mkpath(m_qstrStorePath + "/TAG");
+                            }
+                            QString qstrTargetID = m_pGParam->m_SImageProcessorData.bProcessMode ? m_SNetMasterControlData.qstrTargetID
+                                                               : m_pGParam->m_SImageReplayerData.qstrTargetID;
+                            QString qstrTeleID = m_pGParam->m_SImageProcessorData.bProcessMode ? QString::number(m_pGParam->m_SObsParams.iObsID)
+                                                             : m_pGParam->m_SImageReplayerData.qstrTeleID;
+                            QString qstrJSTagFileName;
+                            qstrJSTagFileName.sprintf("%04d%02d%02d%02d%02d%02d%03d_%06d_%04d_%06d.tag",
+                                                      (*(iter - 1)).stimeFrame.iYear,
+                                                      (*(iter - 1)).stimeFrame.iMonth,
+                                                      (*(iter - 1)).stimeFrame.iDay,
+                                                      (*(iter - 1)).stimeFrame.iHour,
+                                                      (*(iter - 1)).stimeFrame.iMinute,
+                                                      (*(iter - 1)).stimeFrame.iSecond,
+                                                      (*(iter - 1)).stimeFrame.iMillisecond,
+                                                      qstrTargetID.toUInt(),
+                                                      qstrTeleID.toUInt(),
+                                                      (unsigned int)(*(iter - 1)).ulFrameSeq);
+                            WriteVedioTagFile(m_qstrStorePath + "/TAG", qstrJSTagFileName, resPacket3.blob, resPacket3.qstrTargetID);
+                        }
                     }
+                    WriteGAEGTW(vecNewTargetInCurFrame, (*iter).ulFrameSeq - 3);
+                    WriteGAEGTW(vecNewTargetInCurFrame, (*iter).ulFrameSeq - 2);
+                    WriteGAEGTW(vecNewTargetInCurFrame, (*iter).ulFrameSeq - 1);
                 }
-                WriteGAEGTW(vecNewTargetInCurFrame, (*iter).ulFrameSeq - 3);
-                WriteGAEGTW(vecNewTargetInCurFrame, (*iter).ulFrameSeq - 2);
-                WriteGAEGTW(vecNewTargetInCurFrame, (*iter).ulFrameSeq - 1);
+            }
+            else
+            {
+                if(vecAllTargetInCurFrame.size())
+                    m_vectTargetInfo.back().qstrTargetID = m_pGParam->m_SImageReplayerData.qstrTargetID;
             }
 
             sGXTCHeader header;
             header.iNumTargets = 0;
-            vector<sGXTCData> vectGXTCData;
+            vector<sGXTCData> vectGXTCData;                       
             if(vecAllTargetInCurFrame.size())
             {
                 for(int iAll = 0; iAll < vecAllTargetInCurFrame.size(); iAll++)
                 {
                     int i = vecAllTargetInCurFrame[iAll];
+
                     ///******************当前帧******************///
                     /// Result Packet
                     sMeasureBlob blob = m_vectTargetInfo[i].vectInfoInFrame[m_vectTargetInfo[i].vectInfoInFrame.size()-1].blobMeasure;
@@ -2275,13 +2347,6 @@ int ImageProcAlgo::Proc_Direct(void)
         iTime7 = ClockOff();
         qDebug() << "### Proc Binary:" << iTime7 << "ms";
         //***********************************************************************//
-
-        if (m_pGParam->m_SAddImage.bAddRepeat)
-        {
-            AddImage(m_pGParam->m_SAddImage.uiAddFrameNum);
-            m_pGParam->m_SAddImage.bNextImg = true;
-            return 0;
-        }
 
         /// Blob
         ClockOn();
@@ -3489,9 +3554,10 @@ int ImageProcAlgo::AddImage(unsigned int uiAddFrameNum)
     {
         clEnqueueWriteBuffer(m_pGpuDevMngr->cqCommandQueue, m_cmOverlay, CL_TRUE, 0, m_szImageWidth * m_szImageHeight * sizeof(double), m_pausImgOverlayInit, 0, NULL, NULL);
     }
-    ImageOverlay(m_cmEnhance, m_cmOverlay, m_szImageWidth, m_szImageHeight);
+    ImageOverlay(m_cmOri, m_cmOverlay, m_szImageWidth, m_szImageHeight);
     m_pGParam->m_SAddImage.uiCurNum++;
-    if(m_pGParam->m_SAddImage.uiCurNum % uiAddFrameNum == 0)
+    bool bReady = m_pGParam->m_SAddImage.bLastImg ? (m_pGParam->m_SAddImage.uiCurNum == m_pGParam->m_SAddImage.uiAllImgNum) : (m_pGParam->m_SAddImage.uiCurNum % uiAddFrameNum == 0);
+    if(bReady)
     {
         ImgAvg(m_cmOverlay, m_cmImgAvg, m_szImageWidth, m_szImageHeight, uiAddFrameNum);
         clEnqueueReadBuffer(m_pGpuDevMngr->cqCommandQueue, m_cmImgAvg, CL_TRUE, 0, m_szImageWidth * m_szImageHeight * sizeof(unsigned short), m_pausAddImgFrame->pausImage, 0, NULL, NULL);

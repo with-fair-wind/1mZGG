@@ -245,6 +245,6 @@ void CommDisplay::on_SignalTimerRecvCheck(void)
             m_serialPort->close();
         }
         m_bPortIsOpen = m_serialPort->open(QIODevice::ReadWrite);
-        m_pLog->CriticalMsg(QStringLiteral("25Hz数据端口接收帧数丢失超限."));
+//        m_pLog->CriticalMsg(QStringLiteral("25Hz数据端口接收帧数丢失超限."));
     }
 }

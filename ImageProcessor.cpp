@@ -135,7 +135,15 @@ void ImageProcessor::CallBackProcess(void* pvoidThis)
                 pThis->MarkDispInfor();
 
                 pThis->m_pImageProc->InputFramePacket(framePacket);
-                pThis->m_pImageProc->ProcFramePacket();
+
+                if (!pThis->m_pGParam->m_SAddImage.bAddRepeat)
+                    pThis->m_pImageProc->ProcFramePacket();
+                else
+                {
+                    if(pThis->m_pGParam->m_SAddImage.uiCurNum == pThis->m_pGParam->m_SAddImage.uiAllImgNum)
+                        emit pThis->SignalAddEnding();
+                }
+
                 if (pausReplay)   delete []  pausReplay;
             }
 
@@ -145,14 +153,10 @@ void ImageProcessor::CallBackProcess(void* pvoidThis)
             {
                 emit pThis->SignalTrackData();
                 emit pThis->SignalDisplay();
-            }
-            else
-            {
-                if(pThis->m_pGParam->m_SAddImage.uiCurNum / pThis->m_pGParam->m_SAddImage.uiAddFrameNum == pThis->m_pGParam->m_SAddImage.uiProduceNum)
-                    emit pThis->SignalAddEnding();
+                if(pThis->m_pGParam->m_STrackParams.bUseManualSource)
+                    emit pThis->SignelSourceProRes(pThis->m_pImageProc->GetSourceIndex(), pThis->m_uiFrameSeq - 1);
             }
 
-            pThis->m_pGParam->m_SImageProcessorData.bProcessing = false;
             std::chrono::high_resolution_clock::time_point endTime = std::chrono::high_resolution_clock::now();	///////////////////////////
             std::chrono::milliseconds timeInterval = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - beginTime);	///////////////////////////
             QDateTime qdtCut = QDateTime::currentDateTime();
@@ -166,6 +170,7 @@ void ImageProcessor::CallBackProcess(void* pvoidThis)
                      << ":" << qdtCut.time().second()
                      << "." << qdtCut.time().msec();
             qDebug() << "#################################";
+            pThis->m_pGParam->m_SImageProcessorData.bProcessing = false;
         }
     }
 }

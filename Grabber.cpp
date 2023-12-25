@@ -630,7 +630,7 @@ void Grabber::CallBackQuery(void *pvoidThis)
             if (pThis->m_ulCountQueryTemp++ > 20 || pThis->m_bQueryTemp)
             {
                 pThis->m_bQueryTemp = true;
-                pThis->m_pCameraComm->OnQueryTemp(pThis->m_fCamTemp);
+//                pThis->m_pCameraComm->OnQueryTemp(pThis->m_fCamTemp);
             }
         }
     }

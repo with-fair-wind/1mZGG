@@ -35,7 +35,7 @@ struct SCommNetSettings
 /// 路径
 struct SPath
 {
-    QString qstrDataStorePath = "/home/dps/DPS_Data";	// 数据保存路径
+    QString qstrDataStorePath = "/home/dps/DPS_DATA";	// 数据保存路径
     QString qstrInitFileName = "SystemInit.ini";	// 配置文件路径
 };
 
@@ -404,7 +404,7 @@ struct SLog
 
 /// TrackParams
 
-struct SBlobParams
+struct SSourceParams
 {
     float posx = 0.0;
     float posy = 0.0;
@@ -417,13 +417,40 @@ struct SBlobParams
     float fMagIns = 0.0;	// 连通域仪器星等
 };
 
+struct SSourceDisp
+{
+    unsigned uiAddFrameID;
+    unsigned uiAddnum;
+    std::pair<unsigned, unsigned> pairBgEnd;
+    double dRa = 0.0;
+    double dDec = 0.0;
+    double dMag = 0.0;
+    SSourceDisp() : uiAddFrameID(0), uiAddnum(0), pairBgEnd(std::make_pair(0, 0)) {}
+    SSourceDisp(unsigned id, unsigned add, unsigned bg, unsigned end) : uiAddFrameID(id), uiAddnum(add)
+    {
+         pairBgEnd = std::make_pair(bg, end);
+    }
+};
+
+struct SRaDecTrackParams
+{
+    std::pair<double, double> dAssoc_Radius{0.0, 0.0};
+    std::pair<double, double> dAssoc_Thresh{0.0, 0.0};
+    std::pair<double, double> dAssoc_SpdThresh{0.0, 0.0};
+
+    std::pair<double, double> dTrack_Thresh{0.0, 0.0};
+    std::pair<double, double> dTrack_Factor{0.0, 0.0};
+    std::pair<double, double> dTrack_SpdFactor{0.0, 0.0};
+};
+
 struct STrackParams
 {
     QString qstrExEPath = "/home/kk/anaconda3/envs/env_twdw_gdcl/bin/python";
     QString qstrPYPath = "/home/kk/code/Python_Project/1mZGG/Source";
     QStringList qListPYFile;
-    SBlobParams sblobParams;
     bool bUseManualSource = false;
+    std::vector<std::pair<SSourceDisp, SSourceParams>> vecSource;
+    SRaDecTrackParams sRaDecTrackParams;
 };
 
 struct SAddImage
@@ -432,9 +459,12 @@ struct SAddImage
     unsigned int uiAllImgNum = 0;
     unsigned int uiAddFrameNum = 10;
     unsigned int uiProduceNum = 0;
-    bool bAddRepeat = false;
+    unsigned int uiRestNum = 0;    
     unsigned int uiCurNum = 0;
+
+    bool bAddRepeat = false;
     bool bNextImg = false;
+    bool bLastImg = false;
 };
 
 /// Class GlobalParameter
@@ -471,6 +501,7 @@ public:
     SLog m_SLog;
     SObsParams m_SObsParams;
     bool m_bDebugEN;
+    bool m_bDebugBW;
     QString m_qstrImageFormat;
     STrackParams m_STrackParams;
     SAddImage m_SAddImage;

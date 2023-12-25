@@ -53,7 +53,6 @@ public:
     void CalcPointError(double dAzi, double dEle, double& dAziErr, double& dEleErr){m_pImageProc->CalcPointError(dAzi, dEle, dAziErr, dEleErr);}
     CStarMap* GetStarMap() {return m_pImageProc->GetStarMap();}
     void CalcDistortionDelta(double dPosX, double dPosY, double &dPosDx, double &dPosDy){m_pImageProc->CalcDistortionDelta(dPosX, dPosY, dPosDx, dPosDy);}
-    void setRaDecThresh(const double& dRaThresh, const double& dDecThresh, const double& dRaSpdThresh, const double& dDecSpdThresh) {m_pImageProc->setRaDecThresh(dRaThresh, dDecThresh, dRaSpdThresh, dDecSpdThresh);}
 
 private:
     static void CallBackProcess(void* pvoidThis);	// 处理线程回调
@@ -65,6 +64,7 @@ signals:
     void SignalTrackData(void);	// 提取到跟踪数据信号
     void SignalGrabDataRotate(void);
     void SignalAddEnding();
+    void SignelSourceProRes(int sourceIndex, unsigned proFrameID);
 
 private slots :
     void on_SignalGrabInit(unsigned int uiGrabWidth, unsigned int uiGrabHeight);    // 开启图像采集后,Grabber会发出此信号,用于InitProc(PROC_NONE,...)

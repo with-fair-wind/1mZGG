@@ -113,6 +113,7 @@ int main(int argc, char *argv[])
 
         QObject::connect(&imageprocessorMain, SIGNAL(SignalDisplay()), &ctrlpadMain, SLOT(on_SignalDisplay()));
         QObject::connect(&imageprocessorMain, &ImageProcessor::SignalAddEnding, &ctrlpadMain, &UI_CtrlPad::on_SignalAddEnding);
+        QObject::connect(&imageprocessorMain, &ImageProcessor::SignelSourceProRes, &ctrlpadMain, &UI_CtrlPad::on_SignelSourceProRes);
 
         /// ImageReplayer信号连接
         QObject::connect(&imagereplayerMain, SIGNAL(SignalReplayData()), &imageprocessorMain, SLOT(on_SignalReplayData()));

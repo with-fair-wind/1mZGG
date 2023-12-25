@@ -177,8 +177,8 @@ struct sTargetInfo
 	pair<float, float> pairfPredSpdInFrame;	// 目标帧内预测速度,量纲为"pixel/frame"
 	pair<float, float> pairfPredSpdAE;	// 目标结合望远镜方位、俯仰角预测速度,量纲为"°/s"
 
-    pair<float, float> pairPredSpdRaDec;
-    pair<float, float> pairPredPosRaDec;
+    pair<float, float> pairPredSpdRaDec = make_pair(0.0, 0.0);
+    pair<float, float> pairPredPosRaDec = make_pair(0.0, 0.0);;
 
     float fValid = 1.0;	// 目标存在性分数(0~1.0,无测量占比)
     bool bLiving = false;	// 目标是否存活
@@ -222,6 +222,7 @@ public:
 	/// 计算恒星速度
 	int CalcStarSpd(sMeasuresInFrame measures, pair<float, float>& pairfSpd, pair<float, float>& pairfSpd_AE, int& iNumMost);
 	/// 跟踪器的检测跟踪过程,循环压入测量数据
+    int PushManualSource(sMeasuresInFrame measures, vector<sTargetInfo>& vectTargetInfo);
     int TrackProc_RaDec(sMeasuresInFrame measures, vector<sTargetInfo>& vectTargetInfo, bool bFullLEO);	// 必须在CalcStarSpd()后调用
     int TrackProc_GEO(sMeasuresInFrame measures, vector<sTargetInfo>& vectTargetInfo, bool bFullLEO, vector<pair<QString, sMeasureBlob>> vecGEOisbValidBlob);	// 必须在CalcStarSpd()后调用
 	int TrackProc_LEO(sMeasuresInFrame measures, sTargetInfo& targetInfo);	
@@ -240,8 +241,6 @@ public:
 
     void BJ2UTC(int iBJYear, int iBJMonth, int iBJDay, int iBJHour, int &iUTCYear, int &iUTCMonth, int &iUTCDay, int &iUTCHour);
     void AangleToEquator(double A, double E, double Longm, double phim, int y, int m, int d, int hour, int min, double sec, double p, double T, bool nflag, double *Ra, double *De, double *Rm, double *Dm, bool zflag);
-    void setRaDecThresh(const double& dRaThresh, const double& dDecThresh, const double& dRaSpdThresh, const double& dDecSpdThresh){m_dRaThresh = dRaThresh; m_dDecThresh = dDecThresh;
-                                                                                                                                   m_dRaSpdThresh = dRaSpdThresh; m_dDecSpdThresh = dDecSpdThresh;}
     int getExponent(double num);
 
 private:
@@ -298,12 +297,6 @@ private:
     float m_fFrameFreq;
     int m_iTargetID;
     bool m_bFullLEO;
-
-    double m_dRaThresh;
-    double m_dDecThresh;
-    double m_dRaSpdThresh;
-    double m_dDecSpdThresh;
-
     vector<sMeasureBlob> m_vectManualAddTop3blob;
 };
 

@@ -69,9 +69,13 @@ int GlobalParameter::ReadInitFile(QString qstrFileName)
         qsetSystemInit->endGroup();
         /// [Path]
         qsetSystemInit->beginGroup("Path");
-        if (qsetSystemInit->contains("DataStorePath"))
+        if (qsetSystemInit->contains("DataStorePath")
+                && qsetSystemInit->contains("PythonExEPath")
+                && qsetSystemInit->contains("PyFilesPath"))
         {
             m_SPath.qstrDataStorePath = qsetSystemInit->value("DataStorePath").toString();
+            m_STrackParams.qstrExEPath = qsetSystemInit->value("PythonExEPath").toString();
+            m_STrackParams.qstrPYPath = qsetSystemInit->value("PyFilesPath").toString();
         }
         else
         {
@@ -102,10 +106,12 @@ int GlobalParameter::ReadInitFile(QString qstrFileName)
         }
         qsetSystemInit->endGroup();
         /// [DebugEN]
-        qsetSystemInit->beginGroup("DebugEN");
-        if (qsetSystemInit->contains("DebugEN"))
+        qsetSystemInit->beginGroup("Debug");
+        if (qsetSystemInit->contains("DebugEN")
+                && qsetSystemInit->contains("DebugBW"))
         {
             m_bDebugEN = qsetSystemInit->value("DebugEN").toBool();
+            m_bDebugBW = qsetSystemInit->value("DebugBW").toBool();
         }
         else
         {

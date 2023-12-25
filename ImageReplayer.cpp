@@ -116,6 +116,7 @@ bool ImageReplayer::SetReplayPath(QString qstrReplayPath)
         m_iReplayInterval = m_pGParam->m_SGrabberData.bWindowEN ? 100 : 3000;
         m_pqtimerReplay->setInterval(m_iReplayInterval);
         m_uiSeqCurrent = 0;
+        m_pGParam->m_SAddImage.uiAllImgNum = m_qstrlistReplayFileName.size();
         if (m_qstrlistReplayFileName.size() > 0)
         {
             if (m_pGParam->m_qstrImageFormat == "raw")
@@ -484,7 +485,7 @@ void ImageReplayer::SetReplayInterval(double dFrameFrequency)
 
 void ImageReplayer::on_qtimerReplay_timeout(void)
 {
-    if (m_bReplay || m_bBrowse)
+    if ((m_bReplay || m_bBrowse) && !m_pGParam->m_SImageProcessorData.bProcessing)
     {
         m_qwcEventReplay.wakeAll();
     }
@@ -500,9 +501,12 @@ void ImageReplayer::on_SignalAddImage()
     m_uiSeqCurrent = 0;
 
     m_pGParam->m_SAddImage.uiCurNum = 0;
-    m_pGParam->m_SAddImage.bNextImg = true;
+    m_pGParam->m_SAddImage.bNextImg = true;   
+    m_pGParam->m_SAddImage.bLastImg = false;
     m_pGParam->m_SAddImage.uiAllImgNum = m_qstrlistReplayFileName.size();
-    m_pGParam->m_SAddImage.uiProduceNum = m_pGParam->m_SAddImage.uiAllImgNum / m_pGParam->m_SAddImage.uiAddFrameNum;
+    unsigned ProduceNum = m_pGParam->m_SAddImage.uiAllImgNum / m_pGParam->m_SAddImage.uiAddFrameNum;
+    m_pGParam->m_SAddImage.uiRestNum = m_pGParam->m_SAddImage.uiAllImgNum % m_pGParam->m_SAddImage.uiAddFrameNum;
+    m_pGParam->m_SAddImage.uiProduceNum = ProduceNum + (m_pGParam->m_SAddImage.uiRestNum == 0 ? 0 : 1);
 
     m_pGParam->m_SAddImage.qstrSavePath = m_qstrReplayPath + "/Add";
     QDir qdirImg(m_pGParam->m_SAddImage.qstrSavePath);
@@ -515,21 +519,33 @@ void ImageReplayer::on_SignalAddImage()
     if(m_pGParam->m_SAddImage.bAddRepeat)
     {
         CreatDir(m_pGParam->m_SAddImage.qstrSavePath);
+        QFile file(m_pGParam->m_SAddImage.qstrSavePath + "/SourceInfo.txt");
 
         for(unsigned int i = 0; i < (m_pGParam->m_SAddImage.uiProduceNum); i++)
         {
+            m_pGParam->m_SAddImage.bNextImg = true;
             unsigned int j = 0;
+            if((i == m_pGParam->m_SAddImage.uiProduceNum - 1) && m_pGParam->m_SAddImage.uiRestNum)
+                m_pGParam->m_SAddImage.bLastImg = true;
             if (m_pGParam->m_qstrImageFormat == "bmp")
             {
                 while(true)
                 {
-                    if(j >= m_pGParam->m_SAddImage.uiAddFrameNum)
-                        break;
                     if(m_pGParam->m_SAddImage.bNextImg)
                     {
                         m_pGParam->m_SAddImage.bNextImg = false;
-
-                        if(!i && !j)
+                        if(j >= (m_pGParam->m_SAddImage.bLastImg ? m_pGParam->m_SAddImage.uiRestNum : m_pGParam->m_SAddImage.uiAddFrameNum))
+                        {
+                            if(file.open(QIODevice::Append | QIODevice::Text))
+                            {
+                                QTextStream out(&file);
+                                unsigned addNum = (m_pGParam->m_SAddImage.bLastImg ? m_pGParam->m_SAddImage.uiRestNum : m_pGParam->m_SAddImage.uiAddFrameNum);
+                                out << i << " " << addNum << " " << m_uiSeqCurrent - addNum << " " << m_uiSeqCurrent - 1 << endl;
+                                file.close();
+                            }
+                            break;
+                        }
+                        if(!m_uiSeqCurrent)
                             GetBMP(true);
                         else
                             GetBMP(false);
@@ -549,6 +565,8 @@ void ImageReplayer::on_SignalAddImage()
                     }
                 }
             }
+
+
         }
     }
 }

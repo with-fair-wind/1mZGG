@@ -215,6 +215,43 @@ int TrackAlgo::CalcStarSpd(vector<sMeasuresInFrame> vectMeasuresInputFIFO, float
 //    return 0;
 //}
 
+int TrackAlgo::PushManualSource(sMeasuresInFrame measures, vector<sTargetInfo> &vectTargetInfo)
+{
+    m_vectFIFO_Target.push_back(measures);
+
+    sTargetInfoInFrame infoinframe;
+    infoinframe.stimeFrame = m_vectFIFO_Target.back().stimeFrame;
+    infoinframe.ulFrameSeq = m_vectFIFO_Target.back().ulFrameSeq;
+    infoinframe.blobMeasure = m_vectFIFO_Target.back().vectTargetMeasures.empty() ? sMeasureBlob() : m_vectFIFO_Target.back().vectTargetMeasures.at(0);
+    infoinframe.bValid = !m_vectFIFO_Target.back().vectTargetMeasures.empty();
+
+    if(!m_ulFrameSeq)
+    {
+        sTargetInfo infoAssoc;
+        infoAssoc.vectInfoInFrame.push_back(infoinframe);
+        infoAssoc.bLiving |= infoinframe.bValid;
+        infoAssoc.fValid = infoinframe.bValid ? 1 : 0;
+        vectTargetInfo.push_back(infoAssoc);
+    }
+    else
+    {
+        vectTargetInfo.back().vectInfoInFrame.push_back(infoinframe);
+        vectTargetInfo.back().bLiving |= infoinframe.bValid;
+        vectTargetInfo.back().fValid = ((m_ulFrameSeq) * vectTargetInfo.back().fValid + (infoinframe.bValid ? 1 : 0)) / (m_ulFrameSeq + 1);
+    }
+
+    m_ulFrameSeq++;
+    if (m_vectFIFO_Target.size() > 5)
+    {
+        vector<sMeasuresInFrame>::iterator k = m_vectFIFO_Target.begin();
+        m_vectFIFO_Target.erase(k);	// 删除第一个元素
+    }
+
+    m_vectTargetInfo = vectTargetInfo;
+
+    return 0;
+}
+
 int TrackAlgo::TrackProc_RaDec(sMeasuresInFrame measures, vector<sTargetInfo> &vectTargetInfo, bool bFullLEO)
 {
     if (m_iMode != TRACK_GEO)
@@ -262,9 +299,15 @@ int TrackAlgo::RaDec_Assoc4(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vect
 
     int iSize = vectMeasuresInputFIFO.size();
 
-    double dRadius = 100.0 / 3600.0; // 速度波门100角秒
-    m_pGParam->m_SImageProcessorData.fThreshErr = m_dRaThresh;
-    m_pGParam->m_SImageProcessorData.fRadiusT = dRadius;
+    double dRaRadius = m_pGParam->m_STrackParams.sRaDecTrackParams.dAssoc_Radius.first / 3600.0;
+    double dDecRadius = m_pGParam->m_STrackParams.sRaDecTrackParams.dAssoc_Radius.second / 3600.0;
+    double dRaThresh =  m_pGParam->m_STrackParams.sRaDecTrackParams.dAssoc_Thresh.first / 3600.0;
+    double dDecThresh = m_pGParam->m_STrackParams.sRaDecTrackParams.dAssoc_Thresh.second / 3600.0;
+    double dRaSpdThresh = m_pGParam->m_STrackParams.sRaDecTrackParams.dAssoc_SpdThresh.first / 3600.0;
+    double dDecSpdThresh = m_pGParam->m_STrackParams.sRaDecTrackParams.dAssoc_SpdThresh.second / 3600.0;
+
+    m_pGParam->m_SImageProcessorData.fThreshErr = dRaThresh;
+    m_pGParam->m_SImageProcessorData.fRadiusT = dRaRadius;
 
     if (iSize >= 4)
     {
@@ -285,17 +328,17 @@ int TrackAlgo::RaDec_Assoc4(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vect
                     float fDx1_0 = vectMeasuresInputFIFO[iSize - 3].vectTargetMeasures.at(j).dRa - vectMeasuresInputFIFO[iSize - 4].vectTargetMeasures.at(i).dRa;
                     float fDy1_0 = vectMeasuresInputFIFO[iSize - 3].vectTargetMeasures.at(j).dDec - vectMeasuresInputFIFO[iSize - 4].vectTargetMeasures.at(i).dDec;
 
-                    if (abs(fDx1_0) < dRadius && abs(fDy1_0) < dRadius
-                            && !(abs(fDx1_0) < m_dRaThresh && abs(fDy1_0) < m_dDecThresh))
+                    if (abs(fDx1_0) < dRaRadius && abs(fDy1_0) < dDecRadius
+                            && !(abs(fDx1_0) < dRaThresh && abs(fDy1_0) < dDecThresh))
                     {
                         for (int k = 0; k < vectMeasuresInputFIFO[iSize - 2].vectTargetMeasures.size(); k++)
                         {
                             float fDx2_1 = vectMeasuresInputFIFO[iSize - 2].vectTargetMeasures.at(k).dRa - vectMeasuresInputFIFO[iSize - 3].vectTargetMeasures.at(j).dRa;
                             float fDy2_1 = vectMeasuresInputFIFO[iSize - 2].vectTargetMeasures.at(k).dDec - vectMeasuresInputFIFO[iSize - 3].vectTargetMeasures.at(j).dDec;
 
-                            if (abs(fDx2_1) < dRadius && abs(fDy2_1) < dRadius
-                                    && !(abs(fDx2_1) < m_dRaThresh && abs(fDy2_1) < m_dDecThresh)
-                                    && abs(fDx2_1 - fDx1_0) <= m_dRaSpdThresh && abs(fDy2_1 - fDy1_0) <= m_dDecSpdThresh
+                            if (abs(fDx2_1) < dRaRadius && abs(fDy2_1) < dDecRadius
+                                    && !(abs(fDx2_1) < dRaThresh && abs(fDy2_1) < dDecThresh)
+                                    && abs(fDx2_1 - fDx1_0) <= dRaSpdThresh && abs(fDy2_1 - fDy1_0) <= dDecSpdThresh
                                     && (fDx2_1 * fDx1_0 > 0) && (fDy2_1 * fDy1_0 > 0))
                             {
                                 for (int m = 0; m < vectMeasuresInputFIFO[iSize - 1].vectTargetMeasures.size(); m++)
@@ -303,10 +346,10 @@ int TrackAlgo::RaDec_Assoc4(vector<sMeasuresInFrame> vectMeasuresInputFIFO, vect
                                     float fDx3_2 = vectMeasuresInputFIFO[iSize - 1].vectTargetMeasures.at(m).dRa - vectMeasuresInputFIFO[iSize - 2].vectTargetMeasures.at(k).dRa;
                                     float fDy3_2 = vectMeasuresInputFIFO[iSize - 1].vectTargetMeasures.at(m).dDec - vectMeasuresInputFIFO[iSize - 2].vectTargetMeasures.at(k).dDec;
 
-                                    if (abs(fDx3_2) < dRadius && abs(fDy3_2) < dRadius
-                                            && !(abs(fDx3_2) < m_dRaThresh && abs(fDy3_2) < m_dDecThresh)
-                                            && abs(fDx3_2 - fDx2_1) <= m_dRaSpdThresh && abs(fDy3_2 - fDy2_1) <= m_dDecSpdThresh
-                                            && abs(fDx3_2 - fDx1_0) <= m_dRaSpdThresh && abs(fDy3_2 - fDy1_0) <= m_dDecSpdThresh
+                                    if (abs(fDx3_2) < dRaRadius && abs(fDy3_2) < dDecRadius
+                                            && !(abs(fDx3_2) < dRaThresh && abs(fDy3_2) < dDecThresh)
+                                            && abs(fDx3_2 - fDx2_1) <= dRaSpdThresh && abs(fDy3_2 - fDy2_1) <= dDecSpdThresh
+                                            && abs(fDx3_2 - fDx1_0) <= dRaSpdThresh && abs(fDy3_2 - fDy1_0) <= dDecSpdThresh
                                             && (fDx3_2 * fDx2_1 > 0) && (fDy3_2 * fDy2_1 > 0))
                                     {
                                         sTargetInfoInFrame infoinframe0, infoinframe1, infoinframe2, infoinframe3;
@@ -464,8 +507,8 @@ int TrackAlgo::RaDec_FindTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO,
         {
             for (int i = 0; i < vectTargetInfoTemp.size(); i++)
             {
-                if (abs(vectTargetInfoTemp[i].pairPredSpdRaDec.first) > 100.0 / 3600.0
-                      || abs(vectTargetInfoTemp[i].pairPredSpdRaDec.second) > 100.0 / 3600.0)
+                if (abs(vectTargetInfoTemp[i].pairPredSpdRaDec.first) > m_pGParam->m_STrackParams.sRaDecTrackParams.dAssoc_Radius.first / 3600.0
+                      || abs(vectTargetInfoTemp[i].pairPredSpdRaDec.second) > m_pGParam->m_STrackParams.sRaDecTrackParams.dAssoc_Radius.second / 3600.0)
                 {
                     vectTargetInfoTemp[i].bLiving = false;
                 }
@@ -548,8 +591,8 @@ int TrackAlgo::RaDec_ReFindTargets(vector<sMeasuresInFrame> vectMeasuresInputFIF
 
             for (int i = 0; i < vectTargetInfoTemp.size(); i++)
             {
-                if (abs(vectTargetInfoTemp[i].pairPredSpdRaDec.first) > 100.0 / 3600.0
-                          || abs(vectTargetInfoTemp[i].pairPredSpdRaDec.second) > 100.0 / 3600.0)
+                if (abs(vectTargetInfoTemp[i].pairPredSpdRaDec.first) > m_pGParam->m_STrackParams.sRaDecTrackParams.dAssoc_Radius.first / 3600.0
+                          || abs(vectTargetInfoTemp[i].pairPredSpdRaDec.second) > m_pGParam->m_STrackParams.sRaDecTrackParams.dAssoc_Radius.second / 3600.0)
                 {
                     vectTargetInfoTemp[i].bLiving = false;
                 }
@@ -606,8 +649,18 @@ int TrackAlgo::RaDec_TrackTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO
 
 //                    float fThreshRa = m_dRaThresh + iNumUnValid * pow(10, getExponent(m_dRaThresh));
 //                    float fThreshDec = m_dDecThresh + iNumUnValid * pow(10, getExponent(m_dDecThresh));
-                    float fThreshRa = m_dRaThresh * 10 + iNumUnValid * 1.5 / 3600.0;
-                    float fThreshDec = m_dDecThresh + iNumUnValid * 0.15 / 3600.0;
+
+                    double dRaThreshInit = m_pGParam->m_STrackParams.sRaDecTrackParams.dTrack_Thresh.first / 3600.0;
+                    double dDecThreshInit = m_pGParam->m_STrackParams.sRaDecTrackParams.dTrack_Thresh.second / 3600.0;
+                    double dRaFactor = m_pGParam->m_STrackParams.sRaDecTrackParams.dTrack_Factor.first / 3600.0;
+                    double dDecFactor = m_pGParam->m_STrackParams.sRaDecTrackParams.dTrack_Factor.second / 3600.0;
+                    double dRaSpdFactor = m_pGParam->m_STrackParams.sRaDecTrackParams.dTrack_SpdFactor.first / 3600.0;
+                    double dDecSpdFactor = m_pGParam->m_STrackParams.sRaDecTrackParams.dTrack_SpdFactor.second / 3600.0;
+                    double dRaSpdThresh = m_pGParam->m_STrackParams.sRaDecTrackParams.dAssoc_SpdThresh.first / 3600.0;
+                    double dDecSpdThresh = m_pGParam->m_STrackParams.sRaDecTrackParams.dAssoc_SpdThresh.second/ 3600.0;
+
+                    float fThreshRa = dRaThreshInit + iNumUnValid * dRaFactor;
+                    float fThreshDec = dDecThreshInit + iNumUnValid * dDecFactor;
 
 #pragma omp parallel for num_threads(m_iNumCPUCores)
                     for (int j = 0; j < vectMeasuresInputFIFO.at(vectMeasuresInputFIFO.size() - 1).vectTargetMeasures.size(); j++)
@@ -619,8 +672,8 @@ int TrackAlgo::RaDec_TrackTargets(vector<sMeasuresInFrame> vectMeasuresInputFIFO
                         float fDy = vectMeasuresInputFIFO.back().vectTargetMeasures.at(j).dDec - vectTargetInfo[i].vectInfoInFrame.back().blobMeasure.dDec;
 
 //                        iNumUnValidTemp = iNumUnValid > 7 ? 7 : iNumUnValid;
-                        float fSpdRaThresh = m_dRaSpdThresh + iNumUnValid * pow(10, getExponent(m_dRaSpdThresh));
-                        float fSpdDecThresh = m_dDecSpdThresh + iNumUnValid * pow(10, getExponent(m_dDecSpdThresh));
+                        float fSpdRaThresh = dRaSpdThresh + iNumUnValid * dRaSpdFactor;
+                        float fSpdDecThresh = dDecSpdThresh + iNumUnValid * dDecSpdFactor;
                         if (abs(fDistX) <= fThreshRa && abs(fDistY) <= fThreshDec
                                 && fDist <= fDispTempTemp[omp_get_thread_num()]
                                 && abs(fDx - vectTargetInfo.at(i).pairPredSpdRaDec.first) < fSpdRaThresh
