@@ -120,6 +120,7 @@ void UI_CtrlPad::UIInit(void)
     ui.checkBox_AddManualSource->setEnabled(false);
     ui.tableWidget_SourceDisp->setEnabled(false);
     ui.tableWidget_SourceProRes->setEnabled(false);
+    ui.pushButton_LoadSourceDispInfo->setEnabled(false);
     ui.stackedWidget->setCurrentIndex(0);
 
     QVector<QStringList> data(9, QStringList("0.0"));
@@ -2949,6 +2950,7 @@ void UI_CtrlPad::on_pushButton_SourcePath_clicked()
     directory.cdUp();
     QString parentDir = directory.absolutePath();
     LoadSourceDisp(parentDir + "/SourceInfo.txt");
+    ui.pushButton_ManualSource->setEnabled(false);
 
     LoadSource(qstrSourcePath);
 }
