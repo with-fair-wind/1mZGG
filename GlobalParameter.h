@@ -313,7 +313,7 @@ struct SImageProcessorData
     bool bProcessing = false;
     bool bWindowEN = false;
 
-    bool bTrackAlgorithm = false; // 是否使用赤经赤纬坐标系
+    bool bTrackAlgorithm = true; // 是否使用赤经赤纬坐标系
 };
 
 /// DataProcessor数据

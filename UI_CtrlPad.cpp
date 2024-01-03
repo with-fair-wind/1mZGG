@@ -112,12 +112,11 @@ void UI_CtrlPad::UIInit(void)
     ui.lineEdit_pyPath->setText(m_pGParam->m_STrackParams.qstrPYPath);  
     ui.lineEdit_AddFrameNum->setText(QString::number(m_pGParam->m_SAddImage.uiAddFrameNum));
     on_checkBox_LockDisp_clicked(false);
-    ui.checkBox_TrackAlgorithm->setChecked(false);
-    ui.groupBox_3->setEnabled(false);
+    ui.checkBox_TrackAlgorithm->setChecked(true);
     ui.pushButton_LoadSourceDispInfo->setEnabled(true);
     ui.pushButton_ManualSource->setEnabled(false);
     ui.lineEdit_ReplayFrames->setReadOnly(true);
-    ui.checkBox_AddManualSource->setEnabled(false);
+    ui.checkBox_AddManualSource->setEnabled(true);
     ui.tableWidget_SourceDisp->setEnabled(false);
     ui.tableWidget_SourceProRes->setEnabled(false);
     ui.pushButton_LoadSourceDispInfo->setEnabled(false);

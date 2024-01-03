@@ -64,11 +64,11 @@ int main(int argc, char *argv[])
             proc.start("/home/dps/IniFiles/mount_dps.sh");
             proc.waitForFinished(1000);
         }
-        else
-        {
-            pglobalparameterMain->m_SPath.qstrDataStorePath = "/home/dps/DPS_DATA/TASK";
-//            pglobalparameterMain->m_SPath.qstrDataStorePath = "/home/dps/DPS_DATA_TEMP/DPS/TASK";
-        }
+//        else
+//        {
+//            pglobalparameterMain->m_SPath.qstrDataStorePath = "/home/dps/DPS_DATA/TASK";
+////            pglobalparameterMain->m_SPath.qstrDataStorePath = "/home/dps/DPS_DATA_TEMP/DPS/TASK";
+//        }
         //////////////////////
         MyLog mylogMain;
         CommDisplay commdisplayMain;	// 机下光端机显示
