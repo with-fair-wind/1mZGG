@@ -1,0 +1,42 @@
+CompileFlags:
+  CompilationDatabase: build/clang-cl-debug-local
+  Add:
+    - -std=c++23
+    - -Wno-unused-parameter
+    - -isystem
+    - C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.6/include
+
+---
+If:
+  PathMatch: .*\.cu$
+CompileFlags:
+  Remove:
+    - "*"
+  Add:
+    - clang
+    - -xcuda
+    - --cuda-gpu-arch=sm_90
+    - --cuda-path=C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.6
+    - -nocudalib
+    - -nocudainc
+    - -isystem
+    - C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.6/include
+    - -Wno-everything
+
+Diagnostics:
+  ClangTidy:
+    Add:
+      - modernize-*
+      - performance-*
+      - bugprone-*
+      - cppcoreguidelines-*
+      - readability-identifier-naming
+    Remove:
+      - modernize-use-trailing-return-type
+      - modernize-avoid-c-arrays
+  UnusedIncludes: Strict
+
+InlayHints:
+  Enabled: true
+  ParameterNames: true
+  DeducedTypes: true
