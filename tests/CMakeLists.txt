@@ -12,8 +12,13 @@ function(dss_add_test TEST_NAME TEST_SOURCE)
 endfunction()
 
 dss_add_test(test_frame_codec test_frame_codec.cpp dss_core)
+dss_add_test(test_serial_protocol_codec test_serial_protocol_codec.cpp dss_core)
 dss_add_test(test_config test_config.cpp dss_core)
+dss_add_test(test_service_host test_service_host.cpp dss_core)
 dss_add_test(test_bounded_channel test_bounded_channel.cpp dss_processing)
+dss_add_test(test_image_processor test_image_processor.cpp dss_processing)
+dss_add_test(test_frame_view test_frame_view.cpp dss_processing)
+dss_add_test(test_processing_pipeline test_processing_pipeline.cpp dss_processing)
 
 if(TARGET dss_processing_opencv)
     dss_add_test(test_opencv_processing test_opencv_processing.cpp dss_processing_opencv)

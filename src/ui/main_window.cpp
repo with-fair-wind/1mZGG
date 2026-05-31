@@ -1,4 +1,5 @@
 #include "dss/ui/main_window.h"
+#include "dss/ui/app_event.h"
 #include "dss/ui/image_display.h"
 
 #include <QCheckBox>
@@ -185,6 +186,8 @@ void MainWindow::setupDisplayPage()
     layout->addWidget(m_imageDisplay, 3);
 
     connect(&m_vm, &ViewModel::displayImageReady, m_imageDisplay, &ImageDisplay::setImage);
+    connect(m_imageDisplay, &ImageDisplay::positionClicked, &AppEvent::instance(),
+        &AppEvent::publishTargetPositionSelected);
 }
 
 void MainWindow::setupAnalysisPage()
@@ -230,6 +233,9 @@ void MainWindow::setupLogPage()
 
 void MainWindow::connectSignals()
 {
+    connect(&AppEvent::instance(), &AppEvent::targetPositionSelected, &m_vm, &ViewModel::selectTarget);
+    connect(&AppEvent::instance(), &AppEvent::zoomLevelChanged, &m_vm, &ViewModel::toggleZoom);
+
     connect(&m_vm, &ViewModel::statusTextChanged, [this](const QString& text) {
 #ifdef DSS_HAS_ELA
         ElaMessageBar::success(ElaMessageBarType::TopRight, "Status", text, 2000, this);

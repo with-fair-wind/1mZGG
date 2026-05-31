@@ -1,8 +1,6 @@
+#include "dss/app/application_context.h"
 #include "dss/core/config.h"
-#include "dss/core/event_bus.h"
 #include "dss/core/events.h"
-#include "dss/core/logger.h"
-#include "dss/core/service_registry.h"
 #include "dss/ui/init_dialog.h"
 #include "dss/ui/main_window.h"
 #include "dss/ui/view_model.h"
@@ -25,15 +23,11 @@ int main(int argc, char* argv[])
     QApplication::setApplicationVersion("2.0.0");
     QApplication::setOrganizationName("DPS");
 
-    using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;
-    MessageBus bus;
-    Dss::Core::ServiceRegistry registry;
+    Dss::App::ApplicationContext context;
+    context.wireLogger();
 
-    Dss::Core::Logger::instance().setBus(&bus);
-
-    auto& config = Dss::Core::Config::instance();
     auto configPath = QApplication::applicationDirPath().toStdString() + "/../config/SystemInit.ini";
-    if (auto result = config.load(configPath); !result)
+    if (auto result = context.loadConfig(configPath); !result)
     {
         qWarning() << "Config load warning:" << QString::fromStdString(result.error());
     }
@@ -51,7 +45,7 @@ int main(int argc, char* argv[])
     initDialog.setStatus("EventBus", true);
     initDialog.setProgress(100);
 
-    Dss::Ui::ViewModel viewModel(bus, registry);
+    Dss::Ui::ViewModel viewModel(context.bus(), context.registry());
     Dss::Ui::MainWindow mainWindow(viewModel);
     mainWindow.show();
 

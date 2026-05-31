@@ -174,7 +174,7 @@ using IniData = std::unordered_map<std::string, Section>;
 void writeEndpoint(std::ostream& output,
                    std::string_view ipKey,
                    std::string_view portKey,
-                   const Network::UdpEndpointConfig& endpoint)
+                   const UdpEndpointConfig& endpoint)
 {
     output << ipKey << '=' << endpoint.remoteIp << '\n';
     output << portKey << '=' << endpoint.remotePort << '\n';

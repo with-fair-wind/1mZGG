@@ -1,10 +1,18 @@
 #include "dss/network/udp_channel.h"
 
+#include <QAbstractSocket>
 #include <QHostAddress>
 #include <QNetworkDatagram>
+#include <QObject>
+#include <QString>
+#include <QUdpSocket>
+
+#include <vector>
 
 namespace Dss::Network
 {
+
+UdpChannel::UdpChannel() = default;
 
 UdpChannel::~UdpChannel()
 {
@@ -85,18 +93,21 @@ void UdpChannel::onReadyRead()
         QNetworkDatagram datagram = m_socket->receiveDatagram();
         if (datagram.isValid())
         {
-            std::lock_guard lock(m_mutex);
-            if (m_recvCallback)
+            decltype(m_recvCallback) callback;
             {
-                auto bytes = datagram.data();
-                auto sender = datagram.senderAddress().toString().toStdString();
-                auto port = static_cast<uint16_t>(datagram.senderPort());
-                m_recvCallback(
-                    std::span<const uint8_t>(
-                        reinterpret_cast<const uint8_t*>(bytes.constData()),
-                        static_cast<size_t>(bytes.size())),
-                    sender,
-                    port);
+                std::lock_guard lock(m_mutex);
+                callback = m_recvCallback;
+            }
+
+            if (callback)
+            {
+                const auto bytes = datagram.data();
+                std::vector<uint8_t> payload(
+                    reinterpret_cast<const uint8_t*>(bytes.constData()),
+                    reinterpret_cast<const uint8_t*>(bytes.constData()) + bytes.size());
+                const auto sender = datagram.senderAddress().toString().toStdString();
+                const auto port = static_cast<uint16_t>(datagram.senderPort());
+                callback(std::span<const uint8_t>(payload.data(), payload.size()), sender, port);
             }
         }
     }

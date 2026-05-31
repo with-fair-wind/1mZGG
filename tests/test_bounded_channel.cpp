@@ -2,7 +2,11 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
+#include <future>
 #include <stop_token>
+
+using namespace std::chrono_literals;
 
 TEST(BoundedChannelTest, PreservesFifoOrder)
 {
@@ -32,4 +36,22 @@ TEST(BoundedChannelTest, PopReturnsEmptyWhenStopped)
     const auto value = channel.pop(stopSource.get_token());
 
     EXPECT_FALSE(value.has_value());
+}
+
+TEST(BoundedChannelTest, BlockingPushReturnsFalseWhenStopped)
+{
+    Dss::Processing::BoundedChannel<int, 1> channel;
+    std::stop_source stopSource;
+
+    ASSERT_TRUE(channel.tryPush(10));
+
+    auto pushed = std::async(std::launch::async, [&channel, token = stopSource.get_token()]() mutable {
+        return channel.push(20, token);
+    });
+
+    ASSERT_EQ(pushed.wait_for(50ms), std::future_status::timeout);
+    stopSource.request_stop();
+
+    EXPECT_FALSE(pushed.get());
+    EXPECT_EQ(channel.size(), 1U);
 }

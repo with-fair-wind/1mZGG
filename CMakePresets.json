@@ -84,7 +84,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_CXX_COMPILER": "cl",
-        "CMAKE_PREFIX_PATH": "F:/Qt/6.11.1/msvc2022_64",
+        "CMAKE_PREFIX_PATH": "$env{DSS_QT_ROOT}",
         "DSS_ENABLE_TESTS": "OFF"
       },
       "condition": {
@@ -100,7 +100,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_CXX_COMPILER": "cl",
-        "CMAKE_PREFIX_PATH": "F:/Qt/6.11.1/msvc2022_64",
+        "CMAKE_PREFIX_PATH": "$env{DSS_QT_ROOT}",
         "DSS_ENABLE_TESTS": "OFF"
       },
       "condition": {
@@ -144,7 +144,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_CXX_COMPILER": "clang-cl",
-        "CMAKE_PREFIX_PATH": "F:/Qt/6.11.1/msvc2022_64",
+        "CMAKE_PREFIX_PATH": "$env{DSS_QT_ROOT}",
         "DSS_ENABLE_TESTS": "OFF"
       },
       "condition": {
@@ -160,7 +160,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_CXX_COMPILER": "clang-cl",
-        "CMAKE_PREFIX_PATH": "F:/Qt/6.11.1/msvc2022_64",
+        "CMAKE_PREFIX_PATH": "$env{DSS_QT_ROOT}",
         "DSS_ENABLE_TESTS": "OFF"
       },
       "condition": {

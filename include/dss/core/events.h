@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <span>
 #include <string>
 #include <vector>
@@ -33,8 +34,11 @@ struct GrabStoppedEvent
 // --- Processing events ---
 struct DisplayRefreshEvent
 {
+    uint64_t frameSeq = 0;
     uint32_t width = 0;
     uint32_t height = 0;
+    uint32_t stride = 0;
+    std::shared_ptr<const std::vector<uint8_t>> displayImage;
 };
 
 struct ProcessingCompleteEvent

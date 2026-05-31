@@ -1,21 +1,15 @@
 #pragma once
 
 #include "dss/core/constants.h"
+#include "dss/core/config_types.h"
 
-#include <cstdint>
 #include <expected>
 #include <string>
 
 namespace Dss::Network
 {
 
-struct UdpEndpointConfig
-{
-    std::string localIp;
-    uint16_t localPort = 0;
-    std::string remoteIp;
-    uint16_t remotePort = 0;
-};
+using UdpEndpointConfig = Dss::Core::UdpEndpointConfig;
 
 class INetworkChannel
 {

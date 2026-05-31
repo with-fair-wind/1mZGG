@@ -4,10 +4,9 @@
 #include <filesystem>
 #include <string>
 
-#include "dss/comm/i_serial_channel.h"
 #include "dss/core/constants.h"
+#include "dss/core/config_types.h"
 #include "dss/core/types.h"
-#include "dss/network/i_network_channel.h"
 
 namespace Dss::Core
 {
@@ -22,17 +21,17 @@ struct PathConfig
 
 struct CommNetConfig
 {
-    Comm::SerialConfig displayPort;
-    Comm::SerialConfig exposurePort;
-    Comm::SerialConfig masterControlPort;
-    Comm::SerialConfig servoPort;
+    SerialConfig displayPort;
+    SerialConfig exposurePort;
+    SerialConfig masterControlPort;
+    SerialConfig servoPort;
     std::string cameraPort;
 
-    Network::UdpEndpointConfig imageSender;
-    Network::UdpEndpointConfig exchange;
-    Network::UdpEndpointConfig errorDiag;
-    Network::UdpEndpointConfig atmos;
-    Network::UdpEndpointConfig heartbeat;
+    UdpEndpointConfig imageSender;
+    UdpEndpointConfig exchange;
+    UdpEndpointConfig errorDiag;
+    UdpEndpointConfig atmos;
+    UdpEndpointConfig heartbeat;
 };
 
 struct ObservatoryConfig

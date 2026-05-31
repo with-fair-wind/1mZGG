@@ -1,5 +1,6 @@
 #pragma once
 
+#include "dss/comm/serial_protocol_codec.h"
 #include "dss/comm/serial_worker_base.h"
 #include "dss/core/types.h"
 
@@ -11,16 +12,15 @@ namespace Dss::Comm
 class ExposureChannel final : public SerialWorkerBase
 {
 public:
-    static constexpr size_t RECV_SIZE = 23;
-    static constexpr size_t SEND_SIZE = 8;
+    static constexpr auto Protocol = SerialProtocol::Exposure;
 
     explicit ExposureChannel(MessageBus& bus);
 
     [[nodiscard]] auto latestData() const -> Dss::Core::ExposureDisplayData;
 
 protected:
-    [[nodiscard]] auto recvFrameSize() const -> size_t override { return RECV_SIZE; }
-    [[nodiscard]] auto sendFrameSize() const -> size_t override { return SEND_SIZE; }
+    [[nodiscard]] auto recvFrameSize() const -> size_t override { return layoutFor(Protocol).recvSize; }
+    [[nodiscard]] auto sendFrameSize() const -> size_t override { return layoutFor(Protocol).sendSize; }
     void decodeFrame(std::span<const uint8_t> data) override;
     void encodeFrame(std::span<uint8_t> buffer) override;
 

@@ -22,7 +22,11 @@ public:
         return logger;
     }
 
-    void setBus(MessageBus* bus) { m_bus = bus; }
+    void setBus(MessageBus* bus)
+    {
+        std::lock_guard lock(m_mutex);
+        m_bus = bus;
+    }
 
     void info(std::string_view msg)
     {
@@ -50,13 +54,20 @@ private:
 
     void emitLog(std::string message)
     {
-        if (m_bus)
+        MessageBus* bus = nullptr;
         {
-            m_bus->emit(LogMessageEvent{std::move(message)});
+            std::lock_guard lock(m_mutex);
+            bus = m_bus;
+        }
+
+        if (bus)
+        {
+            bus->emit(LogMessageEvent{std::move(message)});
         }
     }
 
     MessageBus* m_bus = nullptr;
+    std::mutex m_mutex;
 };
 
 } // namespace Dss::Core

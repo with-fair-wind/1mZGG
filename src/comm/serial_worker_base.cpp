@@ -1,6 +1,9 @@
 #include "dss/comm/serial_worker_base.h"
 
-#include <QDebug>
+#include <QByteArray>
+#include <QIODevice>
+#include <QSerialPort>
+#include <QString>
 
 #include <chrono>
 
@@ -128,8 +131,8 @@ void SerialWorkerBase::sendFrameInternal()
 {
     const auto frameSize = sendFrameSize();
     std::vector<uint8_t> buffer(frameSize, 0);
-    FrameCodec::wrap(buffer);
     encodeFrame(buffer);
+    FrameCodec::wrap(buffer);
 
     if (m_serialPort && m_serialPort->isOpen())
     {

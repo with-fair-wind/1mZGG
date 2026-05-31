@@ -5,8 +5,6 @@
 #include "dss/core/constants.h"
 #include "dss/core/event_bus.h"
 
-#include <QSerialPort>
-
 #include <atomic>
 #include <cstdint>
 #include <expected>
@@ -17,6 +15,8 @@
 #include <string>
 #include <thread>
 #include <vector>
+
+class QSerialPort;
 
 namespace Dss::Comm
 {

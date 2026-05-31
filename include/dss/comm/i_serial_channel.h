@@ -1,22 +1,16 @@
 #pragma once
 
 #include "dss/core/constants.h"
+#include "dss/core/config_types.h"
 
-#include <cstdint>
+#include <cstddef>
 #include <expected>
-#include <span>
 #include <string>
 
 namespace Dss::Comm
 {
 
-struct SerialConfig
-{
-    std::string portName;
-    int baudRate = 230400;
-    int dataBits = 8;
-    int stopBits = 1;
-};
+using SerialConfig = Dss::Core::SerialConfig;
 
 class ISerialChannel
 {

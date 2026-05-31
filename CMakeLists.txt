@@ -291,6 +291,13 @@ else()
 endif()
 
 if(DSS_BUILD_APP)
+    if(WIN32 AND NOT DEFINED ENV{DSS_QT_ROOT} AND NOT CMAKE_PREFIX_PATH AND NOT Qt6_DIR)
+        message(STATUS
+            "DSS_QT_ROOT is not set. For local Qt presets, set it to your Qt root, "
+            "for example F:/Qt/6.11.1/msvc2022_64."
+        )
+    endif()
+
     find_package(Qt6 QUIET COMPONENTS Core Gui Widgets Network SerialPort Charts)
     if(Qt6_FOUND)
         set(CMAKE_AUTOMOC ON)
@@ -307,7 +314,8 @@ if(DSS_BUILD_APP)
     else()
         message(WARNING
             "Qt6 not found; DSS_BUILD_APP is disabled for this configure. "
-            "Set CMAKE_PREFIX_PATH or Qt6_DIR in CMakeUserPresets.json to build the desktop app."
+            "Set DSS_QT_ROOT, CMAKE_PREFIX_PATH, or Qt6_DIR to your Qt root "
+            "(for example F:/Qt/6.11.1/msvc2022_64) to build the desktop app."
         )
         set(DSS_BUILD_APP OFF CACHE BOOL "Build the Qt desktop application" FORCE)
         set(DSS_HAS_ELA OFF)
@@ -315,6 +323,7 @@ if(DSS_BUILD_APP)
 endif()
 
 file(GLOB_RECURSE DSS_CORE_SOURCES CONFIGURE_DEPENDS src/core/*.cpp)
+file(GLOB_RECURSE DSS_APP_SOURCES CONFIGURE_DEPENDS src/app/*.cpp)
 file(GLOB_RECURSE DSS_PROCESSING_SOURCES CONFIGURE_DEPENDS src/processing/*.cpp)
 file(GLOB_RECURSE DSS_TRACKING_SOURCES CONFIGURE_DEPENDS src/tracking/*.cpp)
 file(GLOB_RECURSE DSS_COMM_QT_SOURCES CONFIGURE_DEPENDS src/comm/*.cpp)
@@ -327,6 +336,11 @@ list(FILTER DSS_PROCESSING_SOURCES EXCLUDE REGEX ".*/opencv_processing_strategy\
 add_library(dss_core STATIC ${DSS_CORE_SOURCES})
 dss_target_defaults(dss_core)
 dss_std_pch(dss_core)
+
+add_library(dss_app STATIC ${DSS_APP_SOURCES})
+dss_target_defaults(dss_app)
+dss_std_pch(dss_app)
+target_link_libraries(dss_app PUBLIC dss_core)
 
 add_library(dss_tracking STATIC ${DSS_TRACKING_SOURCES})
 dss_target_defaults(dss_tracking)
@@ -406,6 +420,7 @@ if(DSS_BUILD_APP)
     )
     target_link_libraries(DSS_QT PRIVATE
         dss_core
+        dss_app
         dss_processing
         dss_tracking
         dss_comm_qt

@@ -2,8 +2,6 @@
 
 #include "dss/network/i_network_channel.h"
 
-#include <QUdpSocket>
-
 #include <cstdint>
 #include <expected>
 #include <functional>
@@ -11,13 +9,15 @@
 #include <mutex>
 #include <span>
 
+class QUdpSocket;
+
 namespace Dss::Network
 {
 
 class UdpChannel
 {
 public:
-    UdpChannel() = default;
+    UdpChannel();
     ~UdpChannel();
 
     UdpChannel(const UdpChannel&) = delete;
@@ -32,8 +32,6 @@ public:
     [[nodiscard]] bool isBound() const;
 
     void setReceiveCallback(std::function<void(std::span<const uint8_t>, const std::string&, uint16_t)> cb);
-
-    [[nodiscard]] auto socket() -> QUdpSocket* { return m_socket.get(); }
 
 private:
     void onReadyRead();

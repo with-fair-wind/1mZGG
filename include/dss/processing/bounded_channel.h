@@ -16,7 +16,7 @@ public:
     bool tryPush(T value)
     {
         std::lock_guard lock(m_mutex);
-        if (m_count >= Capacity)
+        if (m_closed || m_count >= Capacity)
         {
             return false;
         }
@@ -27,20 +27,32 @@ public:
         return true;
     }
 
-    void push(T value)
+    bool push(T value, std::stop_token token)
     {
         std::unique_lock lock(m_mutex);
-        m_notFull.wait(lock, [this]() { return m_count < Capacity; });
+        if (!m_notFull.wait(lock, token, [this]() { return m_closed || m_count < Capacity; }))
+        {
+            return false;
+        }
+        if (m_closed)
+        {
+            return false;
+        }
         m_buffer[m_tail] = std::move(value);
         m_tail = (m_tail + 1) % Capacity;
         ++m_count;
         m_notEmpty.notify_one();
+        return true;
     }
 
     auto pop(std::stop_token token) -> std::optional<T>
     {
         std::unique_lock lock(m_mutex);
-        if (!m_notEmpty.wait(lock, token, [this]() { return m_count > 0; }))
+        if (!m_notEmpty.wait(lock, token, [this]() { return m_closed || m_count > 0; }))
+        {
+            return std::nullopt;
+        }
+        if (m_count == 0)
         {
             return std::nullopt;
         }
@@ -83,6 +95,22 @@ public:
         m_head = 0;
         m_tail = 0;
         m_count = 0;
+        m_notFull.notify_all();
+        m_notEmpty.notify_all();
+    }
+
+    void close()
+    {
+        std::lock_guard lock(m_mutex);
+        m_closed = true;
+        m_notFull.notify_all();
+        m_notEmpty.notify_all();
+    }
+
+    void open()
+    {
+        std::lock_guard lock(m_mutex);
+        m_closed = false;
     }
 
 private:
@@ -93,6 +121,7 @@ private:
     size_t m_head = 0;
     size_t m_tail = 0;
     size_t m_count = 0;
+    bool m_closed = false;
 };
 
 } // namespace Dss::Processing

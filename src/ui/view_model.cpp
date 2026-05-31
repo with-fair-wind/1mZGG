@@ -93,8 +93,24 @@ void ViewModel::setupSubscriptions()
 
 void ViewModel::onDisplayRefresh(const Dss::Core::DisplayRefreshEvent& event)
 {
-    // TODO: convert display buffer to QImage and emit displayImageReady
-    (void)event;
+    if (!event.displayImage || event.width == 0 || event.height == 0 || event.stride == 0)
+    {
+        return;
+    }
+
+    const auto expectedSize = static_cast<size_t>(event.stride) * static_cast<size_t>(event.height);
+    if (event.displayImage->size() < expectedSize)
+    {
+        return;
+    }
+
+    QImage image(
+        event.displayImage->data(),
+        static_cast<int>(event.width),
+        static_cast<int>(event.height),
+        static_cast<qsizetype>(event.stride),
+        QImage::Format_Grayscale8);
+    Q_EMIT displayImageReady(image.copy());
 }
 
 void ViewModel::onProcessingComplete(const Dss::Core::ProcessingCompleteEvent& event)
