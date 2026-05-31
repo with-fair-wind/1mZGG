@@ -1,42 +1,64 @@
 CompileFlags:
-  CompilationDatabase: build/clang-cl-debug-local
+  CompilationDatabase: .
   Add:
     - -std=c++23
-    - -Wno-unused-parameter
-    - -isystem
-    - C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.6/include
+  Remove:
+    - /Fo*
+    - /Fd*
+    - /FS
+
+Completion:
+  AllScopes: Yes
+  HeaderInsertion: IWYU
+
+Diagnostics:
+  MissingIncludes: Strict
+  UnusedIncludes: Strict
+  ClangTidy:
+    Add:
+      - bugprone-*
+      - cert-*
+      - concurrency-*
+      - cppcoreguidelines-*
+      - modernize-*
+      - performance-*
+      - portability-*
+      - readability-*
+    Remove:
+      - bugprone-easily-swappable-parameters
+      - cert-err58-cpp
+      - cppcoreguidelines-avoid-c-arrays
+      - cppcoreguidelines-avoid-magic-numbers
+      - cppcoreguidelines-non-private-member-variables-in-classes
+      - cppcoreguidelines-owning-memory
+      - cppcoreguidelines-pro-bounds-array-to-pointer-decay
+      - cppcoreguidelines-pro-bounds-constant-array-index
+      - cppcoreguidelines-pro-bounds-pointer-arithmetic
+      - modernize-avoid-c-arrays
+      - modernize-use-designated-initializers
+      - modernize-use-trailing-return-type
+      - performance-unnecessary-value-param
+      - readability-convert-member-functions-to-static
+      - readability-identifier-length
+      - readability-identifier-naming
+      - readability-magic-numbers
+      - readability-uppercase-literal-suffix
+
+Index:
+  Background: Build
+
+InlayHints:
+  Enabled: Yes
+  ParameterNames: Yes
+  DeducedTypes: Yes
+  Designators: Yes
+  BlockEnd: Yes
+  DefaultArguments: Yes
 
 ---
 If:
-  PathMatch: .*\.cu$
-CompileFlags:
-  Remove:
-    - "*"
-  Add:
-    - clang
-    - -xcuda
-    - --cuda-gpu-arch=sm_90
-    - --cuda-path=C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.6
-    - -nocudalib
-    - -nocudainc
-    - -isystem
-    - C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.6/include
-    - -Wno-everything
-
+  PathMatch: (oldsrc|third_party|build|\.ref-repos)/.*
+Index:
+  Background: Skip
 Diagnostics:
-  ClangTidy:
-    Add:
-      - modernize-*
-      - performance-*
-      - bugprone-*
-      - cppcoreguidelines-*
-      - readability-identifier-naming
-    Remove:
-      - modernize-use-trailing-return-type
-      - modernize-avoid-c-arrays
-  UnusedIncludes: Strict
-
-InlayHints:
-  Enabled: true
-  ParameterNames: true
-  DeducedTypes: true
+  Suppress: '*'

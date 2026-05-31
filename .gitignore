@@ -9,7 +9,11 @@ DSS_QT.pro.*
 # CMake build directories
 /build/
 /cmake-build-*/
+/compile_commands.json
 CMakeUserPresets.json
+
+# Local reference clones used during migration
+/.ref-repos/
 
 # Conan
 /CMakeUserPresets.json

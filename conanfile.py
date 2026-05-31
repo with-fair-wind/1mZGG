@@ -7,8 +7,14 @@ class DSSQTConan(ConanFile):
     version = "2.0.0"
     settings = "os", "compiler", "build_type", "arch"
 
-    options = {"with_conan_qt": [True, False]}
-    default_options = {"with_conan_qt": False}
+    options = {
+        "with_conan_qt": [True, False],
+        "with_opencv": [True, False],
+    }
+    default_options = {
+        "with_conan_qt": False,
+        "with_opencv": False,
+    }
 
     def requirements(self):
         if self.options.with_conan_qt:
@@ -16,6 +22,8 @@ class DSSQTConan(ConanFile):
         self.requires("gtest/1.15.0")
         self.requires("spdlog/1.14.0")
         self.requires("nlohmann_json/3.11.3")
+        if self.options.with_opencv:
+            self.requires("opencv/4.10.0")
 
     def configure(self):
         if self.options.with_conan_qt:

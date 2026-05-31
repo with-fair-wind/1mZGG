@@ -1,6 +1,6 @@
 BasedOnStyle: Microsoft
 Language: Cpp
-Standard: c++23
+Standard: Latest
 
 IndentWidth: 4
 TabWidth: 4
@@ -73,7 +73,11 @@ SpacesInContainerLiterals: false
 
 PointerAlignment: Left
 ReferenceAlignment: Left
+DerivePointerAlignment: false
 QualifierAlignment: Left
+
+SpaceBeforeCpp11BracedList: false
+SpaceBeforeRangeBasedForLoopColon: true
 
 EmptyLineAfterAccessModifier: Never
 EmptyLineBeforeAccessModifier: LogicalBlock

@@ -13,10 +13,31 @@
       "binaryDir": "${sourceDir}/build/${presetName}",
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-        "CUDAToolkit_ROOT": "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.6",
-        "CMAKE_CUDA_COMPILER": "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.6/bin/nvcc.exe",
-        "CMAKE_CUDA_HOST_COMPILER": "C:/Program Files/Microsoft Visual Studio/18/Enterprise/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/cl.exe",
-        "CMAKE_CUDA_FLAGS": "--allow-unsupported-compiler"
+        "DSS_BUILD_APP": "ON",
+        "DSS_ENABLE_TESTS": "ON",
+        "DSS_ENABLE_CUDA": "OFF",
+        "DSS_ENABLE_OPENCV": "ON"
+      }
+    },
+    {
+      "name": "core-dev",
+      "displayName": "Core Dev (No Qt/CUDA)",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_COMPILER": "g++",
+        "DSS_BUILD_APP": "OFF",
+        "DSS_ENABLE_TESTS": "OFF",
+        "DSS_ENABLE_CUDA": "OFF"
+      }
+    },
+    {
+      "name": "core-tests",
+      "displayName": "Core Tests (No Qt/CUDA)",
+      "inherits": "core-dev",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "DSS_ENABLE_TESTS": "ON"
       }
     },
     {
@@ -34,7 +55,6 @@
       "inherits": "conan-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_C_COMPILER": "cl",
         "CMAKE_CXX_COMPILER": "cl"
       },
       "condition": {
@@ -49,7 +69,6 @@
       "inherits": "conan-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_C_COMPILER": "cl",
         "CMAKE_CXX_COMPILER": "cl"
       },
       "condition": {
@@ -64,9 +83,9 @@
       "inherits": "base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_C_COMPILER": "cl",
         "CMAKE_CXX_COMPILER": "cl",
-        "CMAKE_PREFIX_PATH": "D:/Qt/6.11.1/msvc2022_64"
+        "CMAKE_PREFIX_PATH": "F:/Qt/6.11.1/msvc2022_64",
+        "DSS_ENABLE_TESTS": "OFF"
       },
       "condition": {
         "type": "equals",
@@ -80,9 +99,9 @@
       "inherits": "base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_C_COMPILER": "cl",
         "CMAKE_CXX_COMPILER": "cl",
-        "CMAKE_PREFIX_PATH": "D:/Qt/6.11.1/msvc2022_64"
+        "CMAKE_PREFIX_PATH": "F:/Qt/6.11.1/msvc2022_64",
+        "DSS_ENABLE_TESTS": "OFF"
       },
       "condition": {
         "type": "equals",
@@ -96,7 +115,6 @@
       "inherits": "conan-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_C_COMPILER": "clang-cl",
         "CMAKE_CXX_COMPILER": "clang-cl"
       },
       "condition": {
@@ -111,7 +129,6 @@
       "inherits": "conan-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_C_COMPILER": "clang-cl",
         "CMAKE_CXX_COMPILER": "clang-cl"
       },
       "condition": {
@@ -126,9 +143,9 @@
       "inherits": "base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_C_COMPILER": "clang-cl",
         "CMAKE_CXX_COMPILER": "clang-cl",
-        "CMAKE_PREFIX_PATH": "D:/Qt/6.11.1/msvc2022_64"
+        "CMAKE_PREFIX_PATH": "F:/Qt/6.11.1/msvc2022_64",
+        "DSS_ENABLE_TESTS": "OFF"
       },
       "condition": {
         "type": "equals",
@@ -142,9 +159,37 @@
       "inherits": "base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_C_COMPILER": "clang-cl",
         "CMAKE_CXX_COMPILER": "clang-cl",
-        "CMAKE_PREFIX_PATH": "D:/Qt/6.11.1/msvc2022_64"
+        "CMAKE_PREFIX_PATH": "F:/Qt/6.11.1/msvc2022_64",
+        "DSS_ENABLE_TESTS": "OFF"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "mingw-gcc-debug",
+      "displayName": "MinGW GCC Debug",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_COMPILER": "g++"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "mingw-gcc-release",
+      "displayName": "MinGW GCC Release",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_COMPILER": "g++"
       },
       "condition": {
         "type": "equals",
@@ -158,7 +203,6 @@
       "inherits": "base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_C_COMPILER": "gcc",
         "CMAKE_CXX_COMPILER": "g++"
       },
       "condition": {
@@ -173,7 +217,6 @@
       "inherits": "base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_C_COMPILER": "gcc",
         "CMAKE_CXX_COMPILER": "g++"
       },
       "condition": {
@@ -188,7 +231,6 @@
       "inherits": "base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++"
       },
       "condition": {
@@ -203,7 +245,6 @@
       "inherits": "base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++"
       },
       "condition": {
@@ -214,6 +255,14 @@
     }
   ],
   "buildPresets": [
+    {
+      "name": "core-dev",
+      "configurePreset": "core-dev"
+    },
+    {
+      "name": "core-tests",
+      "configurePreset": "core-tests"
+    },
     {
       "name": "msvc-debug",
       "configurePreset": "msvc-debug"
@@ -245,6 +294,14 @@
     {
       "name": "clang-cl-release-local",
       "configurePreset": "clang-cl-release-local"
+    },
+    {
+      "name": "mingw-gcc-debug",
+      "configurePreset": "mingw-gcc-debug"
+    },
+    {
+      "name": "mingw-gcc-release",
+      "configurePreset": "mingw-gcc-release"
     },
     {
       "name": "gcc-debug",

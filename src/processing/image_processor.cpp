@@ -75,14 +75,7 @@ void ImageProcessor::workerLoop(std::stop_token token)
             std::lock_guard lock(m_strategyMutex);
             if (m_procStrategy)
             {
-                Dss::Core::FrameMeasurements input{};
-                input.frameSeq = packet.frameSeq;
-                input.timestamp = packet.metadata.timestamp;
-                input.fovCenterAe = packet.metadata.pointingAe;
-                input.exposureTime = packet.metadata.exposureTime;
-                input.frameFreq = packet.metadata.frameFrequency;
-
-                procResult = m_procStrategy->process(input);
+                procResult = m_procStrategy->process(packet);
             }
         }
 
