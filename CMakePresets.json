@@ -20,12 +20,21 @@
       }
     },
     {
-      "name": "core-dev",
-      "displayName": "Core Dev (No Qt/CUDA)",
+      "name": "conan-base",
+      "hidden": true,
       "inherits": "base",
       "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/build/${presetName}/generators/conan_toolchain.cmake",
+        "CMAKE_POLICY_DEFAULT_CMP0091": "NEW",
+        "CMAKE_PREFIX_PATH": "$env{DSS_QT_ROOT}"
+      }
+    },
+    {
+      "name": "core-dev",
+      "displayName": "Core Dev (No Qt/CUDA)",
+      "inherits": "conan-base",
+      "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_CXX_COMPILER": "g++",
         "DSS_BUILD_APP": "OFF",
         "DSS_ENABLE_TESTS": "OFF",
         "DSS_ENABLE_CUDA": "OFF"
@@ -41,17 +50,8 @@
       }
     },
     {
-      "name": "conan-base",
-      "hidden": true,
-      "inherits": "base",
-      "cacheVariables": {
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/build/${presetName}/generators/conan_toolchain.cmake",
-        "CMAKE_POLICY_DEFAULT_CMP0091": "NEW"
-      }
-    },
-    {
       "name": "msvc-debug",
-      "displayName": "MSVC Debug (Conan)",
+      "displayName": "MSVC Debug",
       "inherits": "conan-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
@@ -65,7 +65,7 @@
     },
     {
       "name": "msvc-release",
-      "displayName": "MSVC Release (Conan)",
+      "displayName": "MSVC Release",
       "inherits": "conan-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
@@ -78,40 +78,8 @@
       }
     },
     {
-      "name": "msvc-debug-local",
-      "displayName": "MSVC Debug (Local Qt)",
-      "inherits": "base",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_CXX_COMPILER": "cl",
-        "CMAKE_PREFIX_PATH": "$env{DSS_QT_ROOT}",
-        "DSS_ENABLE_TESTS": "OFF"
-      },
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Windows"
-      }
-    },
-    {
-      "name": "msvc-release-local",
-      "displayName": "MSVC Release (Local Qt)",
-      "inherits": "base",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_CXX_COMPILER": "cl",
-        "CMAKE_PREFIX_PATH": "$env{DSS_QT_ROOT}",
-        "DSS_ENABLE_TESTS": "OFF"
-      },
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Windows"
-      }
-    },
-    {
       "name": "clang-cl-debug",
-      "displayName": "Clang-CL Debug (Conan)",
+      "displayName": "Clang-CL Debug",
       "inherits": "conan-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
@@ -125,7 +93,7 @@
     },
     {
       "name": "clang-cl-release",
-      "displayName": "Clang-CL Release (Conan)",
+      "displayName": "Clang-CL Release",
       "inherits": "conan-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
@@ -138,41 +106,9 @@
       }
     },
     {
-      "name": "clang-cl-debug-local",
-      "displayName": "Clang-CL Debug (Local Qt)",
-      "inherits": "base",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_CXX_COMPILER": "clang-cl",
-        "CMAKE_PREFIX_PATH": "$env{DSS_QT_ROOT}",
-        "DSS_ENABLE_TESTS": "OFF"
-      },
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Windows"
-      }
-    },
-    {
-      "name": "clang-cl-release-local",
-      "displayName": "Clang-CL Release (Local Qt)",
-      "inherits": "base",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
-        "CMAKE_CXX_COMPILER": "clang-cl",
-        "CMAKE_PREFIX_PATH": "$env{DSS_QT_ROOT}",
-        "DSS_ENABLE_TESTS": "OFF"
-      },
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Windows"
-      }
-    },
-    {
       "name": "mingw-gcc-debug",
       "displayName": "MinGW GCC Debug",
-      "inherits": "base",
+      "inherits": "conan-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_CXX_COMPILER": "g++"
@@ -186,7 +122,7 @@
     {
       "name": "mingw-gcc-release",
       "displayName": "MinGW GCC Release",
-      "inherits": "base",
+      "inherits": "conan-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_CXX_COMPILER": "g++"
@@ -200,7 +136,7 @@
     {
       "name": "gcc-debug",
       "displayName": "GCC Debug",
-      "inherits": "base",
+      "inherits": "conan-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_CXX_COMPILER": "g++"
@@ -214,7 +150,7 @@
     {
       "name": "gcc-release",
       "displayName": "GCC Release",
-      "inherits": "base",
+      "inherits": "conan-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_CXX_COMPILER": "g++"
@@ -228,7 +164,7 @@
     {
       "name": "clang-debug",
       "displayName": "Clang Debug",
-      "inherits": "base",
+      "inherits": "conan-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_CXX_COMPILER": "clang++"
@@ -242,7 +178,7 @@
     {
       "name": "clang-release",
       "displayName": "Clang Release",
-      "inherits": "base",
+      "inherits": "conan-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_CXX_COMPILER": "clang++"
@@ -272,28 +208,12 @@
       "configurePreset": "msvc-release"
     },
     {
-      "name": "msvc-debug-local",
-      "configurePreset": "msvc-debug-local"
-    },
-    {
-      "name": "msvc-release-local",
-      "configurePreset": "msvc-release-local"
-    },
-    {
       "name": "clang-cl-debug",
       "configurePreset": "clang-cl-debug"
     },
     {
       "name": "clang-cl-release",
       "configurePreset": "clang-cl-release"
-    },
-    {
-      "name": "clang-cl-debug-local",
-      "configurePreset": "clang-cl-debug-local"
-    },
-    {
-      "name": "clang-cl-release-local",
-      "configurePreset": "clang-cl-release-local"
     },
     {
       "name": "mingw-gcc-debug",

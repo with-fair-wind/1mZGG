@@ -4,9 +4,9 @@
 #include <cctype>
 #include <fstream>
 #include <limits>
-#include <sstream>
 #include <string_view>
-#include <unordered_map>
+
+#include <nlohmann/json.hpp>
 
 namespace Dss::Core
 {
@@ -14,25 +14,7 @@ namespace Dss::Core
 namespace
 {
 
-using Section = std::unordered_map<std::string, std::string>;
-using IniData = std::unordered_map<std::string, Section>;
-
-[[nodiscard]] auto trim(std::string_view value) -> std::string_view
-{
-    std::size_t first = 0;
-    while (first < value.size() && std::isspace(static_cast<unsigned char>(value[first])) != 0)
-    {
-        ++first;
-    }
-
-    auto last = value.size();
-    while (last > first && std::isspace(static_cast<unsigned char>(value[last - 1])) != 0)
-    {
-        --last;
-    }
-
-    return value.substr(first, last - first);
-}
+using Json = nlohmann::json;
 
 [[nodiscard]] auto normalizeBool(std::string value) -> std::string
 {
@@ -42,75 +24,147 @@ using IniData = std::unordered_map<std::string, Section>;
     return value;
 }
 
-[[nodiscard]] auto parseIni(const std::filesystem::path& iniPath) -> std::expected<IniData, std::string>
+[[nodiscard]] auto parseJson(const std::filesystem::path& configPath) -> std::expected<Json, std::string>
 {
-    std::ifstream input(iniPath);
+    std::ifstream input(configPath);
     if (!input)
     {
-        return std::unexpected("Failed to open config file: " + iniPath.string());
+        return std::unexpected("Failed to open config file: " + configPath.string());
     }
 
-    IniData data;
-    std::string currentSection;
-    std::string line;
-    while (std::getline(input, line))
+    try
     {
-        const auto commentPos = line.find_first_of("#;");
-        if (commentPos != std::string::npos)
-        {
-            line.erase(commentPos);
-        }
-
-        const auto view = trim(line);
-        if (view.empty())
-        {
-            continue;
-        }
-
-        if (view.front() == '[' && view.back() == ']')
-        {
-            currentSection = std::string(trim(view.substr(1, view.size() - 2)));
-            data.try_emplace(currentSection);
-            continue;
-        }
-
-        const auto equalPos = view.find('=');
-        if (equalPos == std::string_view::npos)
-        {
-            continue;
-        }
-
-        const auto key = std::string(trim(view.substr(0, equalPos)));
-        const auto value = std::string(trim(view.substr(equalPos + 1)));
-        data[currentSection][key] = value;
+        return Json::parse(input);
     }
-
-    return data;
+    catch (const Json::exception& error)
+    {
+        return std::unexpected("Failed to parse JSON config file " + configPath.string() + ": " + error.what());
+    }
 }
 
-[[nodiscard]] auto getString(const IniData& data,
-                             std::string_view section,
-                             std::string_view key,
-                             std::string fallback) -> std::string
+[[nodiscard]] auto objectAt(const Json& object, std::string_view key) -> const Json*
 {
-    const auto sectionIt = data.find(std::string(section));
-    if (sectionIt == data.end())
+    if (!object.is_object())
+    {
+        return nullptr;
+    }
+
+    const auto it = object.find(std::string(key));
+    return it != object.end() && it->is_object() ? &(*it) : nullptr;
+}
+
+[[nodiscard]] auto objectAt(const Json* object, std::string_view key) -> const Json*
+{
+    return object != nullptr ? objectAt(*object, key) : nullptr;
+}
+
+[[nodiscard]] auto valueAt(const Json* object, std::string_view key) -> const Json*
+{
+    if (object == nullptr || !object->is_object())
+    {
+        return nullptr;
+    }
+
+    const auto it = object->find(std::string(key));
+    return it != object->end() && !it->is_null() ? &(*it) : nullptr;
+}
+
+[[nodiscard]] auto getString(const Json* object, std::string_view key, std::string fallback) -> std::string
+{
+    const auto* value = valueAt(object, key);
+    return value != nullptr && value->is_string() ? value->get<std::string>() : std::move(fallback);
+}
+
+[[nodiscard]] auto getBool(const Json* object, std::string_view key, bool fallback) -> bool
+{
+    const auto* value = valueAt(object, key);
+    if (value == nullptr)
     {
         return fallback;
     }
 
-    const auto valueIt = sectionIt->second.find(std::string(key));
-    return valueIt != sectionIt->second.end() ? valueIt->second : std::move(fallback);
+    if (value->is_boolean())
+    {
+        return value->get<bool>();
+    }
+    if (value->is_number_integer())
+    {
+        return value->get<int>() != 0;
+    }
+    if (value->is_string())
+    {
+        const auto normalized = normalizeBool(value->get<std::string>());
+        if (normalized == "true" || normalized == "1" || normalized == "yes" || normalized == "on")
+        {
+            return true;
+        }
+        if (normalized == "false" || normalized == "0" || normalized == "no" || normalized == "off")
+        {
+            return false;
+        }
+    }
+    return fallback;
 }
 
-[[nodiscard]] auto getInt(const IniData& data,
-                          std::string_view section,
-                          std::string_view key,
-                          int fallback) -> int
+[[nodiscard]] auto getDouble(const Json* object, std::string_view key, double fallback) -> double
 {
+    const auto* value = valueAt(object, key);
+    if (value == nullptr)
+    {
+        return fallback;
+    }
+
     try
     {
-        return std::stoi(getString(data, section, key, std::to_string(fallback)));
+        if (value->is_number())
+        {
+            return value->get<double>();
+        }
+        if (value->is_string())
+        {
+            return std::stod(value->get<std::string>());
+        }
+    }
+    catch (...)
+    {
+    }
+    return fallback;
+}
+
+[[nodiscard]] auto getFloat(const Json* object, std::string_view key, float fallback) -> float
+{
+    return static_cast<float>(getDouble(object, key, fallback));
+}
+
+[[nodiscard]] auto getInt(const Json* object, std::string_view key, int fallback) -> int
+{
+    const auto* value = valueAt(object, key);
+    if (value == nullptr)
+    {
+        return fallback;
+    }
+
+    try
+    {
+        long long parsed = 0;
+        if (value->is_number_integer())
+        {
+            parsed = value->get<long long>();
+        }
+        else if (value->is_string())
+        {
+            parsed = std::stoll(value->get<std::string>());
+        }
+        else
+        {
+            return fallback;
+        }
+
+        if (parsed < std::numeric_limits<int>::min() || parsed > std::numeric_limits<int>::max())
+        {
+            return fallback;
+        }
+        return static_cast<int>(parsed);
     }
     catch (...)
     {
@@ -118,12 +172,9 @@ using IniData = std::unordered_map<std::string, Section>;
     }
 }
 
-[[nodiscard]] auto getUInt16(const IniData& data,
-                             std::string_view section,
-                             std::string_view key,
-                             uint16_t fallback) -> uint16_t
+[[nodiscard]] auto getUInt16(const Json* object, std::string_view key, uint16_t fallback) -> uint16_t
 {
-    const auto value = getInt(data, section, key, fallback);
+    const auto value = getInt(object, key, fallback);
     if (value < 0 || value > static_cast<int>(std::numeric_limits<uint16_t>::max()))
     {
         return fallback;
@@ -131,113 +182,116 @@ using IniData = std::unordered_map<std::string, Section>;
     return static_cast<uint16_t>(value);
 }
 
-[[nodiscard]] auto getDouble(const IniData& data,
-                             std::string_view section,
-                             std::string_view key,
-                             double fallback) -> double
-{
-    try
-    {
-        return std::stod(getString(data, section, key, std::to_string(fallback)));
-    }
-    catch (...)
-    {
-        return fallback;
-    }
-}
-
-[[nodiscard]] auto getFloat(const IniData& data,
-                            std::string_view section,
-                            std::string_view key,
-                            float fallback) -> float
-{
-    return static_cast<float>(getDouble(data, section, key, fallback));
-}
-
-[[nodiscard]] auto getBool(const IniData& data,
-                           std::string_view section,
+[[nodiscard]] auto getPath(const Json* object,
                            std::string_view key,
-                           bool fallback) -> bool
+                           const std::filesystem::path& fallback) -> std::filesystem::path
 {
-    const auto value = normalizeBool(getString(data, section, key, fallback ? "true" : "false"));
-    if (value == "true" || value == "1" || value == "yes" || value == "on")
-    {
-        return true;
-    }
-    if (value == "false" || value == "0" || value == "no" || value == "off")
-    {
-        return false;
-    }
+    return getString(object, key, fallback.string());
+}
+
+[[nodiscard]] auto loadSerial(const Json* object, std::string_view key, SerialConfig fallback) -> SerialConfig
+{
+    const auto* section = objectAt(object, key);
+    fallback.portName = getString(section, "portName", fallback.portName);
+    fallback.baudRate = getInt(section, "baudRate", fallback.baudRate);
+    fallback.dataBits = getInt(section, "dataBits", fallback.dataBits);
+    fallback.stopBits = getInt(section, "stopBits", fallback.stopBits);
     return fallback;
 }
 
-void writeEndpoint(std::ostream& output,
-                   std::string_view ipKey,
-                   std::string_view portKey,
-                   const UdpEndpointConfig& endpoint)
+[[nodiscard]] auto loadEndpoint(const Json* object,
+                                std::string_view key,
+                                UdpEndpointConfig fallback) -> UdpEndpointConfig
 {
-    output << ipKey << '=' << endpoint.remoteIp << '\n';
-    output << portKey << '=' << endpoint.remotePort << '\n';
+    const auto* section = objectAt(object, key);
+    fallback.localIp = getString(section, "localIp", fallback.localIp);
+    fallback.localPort = getUInt16(section, "localPort", fallback.localPort);
+    fallback.remoteIp = getString(section, "remoteIp", fallback.remoteIp);
+    fallback.remotePort = getUInt16(section, "remotePort", fallback.remotePort);
+    return fallback;
+}
+
+[[nodiscard]] auto serialToJson(const SerialConfig& config) -> Json
+{
+    return {
+        {"portName", config.portName},
+        {"baudRate", config.baudRate},
+        {"dataBits", config.dataBits},
+        {"stopBits", config.stopBits},
+    };
+}
+
+[[nodiscard]] auto endpointToJson(const UdpEndpointConfig& config) -> Json
+{
+    return {
+        {"localIp", config.localIp},
+        {"localPort", config.localPort},
+        {"remoteIp", config.remoteIp},
+        {"remotePort", config.remotePort},
+    };
 }
 
 } // namespace
 
-auto Config::load(const std::filesystem::path& iniPath) -> std::expected<void, std::string>
+auto Config::load(const std::filesystem::path& configPath) -> std::expected<void, std::string>
 {
-    if (!std::filesystem::exists(iniPath))
+    if (!std::filesystem::exists(configPath))
     {
-        return std::unexpected("Config file not found: " + iniPath.string());
+        return std::unexpected("Config file not found: " + configPath.string());
     }
 
-    auto parsed = parseIni(iniPath);
+    auto parsed = parseJson(configPath);
     if (!parsed)
     {
         return std::unexpected(parsed.error());
     }
 
     const auto& settings = *parsed;
-    m_paths.iniFile = iniPath;
+    const auto* paths = objectAt(settings, "paths");
+    const auto* commNet = objectAt(settings, "commNet");
+    const auto* optics = objectAt(settings, "optics");
+    const auto* observatory = objectAt(settings, "observatory");
+    const auto* tracking = objectAt(settings, "tracking");
 
-    m_paths.dataRoot = getString(settings, "Path", "DataRoot", "");
-    m_paths.ccfFile = getString(settings, "Path", "CCFFile", "");
-    m_paths.kernelFile = getString(settings, "Path", "KernelFile", "");
+    m_paths.configFile = configPath;
+    m_paths.dataRoot = getPath(paths, "dataRoot", {});
+    m_paths.ccfFile = getPath(paths, "ccfFile", {});
+    m_paths.kernelFile = getPath(paths, "kernelFile", {});
 
-    m_commNet.displayPort.portName = getString(settings, "CommNetSettings", "DisplayPort", "/dev/ttyUSB0S");
-    m_commNet.exposurePort.portName = getString(settings, "CommNetSettings", "ExposurePort", "/dev/ttyUSB1S");
-    m_commNet.masterControlPort.portName =
-        getString(settings, "CommNetSettings", "MasterControlPort", "/dev/ttyUSB2S");
-    m_commNet.servoPort.portName = getString(settings, "CommNetSettings", "ServoPort", "/dev/ttyUSB3S");
-    m_commNet.cameraPort = getString(settings, "CommNetSettings", "CameraPort", "/dev/ttyUSB4");
+    m_commNet.displayPort = loadSerial(commNet, "displayPort", {"/dev/ttyUSB0S", 230400, 8, 1});
+    m_commNet.exposurePort = loadSerial(commNet, "exposurePort", {"/dev/ttyUSB1S", 230400, 8, 1});
+    m_commNet.masterControlPort =
+        loadSerial(commNet, "masterControlPort", {"/dev/ttyUSB2S", 230400, 8, 1});
+    m_commNet.servoPort = loadSerial(commNet, "servoPort", {"/dev/ttyUSB3S", 230400, 8, 1});
+    m_commNet.cameraPort = getString(commNet, "cameraPort", "/dev/ttyUSB4");
 
-    m_commNet.imageSender.remoteIp =
-        getString(settings, "CommNetSettings", "IPImageTrans", "192.168.1.2");
-    m_commNet.imageSender.remotePort = getUInt16(settings, "CommNetSettings", "PortImageTrans", 4000);
-    m_commNet.exchange.remoteIp = getString(settings, "CommNetSettings", "IPExchange", "192.168.1.3");
-    m_commNet.exchange.remotePort = getUInt16(settings, "CommNetSettings", "PortExchange", 5000);
-    m_commNet.errorDiag.remoteIp = getString(settings, "CommNetSettings", "IPErrorDiag", "192.168.1.4");
-    m_commNet.errorDiag.remotePort = getUInt16(settings, "CommNetSettings", "PortErrorDiag", 5001);
-    m_commNet.atmos.remoteIp = getString(settings, "CommNetSettings", "IPAtmos", "192.168.1.5");
-    m_commNet.atmos.remotePort = getUInt16(settings, "CommNetSettings", "PortAtmos", 5002);
-    m_commNet.heartbeat.remoteIp = getString(settings, "CommNetSettings", "IPHeartbeat", "192.168.1.6");
-    m_commNet.heartbeat.remotePort = getUInt16(settings, "CommNetSettings", "PortHeartbeat", 5003);
+    m_commNet.imageSender = loadEndpoint(commNet, "imageSender", {"", 0, "192.168.1.2", 4000});
+    m_commNet.exchange = loadEndpoint(commNet, "exchange", {"", 0, "192.168.1.3", 5000});
+    m_commNet.errorDiag = loadEndpoint(commNet, "errorDiag", {"", 0, "192.168.1.4", 5001});
+    m_commNet.atmos = loadEndpoint(commNet, "atmos", {"", 0, "192.168.1.5", 5002});
+    m_commNet.heartbeat = loadEndpoint(commNet, "heartbeat", {"", 0, "192.168.1.6", 5003});
 
-    m_optics.imageWidth = getInt(settings, "OpticSettings", "ImageWidth", 6144);
-    m_optics.imageHeight = getInt(settings, "OpticSettings", "ImageHeight", 6144);
-    m_optics.pixelScale = getFloat(settings, "OpticSettings", "PixelScale", 0.0003453f);
-    m_optics.fovCenterX = static_cast<float>(m_optics.imageWidth) / 2.0f;
-    m_optics.fovCenterY = static_cast<float>(m_optics.imageHeight) / 2.0f;
+    m_optics.imageWidth = getInt(optics, "imageWidth", 6144);
+    m_optics.imageHeight = getInt(optics, "imageHeight", 6144);
+    m_optics.pixelScale = getFloat(optics, "pixelScale", 0.0003453f);
+    m_optics.fovCenterX = getFloat(optics, "fovCenterX", static_cast<float>(m_optics.imageWidth) / 2.0f);
+    m_optics.fovCenterY = getFloat(optics, "fovCenterY", static_cast<float>(m_optics.imageHeight) / 2.0f);
 
-    m_observatory.longitude = getDouble(settings, "ObservatorySettings", "Longitude", 0.0);
-    m_observatory.latitude = getDouble(settings, "ObservatorySettings", "Latitude", 0.0);
-    m_observatory.altitude = getDouble(settings, "ObservatorySettings", "Altitude", 0.0);
+    m_observatory.longitude = getDouble(observatory, "longitude", 0.0);
+    m_observatory.latitude = getDouble(observatory, "latitude", 0.0);
+    m_observatory.altitude = getDouble(observatory, "altitude", 0.0);
 
-    m_tracking.thresholdLiving = getFloat(settings, "TrackSettings", "ThresholdLiving", 0.5f);
-    m_tracking.numFramesLiving = getInt(settings, "TrackSettings", "NumFramesLiving", 10);
-    m_tracking.searchRadius = getFloat(settings, "TrackSettings", "SearchRadius", 50.0f);
-    m_tracking.ratioFov = getFloat(settings, "TrackSettings", "RatioFOV", 0.25f);
-    m_tracking.thresholdStarMode = getFloat(settings, "TrackSettings", "ThresholdStarMode", 10.0f);
-    m_tracking.thresholdGazeMode = getFloat(settings, "TrackSettings", "ThresholdGazeMode", 2.0f);
-    m_tracking.autoDecide = getBool(settings, "TrackSettings", "AutoDecide", true);
+    m_tracking.thresholdLiving = getFloat(tracking, "thresholdLiving", 0.5f);
+    m_tracking.numFramesLiving = getInt(tracking, "numFramesLiving", 10);
+    m_tracking.searchRadius = getFloat(tracking, "searchRadius", 50.0f);
+    m_tracking.ratioFov = getFloat(tracking, "ratioFov", 0.25f);
+    m_tracking.thresholdStarMode = getFloat(tracking, "thresholdStarMode", 10.0f);
+    m_tracking.thresholdGazeMode = getFloat(tracking, "thresholdGazeMode", 2.0f);
+    m_tracking.autoDecide = getBool(tracking, "autoDecide", true);
+    m_tracking.thresholdMeo = getFloat(tracking, "thresholdMeo", 5.0f);
+    m_tracking.spdLowAe = getFloat(tracking, "spdLowAe", 0.0f);
+    m_tracking.spdHighAe = getFloat(tracking, "spdHighAe", 0.0f);
+    m_tracking.thresholdAe = getFloat(tracking, "thresholdAe", 0.0f);
     m_tracking.opticParams = m_optics;
 
     return {};
@@ -245,53 +299,68 @@ auto Config::load(const std::filesystem::path& iniPath) -> std::expected<void, s
 
 auto Config::save() -> std::expected<void, std::string>
 {
-    if (m_paths.iniFile.empty())
+    if (m_paths.configFile.empty())
     {
         return std::unexpected("No config file path set");
     }
 
-    std::ofstream output(m_paths.iniFile);
+    const Json outputJson = {
+        {"paths",
+         {
+             {"dataRoot", m_paths.dataRoot.string()},
+             {"ccfFile", m_paths.ccfFile.string()},
+             {"kernelFile", m_paths.kernelFile.string()},
+         }},
+        {"commNet",
+         {
+             {"displayPort", serialToJson(m_commNet.displayPort)},
+             {"exposurePort", serialToJson(m_commNet.exposurePort)},
+             {"masterControlPort", serialToJson(m_commNet.masterControlPort)},
+             {"servoPort", serialToJson(m_commNet.servoPort)},
+             {"cameraPort", m_commNet.cameraPort},
+             {"imageSender", endpointToJson(m_commNet.imageSender)},
+             {"exchange", endpointToJson(m_commNet.exchange)},
+             {"errorDiag", endpointToJson(m_commNet.errorDiag)},
+             {"atmos", endpointToJson(m_commNet.atmos)},
+             {"heartbeat", endpointToJson(m_commNet.heartbeat)},
+         }},
+        {"optics",
+         {
+             {"imageWidth", m_optics.imageWidth},
+             {"imageHeight", m_optics.imageHeight},
+             {"fovCenterX", m_optics.fovCenterX},
+             {"fovCenterY", m_optics.fovCenterY},
+             {"pixelScale", m_optics.pixelScale},
+         }},
+        {"observatory",
+         {
+             {"longitude", m_observatory.longitude},
+             {"latitude", m_observatory.latitude},
+             {"altitude", m_observatory.altitude},
+         }},
+        {"tracking",
+         {
+             {"thresholdLiving", m_tracking.thresholdLiving},
+             {"numFramesLiving", m_tracking.numFramesLiving},
+             {"searchRadius", m_tracking.searchRadius},
+             {"ratioFov", m_tracking.ratioFov},
+             {"thresholdStarMode", m_tracking.thresholdStarMode},
+             {"thresholdGazeMode", m_tracking.thresholdGazeMode},
+             {"autoDecide", m_tracking.autoDecide},
+             {"thresholdMeo", m_tracking.thresholdMeo},
+             {"spdLowAe", m_tracking.spdLowAe},
+             {"spdHighAe", m_tracking.spdHighAe},
+             {"thresholdAe", m_tracking.thresholdAe},
+         }},
+    };
+
+    std::ofstream output(m_paths.configFile);
     if (!output)
     {
-        return std::unexpected("Failed to open config file for writing: " + m_paths.iniFile.string());
+        return std::unexpected("Failed to open config file for writing: " + m_paths.configFile.string());
     }
 
-    output << "[Path]\n";
-    output << "DataRoot=" << m_paths.dataRoot.string() << '\n';
-    output << "CCFFile=" << m_paths.ccfFile.string() << '\n';
-    output << "KernelFile=" << m_paths.kernelFile.string() << "\n\n";
-
-    output << "[CommNetSettings]\n";
-    output << "DisplayPort=" << m_commNet.displayPort.portName << '\n';
-    output << "ExposurePort=" << m_commNet.exposurePort.portName << '\n';
-    output << "MasterControlPort=" << m_commNet.masterControlPort.portName << '\n';
-    output << "ServoPort=" << m_commNet.servoPort.portName << '\n';
-    output << "CameraPort=" << m_commNet.cameraPort << "\n\n";
-    writeEndpoint(output, "IPImageTrans", "PortImageTrans", m_commNet.imageSender);
-    writeEndpoint(output, "IPExchange", "PortExchange", m_commNet.exchange);
-    writeEndpoint(output, "IPErrorDiag", "PortErrorDiag", m_commNet.errorDiag);
-    writeEndpoint(output, "IPAtmos", "PortAtmos", m_commNet.atmos);
-    writeEndpoint(output, "IPHeartbeat", "PortHeartbeat", m_commNet.heartbeat);
-
-    output << "\n[OpticSettings]\n";
-    output << "ImageWidth=" << m_optics.imageWidth << '\n';
-    output << "ImageHeight=" << m_optics.imageHeight << '\n';
-    output << "PixelScale=" << m_optics.pixelScale << "\n\n";
-
-    output << "[ObservatorySettings]\n";
-    output << "Longitude=" << m_observatory.longitude << '\n';
-    output << "Latitude=" << m_observatory.latitude << '\n';
-    output << "Altitude=" << m_observatory.altitude << "\n\n";
-
-    output << "[TrackSettings]\n";
-    output << "ThresholdLiving=" << m_tracking.thresholdLiving << '\n';
-    output << "NumFramesLiving=" << m_tracking.numFramesLiving << '\n';
-    output << "SearchRadius=" << m_tracking.searchRadius << '\n';
-    output << "RatioFOV=" << m_tracking.ratioFov << '\n';
-    output << "ThresholdStarMode=" << m_tracking.thresholdStarMode << '\n';
-    output << "ThresholdGazeMode=" << m_tracking.thresholdGazeMode << '\n';
-    output << "AutoDecide=" << (m_tracking.autoDecide ? "true" : "false") << '\n';
-
+    output << outputJson.dump(4) << '\n';
     return {};
 }
 

@@ -1,0 +1,98 @@
+{
+    "paths": {
+        "dataRoot": "./data",
+        "ccfFile": "./data/ccf.dat",
+        "kernelFile": "./kernels"
+    },
+    "commNet": {
+        "displayPort": {
+            "portName": "/dev/ttyUSB0S",
+            "baudRate": 230400,
+            "dataBits": 8,
+            "stopBits": 1
+        },
+        "exposurePort": {
+            "portName": "/dev/ttyUSB1S",
+            "baudRate": 230400,
+            "dataBits": 8,
+            "stopBits": 1
+        },
+        "masterControlPort": {
+            "portName": "/dev/ttyUSB2S",
+            "baudRate": 230400,
+            "dataBits": 8,
+            "stopBits": 1
+        },
+        "servoPort": {
+            "portName": "/dev/ttyUSB3S",
+            "baudRate": 230400,
+            "dataBits": 8,
+            "stopBits": 1
+        },
+        "cameraPort": "/dev/ttyUSB4",
+        "imageSender": {
+            "localIp": "",
+            "localPort": 0,
+            "remoteIp": "192.168.1.2",
+            "remotePort": 4000
+        },
+        "exchange": {
+            "localIp": "",
+            "localPort": 0,
+            "remoteIp": "192.168.1.3",
+            "remotePort": 5000
+        },
+        "errorDiag": {
+            "localIp": "",
+            "localPort": 0,
+            "remoteIp": "192.168.1.4",
+            "remotePort": 5001
+        },
+        "atmos": {
+            "localIp": "",
+            "localPort": 0,
+            "remoteIp": "192.168.1.5",
+            "remotePort": 5002
+        },
+        "heartbeat": {
+            "localIp": "",
+            "localPort": 0,
+            "remoteIp": "192.168.1.6",
+            "remotePort": 5003
+        }
+    },
+    "optics": {
+        "imageWidth": 6144,
+        "imageHeight": 6144,
+        "fovCenterX": 3072.0,
+        "fovCenterY": 3072.0,
+        "pixelScale": 0.0003453
+    },
+    "observatory": {
+        "longitude": 0.0,
+        "latitude": 0.0,
+        "altitude": 0.0
+    },
+    "tracking": {
+        "thresholdLiving": 0.5,
+        "numFramesLiving": 10,
+        "searchRadius": 50.0,
+        "ratioFov": 0.25,
+        "thresholdStarMode": 10.0,
+        "thresholdGazeMode": 2.0,
+        "autoDecide": true,
+        "thresholdMeo": 5.0,
+        "spdLowAe": 0.0,
+        "spdHighAe": 0.0,
+        "thresholdAe": 0.0
+    },
+    "camera": {
+        "triggerMode": 0,
+        "exposureTime": 100,
+        "frameRate": 25
+    },
+    "display": {
+        "biggerFirst": 36,
+        "biggerSecond": 21
+    }
+}

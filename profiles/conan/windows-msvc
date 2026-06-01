@@ -1,0 +1,4 @@
+[settings]
+compiler.cppstd=23
+compiler.runtime=dynamic
+

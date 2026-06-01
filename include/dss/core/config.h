@@ -13,7 +13,7 @@ namespace Dss::Core
 
 struct PathConfig
 {
-    std::filesystem::path iniFile;
+    std::filesystem::path configFile;
     std::filesystem::path dataRoot;
     std::filesystem::path ccfFile;
     std::filesystem::path kernelFile;
@@ -50,7 +50,7 @@ public:
         return config;
     }
 
-    auto load(const std::filesystem::path& iniPath) -> std::expected<void, std::string>;
+    auto load(const std::filesystem::path& configPath) -> std::expected<void, std::string>;
     auto save() -> std::expected<void, std::string>;
 
     [[nodiscard]] auto paths() const -> const PathConfig& { return m_paths; }

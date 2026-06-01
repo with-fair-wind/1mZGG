@@ -26,7 +26,7 @@ int main(int argc, char* argv[])
     Dss::App::ApplicationContext context;
     context.wireLogger();
 
-    auto configPath = QApplication::applicationDirPath().toStdString() + "/../config/SystemInit.ini";
+    auto configPath = QApplication::applicationDirPath().toStdString() + "/../config/SystemInit.json";
     if (auto result = context.loadConfig(configPath); !result)
     {
         qWarning() << "Config load warning:" << QString::fromStdString(result.error());

@@ -247,6 +247,10 @@ endfunction()
 find_package(spdlog QUIET)
 find_package(nlohmann_json QUIET)
 
+if(NOT TARGET nlohmann_json::nlohmann_json)
+    message(FATAL_ERROR "nlohmann_json not found. Run conan install before configuring this project.")
+endif()
+
 if(DSS_ENABLE_TESTS)
     find_package(GTest QUIET)
     if(NOT TARGET GTest::gtest_main)
@@ -336,6 +340,7 @@ list(FILTER DSS_PROCESSING_SOURCES EXCLUDE REGEX ".*/opencv_processing_strategy\
 add_library(dss_core STATIC ${DSS_CORE_SOURCES})
 dss_target_defaults(dss_core)
 dss_std_pch(dss_core)
+target_link_libraries(dss_core PUBLIC nlohmann_json::nlohmann_json)
 
 add_library(dss_app STATIC ${DSS_APP_SOURCES})
 dss_target_defaults(dss_app)
@@ -475,6 +480,14 @@ if(DSS_BUILD_APP)
     if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/resources/dss.qrc)
         target_sources(DSS_QT PRIVATE resources/dss.qrc)
     endif()
+
+    add_custom_command(TARGET DSS_QT POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/config"
+            "${CMAKE_BINARY_DIR}/config"
+        COMMENT "Copying runtime JSON config into ${CMAKE_BINARY_DIR}/config"
+        VERBATIM
+    )
 
     dss_enable_qt_deploy(DSS_QT)
 endif()
