@@ -1,7 +1,6 @@
 #include "dss/comm/frame_codec.h"
 
 #include <gtest/gtest.h>
-
 #include <vector>
 
 TEST(FrameCodecTest, WrapsAndValidatesFrame)
@@ -21,4 +20,11 @@ TEST(FrameCodecTest, RejectsWrongTailOrSize)
 
     EXPECT_FALSE(Dss::Comm::FrameCodec::validate(frame, frame.size()));
     EXPECT_FALSE(Dss::Comm::FrameCodec::validate(frame, frame.size() + 1));
+}
+
+TEST(FrameCodecTest, RejectsEmptyFrame)
+{
+    const std::vector<uint8_t> frame;
+
+    EXPECT_FALSE(Dss::Comm::FrameCodec::validate(frame, frame.size()));
 }

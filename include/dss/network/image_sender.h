@@ -5,6 +5,7 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <mutex>
@@ -21,7 +22,10 @@ class ImageSender
 public:
     using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;
 
-    static constexpr size_t MaxUdpPayload = 60000;
+    static constexpr std::size_t MaxUdpPayload = 60U * 1024U;
+    static constexpr std::size_t PacketHeaderSize = 20U;
+    static constexpr std::size_t ImageHeaderSize = 10U;
+    static constexpr std::size_t PacketPaddingSize = 4U;
 
     explicit ImageSender(MessageBus& bus);
     ~ImageSender();
@@ -30,6 +34,8 @@ public:
     void close();
 
     void sendImage(std::span<const uint8_t> imageData, uint32_t width, uint32_t height);
+    [[nodiscard]] static auto buildPackets(std::span<const uint8_t> imageData, uint32_t width, uint32_t height)
+        -> std::vector<std::vector<uint8_t>>;
 
 private:
     void workerLoop(std::stop_token token);

@@ -3,16 +3,57 @@
 #include "dss/core/events.h"
 
 #include <algorithm>
-#include <array>
-#include <cstring>
+#include <limits>
 
 namespace Dss::Network
 {
 
-ImageSender::ImageSender(MessageBus& bus)
-    : m_bus(bus)
+namespace
 {
+
+constexpr uint32_t ImagePacketMagic = 0xAAAA5555U;
+constexpr uint8_t MonoChannelCount = 1U;
+constexpr uint8_t EightBitDepth = 8U;
+
+void writeU16Be(std::vector<uint8_t>& buffer, size_t offset, uint16_t value)
+{
+    buffer[offset] = static_cast<uint8_t>((value >> 8U) & 0xFFU);
+    buffer[offset + 1U] = static_cast<uint8_t>(value & 0xFFU);
 }
+
+void writeU32Be(std::vector<uint8_t>& buffer, size_t offset, uint32_t value)
+{
+    buffer[offset] = static_cast<uint8_t>((value >> 24U) & 0xFFU);
+    buffer[offset + 1U] = static_cast<uint8_t>((value >> 16U) & 0xFFU);
+    buffer[offset + 2U] = static_cast<uint8_t>((value >> 8U) & 0xFFU);
+    buffer[offset + 3U] = static_cast<uint8_t>(value & 0xFFU);
+}
+
+void writeU32Le(std::vector<uint8_t>& buffer, size_t offset, uint32_t value)
+{
+    buffer[offset] = static_cast<uint8_t>(value & 0xFFU);
+    buffer[offset + 1U] = static_cast<uint8_t>((value >> 8U) & 0xFFU);
+    buffer[offset + 2U] = static_cast<uint8_t>((value >> 16U) & 0xFFU);
+    buffer[offset + 3U] = static_cast<uint8_t>((value >> 24U) & 0xFFU);
+}
+
+[[nodiscard]] auto buildEncodedImage(std::span<const uint8_t> imageData, uint32_t width, uint32_t height)
+    -> std::vector<uint8_t>
+{
+    std::vector<uint8_t> encoded(ImageSender::ImageHeaderSize + imageData.size());
+    const auto encodedLength = static_cast<uint32_t>(encoded.size());
+    writeU32Be(encoded, 0U, encodedLength);
+    writeU16Be(encoded, 4U, static_cast<uint16_t>(width));
+    writeU16Be(encoded, 6U, static_cast<uint16_t>(height));
+    encoded[8U] = MonoChannelCount;
+    encoded[9U] = EightBitDepth;
+    std::copy(imageData.begin(), imageData.end(), encoded.begin() + ImageSender::ImageHeaderSize);
+    return encoded;
+}
+
+} // namespace
+
+ImageSender::ImageSender(MessageBus& bus) : m_bus(bus) {}
 
 ImageSender::~ImageSender()
 {
@@ -54,6 +95,43 @@ void ImageSender::sendImage(std::span<const uint8_t> imageData, uint32_t width, 
     m_bufferCv.notify_one();
 }
 
+auto ImageSender::buildPackets(std::span<const uint8_t> imageData, uint32_t width, uint32_t height)
+    -> std::vector<std::vector<uint8_t>>
+{
+    if (imageData.empty() || imageData.size() > std::numeric_limits<uint32_t>::max() - ImageHeaderSize)
+    {
+        return {};
+    }
+
+    const auto encoded = buildEncodedImage(imageData, width, height);
+    const auto totalPackets = (encoded.size() + MaxUdpPayload - 1U) / MaxUdpPayload;
+    if (totalPackets > std::numeric_limits<uint32_t>::max())
+    {
+        return {};
+    }
+
+    std::vector<std::vector<uint8_t>> packets;
+    packets.reserve(totalPackets);
+
+    uint32_t sequence = 1U;
+    for (size_t offset = 0U; offset < encoded.size(); offset += MaxUdpPayload)
+    {
+        const auto chunkSize = std::min(MaxUdpPayload, encoded.size() - offset);
+        std::vector<uint8_t> packet(PacketHeaderSize + chunkSize + PacketPaddingSize);
+        writeU32Le(packet, 0U, ImagePacketMagic);
+        writeU32Le(packet, 4U, static_cast<uint32_t>(totalPackets));
+        writeU32Le(packet, 8U, static_cast<uint32_t>(encoded.size()));
+        writeU32Le(packet, 12U, sequence);
+        writeU32Le(packet, 16U, static_cast<uint32_t>(chunkSize));
+        std::copy_n(
+            encoded.begin() + static_cast<std::ptrdiff_t>(offset), chunkSize, packet.begin() + PacketHeaderSize);
+        packets.push_back(std::move(packet));
+        ++sequence;
+    }
+
+    return packets;
+}
+
 void ImageSender::workerLoop(std::stop_token token)
 {
     while (!token.stop_requested())
@@ -82,43 +160,10 @@ void ImageSender::workerLoop(std::stop_token token)
             continue;
         }
 
-        // 10-byte header: totalLen(4) + width(2) + height(2) + channels(1) + depth(1)
-        std::array<uint8_t, 10> header{};
-        auto totalLen = static_cast<uint32_t>(image.size());
-        std::memcpy(header.data(), &totalLen, 4);
-        auto w16 = static_cast<uint16_t>(w);
-        auto h16 = static_cast<uint16_t>(h);
-        std::memcpy(header.data() + 4, &w16, 2);
-        std::memcpy(header.data() + 6, &h16, 2);
-        header[8] = 1; // channels
-        header[9] = 8; // bit depth
-
-        // Fragment and send
-        size_t offset = 0;
-        uint16_t seq = 0;
-        while (offset < image.size())
+        const auto packets = buildPackets(image, w, h);
+        for (const auto& packet : packets)
         {
-            size_t chunk = std::min(MaxUdpPayload - 20, image.size() - offset);
-
-            std::vector<uint8_t> packet(20 + chunk);
-            // Packet header: magic(4) + seq(2) + totalPackets(2) + offset(4) + chunkLen(4) + header(4)
-            uint32_t magic = 0xAAAA5555;
-            std::memcpy(packet.data(), &magic, 4);
-            std::memcpy(packet.data() + 4, &seq, 2);
-            auto totalPackets =
-                static_cast<uint16_t>((image.size() + MaxUdpPayload - 21) / (MaxUdpPayload - 20));
-            std::memcpy(packet.data() + 6, &totalPackets, 2);
-            auto off32 = static_cast<uint32_t>(offset);
-            std::memcpy(packet.data() + 8, &off32, 4);
-            auto chunk32 = static_cast<uint32_t>(chunk);
-            std::memcpy(packet.data() + 12, &chunk32, 4);
-            std::memcpy(packet.data() + 16, header.data(), 4);
-            std::memcpy(packet.data() + 20, image.data() + offset, chunk);
-
             m_channel.send(packet);
-
-            offset += chunk;
-            ++seq;
         }
 
         m_bus.emit(Dss::Core::ImageSendEvent{0});

@@ -20,6 +20,10 @@ public:
         {
             return false;
         }
+        if (data.size() < 2U)
+        {
+            return false;
+        }
         return data.front() == HEADER && data.back() == TAIL;
     }
 
