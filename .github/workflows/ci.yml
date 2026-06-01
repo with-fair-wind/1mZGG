@@ -16,7 +16,7 @@ concurrency:
 env:
   BUILD_TYPE: Release
   CONAN_HOME: ${{ github.workspace }}/.conan2
-  PRESET: msvc-release
+  PRESET: ci-msvc-release
   QT_ARCH: win64_msvc2022_64
   QT_INSTALL_DIR: ${{ github.workspace }}/Qt
   QT_VERSION: 6.8.0
@@ -91,7 +91,7 @@ jobs:
             'cmake --preset %PRESET% --fresh -DDSS_BUILD_APP=ON',
             'cmake --build --preset %PRESET%',
             'call build\%PRESET%\generators\conanrun.bat',
-            'ctest --test-dir build\%PRESET% --output-on-failure --no-tests=error'
+            'ctest --test-dir build\%PRESET% -C %BUILD_TYPE% --output-on-failure --no-tests=error'
           ) -join " && "
 
           cmd.exe /d /s /c "`"$vcvars`" && $commands"
@@ -120,6 +120,6 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: dss_qt-windows-msvc-release
-          path: build/msvc-release/bin/**
+          path: build/${{ env.PRESET }}/bin/**
           if-no-files-found: error
           retention-days: 14

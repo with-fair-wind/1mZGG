@@ -78,6 +78,18 @@
       }
     },
     {
+      "name": "ci-msvc-release",
+      "displayName": "CI MSVC Release",
+      "inherits": "conan-base",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
       "name": "clang-cl-debug",
       "displayName": "Clang-CL Debug",
       "inherits": "conan-base",
@@ -206,6 +218,11 @@
     {
       "name": "msvc-release",
       "configurePreset": "msvc-release"
+    },
+    {
+      "name": "ci-msvc-release",
+      "configurePreset": "ci-msvc-release",
+      "configuration": "Release"
     },
     {
       "name": "clang-cl-debug",
