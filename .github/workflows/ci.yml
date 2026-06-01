@@ -18,13 +18,14 @@ env:
   CONAN_HOME: ${{ github.workspace }}/.conan2
   PRESET: ci-msvc-release
   QT_ARCH: win64_msvc2022_64
+  QT_CACHE_SUFFIX: qtcharts-qtserialport
   QT_INSTALL_DIR: ${{ github.workspace }}/Qt
   QT_VERSION: 6.8.0
 
 jobs:
   windows-msvc-release:
     name: Windows MSVC Release
-    runs-on: windows-latest
+    runs-on: windows-2022
     timeout-minutes: 120
 
     steps:
@@ -42,9 +43,9 @@ jobs:
           path: |
             ${{ env.CONAN_HOME }}
             ${{ env.QT_INSTALL_DIR }}
-          key: windows-msvc-${{ env.QT_VERSION }}-${{ hashFiles('conanfile.py', 'profiles/conan/windows-msvc') }}
+          key: windows-msvc-${{ env.QT_VERSION }}-${{ env.QT_CACHE_SUFFIX }}-${{ hashFiles('conanfile.py', 'profiles/conan/windows-msvc') }}
           restore-keys: |
-            windows-msvc-${{ env.QT_VERSION }}-
+            windows-msvc-${{ env.QT_VERSION }}-${{ env.QT_CACHE_SUFFIX }}-
 
       - name: Install build tools
         shell: pwsh
@@ -61,8 +62,14 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $qtRoot = Join-Path $env:QT_INSTALL_DIR "$env:QT_VERSION\msvc2022_64"
+          $chartsConfig = Join-Path $qtRoot "lib\cmake\Qt6Charts\Qt6ChartsConfig.cmake"
+          $serialPortConfig = Join-Path $qtRoot "lib\cmake\Qt6SerialPort\Qt6SerialPortConfig.cmake"
+          if ((Test-Path $qtRoot) -and (!(Test-Path $chartsConfig) -or !(Test-Path $serialPortConfig))) {
+            Remove-Item -LiteralPath $qtRoot -Recurse -Force
+          }
+
           if (!(Test-Path $qtRoot)) {
-            python -m aqt install-qt windows desktop $env:QT_VERSION $env:QT_ARCH -O $env:QT_INSTALL_DIR
+            python -m aqt install-qt windows desktop $env:QT_VERSION $env:QT_ARCH -O $env:QT_INSTALL_DIR -m qtcharts qtserialport
           }
 
           $deployTool = Join-Path $qtRoot "bin\windeployqt6.exe"
