@@ -1,18 +1,18 @@
 #pragma once
 
-#include "dss/core/event_bus.h"
-#include "dss/network/udp_channel.h"
-
 #include <atomic>
 #include <expected>
+#include <mutex>
 #include <stop_token>
 #include <thread>
 
-namespace Dss::Network
-{
+#include "dss/core/event_bus.h"
+#include "dss/network/diagnostic_protocol.h"
+#include "dss/network/udp_channel.h"
 
-class ErrorDiagnostics
-{
+namespace Dss::Network {
+
+class ErrorDiagnostics {
 public:
     using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;
 
@@ -21,13 +21,18 @@ public:
 
     auto open(const UdpEndpointConfig& config) -> std::expected<void, std::string>;
     void close();
+    [[nodiscard]] bool isOpen() const;
+    void setStatus(const DiagnosticStatus& status);
 
 private:
     void workerLoop(std::stop_token token);
+    [[nodiscard]] auto statusSnapshot() const -> DiagnosticStatus;
 
-    MessageBus& m_bus;
+    [[maybe_unused]] MessageBus& m_bus;
     UdpChannel m_channel;
     std::jthread m_workerThread;
+    mutable std::mutex m_statusMutex;
+    DiagnosticStatus m_status{};
 };
 
-} // namespace Dss::Network
+}  // namespace Dss::Network

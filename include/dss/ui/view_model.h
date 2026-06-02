@@ -1,23 +1,20 @@
 #pragma once
 
+#include <QImage>
+#include <QObject>
+#include <QPointF>
+#include <memory>
+#include <vector>
+
 #include "dss/core/constants.h"
 #include "dss/core/event_bus.h"
 #include "dss/core/events.h"
 #include "dss/core/service_registry.h"
 #include "dss/core/types.h"
 
-#include <QImage>
-#include <QObject>
-#include <QPointF>
+namespace Dss::Ui {
 
-#include <memory>
-#include <vector>
-
-namespace Dss::Ui
-{
-
-class ViewModel : public QObject
-{
+class ViewModel : public QObject {
     Q_OBJECT
 
     Q_PROPERTY(bool isGrabbing READ isGrabbing NOTIFY grabbingChanged)
@@ -30,15 +27,28 @@ class ViewModel : public QObject
 public:
     using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;
 
-    explicit ViewModel(MessageBus& bus, Dss::Core::ServiceRegistry& registry, QObject* parent = nullptr);
+    explicit ViewModel(MessageBus& bus, Dss::Core::ServiceRegistry& registry,
+                       QObject* parent = nullptr);
     ~ViewModel() override;
 
-    [[nodiscard]] bool isGrabbing() const { return m_grabbing; }
-    [[nodiscard]] double frameRate() const { return m_frameRate; }
-    [[nodiscard]] int trackMode() const { return m_trackMode; }
-    [[nodiscard]] double exposure() const { return m_exposure; }
-    [[nodiscard]] bool isSaving() const { return m_saving; }
-    [[nodiscard]] QString statusText() const { return m_statusText; }
+    [[nodiscard]] bool isGrabbing() const {
+        return m_grabbing;
+    }
+    [[nodiscard]] double frameRate() const {
+        return m_frameRate;
+    }
+    [[nodiscard]] int trackMode() const {
+        return m_trackMode;
+    }
+    [[nodiscard]] double exposure() const {
+        return m_exposure;
+    }
+    [[nodiscard]] bool isSaving() const {
+        return m_saving;
+    }
+    [[nodiscard]] QString statusText() const {
+        return m_statusText;
+    }
 
     Q_INVOKABLE void startGrab();
     Q_INVOKABLE void stopGrab();
@@ -84,4 +94,4 @@ private:
     std::vector<Dss::Evt::ScopedConnection> m_connections;
 };
 
-} // namespace Dss::Ui
+}  // namespace Dss::Ui

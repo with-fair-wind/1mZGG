@@ -1,13 +1,12 @@
-#include "dss/processing/opencv_processing_strategy.h"
-
-#include <gtest/gtest.h>
-
 #include <cstddef>
 #include <cstdint>
 #include <vector>
 
-TEST(OpenCvProcessingStrategyTest, ComputesStatsAndExtractsBrightBlob)
-{
+#include <gtest/gtest.h>
+
+#include "dss/processing/opencv_processing_strategy.h"
+
+TEST(OpenCvProcessingStrategyTest, ComputesStatsAndExtractsBrightBlob) {
     Dss::Processing::FramePacket packet{};
     packet.width = 8;
     packet.height = 8;

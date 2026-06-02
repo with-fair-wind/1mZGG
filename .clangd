@@ -12,7 +12,7 @@ Completion:
   HeaderInsertion: IWYU
 
 Diagnostics:
-  MissingIncludes: Strict
+  MissingIncludes: None
   UnusedIncludes: Strict
   ClangTidy:
     Add:
@@ -61,4 +61,4 @@ If:
 Index:
   Background: Skip
 Diagnostics:
-  Suppress: '*'
+  Suppress: "*"

@@ -1,9 +1,8 @@
-#include "dss/processing/frame_view.h"
-
 #include <gtest/gtest.h>
 
-TEST(FrameView, ExposesNonOwningImageSpans)
-{
+#include "dss/processing/frame_view.h"
+
+TEST(FrameView, ExposesNonOwningImageSpans) {
     Dss::Processing::FramePacket packet;
     packet.frameSeq = 42;
     packet.width = 2;
@@ -21,8 +20,7 @@ TEST(FrameView, ExposesNonOwningImageSpans)
     EXPECT_EQ(view.displayImage[3], 40U);
 }
 
-TEST(FrameView, ExposesMutableImageSpans)
-{
+TEST(FrameView, ExposesMutableImageSpans) {
     Dss::Processing::FramePacket packet;
     packet.rawImage = {1, 2, 3};
 

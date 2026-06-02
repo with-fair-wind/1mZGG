@@ -5,11 +5,9 @@
 #include <QMouseEvent>
 #include <QWidget>
 
-namespace Dss::Ui
-{
+namespace Dss::Ui {
 
-class ImageDisplay : public QWidget
-{
+class ImageDisplay : public QWidget {
     Q_OBJECT
 
 public:
@@ -36,4 +34,4 @@ private:
     QPointF m_offset{};
 };
 
-} // namespace Dss::Ui
+}  // namespace Dss::Ui

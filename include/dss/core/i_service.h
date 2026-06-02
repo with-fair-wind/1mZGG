@@ -4,11 +4,9 @@
 #include <string>
 #include <string_view>
 
-namespace Dss::Core
-{
+namespace Dss::Core {
 
-class IService
-{
+class IService {
 public:
     virtual ~IService() = default;
 
@@ -17,4 +15,4 @@ public:
     virtual void stop() noexcept = 0;
 };
 
-} // namespace Dss::Core
+}  // namespace Dss::Core

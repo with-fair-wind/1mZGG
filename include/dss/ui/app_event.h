@@ -3,11 +3,9 @@
 #include <QObject>
 #include <QPointF>
 
-namespace Dss::Ui
-{
+namespace Dss::Ui {
 
-class AppEvent final : public QObject
-{
+class AppEvent final : public QObject {
     Q_OBJECT
 
 public:
@@ -25,4 +23,4 @@ private:
     explicit AppEvent(QObject* parent = nullptr);
 };
 
-} // namespace Dss::Ui
+}  // namespace Dss::Ui

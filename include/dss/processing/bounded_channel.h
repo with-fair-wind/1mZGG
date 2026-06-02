@@ -6,18 +6,14 @@
 #include <optional>
 #include <stop_token>
 
-namespace Dss::Processing
-{
+namespace Dss::Processing {
 
 template <typename T, size_t Capacity = 4>
-class BoundedChannel
-{
+class BoundedChannel {
 public:
-    bool tryPush(T value)
-    {
+    bool tryPush(T value) {
         std::lock_guard lock(m_mutex);
-        if (m_closed || m_count >= Capacity)
-        {
+        if (m_closed || m_count >= Capacity) {
             return false;
         }
         m_buffer[m_tail] = std::move(value);
@@ -27,15 +23,12 @@ public:
         return true;
     }
 
-    bool push(T value, std::stop_token token)
-    {
+    bool push(T value, std::stop_token token) {
         std::unique_lock lock(m_mutex);
-        if (!m_notFull.wait(lock, token, [this]() { return m_closed || m_count < Capacity; }))
-        {
+        if (!m_notFull.wait(lock, token, [this]() { return m_closed || m_count < Capacity; })) {
             return false;
         }
-        if (m_closed)
-        {
+        if (m_closed) {
             return false;
         }
         m_buffer[m_tail] = std::move(value);
@@ -45,15 +38,12 @@ public:
         return true;
     }
 
-    auto pop(std::stop_token token) -> std::optional<T>
-    {
+    auto pop(std::stop_token token) -> std::optional<T> {
         std::unique_lock lock(m_mutex);
-        if (!m_notEmpty.wait(lock, token, [this]() { return m_closed || m_count > 0; }))
-        {
+        if (!m_notEmpty.wait(lock, token, [this]() { return m_closed || m_count > 0; })) {
             return std::nullopt;
         }
-        if (m_count == 0)
-        {
+        if (m_count == 0) {
             return std::nullopt;
         }
         T value = std::move(m_buffer[m_head]);
@@ -63,11 +53,9 @@ public:
         return value;
     }
 
-    [[nodiscard]] auto tryPop() -> std::optional<T>
-    {
+    [[nodiscard]] auto tryPop() -> std::optional<T> {
         std::lock_guard lock(m_mutex);
-        if (m_count == 0)
-        {
+        if (m_count == 0) {
             return std::nullopt;
         }
         T value = std::move(m_buffer[m_head]);
@@ -77,20 +65,17 @@ public:
         return value;
     }
 
-    [[nodiscard]] size_t size() const
-    {
+    [[nodiscard]] size_t size() const {
         std::lock_guard lock(m_mutex);
         return m_count;
     }
 
-    [[nodiscard]] bool empty() const
-    {
+    [[nodiscard]] bool empty() const {
         std::lock_guard lock(m_mutex);
         return m_count == 0;
     }
 
-    void clear()
-    {
+    void clear() {
         std::lock_guard lock(m_mutex);
         m_head = 0;
         m_tail = 0;
@@ -99,16 +84,14 @@ public:
         m_notEmpty.notify_all();
     }
 
-    void close()
-    {
+    void close() {
         std::lock_guard lock(m_mutex);
         m_closed = true;
         m_notFull.notify_all();
         m_notEmpty.notify_all();
     }
 
-    void open()
-    {
+    void open() {
         std::lock_guard lock(m_mutex);
         m_closed = false;
     }
@@ -124,4 +107,4 @@ private:
     bool m_closed = false;
 };
 
-} // namespace Dss::Processing
+}  // namespace Dss::Processing

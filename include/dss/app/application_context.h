@@ -1,19 +1,17 @@
 #pragma once
 
+#include <expected>
+#include <filesystem>
+#include <string>
+
 #include "dss/core/config.h"
 #include "dss/core/event_bus.h"
 #include "dss/core/service_host.h"
 #include "dss/core/service_registry.h"
 
-#include <expected>
-#include <filesystem>
-#include <string>
+namespace Dss::App {
 
-namespace Dss::App
-{
-
-class ApplicationContext
-{
+class ApplicationContext {
 public:
     using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;
 
@@ -31,6 +29,7 @@ public:
 
     void wireLogger();
     auto loadConfig(const std::filesystem::path& configPath) -> std::expected<void, std::string>;
+    void registerCommunicationServices();
     auto startServices() -> std::expected<void, std::string>;
     void stopServices() noexcept;
 
@@ -40,4 +39,4 @@ private:
     Dss::Core::ServiceHost m_services;
 };
 
-} // namespace Dss::App
+}  // namespace Dss::App

@@ -4,11 +4,9 @@
 #include <expected>
 #include <string>
 
-namespace Dss::Gpu
-{
+namespace Dss::Gpu {
 
-class IGpuBackend
-{
+class IGpuBackend {
 public:
     virtual ~IGpuBackend() = default;
 
@@ -17,4 +15,4 @@ public:
     [[nodiscard]] virtual auto deviceName() const -> std::string = 0;
 };
 
-} // namespace Dss::Gpu
+}  // namespace Dss::Gpu

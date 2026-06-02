@@ -1,7 +1,5 @@
 #pragma once
 
-#include "dss/network/i_network_channel.h"
-
 #include <cstdint>
 #include <expected>
 #include <functional>
@@ -9,13 +7,13 @@
 #include <mutex>
 #include <span>
 
+#include "dss/network/i_network_channel.h"
+
 class QUdpSocket;
 
-namespace Dss::Network
-{
+namespace Dss::Network {
 
-class UdpChannel
-{
+class UdpChannel {
 public:
     UdpChannel();
     ~UdpChannel();
@@ -31,7 +29,8 @@ public:
 
     [[nodiscard]] bool isBound() const;
 
-    void setReceiveCallback(std::function<void(std::span<const uint8_t>, const std::string&, uint16_t)> cb);
+    void setReceiveCallback(
+        std::function<void(std::span<const uint8_t>, const std::string&, uint16_t)> cb);
 
 private:
     void onReadyRead();
@@ -42,4 +41,4 @@ private:
     std::mutex m_mutex;
 };
 
-} // namespace Dss::Network
+}  // namespace Dss::Network

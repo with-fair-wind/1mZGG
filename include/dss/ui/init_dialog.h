@@ -4,15 +4,12 @@
 #include <QLabel>
 #include <QProgressBar>
 #include <QVBoxLayout>
-
 #include <expected>
 #include <string>
 
-namespace Dss::Ui
-{
+namespace Dss::Ui {
 
-class InitDialog : public QDialog
-{
+class InitDialog : public QDialog {
     Q_OBJECT
 
 public:
@@ -32,4 +29,4 @@ private:
     int m_successCount = 0;
 };
 
-} // namespace Dss::Ui
+}  // namespace Dss::Ui

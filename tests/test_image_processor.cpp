@@ -1,23 +1,19 @@
-#include "dss/processing/image_processor.h"
-
-#include "dss/core/events.h"
-
-#include <gtest/gtest.h>
-
 #include <chrono>
 #include <future>
 
+#include <gtest/gtest.h>
+
+#include "dss/core/events.h"
+#include "dss/processing/image_processor.h"
+
 using namespace std::chrono_literals;
 
-namespace
-{
+namespace {
 
-class DisplayStrategy final : public Dss::Processing::IProcessingStrategy
-{
+class DisplayStrategy final : public Dss::Processing::IProcessingStrategy {
 public:
     [[nodiscard]] auto process(const Dss::Processing::FramePacket& input)
-        -> Dss::Processing::ProcessingResult override
-    {
+        -> Dss::Processing::ProcessingResult override {
         Dss::Processing::ProcessingResult result;
         result.success = true;
         result.stats.maxVal = static_cast<double>(input.frameSeq);
@@ -25,21 +21,18 @@ public:
         return result;
     }
 
-    [[nodiscard]] auto name() const -> std::string_view override
-    {
+    [[nodiscard]] auto name() const -> std::string_view override {
         return "display";
     }
 
-    [[nodiscard]] auto mode() const -> Dss::Core::ProcessingMode override
-    {
+    [[nodiscard]] auto mode() const -> Dss::Core::ProcessingMode override {
         return Dss::Core::ProcessingMode::Direct;
     }
 };
 
-} // namespace
+}  // namespace
 
-TEST(ImageProcessor, PublishesDisplayFramePayload)
-{
+TEST(ImageProcessor, PublishesDisplayFramePayload) {
     Dss::Processing::ImageProcessor::MessageBus bus;
     Dss::Processing::ImageProcessor processor(bus);
     processor.setProcessingStrategy(std::make_unique<DisplayStrategy>());

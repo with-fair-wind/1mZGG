@@ -8,44 +8,35 @@
 
 #include <nlohmann/json.hpp>
 
-namespace Dss::Core
-{
+namespace Dss::Core {
 
-namespace
-{
+namespace {
 
 using Json = nlohmann::json;
 
-[[nodiscard]] auto normalizeBool(std::string value) -> std::string
-{
-    std::ranges::transform(value, value.begin(), [](unsigned char ch) {
-        return static_cast<char>(std::tolower(ch));
-    });
+[[nodiscard]] auto normalizeBool(std::string value) -> std::string {
+    std::ranges::transform(value, value.begin(),
+                           [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
     return value;
 }
 
-[[nodiscard]] auto parseJson(const std::filesystem::path& configPath) -> std::expected<Json, std::string>
-{
+[[nodiscard]] auto parseJson(const std::filesystem::path& configPath)
+    -> std::expected<Json, std::string> {
     std::ifstream input(configPath);
-    if (!input)
-    {
+    if (!input) {
         return std::unexpected("Failed to open config file: " + configPath.string());
     }
 
-    try
-    {
+    try {
         return Json::parse(input);
-    }
-    catch (const Json::exception& error)
-    {
-        return std::unexpected("Failed to parse JSON config file " + configPath.string() + ": " + error.what());
+    } catch (const Json::exception& error) {
+        return std::unexpected("Failed to parse JSON config file " + configPath.string() + ": " +
+                               error.what());
     }
 }
 
-[[nodiscard]] auto objectAt(const Json& object, std::string_view key) -> const Json*
-{
-    if (!object.is_object())
-    {
+[[nodiscard]] auto objectAt(const Json& object, std::string_view key) -> const Json* {
+    if (!object.is_object()) {
         return nullptr;
     }
 
@@ -53,15 +44,12 @@ using Json = nlohmann::json;
     return it != object.end() && it->is_object() ? &(*it) : nullptr;
 }
 
-[[nodiscard]] auto objectAt(const Json* object, std::string_view key) -> const Json*
-{
+[[nodiscard]] auto objectAt(const Json* object, std::string_view key) -> const Json* {
     return object != nullptr ? objectAt(*object, key) : nullptr;
 }
 
-[[nodiscard]] auto valueAt(const Json* object, std::string_view key) -> const Json*
-{
-    if (object == nullptr || !object->is_object())
-    {
+[[nodiscard]] auto valueAt(const Json* object, std::string_view key) -> const Json* {
+    if (object == nullptr || !object->is_object()) {
         return nullptr;
     }
 
@@ -69,128 +57,101 @@ using Json = nlohmann::json;
     return it != object->end() && !it->is_null() ? &(*it) : nullptr;
 }
 
-[[nodiscard]] auto getString(const Json* object, std::string_view key, std::string fallback) -> std::string
-{
+[[nodiscard]] auto getString(const Json* object, std::string_view key, std::string fallback)
+    -> std::string {
     const auto* value = valueAt(object, key);
     return value != nullptr && value->is_string() ? value->get<std::string>() : std::move(fallback);
 }
 
-[[nodiscard]] auto getBool(const Json* object, std::string_view key, bool fallback) -> bool
-{
+[[nodiscard]] auto getBool(const Json* object, std::string_view key, bool fallback) -> bool {
     const auto* value = valueAt(object, key);
-    if (value == nullptr)
-    {
+    if (value == nullptr) {
         return fallback;
     }
 
-    if (value->is_boolean())
-    {
+    if (value->is_boolean()) {
         return value->get<bool>();
     }
-    if (value->is_number_integer())
-    {
+    if (value->is_number_integer()) {
         return value->get<int>() != 0;
     }
-    if (value->is_string())
-    {
+    if (value->is_string()) {
         const auto normalized = normalizeBool(value->get<std::string>());
-        if (normalized == "true" || normalized == "1" || normalized == "yes" || normalized == "on")
-        {
+        if (normalized == "true" || normalized == "1" || normalized == "yes" ||
+            normalized == "on") {
             return true;
         }
-        if (normalized == "false" || normalized == "0" || normalized == "no" || normalized == "off")
-        {
+        if (normalized == "false" || normalized == "0" || normalized == "no" ||
+            normalized == "off") {
             return false;
         }
     }
     return fallback;
 }
 
-[[nodiscard]] auto getDouble(const Json* object, std::string_view key, double fallback) -> double
-{
+[[nodiscard]] auto getDouble(const Json* object, std::string_view key, double fallback) -> double {
     const auto* value = valueAt(object, key);
-    if (value == nullptr)
-    {
+    if (value == nullptr) {
         return fallback;
     }
 
-    try
-    {
-        if (value->is_number())
-        {
+    try {
+        if (value->is_number()) {
             return value->get<double>();
         }
-        if (value->is_string())
-        {
+        if (value->is_string()) {
             return std::stod(value->get<std::string>());
         }
-    }
-    catch (...)
-    {
+    } catch (...) {
     }
     return fallback;
 }
 
-[[nodiscard]] auto getFloat(const Json* object, std::string_view key, float fallback) -> float
-{
+[[nodiscard]] auto getFloat(const Json* object, std::string_view key, float fallback) -> float {
     return static_cast<float>(getDouble(object, key, fallback));
 }
 
-[[nodiscard]] auto getInt(const Json* object, std::string_view key, int fallback) -> int
-{
+[[nodiscard]] auto getInt(const Json* object, std::string_view key, int fallback) -> int {
     const auto* value = valueAt(object, key);
-    if (value == nullptr)
-    {
+    if (value == nullptr) {
         return fallback;
     }
 
-    try
-    {
+    try {
         long long parsed = 0;
-        if (value->is_number_integer())
-        {
+        if (value->is_number_integer()) {
             parsed = value->get<long long>();
-        }
-        else if (value->is_string())
-        {
+        } else if (value->is_string()) {
             parsed = std::stoll(value->get<std::string>());
-        }
-        else
-        {
+        } else {
             return fallback;
         }
 
-        if (parsed < std::numeric_limits<int>::min() || parsed > std::numeric_limits<int>::max())
-        {
+        if (parsed < std::numeric_limits<int>::min() || parsed > std::numeric_limits<int>::max()) {
             return fallback;
         }
         return static_cast<int>(parsed);
-    }
-    catch (...)
-    {
+    } catch (...) {
         return fallback;
     }
 }
 
-[[nodiscard]] auto getUInt16(const Json* object, std::string_view key, uint16_t fallback) -> uint16_t
-{
+[[nodiscard]] auto getUInt16(const Json* object, std::string_view key, uint16_t fallback)
+    -> uint16_t {
     const auto value = getInt(object, key, fallback);
-    if (value < 0 || value > static_cast<int>(std::numeric_limits<uint16_t>::max()))
-    {
+    if (value < 0 || value > static_cast<int>(std::numeric_limits<uint16_t>::max())) {
         return fallback;
     }
     return static_cast<uint16_t>(value);
 }
 
-[[nodiscard]] auto getPath(const Json* object,
-                           std::string_view key,
-                           const std::filesystem::path& fallback) -> std::filesystem::path
-{
+[[nodiscard]] auto getPath(const Json* object, std::string_view key,
+                           const std::filesystem::path& fallback) -> std::filesystem::path {
     return getString(object, key, fallback.string());
 }
 
-[[nodiscard]] auto loadSerial(const Json* object, std::string_view key, SerialConfig fallback) -> SerialConfig
-{
+[[nodiscard]] auto loadSerial(const Json* object, std::string_view key, SerialConfig fallback)
+    -> SerialConfig {
     const auto* section = objectAt(object, key);
     fallback.portName = getString(section, "portName", fallback.portName);
     fallback.baudRate = getInt(section, "baudRate", fallback.baudRate);
@@ -199,10 +160,8 @@ using Json = nlohmann::json;
     return fallback;
 }
 
-[[nodiscard]] auto loadEndpoint(const Json* object,
-                                std::string_view key,
-                                UdpEndpointConfig fallback) -> UdpEndpointConfig
-{
+[[nodiscard]] auto loadEndpoint(const Json* object, std::string_view key,
+                                UdpEndpointConfig fallback) -> UdpEndpointConfig {
     const auto* section = objectAt(object, key);
     fallback.localIp = getString(section, "localIp", fallback.localIp);
     fallback.localPort = getUInt16(section, "localPort", fallback.localPort);
@@ -211,8 +170,7 @@ using Json = nlohmann::json;
     return fallback;
 }
 
-[[nodiscard]] auto serialToJson(const SerialConfig& config) -> Json
-{
+[[nodiscard]] auto serialToJson(const SerialConfig& config) -> Json {
     return {
         {"portName", config.portName},
         {"baudRate", config.baudRate},
@@ -221,8 +179,7 @@ using Json = nlohmann::json;
     };
 }
 
-[[nodiscard]] auto endpointToJson(const UdpEndpointConfig& config) -> Json
-{
+[[nodiscard]] auto endpointToJson(const UdpEndpointConfig& config) -> Json {
     return {
         {"localIp", config.localIp},
         {"localPort", config.localPort},
@@ -231,18 +188,15 @@ using Json = nlohmann::json;
     };
 }
 
-} // namespace
+}  // namespace
 
-auto Config::load(const std::filesystem::path& configPath) -> std::expected<void, std::string>
-{
-    if (!std::filesystem::exists(configPath))
-    {
+auto Config::load(const std::filesystem::path& configPath) -> std::expected<void, std::string> {
+    if (!std::filesystem::exists(configPath)) {
         return std::unexpected("Config file not found: " + configPath.string());
     }
 
     auto parsed = parseJson(configPath);
-    if (!parsed)
-    {
+    if (!parsed) {
         return std::unexpected(parsed.error());
     }
 
@@ -269,13 +223,15 @@ auto Config::load(const std::filesystem::path& configPath) -> std::expected<void
     m_commNet.exchange = loadEndpoint(commNet, "exchange", {"", 0, "192.168.1.3", 5000});
     m_commNet.errorDiag = loadEndpoint(commNet, "errorDiag", {"", 0, "192.168.1.4", 5001});
     m_commNet.atmos = loadEndpoint(commNet, "atmos", {"", 0, "192.168.1.5", 5002});
-    m_commNet.heartbeat = loadEndpoint(commNet, "heartbeat", {"", 0, "192.168.1.6", 5003});
+    m_commNet.heartbeat = loadEndpoint(commNet, "heartbeat", {"", 15361, "0.0.0.0", 15362});
 
     m_optics.imageWidth = getInt(optics, "imageWidth", 6144);
     m_optics.imageHeight = getInt(optics, "imageHeight", 6144);
     m_optics.pixelScale = getFloat(optics, "pixelScale", 0.0003453f);
-    m_optics.fovCenterX = getFloat(optics, "fovCenterX", static_cast<float>(m_optics.imageWidth) / 2.0f);
-    m_optics.fovCenterY = getFloat(optics, "fovCenterY", static_cast<float>(m_optics.imageHeight) / 2.0f);
+    m_optics.fovCenterX =
+        getFloat(optics, "fovCenterX", static_cast<float>(m_optics.imageWidth) / 2.0f);
+    m_optics.fovCenterY =
+        getFloat(optics, "fovCenterY", static_cast<float>(m_optics.imageHeight) / 2.0f);
 
     m_observatory.longitude = getDouble(observatory, "longitude", 0.0);
     m_observatory.latitude = getDouble(observatory, "latitude", 0.0);
@@ -297,10 +253,8 @@ auto Config::load(const std::filesystem::path& configPath) -> std::expected<void
     return {};
 }
 
-auto Config::save() -> std::expected<void, std::string>
-{
-    if (m_paths.configFile.empty())
-    {
+auto Config::save() -> std::expected<void, std::string> {
+    if (m_paths.configFile.empty()) {
         return std::unexpected("No config file path set");
     }
 
@@ -355,13 +309,13 @@ auto Config::save() -> std::expected<void, std::string>
     };
 
     std::ofstream output(m_paths.configFile);
-    if (!output)
-    {
-        return std::unexpected("Failed to open config file for writing: " + m_paths.configFile.string());
+    if (!output) {
+        return std::unexpected("Failed to open config file for writing: " +
+                               m_paths.configFile.string());
     }
 
     output << outputJson.dump(4) << '\n';
     return {};
 }
 
-} // namespace Dss::Core
+}  // namespace Dss::Core

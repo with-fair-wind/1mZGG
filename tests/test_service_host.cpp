@@ -1,43 +1,34 @@
-#include "dss/core/service_host.h"
-
-#include <gtest/gtest.h>
-
 #include <memory>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
-namespace
-{
+#include <gtest/gtest.h>
 
-class RecordingService final : public Dss::Core::IService
-{
+#include "dss/core/service_host.h"
+
+namespace {
+
+class RecordingService final : public Dss::Core::IService {
 public:
-    RecordingService(std::string serviceName, std::vector<std::string>& events, bool failStart = false)
-        : m_name(std::move(serviceName))
-        , m_events(events)
-        , m_failStart(failStart)
-    {
-    }
+    RecordingService(std::string serviceName, std::vector<std::string>& events,
+                     bool failStart = false)
+        : m_name(std::move(serviceName)), m_events(events), m_failStart(failStart) {}
 
-    [[nodiscard]] auto name() const -> std::string_view override
-    {
+    [[nodiscard]] auto name() const -> std::string_view override {
         return m_name;
     }
 
-    auto start() -> std::expected<void, std::string> override
-    {
+    auto start() -> std::expected<void, std::string> override {
         m_events.push_back("start:" + m_name);
-        if (m_failStart)
-        {
+        if (m_failStart) {
             return std::unexpected("boom");
         }
         return {};
     }
 
-    void stop() noexcept override
-    {
+    void stop() noexcept override {
         m_events.push_back("stop:" + m_name);
     }
 
@@ -47,10 +38,9 @@ private:
     bool m_failStart = false;
 };
 
-} // namespace
+}  // namespace
 
-TEST(ServiceHost, StartsAndStopsServicesInLifecycleOrder)
-{
+TEST(ServiceHost, StartsAndStopsServicesInLifecycleOrder) {
     std::vector<std::string> events;
     Dss::Core::ServiceHost host;
     ASSERT_TRUE(host.add(std::make_shared<RecordingService>("first", events)));
@@ -59,11 +49,11 @@ TEST(ServiceHost, StartsAndStopsServicesInLifecycleOrder)
     ASSERT_TRUE(host.startAll());
     host.stopAll();
 
-    EXPECT_EQ(events, (std::vector<std::string>{"start:first", "start:second", "stop:second", "stop:first"}));
+    EXPECT_EQ(events, (std::vector<std::string>{"start:first", "start:second", "stop:second",
+                                                "stop:first"}));
 }
 
-TEST(ServiceHost, StopsAlreadyStartedServicesWhenStartFails)
-{
+TEST(ServiceHost, StopsAlreadyStartedServicesWhenStartFails) {
     std::vector<std::string> events;
     Dss::Core::ServiceHost host;
     ASSERT_TRUE(host.add(std::make_shared<RecordingService>("first", events)));
@@ -75,8 +65,7 @@ TEST(ServiceHost, StopsAlreadyStartedServicesWhenStartFails)
     EXPECT_EQ(events, (std::vector<std::string>{"start:first", "start:second", "stop:first"}));
 }
 
-TEST(ServiceHost, RejectsServicesAddedAfterStart)
-{
+TEST(ServiceHost, RejectsServicesAddedAfterStart) {
     std::vector<std::string> events;
     Dss::Core::ServiceHost host;
     ASSERT_TRUE(host.add(std::make_shared<RecordingService>("first", events)));

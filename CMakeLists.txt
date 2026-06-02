@@ -308,6 +308,11 @@ if(DSS_BUILD_APP)
         set(CMAKE_AUTORCC ON)
         set(CMAKE_AUTOUIC ON)
 
+        if(Qt6Core_DIR)
+            get_filename_component(DSS_QT_RUNTIME_ROOT "${Qt6Core_DIR}/../../.." ABSOLUTE)
+            set(DSS_QT_RUNTIME_BIN_DIR "${DSS_QT_RUNTIME_ROOT}/bin")
+        endif()
+
         if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/ElaWidgetTools/CMakeLists.txt)
             add_subdirectory(third_party/ElaWidgetTools)
             set(DSS_HAS_ELA ON)
@@ -395,6 +400,9 @@ if(DSS_BUILD_APP)
     dss_target_defaults(dss_network_qt)
     dss_qt_pch(dss_network_qt)
     target_link_libraries(dss_network_qt PUBLIC dss_core Qt6::Core Qt6::Network)
+
+    target_compile_definitions(dss_app PRIVATE DSS_BUILD_APP=1)
+    target_link_libraries(dss_app PRIVATE dss_comm_qt dss_network_qt)
 
     add_library(dss_ui_qt STATIC ${DSS_UI_QT_SOURCES} ${DSS_UI_QT_HEADERS})
     dss_target_defaults(dss_ui_qt)

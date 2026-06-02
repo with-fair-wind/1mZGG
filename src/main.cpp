@@ -1,3 +1,6 @@
+#include <QApplication>
+#include <QDebug>
+
 #include "dss/app/application_context.h"
 #include "dss/core/config.h"
 #include "dss/core/events.h"
@@ -5,15 +8,11 @@
 #include "dss/ui/main_window.h"
 #include "dss/ui/view_model.h"
 
-#include <QApplication>
-#include <QDebug>
-
 #ifdef DSS_HAS_ELA
 #include <ElaApplication.h>
 #endif
 
-int main(int argc, char* argv[])
-{
+int main(int argc, char* argv[]) {
 #ifdef DSS_HAS_ELA
     ElaApplication::getInstance()->init();
 #endif
@@ -26,9 +25,9 @@ int main(int argc, char* argv[])
     Dss::App::ApplicationContext context;
     context.wireLogger();
 
-    auto configPath = QApplication::applicationDirPath().toStdString() + "/../config/SystemInit.json";
-    if (auto result = context.loadConfig(configPath); !result)
-    {
+    auto configPath =
+        QApplication::applicationDirPath().toStdString() + "/../config/SystemInit.json";
+    if (auto result = context.loadConfig(configPath); !result) {
         qWarning() << "Config load warning:" << QString::fromStdString(result.error());
     }
 
@@ -37,8 +36,10 @@ int main(int argc, char* argv[])
     initDialog.setStatus("Config", true);
     initDialog.setProgress(10);
 
-    // TODO: Phase 3 - Initialize serial channels and register with ServiceRegistry
-    // TODO: Phase 3 - Initialize network channels
+    context.registerCommunicationServices();
+    initDialog.setStatus("Communication", true);
+    initDialog.setProgress(35);
+
     // TODO: Phase 4 - Create ImageProcessor and register strategies
     // TODO: Phase 5 - Initialize CudaDeviceManager
 

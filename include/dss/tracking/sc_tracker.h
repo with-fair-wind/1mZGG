@@ -1,19 +1,20 @@
 #pragma once
 
-#include "dss/tracking/i_tracking_strategy.h"
-
 #include <deque>
 
-namespace Dss::Tracking
-{
+#include "dss/tracking/i_tracking_strategy.h"
 
-class ScTracker final : public ITrackingStrategy
-{
+namespace Dss::Tracking {
+
+class ScTracker final : public ITrackingStrategy {
 public:
     explicit ScTracker(const Dss::Core::TrackingSettings& settings);
 
-    auto track(const Dss::Core::FrameMeasurements& measurements) -> std::vector<Dss::Core::TargetInfo> override;
-    [[nodiscard]] auto mode() const -> Dss::Core::TrackMode override { return Dss::Core::TrackMode::SpaceCatalog; }
+    auto track(const Dss::Core::FrameMeasurements& measurements)
+        -> std::vector<Dss::Core::TargetInfo> override;
+    [[nodiscard]] auto mode() const -> Dss::Core::TrackMode override {
+        return Dss::Core::TrackMode::SpaceCatalog;
+    }
     void reset() override;
 
 private:
@@ -22,4 +23,4 @@ private:
     Dss::Core::TargetInfo m_currentTarget{};
 };
 
-} // namespace Dss::Tracking
+}  // namespace Dss::Tracking

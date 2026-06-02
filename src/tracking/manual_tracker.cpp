@@ -1,18 +1,13 @@
 #include "dss/tracking/manual_tracker.h"
 
-namespace Dss::Tracking
-{
+namespace Dss::Tracking {
 
-ManualTracker::ManualTracker(const Dss::Core::TrackingSettings& settings)
-    : m_settings(settings)
-{
-}
+ManualTracker::ManualTracker(const Dss::Core::TrackingSettings& settings) : m_settings(settings) {}
 
-auto ManualTracker::track(const Dss::Core::FrameMeasurements& measurements) -> std::vector<Dss::Core::TargetInfo>
-{
+auto ManualTracker::track(const Dss::Core::FrameMeasurements& measurements)
+    -> std::vector<Dss::Core::TargetInfo> {
     m_fifo.push_back(measurements);
-    if (m_fifo.size() > 10)
-    {
+    if (m_fifo.size() > 10) {
         m_fifo.pop_front();
     }
 
@@ -27,16 +22,14 @@ auto ManualTracker::track(const Dss::Core::FrameMeasurements& measurements) -> s
     return {m_currentTarget};
 }
 
-void ManualTracker::reset()
-{
+void ManualTracker::reset() {
     m_fifo.clear();
     m_currentTarget = {};
 }
 
-void ManualTracker::setManualTarget(const Dss::Core::MeasuredBlob& blob)
-{
+void ManualTracker::setManualTarget(const Dss::Core::MeasuredBlob& blob) {
     std::lock_guard lock(m_blobMutex);
     m_manualBlob = blob;
 }
 
-} // namespace Dss::Tracking
+}  // namespace Dss::Tracking

@@ -1,15 +1,10 @@
 #include "dss/comm/servo_channel.h"
 
-namespace Dss::Comm
-{
+namespace Dss::Comm {
 
-ServoChannel::ServoChannel(MessageBus& bus)
-    : SerialWorkerBase(bus)
-{
-}
+ServoChannel::ServoChannel(MessageBus& bus) : SerialWorkerBase(bus) {}
 
-void ServoChannel::setTrackResult(const Dss::Core::TargetInfo& target)
-{
+void ServoChannel::setTrackResult(const Dss::Core::TargetInfo& target) {
     {
         std::lock_guard lock(m_targetMutex);
         m_currentTarget = target;
@@ -17,16 +12,25 @@ void ServoChannel::setTrackResult(const Dss::Core::TargetInfo& target)
     requestSend();
 }
 
-void ServoChannel::decodeFrame(std::span<const uint8_t> /*data*/)
-{
+void ServoChannel::decodeFrame(std::span<const uint8_t> /*data*/) {
     // Servo receive path not used in original code
 }
 
-void ServoChannel::encodeFrame(std::span<uint8_t> buffer)
-{
-    // TODO: encode tracking offsets/speeds from m_currentTarget into 14-byte frame
+void ServoChannel::encodeFrame(std::span<uint8_t> buffer) {
     std::lock_guard lock(m_targetMutex);
-    (void)buffer;
+
+    ServoCorrection correction{};
+    correction.distanceValid = m_currentTarget.living && m_currentTarget.validity >= 0.8F;
+    correction.speedValid = correction.distanceValid;
+    if (correction.distanceValid) {
+        correction.distanceArcsec = m_currentTarget.lastRmDm;
+        correction.speedArcsecPerSec = Dss::Core::Vec2f{
+            m_currentTarget.predictedSpdAe.x * 3600.0F,
+            m_currentTarget.predictedSpdAe.y * 3600.0F,
+        };
+    }
+
+    (void)encodeServoCorrection(correction, buffer);
 }
 
-} // namespace Dss::Comm
+}  // namespace Dss::Comm

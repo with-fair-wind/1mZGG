@@ -1,15 +1,13 @@
 #pragma once
 
-#include "dss/processing/i_processing_strategy.h"
-
 #include <memory>
 #include <string_view>
 
-namespace Dss::Processing
-{
+#include "dss/processing/i_processing_strategy.h"
 
-class ProcessingPipeline
-{
+namespace Dss::Processing {
+
+class ProcessingPipeline {
 public:
     void setBackend(std::unique_ptr<IProcessingStrategy> backend);
 
@@ -22,4 +20,4 @@ private:
     std::unique_ptr<IProcessingStrategy> m_backend;
 };
 
-} // namespace Dss::Processing
+}  // namespace Dss::Processing

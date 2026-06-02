@@ -1,10 +1,5 @@
 #pragma once
 
-#include "dss/comm/frame_codec.h"
-#include "dss/comm/i_serial_channel.h"
-#include "dss/core/constants.h"
-#include "dss/core/event_bus.h"
-
 #include <atomic>
 #include <cstdint>
 #include <expected>
@@ -16,13 +11,16 @@
 #include <thread>
 #include <vector>
 
+#include "dss/comm/frame_codec.h"
+#include "dss/comm/i_serial_channel.h"
+#include "dss/core/constants.h"
+#include "dss/core/event_bus.h"
+
 class QSerialPort;
 
-namespace Dss::Comm
-{
+namespace Dss::Comm {
 
-class SerialWorkerBase : public ISerialChannel
-{
+class SerialWorkerBase : public ISerialChannel {
 public:
     using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;
 
@@ -37,8 +35,12 @@ public:
     [[nodiscard]] bool isOpen() const override;
     [[nodiscard]] auto status() const -> Dss::Core::Status override;
 
-    [[nodiscard]] int recvFramesPerSec() const { return m_recvFps.load(); }
-    [[nodiscard]] int sendFramesPerSec() const { return m_sendFps.load(); }
+    [[nodiscard]] int recvFramesPerSec() const {
+        return m_recvFps.load();
+    }
+    [[nodiscard]] int sendFramesPerSec() const {
+        return m_sendFps.load();
+    }
 
 protected:
     [[nodiscard]] virtual auto recvFrameSize() const -> size_t override = 0;
@@ -49,7 +51,9 @@ protected:
 
     void requestSend();
 
-    MessageBus& bus() { return m_bus; }
+    MessageBus& bus() {
+        return m_bus;
+    }
 
 private:
     void workerLoop(std::stop_token token);
@@ -71,4 +75,4 @@ private:
     std::atomic<int> m_sendCount{0};
 };
 
-} // namespace Dss::Comm
+}  // namespace Dss::Comm

@@ -1,19 +1,17 @@
 #pragma once
 
-#include "dss/core/constants.h"
-#include "dss/core/config_types.h"
-
 #include <cstddef>
 #include <expected>
 #include <string>
 
-namespace Dss::Comm
-{
+#include "dss/core/config_types.h"
+#include "dss/core/constants.h"
+
+namespace Dss::Comm {
 
 using SerialConfig = Dss::Core::SerialConfig;
 
-class ISerialChannel
-{
+class ISerialChannel {
 public:
     virtual ~ISerialChannel() = default;
 
@@ -26,4 +24,4 @@ public:
     [[nodiscard]] virtual auto sendFrameSize() const -> size_t = 0;
 };
 
-} // namespace Dss::Comm
+}  // namespace Dss::Comm

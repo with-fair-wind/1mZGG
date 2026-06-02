@@ -1,16 +1,14 @@
 #pragma once
 
-#include "dss/core/types.h"
-
 #include <cstdint>
 #include <memory>
 #include <vector>
 
-namespace Dss::Processing
-{
+#include "dss/core/types.h"
 
-struct FramePacket
-{
+namespace Dss::Processing {
+
+struct FramePacket {
     uint64_t frameSeq = 0;
     uint32_t width = 0;
     uint32_t height = 0;
@@ -27,4 +25,4 @@ struct FramePacket
     std::vector<Dss::Core::MeasuredBlob> starBlobs;
 };
 
-} // namespace Dss::Processing
+}  // namespace Dss::Processing

@@ -3,12 +3,10 @@
 #include <cstdint>
 #include <numbers>
 
-namespace Dss::Core
-{
+namespace Dss::Core {
 
 // --- Init file read status ---
-enum class InitStatus : int
-{
+enum class InitStatus : int {
     Ok = 1,
     ErrorCommNetSettings = 0,
     ErrorPath = -1,
@@ -20,23 +18,20 @@ enum class InitStatus : int
 };
 
 // --- Tri-state operational status ---
-enum class Status : int
-{
+enum class Status : int {
     Init = -1,
     Error = 0,
     Ok = 1,
 };
 
 // --- Camera trigger mode ---
-enum class TriggerMode : int
-{
+enum class TriggerMode : int {
     External = 0,
     Free = 1,
 };
 
 // --- Serial display mode ---
-enum class CommDisplayMode : int
-{
+enum class CommDisplayMode : int {
     PortInit = 0,
     Recv = 1,
     Send = 2,
@@ -44,16 +39,14 @@ enum class CommDisplayMode : int
 };
 
 // --- Image processing mode ---
-enum class ProcessingMode : int
-{
+enum class ProcessingMode : int {
     None = 0,
     Diff = 1,
     Direct = 3,
 };
 
 // --- Tracking mode ---
-enum class TrackMode : int
-{
+enum class TrackMode : int {
     Init = -1,
     Geo = 0,
     SpaceCatalog = 3,
@@ -78,4 +71,4 @@ inline constexpr double SolarSiderealRatio = 1.00273790935;
 inline constexpr uint8_t FrameHeader = 0x7E;
 inline constexpr uint8_t FrameTail = 0xE7;
 
-} // namespace Dss::Core
+}  // namespace Dss::Core

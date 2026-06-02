@@ -1,87 +1,109 @@
-BasedOnStyle: Microsoft
+BasedOnStyle: Google
 Language: Cpp
 Standard: Latest
+InsertNewlineAtEOF: true
 
-IndentWidth: 4
-TabWidth: 4
-UseTab: Never
-ColumnLimit: 120
+# -----------------------------------------------------------------------------
+# 缩进与列宽
+# -----------------------------------------------------------------------------
+IndentWidth: 4 # 一级缩进 4 个空格（Google 默认 2，此处覆盖）
+TabWidth: 4 # Tab 显示宽度（仅在 UseTab 非 Never 时生效）
+UseTab: Never # 只用空格，不用 Tab（跨编辑器一致性最好）
+ColumnLimit: 100 # 每行最大宽度，超过会自动换行；0 表示不限
 
+# -----------------------------------------------------------------------------
+# 短结构是否允许写在单行
+# -----------------------------------------------------------------------------
+# 访问修饰符（public/private）相对类体的偏移：-4 表示反向缩进 4 列，与 class 对齐
 AccessModifierOffset: -4
-NamespaceIndentation: None
-FixNamespaceComments: true
 
-AllowShortFunctionsOnASingleLine: Inline
+# 短函数单行：None | InlineOnly | Empty | Inline | All
+# Empty 表示只允许「空函数体」单行：void noop() {}
+AllowShortFunctionsOnASingleLine: Empty
+
+# 短 if 语句单行：Never 永远换行，禁止 if (x) return;
 AllowShortIfStatementsOnASingleLine: Never
+
+# 短循环单行：false 永远换行
 AllowShortLoopsOnASingleLine: false
-AllowShortBlocksOnASingleLine: Empty
-AllowShortCaseLabelsOnASingleLine: true
-AllowShortLambdasOnASingleLine: Inline
 
-AlignAfterOpenBracket: Align
-AlignConsecutiveAssignments: false
-AlignConsecutiveDeclarations: false
-AlignOperands: Align
-AlignTrailingComments: true
+# 短 lambda 单行：None | Empty | Inline | All
+# All 允许任何短 lambda 单行：auto f = [](int x) { return x + 1; };
+AllowShortLambdasOnASingleLine: All
 
-BinPackArguments: false
-BinPackParameters: false
-PackConstructorInitializers: NextLine
+# -----------------------------------------------------------------------------
+# 大括号与换行风格
+# -----------------------------------------------------------------------------
+# 大括号位置：Attach（附加在语句尾，K&R 风格）| Linux | Allman | GNU | Stroustrup 等
+# Attach: if (x) {     <-- 大括号紧跟
+BreakBeforeBraces: Attach
 
-BreakBeforeBraces: Custom
-BraceWrapping:
-  AfterCaseLabel: false
-  AfterClass: true
-  AfterControlStatement: Always
-  AfterEnum: true
-  AfterFunction: true
-  AfterNamespace: true
-  AfterStruct: true
-  AfterUnion: true
-  BeforeCatch: true
-  BeforeElse: true
-  BeforeLambdaBody: false
-  IndentBraces: false
-  SplitEmptyFunction: false
-  SplitEmptyRecord: false
-  SplitEmptyNamespace: false
+# 构造函数初始化列表换行位置：BeforeColon | BeforeComma | AfterColon | AfterComma
+# BeforeColon: Foo(int x)
+#                  : x_(x)
+#                  , y_(0)
+BreakConstructorInitializers: BeforeColon
 
-BreakConstructorInitializers: BeforeComma
-BreakInheritanceList: BeforeComma
+# 继承列表换行位置：同上
+# BeforeColon: class Foo
+#                  : public Bar
+#                  , public Baz
+BreakInheritanceList: BeforeColon
 
-IncludeBlocks: Regroup
-IncludeCategories:
-  - Regex: '^<dss/'
-    Priority: 2
-  - Regex: '^<Q'
-    Priority: 3
-  - Regex: '^<'
-    Priority: 4
-  - Regex: '^"'
-    Priority: 1
-
-SortIncludes: CaseSensitive
-SortUsingDeclarations: true
-
-SpaceAfterCStyleCast: false
-SpaceAfterTemplateKeyword: true
-SpaceBeforeAssignmentOperators: true
-SpaceBeforeParens: ControlStatements
-SpaceInEmptyBlock: false
-SpacesInAngles: Never
-SpacesInContainerLiterals: false
-
-PointerAlignment: Left
-ReferenceAlignment: Left
+# -----------------------------------------------------------------------------
+# 指针与引用对齐
+# -----------------------------------------------------------------------------
+# 是否从代码中推导对齐风格：false 表示严格遵循下面的设置
 DerivePointerAlignment: false
-QualifierAlignment: Left
 
+# 指针 * 靠左：int* p   （而非 int *p 或 int * p）
+PointerAlignment: Left
+
+# 引用 & 靠左：int& r
+ReferenceAlignment: Left
+
+# -----------------------------------------------------------------------------
+# 空格控制
+# -----------------------------------------------------------------------------
+# template 关键字后是否加空格：true 表示 template <typename T>
+SpaceAfterTemplateKeyword: true
+
+# C++11 列表初始化前是否加空格：false 表示 Foo{1, 2}（而非 Foo {1, 2}）
 SpaceBeforeCpp11BracedList: false
+
+# range-based for 的冒号前是否加空格：true 表示 for (auto x : v)
 SpaceBeforeRangeBasedForLoopColon: true
 
-EmptyLineAfterAccessModifier: Never
-EmptyLineBeforeAccessModifier: LogicalBlock
-SeparateDefinitionBlocks: Always
+# -----------------------------------------------------------------------------
+# include 头文件排序与分组
+# -----------------------------------------------------------------------------
+# include 块处理：Preserve（保留原样）| Merge（合并相邻块）| Regroup（按下列规则重排+分组）
+# Regroup 会自动按 IncludeCategories 重排，相同 Priority 的内部按字典序排
+IncludeBlocks: Regroup
 
-InsertBraces: true
-InsertNewlineAtEOF: true
+# include 分类规则：Priority 数字越小越靠前；同 Priority 内部按字典序
+# 当前分组：
+#   1. C++ 标准库（<iostream>, <vector>, <cstdint>...）
+#   2. 第三方/系统 .h/.hpp 头（<gtest/gtest.h>, <fmt/format.h>...）
+#   3. 项目本地头（"my_header.h"）
+IncludeCategories:
+  - Regex: "^<[a-z_]+>$" # 纯小写无后缀：标准库
+    Priority: 1
+  - Regex: '^<.*\.h(pp)?>$' # 尖括号 + .h/.hpp：第三方
+    Priority: 2
+  - Regex: '^".*"$' # 双引号：项目本地
+    Priority: 3
+
+# include 排序方式：Never | CaseSensitive | CaseInsensitive
+# CaseSensitive: 'A' 排在 'a' 前面（ASCII 序）
+SortIncludes: CaseSensitive
+
+# -----------------------------------------------------------------------------
+# 命名空间
+# -----------------------------------------------------------------------------
+# 自动在 namespace 闭合 } 后添加 // namespace foo 注释
+FixNamespaceComments: true
+
+# 命名空间内部缩进：None | Inner | All
+# None: namespace foo { 内部不额外缩进（避免深层嵌套时缩进过深）
+NamespaceIndentation: None

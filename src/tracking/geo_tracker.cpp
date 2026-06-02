@@ -1,23 +1,17 @@
 #include "dss/tracking/geo_tracker.h"
 
-namespace Dss::Tracking
-{
+namespace Dss::Tracking {
 
-GeoTracker::GeoTracker(const Dss::Core::TrackingSettings& settings)
-    : m_settings(settings)
-{
-}
+GeoTracker::GeoTracker(const Dss::Core::TrackingSettings& settings) : m_settings(settings) {}
 
-auto GeoTracker::track(const Dss::Core::FrameMeasurements& measurements) -> std::vector<Dss::Core::TargetInfo>
-{
+auto GeoTracker::track(const Dss::Core::FrameMeasurements& measurements)
+    -> std::vector<Dss::Core::TargetInfo> {
     m_fifoTarget.push_back(measurements);
     m_fifoStar.push_back(measurements);
-    if (m_fifoTarget.size() > 10)
-    {
+    if (m_fifoTarget.size() > 10) {
         m_fifoTarget.pop_front();
     }
-    if (m_fifoStar.size() > 5)
-    {
+    if (m_fifoStar.size() > 5) {
         m_fifoStar.pop_front();
     }
 
@@ -25,21 +19,17 @@ auto GeoTracker::track(const Dss::Core::FrameMeasurements& measurements) -> std:
 
     calcStarSpeed();
 
-    if (!m_targetFound)
-    {
+    if (!m_targetFound) {
         assoc4();
         findTargets();
-    }
-    else
-    {
+    } else {
         trackTargets();
     }
 
     return m_targets;
 }
 
-void GeoTracker::reset()
-{
+void GeoTracker::reset() {
     m_fifoTarget.clear();
     m_fifoStar.clear();
     m_targets.clear();
@@ -50,28 +40,24 @@ void GeoTracker::reset()
     m_frameSeq = 0;
 }
 
-int GeoTracker::calcStarSpeed()
-{
+int GeoTracker::calcStarSpeed() {
     // TODO: port from TrackAlgo::CalcStarSpd()
     return 0;
 }
 
-int GeoTracker::assoc4()
-{
+int GeoTracker::assoc4() {
     // TODO: port from TrackAlgo::GEO_Assoc4()
     return 0;
 }
 
-int GeoTracker::findTargets()
-{
+int GeoTracker::findTargets() {
     // TODO: port from TrackAlgo::GEO_FindTargets()
     return 0;
 }
 
-int GeoTracker::trackTargets()
-{
+int GeoTracker::trackTargets() {
     // TODO: port from TrackAlgo::GEO_TrackTargets()
     return 0;
 }
 
-} // namespace Dss::Tracking
+}  // namespace Dss::Tracking

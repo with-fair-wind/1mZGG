@@ -1,37 +1,31 @@
-#include "dss/processing/processing_pipeline.h"
-
 #include <gtest/gtest.h>
 
-namespace
-{
+#include "dss/processing/processing_pipeline.h"
 
-class RecordingStrategy final : public Dss::Processing::IProcessingStrategy
-{
+namespace {
+
+class RecordingStrategy final : public Dss::Processing::IProcessingStrategy {
 public:
     [[nodiscard]] auto process(const Dss::Processing::FramePacket& input)
-        -> Dss::Processing::ProcessingResult override
-    {
+        -> Dss::Processing::ProcessingResult override {
         Dss::Processing::ProcessingResult result;
         result.success = true;
         result.stats.maxVal = static_cast<double>(input.frameSeq);
         return result;
     }
 
-    [[nodiscard]] auto name() const -> std::string_view override
-    {
+    [[nodiscard]] auto name() const -> std::string_view override {
         return "recording";
     }
 
-    [[nodiscard]] auto mode() const -> Dss::Core::ProcessingMode override
-    {
+    [[nodiscard]] auto mode() const -> Dss::Core::ProcessingMode override {
         return Dss::Core::ProcessingMode::Direct;
     }
 };
 
-} // namespace
+}  // namespace
 
-TEST(ProcessingPipeline, ReportsEmptyBackendState)
-{
+TEST(ProcessingPipeline, ReportsEmptyBackendState) {
     Dss::Processing::ProcessingPipeline pipeline;
 
     EXPECT_FALSE(pipeline.hasBackend());
@@ -40,8 +34,7 @@ TEST(ProcessingPipeline, ReportsEmptyBackendState)
     EXPECT_FALSE(pipeline.process({}).success);
 }
 
-TEST(ProcessingPipeline, DelegatesProcessingToConfiguredBackend)
-{
+TEST(ProcessingPipeline, DelegatesProcessingToConfiguredBackend) {
     Dss::Processing::ProcessingPipeline pipeline;
     pipeline.setBackend(std::make_unique<RecordingStrategy>());
 

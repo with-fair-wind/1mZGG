@@ -10,8 +10,7 @@
 
 #include <memory>
 
-namespace Dss::Ui
-{
+namespace Dss::Ui {
 
 class ImageDisplay;
 class ImageDisplayCrop;
@@ -52,4 +51,4 @@ private:
     ImageDisplayCrop* m_imageDisplayCrop = nullptr;
 };
 
-} // namespace Dss::Ui
+}  // namespace Dss::Ui

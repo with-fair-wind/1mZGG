@@ -1,17 +1,15 @@
 #pragma once
 
+#include <string_view>
+#include <vector>
+
 #include "dss/core/constants.h"
 #include "dss/core/types.h"
 #include "dss/processing/frame_packet.h"
 
-#include <string_view>
-#include <vector>
+namespace Dss::Processing {
 
-namespace Dss::Processing
-{
-
-struct ProcessingResult
-{
+struct ProcessingResult {
     Dss::Core::ImageStats stats{};
     std::vector<Dss::Core::MeasuredBlob> targetBlobs;
     std::vector<Dss::Core::MeasuredBlob> starBlobs;
@@ -19,8 +17,7 @@ struct ProcessingResult
     bool success = false;
 };
 
-class IProcessingStrategy
-{
+class IProcessingStrategy {
 public:
     virtual ~IProcessingStrategy() = default;
 
@@ -29,4 +26,4 @@ public:
     [[nodiscard]] virtual auto mode() const -> Dss::Core::ProcessingMode = 0;
 };
 
-} // namespace Dss::Processing
+}  // namespace Dss::Processing

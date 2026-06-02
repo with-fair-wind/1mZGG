@@ -1,26 +1,22 @@
 #include "dss/processing/opencv_processing_strategy.h"
 
-#include <opencv2/core.hpp>
-#include <opencv2/imgproc.hpp>
-
 #include <algorithm>
 #include <cstddef>
 #include <limits>
 
-namespace Dss::Processing
-{
+#include <opencv2/core.hpp>
+#include <opencv2/imgproc.hpp>
 
-namespace
-{
+namespace Dss::Processing {
 
-[[nodiscard]] auto expectedPixelCount(const FramePacket& input) -> std::size_t
-{
+namespace {
+
+[[nodiscard]] auto expectedPixelCount(const FramePacket& input) -> std::size_t {
     return static_cast<std::size_t>(input.width) * static_cast<std::size_t>(input.height);
 }
 
 [[nodiscard]] auto makeBlob(const cv::Mat& stats, const cv::Mat& centroids, int label)
-    -> Dss::Core::MeasuredBlob
-{
+    -> Dss::Core::MeasuredBlob {
     const auto left = stats.at<int>(label, cv::CC_STAT_LEFT);
     const auto top = stats.at<int>(label, cv::CC_STAT_TOP);
     const auto width = stats.at<int>(label, cv::CC_STAT_WIDTH);
@@ -39,19 +35,15 @@ namespace
     return blob;
 }
 
-} // namespace
+}  // namespace
 
 OpenCvProcessingStrategy::OpenCvProcessingStrategy(OpenCvProcessingOptions options)
-    : m_options(options)
-{
-}
+    : m_options(options) {}
 
-auto OpenCvProcessingStrategy::process(const FramePacket& input) -> ProcessingResult
-{
+auto OpenCvProcessingStrategy::process(const FramePacket& input) -> ProcessingResult {
     ProcessingResult result{};
     const auto pixelCount = expectedPixelCount(input);
-    if (input.width == 0 || input.height == 0 || input.rawImage.size() != pixelCount)
-    {
+    if (input.width == 0 || input.height == 0 || input.rawImage.size() != pixelCount) {
         return result;
     }
 
@@ -73,22 +65,17 @@ auto OpenCvProcessingStrategy::process(const FramePacket& input) -> ProcessingRe
     result.stats.stdDev = stddev[0];
 
     cv::Mat display8;
-    if (maxValue > minValue)
-    {
+    if (maxValue > minValue) {
         const auto scale = 255.0 / (maxValue - minValue);
         raw16.convertTo(display8, CV_8U, scale, -minValue * scale);
-    }
-    else
-    {
+    } else {
         display8 = cv::Mat::zeros(rows, cols, CV_8UC1);
     }
 
     result.displayImage.assign(display8.data, display8.data + display8.total());
 
-    const auto threshold = std::clamp(
-        mean[0] + (m_options.thresholdSigma * stddev[0]),
-        0.0,
-        static_cast<double>(std::numeric_limits<uint16_t>::max()));
+    const auto threshold = std::clamp(mean[0] + (m_options.thresholdSigma * stddev[0]), 0.0,
+                                      static_cast<double>(std::numeric_limits<uint16_t>::max()));
 
     cv::Mat binary16;
     cv::threshold(raw16, binary16, threshold, 255.0, cv::THRESH_BINARY);
@@ -99,13 +86,12 @@ auto OpenCvProcessingStrategy::process(const FramePacket& input) -> ProcessingRe
     cv::Mat labels;
     cv::Mat stats;
     cv::Mat centroids;
-    const auto labelCount = cv::connectedComponentsWithStats(binary8, labels, stats, centroids, 8, CV_32S);
+    const auto labelCount =
+        cv::connectedComponentsWithStats(binary8, labels, stats, centroids, 8, CV_32S);
 
-    for (int label = 1; label < labelCount; ++label)
-    {
+    for (int label = 1; label < labelCount; ++label) {
         const auto area = stats.at<int>(label, cv::CC_STAT_AREA);
-        if (area < m_options.minArea || area > m_options.maxArea)
-        {
+        if (area < m_options.minArea || area > m_options.maxArea) {
             continue;
         }
         result.targetBlobs.push_back(makeBlob(stats, centroids, label));
@@ -115,14 +101,12 @@ auto OpenCvProcessingStrategy::process(const FramePacket& input) -> ProcessingRe
     return result;
 }
 
-auto OpenCvProcessingStrategy::name() const -> std::string_view
-{
+auto OpenCvProcessingStrategy::name() const -> std::string_view {
     return "opencv";
 }
 
-auto OpenCvProcessingStrategy::mode() const -> Dss::Core::ProcessingMode
-{
+auto OpenCvProcessingStrategy::mode() const -> Dss::Core::ProcessingMode {
     return Dss::Core::ProcessingMode::Direct;
 }
 
-} // namespace Dss::Processing
+}  // namespace Dss::Processing

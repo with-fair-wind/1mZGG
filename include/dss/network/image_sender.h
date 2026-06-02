@@ -1,8 +1,5 @@
 #pragma once
 
-#include "dss/core/event_bus.h"
-#include "dss/network/udp_channel.h"
-
 #include <atomic>
 #include <condition_variable>
 #include <cstddef>
@@ -14,11 +11,12 @@
 #include <thread>
 #include <vector>
 
-namespace Dss::Network
-{
+#include "dss/core/event_bus.h"
+#include "dss/network/udp_channel.h"
 
-class ImageSender
-{
+namespace Dss::Network {
+
+class ImageSender {
 public:
     using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;
 
@@ -32,10 +30,11 @@ public:
 
     auto open(const UdpEndpointConfig& config) -> std::expected<void, std::string>;
     void close();
+    [[nodiscard]] bool isOpen() const;
 
     void sendImage(std::span<const uint8_t> imageData, uint32_t width, uint32_t height);
-    [[nodiscard]] static auto buildPackets(std::span<const uint8_t> imageData, uint32_t width, uint32_t height)
-        -> std::vector<std::vector<uint8_t>>;
+    [[nodiscard]] static auto buildPackets(std::span<const uint8_t> imageData, uint32_t width,
+                                           uint32_t height) -> std::vector<std::vector<uint8_t>>;
 
 private:
     void workerLoop(std::stop_token token);
@@ -52,4 +51,4 @@ private:
     bool m_hasPending = false;
 };
 
-} // namespace Dss::Network
+}  // namespace Dss::Network

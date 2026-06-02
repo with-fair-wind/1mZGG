@@ -9,31 +9,25 @@
 #include "dss/core/constants.h"
 #include "dss/core/types.h"
 
-namespace Dss::Core
-{
+namespace Dss::Core {
 
 // --- Acquisition events ---
-struct FrameAcquiredEvent
-{
+struct FrameAcquiredEvent {
     uint64_t frameSeq = 0;
     uint32_t width = 0;
     uint32_t height = 0;
     ExposureDisplayData metadata{};
 };
 
-struct GrabStartedEvent
-{
+struct GrabStartedEvent {
     uint32_t width = 0;
     uint32_t height = 0;
 };
 
-struct GrabStoppedEvent
-{
-};
+struct GrabStoppedEvent {};
 
 // --- Processing events ---
-struct DisplayRefreshEvent
-{
+struct DisplayRefreshEvent {
     uint64_t frameSeq = 0;
     uint32_t width = 0;
     uint32_t height = 0;
@@ -41,75 +35,68 @@ struct DisplayRefreshEvent
     std::shared_ptr<const std::vector<uint8_t>> displayImage;
 };
 
-struct ProcessingCompleteEvent
-{
+struct ProcessingCompleteEvent {
     uint64_t frameSeq = 0;
     ImageStats stats{};
 };
 
-struct RotatedFrameReadyEvent
-{
+struct RotatedFrameReadyEvent {
     uint64_t frameSeq = 0;
 };
 
 // --- Tracking events ---
-struct TrackResultEvent
-{
+struct TrackResultEvent {
     uint64_t frameSeq = 0;
     std::vector<TargetInfo> targets;
 };
 
 // --- Network events ---
-struct ImageSendEvent
-{
+struct ImageSendEvent {
     uint64_t frameSeq = 0;
 };
 
 // --- Serial communication events ---
-struct MasterControlEvent
-{
+struct MasterControlEvent {
     float exposure = 0.0f;
     int trackMode = 0;
+    uint8_t mode1 = 0;
+    uint8_t mode2 = 0;
     bool save = false;
     bool grab = false;
+    bool track = false;
+    uint32_t targetId = 0;
+    uint32_t taskId = 0;
+    TimeOfDay start{};
+    TimeOfDay end{};
 };
 
-struct ExposureSyncEvent
-{
+struct ExposureSyncEvent {
     ExposureDisplayData data{};
 };
 
-struct Sync25HzEvent
-{
-};
+struct Sync25HzEvent {};
 
 // --- UI events ---
-struct ManualTargetSelectEvent
-{
+struct ManualTargetSelectEvent {
     float x = 0.0f;
     float y = 0.0f;
 };
 
-struct ZoomChangeEvent
-{
+struct ZoomChangeEvent {
     int level = 0;
 };
 
-struct CloseEvent
-{
-};
+struct CloseEvent {};
 
 // --- System events ---
-struct LogMessageEvent
-{
+struct LogMessageEvent {
     std::string message;
 };
 
-struct AtmosphereDataEvent
-{
+struct AtmosphereDataEvent {
     double temperature = 0.0;
     double pressure = 0.0;
     double humidity = 0.0;
 };
 
-} // namespace Dss::Core
+}  // namespace Dss::Core

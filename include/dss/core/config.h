@@ -4,23 +4,20 @@
 #include <filesystem>
 #include <string>
 
-#include "dss/core/constants.h"
 #include "dss/core/config_types.h"
+#include "dss/core/constants.h"
 #include "dss/core/types.h"
 
-namespace Dss::Core
-{
+namespace Dss::Core {
 
-struct PathConfig
-{
+struct PathConfig {
     std::filesystem::path configFile;
     std::filesystem::path dataRoot;
     std::filesystem::path ccfFile;
     std::filesystem::path kernelFile;
 };
 
-struct CommNetConfig
-{
+struct CommNetConfig {
     SerialConfig displayPort;
     SerialConfig exposurePort;
     SerialConfig masterControlPort;
@@ -34,18 +31,15 @@ struct CommNetConfig
     UdpEndpointConfig heartbeat;
 };
 
-struct ObservatoryConfig
-{
+struct ObservatoryConfig {
     double longitude = 0.0;
     double latitude = 0.0;
     double altitude = 0.0;
 };
 
-class Config
-{
+class Config {
 public:
-    static auto instance() -> Config&
-    {
+    static auto instance() -> Config& {
         static Config config;
         return config;
     }
@@ -53,16 +47,34 @@ public:
     auto load(const std::filesystem::path& configPath) -> std::expected<void, std::string>;
     auto save() -> std::expected<void, std::string>;
 
-    [[nodiscard]] auto paths() const -> const PathConfig& { return m_paths; }
-    [[nodiscard]] auto commNet() const -> const CommNetConfig& { return m_commNet; }
-    [[nodiscard]] auto optics() const -> const OpticParams& { return m_optics; }
-    [[nodiscard]] auto observatory() const -> const ObservatoryConfig& { return m_observatory; }
-    [[nodiscard]] auto trackingSettings() const -> const TrackingSettings& { return m_tracking; }
+    [[nodiscard]] auto paths() const -> const PathConfig& {
+        return m_paths;
+    }
+    [[nodiscard]] auto commNet() const -> const CommNetConfig& {
+        return m_commNet;
+    }
+    [[nodiscard]] auto optics() const -> const OpticParams& {
+        return m_optics;
+    }
+    [[nodiscard]] auto observatory() const -> const ObservatoryConfig& {
+        return m_observatory;
+    }
+    [[nodiscard]] auto trackingSettings() const -> const TrackingSettings& {
+        return m_tracking;
+    }
 
-    auto mutablePaths() -> PathConfig& { return m_paths; }
-    auto mutableCommNet() -> CommNetConfig& { return m_commNet; }
-    auto mutableOptics() -> OpticParams& { return m_optics; }
-    auto mutableTracking() -> TrackingSettings& { return m_tracking; }
+    auto mutablePaths() -> PathConfig& {
+        return m_paths;
+    }
+    auto mutableCommNet() -> CommNetConfig& {
+        return m_commNet;
+    }
+    auto mutableOptics() -> OpticParams& {
+        return m_optics;
+    }
+    auto mutableTracking() -> TrackingSettings& {
+        return m_tracking;
+    }
 
 private:
     Config() = default;
@@ -74,4 +86,4 @@ private:
     TrackingSettings m_tracking{};
 };
 
-} // namespace Dss::Core
+}  // namespace Dss::Core

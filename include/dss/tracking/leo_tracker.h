@@ -1,19 +1,20 @@
 #pragma once
 
-#include "dss/tracking/i_tracking_strategy.h"
-
 #include <deque>
 
-namespace Dss::Tracking
-{
+#include "dss/tracking/i_tracking_strategy.h"
 
-class LeoTracker final : public ITrackingStrategy
-{
+namespace Dss::Tracking {
+
+class LeoTracker final : public ITrackingStrategy {
 public:
     explicit LeoTracker(const Dss::Core::TrackingSettings& settings);
 
-    auto track(const Dss::Core::FrameMeasurements& measurements) -> std::vector<Dss::Core::TargetInfo> override;
-    [[nodiscard]] auto mode() const -> Dss::Core::TrackMode override { return Dss::Core::TrackMode::Leo; }
+    auto track(const Dss::Core::FrameMeasurements& measurements)
+        -> std::vector<Dss::Core::TargetInfo> override;
+    [[nodiscard]] auto mode() const -> Dss::Core::TrackMode override {
+        return Dss::Core::TrackMode::Leo;
+    }
     void reset() override;
 
 private:
@@ -24,4 +25,4 @@ private:
     bool m_targetFound = false;
 };
 
-} // namespace Dss::Tracking
+}  // namespace Dss::Tracking

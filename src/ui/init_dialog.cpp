@@ -1,19 +1,16 @@
 #include "dss/ui/init_dialog.h"
 
 #ifdef DSS_HAS_ELA
+#include <ElaProgressBar.h>
 #include <ElaPushButton.h>
 #include <ElaText.h>
-#include <ElaProgressBar.h>
 #else
 #include <QPushButton>
 #endif
 
-namespace Dss::Ui
-{
+namespace Dss::Ui {
 
-InitDialog::InitDialog(QWidget* parent)
-    : QDialog(parent)
-{
+InitDialog::InitDialog(QWidget* parent) : QDialog(parent) {
     setWindowTitle("DSS_QT - System Initialization");
     setMinimumSize(400, 300);
 
@@ -37,31 +34,24 @@ InitDialog::InitDialog(QWidget* parent)
     mainLayout->addWidget(m_statusLabel);
 }
 
-void InitDialog::setStatus(const QString& module, bool success)
-{
-    auto* label = new QLabel(
-        QString("%1 %2").arg(success ? "✓" : "✗").arg(module));
-    label->setStyleSheet(
-        success ? "color: green;" : "color: red; font-weight: bold;");
+void InitDialog::setStatus(const QString& module, bool success) {
+    auto* label = new QLabel(QString("%1 %2").arg(success ? "✓" : "✗").arg(module));
+    label->setStyleSheet(success ? "color: green;" : "color: red; font-weight: bold;");
     m_statusList->addWidget(label);
 
     ++m_moduleCount;
-    if (success)
-    {
+    if (success) {
         ++m_successCount;
     }
 
-    m_statusLabel->setText(
-        QString("Modules: %1/%2 OK").arg(m_successCount).arg(m_moduleCount));
+    m_statusLabel->setText(QString("Modules: %1/%2 OK").arg(m_successCount).arg(m_moduleCount));
 }
 
-void InitDialog::setProgress(int value)
-{
+void InitDialog::setProgress(int value) {
     m_progress->setValue(value);
-    if (value >= 100)
-    {
+    if (value >= 100) {
         Q_EMIT initComplete(m_successCount == m_moduleCount);
     }
 }
 
-} // namespace Dss::Ui
+}  // namespace Dss::Ui

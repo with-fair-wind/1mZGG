@@ -1,13 +1,12 @@
-#include "dss/core/config.h"
+#include <filesystem>
+#include <fstream>
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
 
-#include <filesystem>
-#include <fstream>
+#include "dss/core/config.h"
 
-TEST(ConfigTest, LoadsJsonWithoutQt)
-{
+TEST(ConfigTest, LoadsJsonWithoutQt) {
     const auto path = std::filesystem::current_path() / "dss_config_test.json";
     {
         std::ofstream output(path);
@@ -55,6 +54,9 @@ TEST(ConfigTest, LoadsJsonWithoutQt)
     EXPECT_EQ(config.commNet().imageSender.remotePort, 4123);
     EXPECT_EQ(config.commNet().exchange.remoteIp, "127.0.0.2");
     EXPECT_EQ(config.commNet().exchange.remotePort, 5123);
+    EXPECT_EQ(config.commNet().heartbeat.localPort, 15361);
+    EXPECT_EQ(config.commNet().heartbeat.remoteIp, "0.0.0.0");
+    EXPECT_EQ(config.commNet().heartbeat.remotePort, 15362);
     EXPECT_EQ(config.optics().imageWidth, 32);
     EXPECT_EQ(config.optics().imageHeight, 16);
     EXPECT_FLOAT_EQ(config.optics().pixelScale, 0.125f);

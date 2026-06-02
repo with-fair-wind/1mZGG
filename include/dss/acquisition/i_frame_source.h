@@ -1,17 +1,15 @@
 #pragma once
 
-#include "dss/core/types.h"
-
 #include <cstdint>
 #include <expected>
 #include <functional>
 #include <string>
 
-namespace Dss::Acquisition
-{
+#include "dss/core/types.h"
 
-class IFrameSource
-{
+namespace Dss::Acquisition {
+
+class IFrameSource {
 public:
     virtual ~IFrameSource() = default;
 
@@ -24,4 +22,4 @@ public:
     [[nodiscard]] virtual auto frameHeight() const -> uint32_t = 0;
 };
 
-} // namespace Dss::Acquisition
+}  // namespace Dss::Acquisition

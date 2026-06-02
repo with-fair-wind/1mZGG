@@ -1,18 +1,16 @@
 #pragma once
 
-#include "dss/core/event_bus.h"
-#include "dss/network/udp_channel.h"
-
 #include <cstdint>
 #include <expected>
 #include <span>
 #include <string>
 
-namespace Dss::Network
-{
+#include "dss/core/event_bus.h"
+#include "dss/network/udp_channel.h"
 
-class AtmosReceiver
-{
+namespace Dss::Network {
+
+class AtmosReceiver {
 public:
     using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;
 
@@ -20,6 +18,7 @@ public:
 
     auto open(const UdpEndpointConfig& config) -> std::expected<void, std::string>;
     void close();
+    [[nodiscard]] bool isOpen() const;
 
 private:
     void onData(std::span<const uint8_t> data, const std::string& sender, uint16_t port);
@@ -28,4 +27,4 @@ private:
     UdpChannel m_channel;
 };
 
-} // namespace Dss::Network
+}  // namespace Dss::Network

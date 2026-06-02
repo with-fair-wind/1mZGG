@@ -1,37 +1,36 @@
-#include "dss/core/service_registry.h"
-
-#include <gtest/gtest.h>
 #include <memory>
 #include <string>
 #include <string_view>
 #include <utility>
 
-namespace
-{
+#include <gtest/gtest.h>
 
-class IChannel
-{
+#include "dss/core/service_registry.h"
+
+namespace {
+
+class IChannel {
 public:
     virtual ~IChannel() = default;
 
     [[nodiscard]] virtual auto name() const -> std::string_view = 0;
 };
 
-class RecordingChannel final : public IChannel
-{
+class RecordingChannel final : public IChannel {
 public:
     explicit RecordingChannel(std::string channelName) : m_name(std::move(channelName)) {}
 
-    [[nodiscard]] auto name() const -> std::string_view override { return m_name; }
+    [[nodiscard]] auto name() const -> std::string_view override {
+        return m_name;
+    }
 
 private:
     std::string m_name;
 };
 
-} // namespace
+}  // namespace
 
-TEST(ServiceRegistry, KeepsNamedImplementationsOfSameInterface)
-{
+TEST(ServiceRegistry, KeepsNamedImplementationsOfSameInterface) {
     Dss::Core::ServiceRegistry registry;
     auto display = std::make_shared<RecordingChannel>("display");
     auto exposure = std::make_shared<RecordingChannel>("exposure");
@@ -46,8 +45,7 @@ TEST(ServiceRegistry, KeepsNamedImplementationsOfSameInterface)
     EXPECT_EQ(registry.tryGet<IChannel>("missing"), nullptr);
 }
 
-TEST(ServiceRegistry, PreservesUnnamedServiceCompatibility)
-{
+TEST(ServiceRegistry, PreservesUnnamedServiceCompatibility) {
     Dss::Core::ServiceRegistry registry;
     auto channel = std::make_shared<RecordingChannel>("default");
 

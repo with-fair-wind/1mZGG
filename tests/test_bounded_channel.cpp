@@ -1,15 +1,14 @@
-#include "dss/processing/bounded_channel.h"
-
-#include <gtest/gtest.h>
-
 #include <chrono>
 #include <future>
 #include <stop_token>
 
+#include <gtest/gtest.h>
+
+#include "dss/processing/bounded_channel.h"
+
 using namespace std::chrono_literals;
 
-TEST(BoundedChannelTest, PreservesFifoOrder)
-{
+TEST(BoundedChannelTest, PreservesFifoOrder) {
     Dss::Processing::BoundedChannel<int, 2> channel;
     std::stop_source stopSource;
 
@@ -27,8 +26,7 @@ TEST(BoundedChannelTest, PreservesFifoOrder)
     EXPECT_TRUE(channel.empty());
 }
 
-TEST(BoundedChannelTest, PopReturnsEmptyWhenStopped)
-{
+TEST(BoundedChannelTest, PopReturnsEmptyWhenStopped) {
     Dss::Processing::BoundedChannel<int, 1> channel;
     std::stop_source stopSource;
     stopSource.request_stop();
@@ -38,16 +36,15 @@ TEST(BoundedChannelTest, PopReturnsEmptyWhenStopped)
     EXPECT_FALSE(value.has_value());
 }
 
-TEST(BoundedChannelTest, BlockingPushReturnsFalseWhenStopped)
-{
+TEST(BoundedChannelTest, BlockingPushReturnsFalseWhenStopped) {
     Dss::Processing::BoundedChannel<int, 1> channel;
     std::stop_source stopSource;
 
     ASSERT_TRUE(channel.tryPush(10));
 
-    auto pushed = std::async(std::launch::async, [&channel, token = stopSource.get_token()]() mutable {
-        return channel.push(20, token);
-    });
+    auto pushed = std::async(
+        std::launch::async,
+        [&channel, token = stopSource.get_token()]() mutable { return channel.push(20, token); });
 
     ASSERT_EQ(pushed.wait_for(50ms), std::future_status::timeout);
     stopSource.request_stop();

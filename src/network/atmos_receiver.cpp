@@ -1,55 +1,44 @@
 #include "dss/network/atmos_receiver.h"
 
 #include "dss/core/events.h"
+#include "dss/network/atmos_protocol.h"
 
-#include <cstring>
+namespace Dss::Network {
 
-namespace Dss::Network
-{
+AtmosReceiver::AtmosReceiver(MessageBus& bus) : m_bus(bus) {}
 
-AtmosReceiver::AtmosReceiver(MessageBus& bus)
-    : m_bus(bus)
-{
-}
-
-auto AtmosReceiver::open(const UdpEndpointConfig& config) -> std::expected<void, std::string>
-{
+auto AtmosReceiver::open(const UdpEndpointConfig& config) -> std::expected<void, std::string> {
     auto result = m_channel.bind(config);
-    if (!result)
-    {
+    if (!result) {
         return result;
     }
 
-    m_channel.setReceiveCallback(
-        [this](std::span<const uint8_t> data, const std::string& sender, uint16_t port) {
-            onData(data, sender, port);
-        });
+    m_channel.setReceiveCallback([this](std::span<const uint8_t> data, const std::string& sender,
+                                        uint16_t port) { onData(data, sender, port); });
 
     return {};
 }
 
-void AtmosReceiver::close()
-{
+void AtmosReceiver::close() {
     m_channel.close();
 }
 
-void AtmosReceiver::onData(std::span<const uint8_t> data, const std::string& /*sender*/, uint16_t /*port*/)
-{
-    // Original: #pragma pack(1) struct { int head; double temp, pressure, humidity; }
-    constexpr size_t expectedSize = sizeof(int) + 3 * sizeof(double);
-    if (data.size() < expectedSize)
-    {
+bool AtmosReceiver::isOpen() const {
+    return m_channel.isBound();
+}
+
+void AtmosReceiver::onData(std::span<const uint8_t> data, const std::string& /*sender*/,
+                           uint16_t /*port*/) {
+    const auto sample = decodeAtmosPacket(data);
+    if (!sample) {
         return;
     }
 
-    double temp = 0;
-    double pressure = 0;
-    double humidity = 0;
-    std::memcpy(&temp, data.data() + sizeof(int), sizeof(double));
-    std::memcpy(&pressure, data.data() + sizeof(int) + sizeof(double), sizeof(double));
-    std::memcpy(&humidity, data.data() + sizeof(int) + 2 * sizeof(double), sizeof(double));
-
-    m_bus.emit(Dss::Core::AtmosphereDataEvent{temp, pressure, humidity});
+    m_bus.emit(Dss::Core::AtmosphereDataEvent{
+        .temperature = sample->temperature,
+        .pressure = sample->pressure,
+        .humidity = sample->humidity,
+    });
 }
 
-} // namespace Dss::Network
+}  // namespace Dss::Network

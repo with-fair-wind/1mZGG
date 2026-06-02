@@ -7,12 +7,10 @@
 #include <utility>
 #include <vector>
 
-namespace Dss::Core
-{
+namespace Dss::Core {
 
 // --- Timestamp ---
-struct Timestamp
-{
+struct Timestamp {
     int year = 0;
     int month = 0;
     int day = 0;
@@ -23,32 +21,34 @@ struct Timestamp
     int microsecond = 0;
 };
 
+struct TimeOfDay {
+    int hour = 0;
+    int minute = 0;
+    int second = 0;
+};
+
 // --- Optics parameters ---
-struct OpticParams
-{
+struct OpticParams {
     int imageWidth = 6144;
     int imageHeight = 6144;
     float fovCenterX = 6144 / 2.0f;
     float fovCenterY = 6144 / 2.0f;
-    float pixelScale = 0.0003453f; // deg/pixel
+    float pixelScale = 0.0003453f;  // deg/pixel
 };
 
 // --- 2D position pair ---
-struct Vec2f
-{
+struct Vec2f {
     float x = 0.0f;
     float y = 0.0f;
 };
 
-struct Vec2d
-{
+struct Vec2d {
     double x = 0.0;
     double y = 0.0;
 };
 
 // --- Single blob detection result ---
-struct MeasuredBlob
-{
+struct MeasuredBlob {
     std::string id;
     Vec2f centroid{};
     float maxX = 0.0f;
@@ -74,13 +74,12 @@ struct MeasuredBlob
 };
 
 // --- All detections in a single frame ---
-struct FrameMeasurements
-{
+struct FrameMeasurements {
     Timestamp timestamp{};
     uint64_t frameSeq = 0;
     Vec2f fovCenterAe{};
-    float exposureTime = 0.0f; // seconds
-    float frameFreq = 0.0f;    // Hz
+    float exposureTime = 0.0f;  // seconds
+    float frameFreq = 0.0f;     // Hz
     std::vector<MeasuredBlob> targetBlobs;
     std::vector<MeasuredBlob> starBlobs;
     double temperature = 0.0;
@@ -88,20 +87,18 @@ struct FrameMeasurements
 };
 
 // --- Per-frame target state ---
-struct TargetFrameInfo
-{
+struct TargetFrameInfo {
     Timestamp timestamp{};
     uint64_t frameSeq = 0;
     MeasuredBlob measuredBlob{};
-    Vec2f posZxdw{};   // axis positioning
-    Vec2f posTwdw{};   // astronomical positioning
+    Vec2f posZxdw{};  // axis positioning
+    Vec2f posTwdw{};  // astronomical positioning
     float magnitude = 0.0f;
     bool valid = false;
 };
 
 // --- Single target tracking state across frames ---
-struct TargetInfo
-{
+struct TargetInfo {
     std::string targetId;
     std::string saveStartTime;
     std::string filenameGae;
@@ -110,14 +107,13 @@ struct TargetInfo
     Vec2f predictedPosAe{};     // degrees
     Vec2f predictedSpdFrame{};  // pixel/frame
     Vec2f predictedSpdAe{};     // deg/s
-    float validity = 1.0f;        // 0~1
+    float validity = 1.0f;      // 0~1
     bool living = false;
     Vec2f lastRmDm{};
 };
 
 // --- Image statistics ---
-struct ImageStats
-{
+struct ImageStats {
     double maxVal = 0.0;
     double minVal = 0.0;
     double avg = 0.0;
@@ -125,27 +121,25 @@ struct ImageStats
 };
 
 // --- Tracking settings ---
-struct TrackingSettings
-{
+struct TrackingSettings {
     OpticParams opticParams{};
     float thresholdLiving = 0.5f;
     int numFramesLiving = 10;
-    float searchRadius = 50.0f;        // pixels
+    float searchRadius = 50.0f;  // pixels
     float ratioFov = 0.25f;
-    float thresholdStarMode = 10.0f;   // pixels
-    float thresholdGazeMode = 2.0f;    // pixels
+    float thresholdStarMode = 10.0f;  // pixels
+    float thresholdGazeMode = 2.0f;   // pixels
     bool autoDecide = true;
-    float thresholdMeo = 5.0f;          // pixels
-    float spdLowAe = 0.0f;            // deg
-    float spdHighAe = 0.0f;           // deg
-    float thresholdAe = 0.0f;          // deg
+    float thresholdMeo = 5.0f;  // pixels
+    float spdLowAe = 0.0f;      // deg
+    float spdHighAe = 0.0f;     // deg
+    float thresholdAe = 0.0f;   // deg
 };
 
 // --- Exposure/display synchronized data ---
-struct ExposureDisplayData
-{
+struct ExposureDisplayData {
     Timestamp timestamp{};
-    Vec2f pointingAe{};           // azimuth/elevation
+    Vec2f pointingAe{};  // azimuth/elevation
     float exposureTime = 0.0f;
     float frameFrequency = 0.0f;
     double temperature = 0.0;
@@ -154,8 +148,7 @@ struct ExposureDisplayData
 };
 
 // --- Measurement result packet ---
-struct ResultPacket
-{
+struct ResultPacket {
     std::string targetId;
     Timestamp timestamp{};
     uint64_t frameSeq = 0;
@@ -176,8 +169,7 @@ struct ResultPacket
 };
 
 // --- Error result (pointing model) ---
-struct PointingErrorResult
-{
+struct PointingErrorResult {
     double ixA = 0.0;
     double iyA = 0.0;
     double horizontal = 0.0;
@@ -190,4 +182,4 @@ struct PointingErrorResult
     double oscillation1 = 0.0;
 };
 
-} // namespace Dss::Core
+}  // namespace Dss::Core

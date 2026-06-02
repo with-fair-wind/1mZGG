@@ -6,11 +6,9 @@
 #include <span>
 #include <string>
 
-namespace Dss::Storage
-{
+namespace Dss::Storage {
 
-class IStorageBackend
-{
+class IStorageBackend {
 public:
     virtual ~IStorageBackend() = default;
 
@@ -18,4 +16,4 @@ public:
     [[nodiscard]] virtual bool isReady() const = 0;
 };
 
-} // namespace Dss::Storage
+}  // namespace Dss::Storage

@@ -5,29 +5,21 @@
 #include <queue>
 #include <vector>
 
-namespace Dss::Processing
-{
+namespace Dss::Processing {
 
-Labeler::Labeler(LabelConfig config)
-    : m_config(config)
-{
-}
+Labeler::Labeler(LabelConfig config) : m_config(config) {}
 
-auto Labeler::labelAndExtract(std::span<const uint8_t> binaryImage,
-                              uint32_t width,
-                              uint32_t height) -> std::vector<Dss::Core::MeasuredBlob>
-{
+auto Labeler::labelAndExtract(std::span<const uint8_t> binaryImage, uint32_t width, uint32_t height)
+    -> std::vector<Dss::Core::MeasuredBlob> {
     const auto total = static_cast<size_t>(width) * height;
-    if (binaryImage.size() != total)
-    {
+    if (binaryImage.size() != total) {
         return {};
     }
 
     std::vector<int> labels(total, 0);
     int currentLabel = 0;
 
-    struct BlobAccum
-    {
+    struct BlobAccum {
         float sumX = 0;
         float sumY = 0;
         float sumDn = 0;
@@ -40,13 +32,10 @@ auto Labeler::labelAndExtract(std::span<const uint8_t> binaryImage,
 
     std::vector<BlobAccum> accums;
 
-    for (uint32_t y = 0; y < height; ++y)
-    {
-        for (uint32_t x = 0; x < width; ++x)
-        {
+    for (uint32_t y = 0; y < height; ++y) {
+        for (uint32_t x = 0; x < width; ++x) {
             auto idx = static_cast<size_t>(y) * width + x;
-            if (binaryImage[idx] == 0 || labels[idx] != 0)
-            {
+            if (binaryImage[idx] == 0 || labels[idx] != 0) {
                 continue;
             }
 
@@ -58,8 +47,7 @@ auto Labeler::labelAndExtract(std::span<const uint8_t> binaryImage,
             queue.push({x, y});
             labels[idx] = currentLabel;
 
-            while (!queue.empty())
-            {
+            while (!queue.empty()) {
                 auto [cx, cy] = queue.front();
                 queue.pop();
 
@@ -76,22 +64,17 @@ auto Labeler::labelAndExtract(std::span<const uint8_t> binaryImage,
                 acc.maxY = std::max(acc.maxY, fy);
                 acc.minY = std::min(acc.minY, fy);
 
-                for (int dy = -1; dy <= 1; ++dy)
-                {
-                    for (int dx = -1; dx <= 1; ++dx)
-                    {
-                        if (dx == 0 && dy == 0)
-                        {
+                for (int dy = -1; dy <= 1; ++dy) {
+                    for (int dx = -1; dx <= 1; ++dx) {
+                        if (dx == 0 && dy == 0) {
                             continue;
                         }
                         auto nx = static_cast<int>(cx) + dx;
                         auto ny = static_cast<int>(cy) + dy;
-                        if (nx >= 0 && nx < static_cast<int>(width) &&
-                            ny >= 0 && ny < static_cast<int>(height))
-                        {
+                        if (nx >= 0 && nx < static_cast<int>(width) && ny >= 0 &&
+                            ny < static_cast<int>(height)) {
                             auto nidx = static_cast<size_t>(ny) * width + static_cast<size_t>(nx);
-                            if (binaryImage[nidx] > 0 && labels[nidx] == 0)
-                            {
+                            if (binaryImage[nidx] > 0 && labels[nidx] == 0) {
                                 labels[nidx] = currentLabel;
                                 queue.push({static_cast<uint32_t>(nx), static_cast<uint32_t>(ny)});
                             }
@@ -103,11 +86,9 @@ auto Labeler::labelAndExtract(std::span<const uint8_t> binaryImage,
     }
 
     std::vector<Dss::Core::MeasuredBlob> blobs;
-    for (const auto& acc : accums)
-    {
+    for (const auto& acc : accums) {
         auto area = static_cast<int>(acc.area);
-        if (area < m_config.minArea || area > m_config.maxArea)
-        {
+        if (area < m_config.minArea || area > m_config.maxArea) {
             continue;
         }
 
@@ -126,4 +107,4 @@ auto Labeler::labelAndExtract(std::span<const uint8_t> binaryImage,
     return blobs;
 }
 
-} // namespace Dss::Processing
+}  // namespace Dss::Processing

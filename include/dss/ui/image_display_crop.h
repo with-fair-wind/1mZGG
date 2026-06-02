@@ -2,11 +2,9 @@
 
 #include "dss/ui/image_display.h"
 
-namespace Dss::Ui
-{
+namespace Dss::Ui {
 
-class ImageDisplayCrop : public ImageDisplay
-{
+class ImageDisplayCrop : public ImageDisplay {
     Q_OBJECT
 
 public:
@@ -20,4 +18,4 @@ private:
     int m_cropSize = 128;
 };
 
-} // namespace Dss::Ui
+}  // namespace Dss::Ui

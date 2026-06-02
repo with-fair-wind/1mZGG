@@ -1,19 +1,20 @@
 #pragma once
 
-#include "dss/tracking/i_tracking_strategy.h"
-
 #include <deque>
 
-namespace Dss::Tracking
-{
+#include "dss/tracking/i_tracking_strategy.h"
 
-class GeoTracker final : public ITrackingStrategy
-{
+namespace Dss::Tracking {
+
+class GeoTracker final : public ITrackingStrategy {
 public:
     explicit GeoTracker(const Dss::Core::TrackingSettings& settings);
 
-    auto track(const Dss::Core::FrameMeasurements& measurements) -> std::vector<Dss::Core::TargetInfo> override;
-    [[nodiscard]] auto mode() const -> Dss::Core::TrackMode override { return Dss::Core::TrackMode::Geo; }
+    auto track(const Dss::Core::FrameMeasurements& measurements)
+        -> std::vector<Dss::Core::TargetInfo> override;
+    [[nodiscard]] auto mode() const -> Dss::Core::TrackMode override {
+        return Dss::Core::TrackMode::Geo;
+    }
     void reset() override;
 
 private:
@@ -33,4 +34,4 @@ private:
     uint64_t m_frameSeq = 0;
 };
 
-} // namespace Dss::Tracking
+}  // namespace Dss::Tracking

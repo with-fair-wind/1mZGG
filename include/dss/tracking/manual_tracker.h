@@ -1,20 +1,21 @@
 #pragma once
 
-#include "dss/tracking/i_tracking_strategy.h"
-
 #include <deque>
 #include <mutex>
 
-namespace Dss::Tracking
-{
+#include "dss/tracking/i_tracking_strategy.h"
 
-class ManualTracker final : public ITrackingStrategy
-{
+namespace Dss::Tracking {
+
+class ManualTracker final : public ITrackingStrategy {
 public:
     explicit ManualTracker(const Dss::Core::TrackingSettings& settings);
 
-    auto track(const Dss::Core::FrameMeasurements& measurements) -> std::vector<Dss::Core::TargetInfo> override;
-    [[nodiscard]] auto mode() const -> Dss::Core::TrackMode override { return Dss::Core::TrackMode::Manual; }
+    auto track(const Dss::Core::FrameMeasurements& measurements)
+        -> std::vector<Dss::Core::TargetInfo> override;
+    [[nodiscard]] auto mode() const -> Dss::Core::TrackMode override {
+        return Dss::Core::TrackMode::Manual;
+    }
     void reset() override;
 
     void setManualTarget(const Dss::Core::MeasuredBlob& blob);
@@ -27,4 +28,4 @@ private:
     std::mutex m_blobMutex;
 };
 
-} // namespace Dss::Tracking
+}  // namespace Dss::Tracking

@@ -1,5 +1,10 @@
 #pragma once
 
+#include <atomic>
+#include <memory>
+#include <mutex>
+#include <thread>
+
 #include "dss/core/event_bus.h"
 #include "dss/processing/bounded_channel.h"
 #include "dss/processing/frame_packet.h"
@@ -7,16 +12,9 @@
 #include "dss/processing/processing_pipeline.h"
 #include "dss/tracking/i_tracking_strategy.h"
 
-#include <atomic>
-#include <memory>
-#include <mutex>
-#include <thread>
+namespace Dss::Processing {
 
-namespace Dss::Processing
-{
-
-class ImageProcessor
-{
+class ImageProcessor {
 public:
     using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;
 
@@ -48,4 +46,4 @@ private:
     std::unique_ptr<Dss::Tracking::ITrackingStrategy> m_trackStrategy;
 };
 
-} // namespace Dss::Processing
+}  // namespace Dss::Processing

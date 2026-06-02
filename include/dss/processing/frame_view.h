@@ -1,15 +1,13 @@
 #pragma once
 
-#include "dss/processing/frame_packet.h"
-
 #include <cstdint>
 #include <span>
 
-namespace Dss::Processing
-{
+#include "dss/processing/frame_packet.h"
 
-struct FrameView
-{
+namespace Dss::Processing {
+
+struct FrameView {
     uint64_t frameSeq = 0;
     uint32_t width = 0;
     uint32_t height = 0;
@@ -19,8 +17,7 @@ struct FrameView
     std::span<const float> photometryImage;
 };
 
-struct MutableFrameView
-{
+struct MutableFrameView {
     uint64_t frameSeq = 0;
     uint32_t width = 0;
     uint32_t height = 0;
@@ -30,30 +27,18 @@ struct MutableFrameView
     std::span<float> photometryImage;
 };
 
-[[nodiscard]] inline auto makeFrameView(const FramePacket& packet) -> FrameView
-{
+[[nodiscard]] inline auto makeFrameView(const FramePacket& packet) -> FrameView {
     return FrameView{
-        packet.frameSeq,
-        packet.width,
-        packet.height,
-        packet.rawImage,
-        packet.rotatedImage,
-        packet.displayImage,
-        packet.photometryImage,
+        packet.frameSeq,     packet.width,        packet.height,          packet.rawImage,
+        packet.rotatedImage, packet.displayImage, packet.photometryImage,
     };
 }
 
-[[nodiscard]] inline auto makeMutableFrameView(FramePacket& packet) -> MutableFrameView
-{
+[[nodiscard]] inline auto makeMutableFrameView(FramePacket& packet) -> MutableFrameView {
     return MutableFrameView{
-        packet.frameSeq,
-        packet.width,
-        packet.height,
-        packet.rawImage,
-        packet.rotatedImage,
-        packet.displayImage,
-        packet.photometryImage,
+        packet.frameSeq,     packet.width,        packet.height,          packet.rawImage,
+        packet.rotatedImage, packet.displayImage, packet.photometryImage,
     };
 }
 
-} // namespace Dss::Processing
+}  // namespace Dss::Processing

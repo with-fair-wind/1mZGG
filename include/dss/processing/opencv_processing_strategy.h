@@ -2,18 +2,15 @@
 
 #include "dss/processing/i_processing_strategy.h"
 
-namespace Dss::Processing
-{
+namespace Dss::Processing {
 
-struct OpenCvProcessingOptions
-{
+struct OpenCvProcessingOptions {
     double thresholdSigma = 3.0;
     int minArea = 3;
     int maxArea = 100000;
 };
 
-class OpenCvProcessingStrategy final : public IProcessingStrategy
-{
+class OpenCvProcessingStrategy final : public IProcessingStrategy {
 public:
     explicit OpenCvProcessingStrategy(OpenCvProcessingOptions options = {});
 
@@ -25,4 +22,4 @@ private:
     OpenCvProcessingOptions m_options;
 };
 
-} // namespace Dss::Processing
+}  // namespace Dss::Processing
