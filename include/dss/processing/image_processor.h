@@ -26,6 +26,7 @@ public:
 
     [[nodiscard]] bool submitFrame(FramePacket packet);
     [[nodiscard]] auto droppedFrames() const -> uint64_t;
+    [[nodiscard]] bool isRunning() const;
 
     void setProcessingStrategy(std::unique_ptr<IProcessingStrategy> strategy);
     void setTrackingStrategy(std::unique_ptr<Dss::Tracking::ITrackingStrategy> strategy);
@@ -39,6 +40,7 @@ private:
     MessageBus& m_bus;
     BoundedChannel<FramePacket, 4> m_frameChannel;
     std::jthread m_workerThread;
+    std::atomic<bool> m_running{false};
     std::atomic<uint64_t> m_droppedFrames{0};
 
     mutable std::mutex m_strategyMutex;

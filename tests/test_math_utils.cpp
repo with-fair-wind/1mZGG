@@ -143,3 +143,54 @@ TEST(MathUtils, AppliesLegacyNearestSampleInterpolation) {
     const std::vector<double> shortY{10.0};
     EXPECT_FALSE(Dss::Math::legacyNearestSampleInterpolate(x, shortY, targetX).has_value());
 }
+
+TEST(MathUtils, ComputesLegacyFftSizeLikeMfftProcess) {
+    EXPECT_FALSE(Dss::Math::legacyFftSize(0).has_value());
+    EXPECT_EQ(Dss::Math::legacyFftSize(1), 2U);
+    EXPECT_EQ(Dss::Math::legacyFftSize(2), 2U);
+    EXPECT_EQ(Dss::Math::legacyFftSize(3), 4U);
+    EXPECT_EQ(Dss::Math::legacyFftSize(4), 4U);
+    EXPECT_EQ(Dss::Math::legacyFftSize(5), 8U);
+}
+
+TEST(MathUtils, BuildsLegacyFftSpectrumWithAmplitudePhaseAndBaseFrequency) {
+    const std::vector<double> signal{1.0, 0.0, -1.0, 0.0};
+
+    const auto spectrum = Dss::Math::legacyFftSpectrum(signal, 0.5);
+
+    ASSERT_TRUE(spectrum.has_value());
+    EXPECT_EQ(spectrum->fftSize, 4U);
+    EXPECT_NEAR(spectrum->baseFrequency, 1.0 / 1.5, kTolerance);
+    ASSERT_EQ(spectrum->real.size(), 4U);
+    ASSERT_EQ(spectrum->imag.size(), 4U);
+    ASSERT_EQ(spectrum->amplitude.size(), 4U);
+    ASSERT_EQ(spectrum->phaseDegrees.size(), 4U);
+    EXPECT_NEAR(spectrum->real[1], 2.0, kTolerance);
+    EXPECT_NEAR(spectrum->imag[1], 0.0, kTolerance);
+    EXPECT_NEAR(spectrum->amplitude[0], 0.0, kTolerance);
+    EXPECT_NEAR(spectrum->amplitude[1], 1.0, kTolerance);
+    EXPECT_NEAR(spectrum->phaseDegrees[1], 0.0, kTolerance);
+    EXPECT_NEAR(spectrum->peakAmplitude, 1.0, kTolerance);
+}
+
+TEST(MathUtils, PadsLegacyFftSpectrumInputToNextPowerOfTwo) {
+    const std::vector<double> signal{1.0, 0.0, -1.0};
+
+    const auto spectrum = Dss::Math::legacyFftSpectrum(signal, 1.0);
+
+    ASSERT_TRUE(spectrum.has_value());
+    EXPECT_EQ(spectrum->fftSize, 4U);
+    EXPECT_NEAR(spectrum->baseFrequency, 1.0 / 3.0, kTolerance);
+    EXPECT_NEAR(spectrum->real[1], 2.0, kTolerance);
+    EXPECT_NEAR(spectrum->amplitude[1], 1.0, kTolerance);
+}
+
+TEST(MathUtils, RejectsInvalidLegacyFftSpectrumInputs) {
+    const std::vector<double> signal{1.0, 0.0, -1.0};
+    const std::vector<double> imag{0.0};
+    const std::vector<double> empty;
+
+    EXPECT_FALSE(Dss::Math::legacyFftSpectrum(empty, 1.0).has_value());
+    EXPECT_FALSE(Dss::Math::legacyFftSpectrum(signal, 0.0).has_value());
+    EXPECT_FALSE(Dss::Math::legacyFftSpectrum(signal, imag, 1.0).has_value());
+}

@@ -100,7 +100,7 @@ GXTC/GDCL 协议数据交换（从旧版 `NetExchange` 迁移）。
 
 | 缺口 | 说明 |
 |------|------|
-| 网络服务未启动 | `startServices()` 未调用 |
+| 网络打开/bind 命令未接线 | 网络服务已注册到 `ServiceRegistry`，但默认 `isOpen() == false`；需要 UI/联调入口显式打开或绑定 |
 | `NetApp` 接收侧逻辑 | 旧版 `NetApp` 的接收处理未完全复制 |
 | `ENetServer` | 旧版的可靠 UDP (ENet) 未迁移 |
 

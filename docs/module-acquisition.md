@@ -4,24 +4,39 @@
 >
 > 头文件: `include/dss/acquisition/`
 >
-> 源文件: 无独立编译目标（header-only）
+> 源文件: `src/acquisition/`
+>
+> 目标: `dss_acquisition_qt`
 
 ## 模块职责
 
-Acquisition 模块定义相机采集与控制的接口和协议。当前为 header-only，实际的 Sapera SDK 采集器尚未迁移。
+Acquisition 模块定义相机采集、回放帧源与控制接口。当前实际 Sapera SDK 采集器尚未迁移，但系统已经可以通过图像序列回放模式驱动处理、显示和存储链路。
 
 ## 组件清单
 
 ### 1. IFrameSource（隐含于接口设计）
 
-帧采集源接口，定义相机的生命周期和帧获取方法：
+帧采集源接口，定义采集/回放源的生命周期和帧回调方法：
 
-- `init()` — 初始化相机
+- `init()` — 初始化帧源
 - `start()` — 开始采集
 - `stop()` — 停止采集
-- `width()` / `height()` — 图像尺寸
+- `setFrameCallback()` — 设置 `FramePacket` 输出回调
+- `frameWidth()` / `frameHeight()` — 图像尺寸
 
-### 2. ICameraController (`i_camera_controller.h`)
+### 2. ImageSequenceFrameSource (`image_sequence_frame_source.h`)
+
+从旧版 `ImageReplayer` 思路迁入的图像序列回放源：
+
+| 能力 | 状态 |
+|------|------|
+| 选择文件序列 | 已实现，UI 可传入 `QStringList` |
+| 常规图像解码 | 已实现，使用 Qt `QImage` 读取 BMP/PNG/JPEG/TIFF 等 |
+| legacy RAW 解码 | 已实现，复用 `decodeRawImageFile()` |
+| 后台回放线程 | 已实现，按帧调用 `IFrameSource::FrameCallback` |
+| 暂停续播进度 | 待实现，当前停止后再次开始会从序列首帧回放 |
+
+### 3. ICameraController (`i_camera_controller.h`)
 
 相机命令接口，抽象相机参数控制：
 
@@ -35,7 +50,7 @@ class ICameraController {
 };
 ```
 
-### 3. CameraControlProtocol (`camera_control_protocol.h`)
+### 4. CameraControlProtocol (`camera_control_protocol.h`)
 
 3 字节寄存器命令的编码函数，从旧版 `CommCamera` 迁移：
 
@@ -48,7 +63,7 @@ class ICameraController {
 
 每条命令格式: `[地址, 高字节, 低字节]`，通过串口发送到相机。
 
-### 4. CommandOnlyCameraController
+### 5. CommandOnlyCameraController
 
 桩实现，仅生成命令字节但不连接串口。用于测试和开发阶段。
 
@@ -59,16 +74,18 @@ class ICameraController {
 | `CommCamera.h/.cpp` (命令编码) | `camera_control_protocol.h` | **已迁移** |
 | `CommCamera.h/.cpp` (串口通信) | `CommandOnlyCameraController` | 部分 (无串口连接) |
 | `Grabber.h/.cpp` (Sapera SDK) | `IFrameSource` 接口 | **未迁移** |
+| `ImageReplayer.h/.cpp` (图像序列) | `ImageSequenceFrameSource` | **已迁移首版** |
 
 ## 当前缺口
 
 | 缺口 | 严重程度 | 说明 |
 |------|---------|------|
-| Sapera 采集器 | **高** | `Grabber` 类 (~500行) 未迁移，系统无法实际采集图像 |
-| 模拟帧源 | 中 | 无测试用模拟帧源实现 |
+| 回放暂停续播/进度 | 中 | 当前可开始/停止序列回放，尚未保留暂停帧号 |
+| Sapera 采集器 | 中 | `Grabber` 类 (~500行) 未迁移，影响真实硬件采集但不阻塞回放模式 |
 | 相机串口连接 | 中 | `CommandOnlyCameraController` 未连接到实际串口通道 |
 
 ## 依赖关系
 
-当前 header-only，仅依赖 `dss_core` 类型。
+`IFrameSource` 接口依赖 `dss_processing` 的 `FramePacket`；`ImageSequenceFrameSource`
+在 `dss_acquisition_qt` 中编译，`.cpp` 内部使用 Qt `QImage` 解码，头文件不直接暴露 Qt 图像头。
 未来实际采集器将依赖 Sapera SDK（通过 `DSS_ENABLE_SAPERA` 选项控制）。

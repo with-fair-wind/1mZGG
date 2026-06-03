@@ -128,7 +128,7 @@ Qt `QSerialPort` 工作线程基类（pimpl 隐藏 Qt 依赖）：
 
 | 缺口 | 说明 |
 |------|------|
-| 串口服务未启动 | `startServices()` 未在 `main.cpp` 中调用 |
+| 串口打开命令未接线 | 四路串口服务已注册到 `ServiceRegistry`，但默认 `isOpen() == false`；需要 UI/联调入口显式调用 `open()` |
 | 错误处理 | 串口断连/重连机制待完善 |
 
 ## 依赖关系

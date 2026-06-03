@@ -1,8 +1,9 @@
 #pragma once
 
 #include <QImage>
-#include <QLabel>
 #include <QMouseEvent>
+#include <QPointF>
+#include <QWheelEvent>
 #include <QWidget>
 
 namespace Dss::Ui {
@@ -14,6 +15,11 @@ public:
     explicit ImageDisplay(QWidget* parent = nullptr);
 
     void setImage(const QImage& image);
+    void resetView();
+
+    [[nodiscard]] auto imagePositionAt(const QPointF& widgetPos) const -> QPointF;
+    [[nodiscard]] auto imageScaleFactor() const -> double;
+    [[nodiscard]] auto imageOffset() const -> QPointF;
 
 signals:
     void positionClicked(QPointF pos);
@@ -24,12 +30,15 @@ protected:
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
+    void wheelEvent(QWheelEvent* event) override;
 
 private:
-    [[nodiscard]] QPointF widgetToImage(const QPointF& widgetPos) const;
+    [[nodiscard]] auto fitScale() const -> double;
+    [[nodiscard]] auto imageToWidget(const QPointF& imagePos) const -> QPointF;
+
+    void clampOffset();
 
     QImage m_currentImage;
-    QImage m_scaledImage;
     double m_scaleFactor = 1.0;
     QPointF m_offset{};
 };

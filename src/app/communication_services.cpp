@@ -1,9 +1,13 @@
 #include "dss/app/application_context.h"
 
 #ifdef DSS_BUILD_APP
+#include <filesystem>
+#include <format>
 #include <memory>
 
 #include "dss/acquisition/i_camera_controller.h"
+#include "dss/acquisition/i_frame_source.h"
+#include "dss/acquisition/image_sequence_frame_source.h"
 #include "dss/comm/display_channel.h"
 #include "dss/comm/exposure_channel.h"
 #include "dss/comm/i_serial_channel.h"
@@ -14,6 +18,7 @@
 #include "dss/network/error_diagnostics.h"
 #include "dss/network/heartbeat.h"
 #include "dss/network/image_sender.h"
+#include "dss/processing/image_processor.h"
 #include "dss/storage/local_image_storage_backend.h"
 #include "dss/storage/track_data_storage_backend.h"
 #endif
@@ -46,9 +51,36 @@ void ApplicationContext::registerCommunicationServices() {
     m_registry.registerService<Dss::Acquisition::ICameraController>(
         "camera", std::make_shared<Dss::Acquisition::CommandOnlyCameraController>(
                       Dss::Core::Config::instance().commNet().cameraPort));
-    m_registry.registerService<Dss::Storage::IStorageBackend>(
-        "image_storage", std::make_shared<Dss::Storage::LocalImageStorageBackend>(
-                             Dss::Core::Config::instance().paths().dataRoot));
+    auto localImageStorage = std::make_shared<Dss::Storage::LocalImageStorageBackend>(
+        Dss::Core::Config::instance().paths().dataRoot);
+    auto imageProcessor = std::make_shared<Dss::Processing::ImageProcessor>(m_bus);
+    auto replaySource = std::make_shared<Dss::Acquisition::ImageSequenceFrameSource>();
+    replaySource->setFrameCallback([imageProcessor,
+                                    localImageStorage](Dss::Processing::FramePacket packet) {
+        if (localImageStorage->isRunning() && !packet.rawImage.empty()) {
+            Dss::Storage::RawImageMetadata metadata{};
+            metadata.width = packet.width;
+            metadata.height = packet.height;
+            metadata.exposure = packet.metadata;
+            metadata.exposureTimeMilliseconds =
+                static_cast<double>(packet.metadata.exposureTime) * 1000.0;
+            metadata.frameFrequency = packet.metadata.frameFrequency;
+            (void)localImageStorage->enqueueRawFrame(
+                std::filesystem::path("replay") / std::format("frame_{:06}.raw", packet.frameSeq),
+                metadata, packet.rawImage);
+        }
+        (void)imageProcessor->submitFrame(std::move(packet));
+    });
+
+    m_registry.registerService<Dss::Processing::ImageProcessor>("image_processor", imageProcessor);
+    m_registry.registerService<Dss::Acquisition::ImageSequenceFrameSource>("replay_source",
+                                                                           replaySource);
+    m_registry.registerService<Dss::Acquisition::IFrameSource>("replay_source",
+                                                               std::move(replaySource));
+    m_registry.registerService<Dss::Storage::LocalImageStorageBackend>("image_storage",
+                                                                       localImageStorage);
+    m_registry.registerService<Dss::Storage::IStorageBackend>("image_storage",
+                                                              std::move(localImageStorage));
     m_registry.registerService<Dss::Storage::IStorageBackend>(
         "track_data_storage", std::make_shared<Dss::Storage::TrackDataStorageBackend>(
                                   Dss::Core::Config::instance().paths().dataRoot));

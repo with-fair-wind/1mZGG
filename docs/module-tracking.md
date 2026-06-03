@@ -77,13 +77,16 @@ LEO 目标跟踪器，对应 `TrackAlgo` 中 LEO 模式。
 ### 7. 数学工具 (`math_utils.h`) — 命名空间 `Dss::Math`
 
 从旧版 `mpolyfit`、`mfft`、`getperiod` 移植的数学函数，**已完全移植且有测试覆盖**。
+其中 `legacyFftSpectrum()` 对齐旧版 `mFFT::FFT_process` 的可观察输出，包括非 2 的幂输入补零、DC/普通频点幅值归一、相位角和基础频率。
 
 | 函数 | 旧版来源 | 用途 |
 |------|---------|------|
-| `polyfit(x, y, degree)` | `mpolyfit` | 最小二乘多项式拟合 |
-| `polyeval(coeffs, x)` | `mpolyfit` | 多项式求值 |
-| `fft(data)` | `mfft` | 快速傅里叶变换 |
-| `ifft(data)` | `mfft` | 逆 FFT |
+| `polyfit()` / `polynomialFit()` / `linearFit()` | `mpolyfit` | 最小二乘多项式拟合和统计量 |
+| `polyval()` | `mpolyfit` | 多项式求值 |
+| `legacyFftSize()` / `legacyFftSpectrum()` | `mfft` | 旧版频谱尺寸、幅值、相位、基频兼容 |
+| `fft()` / `ifft()` | `mfft` | DFT/逆变换基础函数 |
+| `samplePeriodError()` / `minimumSamplePeriod()` | `getperiod` | 采样周期误差和最小周期估计 |
+| `removePolynomialTrend()` / `legacyNearestSampleInterpolate()` | `getperiod` | 去趋势和旧版最近采样插值 |
 | `estimatePeriod(data, sampleRate)` | `getperiod` | 信号周期估计 |
 | `median(data)` | — | 中位数计算 |
 
@@ -99,7 +102,7 @@ LEO 目标跟踪器，对应 `TrackAlgo` 中 LEO 模式。
 | `assoc4()` | `GeoTracker` 内方法 | 骨架 |
 | `findTargets()` | `GeoTracker` 内方法 | 骨架 |
 | `trackTargets()` | `GeoTracker` 内方法 | 骨架 |
-| `mpolyfit` / `mfft` / `getperiod` | `Dss::Math::*` | **已完成** |
+| `mpolyfit` / `mfft` / `getperiod` | `Dss::Math::*` | **已完成**，包含 legacy FFT 频谱兼容 helper |
 
 ## 当前缺口
 

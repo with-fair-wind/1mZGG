@@ -27,6 +27,16 @@ struct DetrendedSeries {
     std::vector<double> residuals;
 };
 
+struct LegacyFftSpectrum {
+    std::vector<double> real;
+    std::vector<double> imag;
+    std::vector<double> amplitude;
+    std::vector<double> phaseDegrees;
+    double baseFrequency = 0.0;
+    double peakAmplitude = 0.0;
+    std::size_t fftSize = 0;
+};
+
 auto polyfit(std::span<const double> x, std::span<const double> y, int order)
     -> std::vector<double>;
 
@@ -48,6 +58,14 @@ auto removePolynomialTrend(std::span<const double> x, std::span<const double> y,
 auto legacyNearestSampleInterpolate(std::span<const double> x, std::span<const double> y,
                                     std::span<const double> targetX)
     -> std::optional<std::vector<double>>;
+
+auto legacyFftSize(std::size_t sampleCount) -> std::optional<std::size_t>;
+
+auto legacyFftSpectrum(std::span<const double> real, double sampleInterval)
+    -> std::optional<LegacyFftSpectrum>;
+
+auto legacyFftSpectrum(std::span<const double> real, std::span<const double> imag,
+                       double sampleInterval) -> std::optional<LegacyFftSpectrum>;
 
 auto polyval(std::span<const double> coeffs, double x) -> double;
 

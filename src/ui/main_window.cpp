@@ -2,6 +2,7 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QFileDialog>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
@@ -78,13 +79,35 @@ void MainWindow::setupControlPage() {
     m_controlPage = new QWidget;
     auto* layout = new QVBoxLayout(m_controlPage);
 
+    auto* sequenceRow = new QHBoxLayout;
+#ifdef DSS_HAS_ELA
+    auto* btnSelectSequence = new ElaPushButton("Select Sequence");
+#else
+    auto* btnSelectSequence = new QPushButton("Select Sequence");
+#endif
+    auto* sequenceLabel = new QLabel("Frames: 0");
+    sequenceRow->addWidget(btnSelectSequence);
+    sequenceRow->addWidget(sequenceLabel);
+
+    connect(btnSelectSequence, &QPushButton::clicked, [this] {
+        const auto files = QFileDialog::getOpenFileNames(
+            this, "Select Image Sequence", QString(),
+            "Image Sequence (*.bmp *.png *.jpg *.jpeg *.tif *.tiff *.raw);;All Files (*)");
+        if (!files.isEmpty()) {
+            m_vm.selectReplayFiles(files);
+        }
+    });
+    connect(&m_vm, &ViewModel::replayFrameCountChanged, [sequenceLabel](int count) {
+        sequenceLabel->setText(QString("Frames: %1").arg(count));
+    });
+
     auto* grabRow = new QHBoxLayout;
 #ifdef DSS_HAS_ELA
-    auto* btnStart = new ElaPushButton("Start Grab");
-    auto* btnStop = new ElaPushButton("Stop Grab");
+    auto* btnStart = new ElaPushButton("Start Replay");
+    auto* btnStop = new ElaPushButton("Pause Replay");
 #else
-    auto* btnStart = new QPushButton("Start Grab");
-    auto* btnStop = new QPushButton("Stop Grab");
+    auto* btnStart = new QPushButton("Start Replay");
+    auto* btnStop = new QPushButton("Pause Replay");
 #endif
     grabRow->addWidget(btnStart);
     grabRow->addWidget(btnStop);
@@ -142,6 +165,7 @@ void MainWindow::setupControlPage() {
         }
     });
 
+    layout->addLayout(sequenceRow);
     layout->addLayout(grabRow);
     layout->addLayout(modeRow);
     layout->addLayout(expRow);

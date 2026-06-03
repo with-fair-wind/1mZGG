@@ -3,6 +3,7 @@
 #include <QImage>
 #include <QObject>
 #include <QPointF>
+#include <QStringList>
 #include <memory>
 #include <vector>
 
@@ -23,6 +24,7 @@ class ViewModel : public QObject {
     Q_PROPERTY(double exposure READ exposure WRITE setExposure NOTIFY exposureChanged)
     Q_PROPERTY(bool isSaving READ isSaving NOTIFY savingChanged)
     Q_PROPERTY(QString statusText READ statusText NOTIFY statusTextChanged)
+    Q_PROPERTY(int replayFrameCount READ replayFrameCount NOTIFY replayFrameCountChanged)
 
 public:
     using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;
@@ -49,7 +51,11 @@ public:
     [[nodiscard]] QString statusText() const {
         return m_statusText;
     }
+    [[nodiscard]] int replayFrameCount() const {
+        return m_replayFrameCount;
+    }
 
+    Q_INVOKABLE bool selectReplayFiles(const QStringList& files);
     Q_INVOKABLE void startGrab();
     Q_INVOKABLE void stopGrab();
     Q_INVOKABLE void setTrackMode(int mode);
@@ -66,6 +72,7 @@ signals:
     void exposureChanged(double ms);
     void savingChanged(bool value);
     void statusTextChanged(const QString& text);
+    void replayFrameCountChanged(int count);
 
     void displayImageReady(QImage image);
     void cropImageReady(QImage image);
@@ -80,6 +87,7 @@ private:
     void onProcessingComplete(const Dss::Core::ProcessingCompleteEvent& event);
     void onTrackResult(const Dss::Core::TrackResultEvent& event);
     void onMasterControl(const Dss::Core::MasterControlEvent& event);
+    void setStatus(QString text);
 
     MessageBus& m_bus;
     Dss::Core::ServiceRegistry& m_registry;
@@ -90,6 +98,7 @@ private:
     double m_exposure = 0.0;
     bool m_saving = false;
     QString m_statusText = "Ready";
+    int m_replayFrameCount = 0;
 
     std::vector<Dss::Evt::ScopedConnection> m_connections;
 };

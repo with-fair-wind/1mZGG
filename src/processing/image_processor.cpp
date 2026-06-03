@@ -11,6 +11,9 @@ ImageProcessor::~ImageProcessor() {
 }
 
 void ImageProcessor::start() {
+    if (m_running.exchange(true)) {
+        return;
+    }
     m_frameChannel.open();
     m_workerThread = std::jthread([this](std::stop_token token) { workerLoop(token); });
 }
@@ -21,6 +24,7 @@ void ImageProcessor::stop() {
         m_frameChannel.close();
         m_workerThread.join();
     }
+    m_running.store(false);
 }
 
 bool ImageProcessor::submitFrame(FramePacket packet) {
@@ -33,6 +37,10 @@ bool ImageProcessor::submitFrame(FramePacket packet) {
 
 auto ImageProcessor::droppedFrames() const -> uint64_t {
     return m_droppedFrames.load(std::memory_order_relaxed);
+}
+
+bool ImageProcessor::isRunning() const {
+    return m_running.load();
 }
 
 void ImageProcessor::setProcessingStrategy(std::unique_ptr<IProcessingStrategy> strategy) {
@@ -102,6 +110,7 @@ void ImageProcessor::workerLoop(std::stop_token token) {
         m_bus.emit(Dss::Core::RotatedFrameReadyEvent{packet.frameSeq});
         m_bus.emit(Dss::Core::ImageSendEvent{packet.frameSeq});
     }
+    m_running.store(false);
 }
 
 }  // namespace Dss::Processing

@@ -8,7 +8,7 @@
 
 ## 模块职责
 
-Storage 模块定义图像和轨迹数据的存储格式，以及本地存储后端。当前以 header-only 格式定义为主，异步写入工作线程尚未实现。
+Storage 模块定义图像和轨迹数据的存储格式、本地存储后端和回放入口。当前格式定义、图像序列回放读取和本地图像 raw 异步写入已迁移，轨迹数据实际 I/O 仍待补齐。
 
 ## 组件清单
 
@@ -24,7 +24,14 @@ class IStorageBackend : public IService {
 
 ### 2. LocalImageStorageBackend (`local_image_storage_backend.h`)
 
-本地图像存储后端，当前仅持有 `baseDir` 路径，无异步写入实现。
+本地图像存储后端，持有 `baseDir` 路径，并提供显式启动的 I/O worker：
+
+| 方法 | 说明 |
+|------|------|
+| `init(baseDir)` | 创建/设置存储根目录 |
+| `start()` / `stop()` | 启动/停止后台写入线程，停止时 drain 队列 |
+| `enqueueRawFrame(path, metadata, pixels)` | 入队 legacy RAW 帧写入 |
+| `isRunning()` | 查询 worker 状态 |
 
 ### 3. TrackDataStorageBackend (`track_data_storage_backend.h`)
 
@@ -65,17 +72,17 @@ class IStorageBackend : public IService {
 |------|------|------|
 | `ImageCode.h/.cpp` (RAW编解码) | `image_storage_format.h` | 格式定义已迁移 |
 | `ImageCode.h/.cpp` (BMP编解码) | `bmp_image_format.h` | 格式定义已迁移 |
-| `ImageStorage.h/.cpp` (文件I/O) | `LocalImageStorageBackend` | 仅路径持有，无写入 |
+| `ImageStorage.h/.cpp` (文件I/O) | `LocalImageStorageBackend` | raw 异步写入首版已迁移 |
 | `TrackDataStorage.h/.cpp` | `TrackDataStorageBackend` + format | 仅格式定义，无I/O |
-| `ImageReplayer.h/.cpp` | — | **未迁移** |
+| `ImageReplayer.h/.cpp` | `ImageSequenceFrameSource` | 图像序列回放首版已迁移 |
 
 ## 当前缺口
 
 | 缺口 | 说明 |
 |------|------|
-| 异步写入 | 无工作线程实现帧数据的异步磁盘写入 |
-| 回放功能 | `ImageReplayer` 完全未迁移 |
-| 存储后端 | `LocalImageStorageBackend` / `TrackDataStorageBackend` 仅为桩实现 |
+| 轨迹数据 I/O | `TrackDataStorageBackend` 仍只有路径和格式 helper |
+| BMP/索引文件写入 | 当前 worker 先落 legacy RAW，BMP/IFM/IMI 会随完整存储会话补齐 |
+| 回放进度控制 | `ImageSequenceFrameSource` 已能按序回放，暂停续播和当前帧进度尚未持久化 |
 
 ## 依赖关系
 

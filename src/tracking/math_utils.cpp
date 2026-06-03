@@ -14,6 +14,29 @@ namespace {
 
 constexpr auto kSingularTolerance = 1.0e-12;
 
+auto isPowerOfTwo(std::size_t value) -> bool {
+    return value != 0 && (value & (value - std::size_t{1})) == 0;
+}
+
+void discreteFourierTransform(std::span<const double> inputReal, std::span<const double> inputImag,
+                              std::span<double> outputReal, std::span<double> outputImag) {
+    const auto n = inputReal.size();
+    for (std::size_t k = 0; k < n; ++k) {
+        double sumReal = 0.0;
+        double sumImag = 0.0;
+        for (std::size_t t = 0; t < n; ++t) {
+            const auto angle =
+                2.0 * std::numbers::pi * static_cast<double>(k * t) / static_cast<double>(n);
+            const auto cosAngle = std::cos(angle);
+            const auto sinAngle = std::sin(angle);
+            sumReal += inputReal[t] * cosAngle + inputImag[t] * sinAngle;
+            sumImag += inputImag[t] * cosAngle - inputReal[t] * sinAngle;
+        }
+        outputReal[k] = sumReal;
+        outputImag[k] = sumImag;
+    }
+}
+
 auto validFitInput(std::span<const double> x, std::span<const double> y, int order) -> bool {
     return order >= 0 && !x.empty() && x.size() == y.size() &&
            x.size() >= static_cast<std::size_t>(order + 1);
@@ -281,6 +304,71 @@ auto legacyNearestSampleInterpolate(std::span<const double> x, std::span<const d
     return interpolated;
 }
 
+auto legacyFftSize(std::size_t sampleCount) -> std::optional<std::size_t> {
+    if (sampleCount == 0) {
+        return std::nullopt;
+    }
+    if (sampleCount == 1) {
+        return 2;
+    }
+    if (isPowerOfTwo(sampleCount)) {
+        return sampleCount;
+    }
+
+    auto fftSize = std::size_t{2};
+    while (fftSize < sampleCount) {
+        if (fftSize > std::numeric_limits<std::size_t>::max() / 2) {
+            return std::nullopt;
+        }
+        fftSize *= 2;
+    }
+    return fftSize;
+}
+
+auto legacyFftSpectrum(std::span<const double> real, double sampleInterval)
+    -> std::optional<LegacyFftSpectrum> {
+    std::vector<double> zeroImag(real.size(), 0.0);
+    return legacyFftSpectrum(real, zeroImag, sampleInterval);
+}
+
+auto legacyFftSpectrum(std::span<const double> real, std::span<const double> imag,
+                       double sampleInterval) -> std::optional<LegacyFftSpectrum> {
+    if (real.empty() || real.size() != imag.size() || sampleInterval <= 0.0 ||
+        !std::isfinite(sampleInterval)) {
+        return std::nullopt;
+    }
+
+    const auto fftSize = legacyFftSize(real.size());
+    if (!fftSize.has_value()) {
+        return std::nullopt;
+    }
+
+    std::vector<double> paddedReal(*fftSize, 0.0);
+    std::vector<double> paddedImag(*fftSize, 0.0);
+    std::ranges::copy(real, paddedReal.begin());
+    std::ranges::copy(imag, paddedImag.begin());
+
+    LegacyFftSpectrum spectrum{};
+    spectrum.fftSize = *fftSize;
+    spectrum.real.resize(*fftSize);
+    spectrum.imag.resize(*fftSize);
+    spectrum.amplitude.resize(*fftSize);
+    spectrum.phaseDegrees.resize(*fftSize);
+    discreteFourierTransform(paddedReal, paddedImag, spectrum.real, spectrum.imag);
+
+    const auto normalBinScale = static_cast<double>(*fftSize) / 2.0;
+    for (std::size_t index = 0; index < *fftSize; ++index) {
+        const auto magnitude = std::hypot(spectrum.real[index], spectrum.imag[index]);
+        spectrum.amplitude[index] =
+            magnitude / ((index == 0) ? static_cast<double>(*fftSize) : normalBinScale);
+        spectrum.phaseDegrees[index] =
+            std::atan2(spectrum.imag[index], spectrum.real[index]) * 180.0 / std::numbers::pi;
+        spectrum.peakAmplitude = std::max(spectrum.peakAmplitude, spectrum.amplitude[index]);
+    }
+    spectrum.baseFrequency = 1.0 / (static_cast<double>(*fftSize - 1) * sampleInterval);
+    return spectrum;
+}
+
 auto polyval(std::span<const double> coeffs, double x) -> double {
     double result = 0.0;
     double xn = 1.0;
@@ -293,19 +381,8 @@ auto polyval(std::span<const double> coeffs, double x) -> double {
 
 void fft(std::span<const double> input, std::span<double> outputReal,
          std::span<double> outputImag) {
-    const auto n = input.size();
-    for (size_t k = 0; k < n; ++k) {
-        double sumReal = 0.0;
-        double sumImag = 0.0;
-        for (size_t t = 0; t < n; ++t) {
-            double angle =
-                2.0 * std::numbers::pi * static_cast<double>(k * t) / static_cast<double>(n);
-            sumReal += input[t] * std::cos(angle);
-            sumImag -= input[t] * std::sin(angle);
-        }
-        outputReal[k] = sumReal;
-        outputImag[k] = sumImag;
-    }
+    const std::vector<double> zeroImag(input.size(), 0.0);
+    discreteFourierTransform(input, zeroImag, outputReal, outputImag);
 }
 
 void ifft(std::span<const double> inputReal, std::span<const double> inputImag,

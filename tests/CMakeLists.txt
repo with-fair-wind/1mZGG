@@ -29,6 +29,7 @@ dss_add_test(test_frame_codec test_frame_codec.cpp dss_core)
 dss_add_test(test_serial_protocol_codec test_serial_protocol_codec.cpp dss_core)
 dss_add_test(test_camera_control_protocol test_camera_control_protocol.cpp dss_core)
 dss_add_test(test_image_storage_format test_image_storage_format.cpp dss_core)
+dss_add_test(test_local_image_storage_backend test_local_image_storage_backend.cpp dss_core)
 dss_add_test(test_bmp_image_format test_bmp_image_format.cpp dss_core)
 dss_add_test(test_track_data_storage_format test_track_data_storage_format.cpp dss_core)
 dss_add_test(test_data_exchange_protocol test_data_exchange_protocol.cpp dss_core)
@@ -53,6 +54,23 @@ if(TARGET dss_comm_qt AND TARGET dss_network_qt)
         dss_app
         dss_comm_qt
         dss_network_qt
+        dss_acquisition_qt
+        dss_processing
+        Qt6::Gui
+    )
+endif()
+
+if(TARGET dss_acquisition_qt)
+    dss_add_qt_test(test_image_sequence_frame_source
+        test_image_sequence_frame_source.cpp
+        dss_acquisition_qt
+    )
+endif()
+
+if(TARGET dss_ui_qt)
+    dss_add_qt_test(test_image_display
+        test_image_display.cpp
+        dss_ui_qt
     )
 endif()
 

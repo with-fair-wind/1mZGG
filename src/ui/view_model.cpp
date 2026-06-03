@@ -1,5 +1,13 @@
 #include "dss/ui/view_model.h"
 
+#include <filesystem>
+#include <vector>
+
+#include "dss/acquisition/i_frame_source.h"
+#include "dss/acquisition/image_sequence_frame_source.h"
+#include "dss/processing/image_processor.h"
+#include "dss/storage/local_image_storage_backend.h"
+
 namespace Dss::Ui {
 
 ViewModel::ViewModel(MessageBus& bus, Dss::Core::ServiceRegistry& registry, QObject* parent)
@@ -9,19 +17,91 @@ ViewModel::ViewModel(MessageBus& bus, Dss::Core::ServiceRegistry& registry, QObj
 
 ViewModel::~ViewModel() = default;
 
+bool ViewModel::selectReplayFiles(const QStringList& files) {
+    if (m_grabbing) {
+        stopGrab();
+    }
+
+    auto replaySource =
+        m_registry.tryGet<Dss::Acquisition::ImageSequenceFrameSource>("replay_source");
+    if (!replaySource) {
+        setStatus("Replay source is not registered");
+        return false;
+    }
+
+    std::vector<std::filesystem::path> paths;
+    paths.reserve(static_cast<std::size_t>(files.size()));
+    for (const auto& file : files) {
+        if (!file.isEmpty()) {
+            paths.emplace_back(file.toStdWString());
+        }
+    }
+
+    auto result = replaySource->setFiles(std::move(paths));
+    if (!result.has_value()) {
+        m_replayFrameCount = 0;
+        Q_EMIT replayFrameCountChanged(m_replayFrameCount);
+        setStatus(QString::fromStdString(result.error()));
+        return false;
+    }
+
+    auto initResult = replaySource->init();
+    if (!initResult.has_value()) {
+        m_replayFrameCount = 0;
+        Q_EMIT replayFrameCountChanged(m_replayFrameCount);
+        setStatus(QString::fromStdString(initResult.error()));
+        return false;
+    }
+
+    m_replayFrameCount = static_cast<int>(replaySource->frameCount());
+    Q_EMIT replayFrameCountChanged(m_replayFrameCount);
+    setStatus(QString("Sequence selected: %1 frames").arg(m_replayFrameCount));
+    return true;
+}
+
 void ViewModel::startGrab() {
-    // TODO: get IFrameSource from registry and start it
+    if (m_grabbing) {
+        return;
+    }
+
+    auto processor = m_registry.tryGet<Dss::Processing::ImageProcessor>("image_processor");
+    auto frameSource = m_registry.tryGet<Dss::Acquisition::IFrameSource>("replay_source");
+    if (!processor || !frameSource) {
+        setStatus("Replay services are not registered");
+        return;
+    }
+
+    auto initResult = frameSource->init();
+    if (!initResult.has_value()) {
+        setStatus(QString::fromStdString(initResult.error()));
+        return;
+    }
+
+    processor->start();
+    frameSource->start();
     m_grabbing = true;
-    m_statusText = "Grabbing...";
+    m_statusText = "Replaying...";
     Q_EMIT grabbingChanged(true);
     Q_EMIT statusTextChanged(m_statusText);
+    m_bus.emit(Dss::Core::GrabStartedEvent{frameSource->frameWidth(), frameSource->frameHeight()});
 }
 
 void ViewModel::stopGrab() {
+    auto frameSource = m_registry.tryGet<Dss::Acquisition::IFrameSource>("replay_source");
+    if (frameSource) {
+        frameSource->stop();
+    }
+
+    auto processor = m_registry.tryGet<Dss::Processing::ImageProcessor>("image_processor");
+    if (processor) {
+        processor->stop();
+    }
+
     m_grabbing = false;
     m_statusText = "Stopped";
     Q_EMIT grabbingChanged(false);
     Q_EMIT statusTextChanged(m_statusText);
+    m_bus.emit(Dss::Core::GrabStoppedEvent{});
 }
 
 void ViewModel::setTrackMode(int mode) {
@@ -44,13 +124,37 @@ void ViewModel::selectTarget(QPointF pos) {
 }
 
 void ViewModel::startSaving() {
+    auto storage = m_registry.tryGet<Dss::Storage::LocalImageStorageBackend>("image_storage");
+    if (!storage) {
+        setStatus("Image storage is not registered");
+        return;
+    }
+    if (!storage->isReady()) {
+        auto initResult = storage->init(storage->baseDir());
+        if (!initResult.has_value()) {
+            setStatus(QString::fromStdString(initResult.error()));
+            return;
+        }
+    }
+    auto startResult = storage->start();
+    if (!startResult.has_value()) {
+        setStatus(QString::fromStdString(startResult.error()));
+        return;
+    }
+
     m_saving = true;
     Q_EMIT savingChanged(true);
+    setStatus("Saving enabled");
 }
 
 void ViewModel::stopSaving() {
+    auto storage = m_registry.tryGet<Dss::Storage::LocalImageStorageBackend>("image_storage");
+    if (storage) {
+        storage->stop();
+    }
     m_saving = false;
     Q_EMIT savingChanged(false);
+    setStatus("Saving stopped");
 }
 
 void ViewModel::toggleZoom(int level) {
@@ -120,6 +224,14 @@ void ViewModel::onMasterControl(const Dss::Core::MasterControlEvent& event) {
     } else if (!event.grab && m_grabbing) {
         stopGrab();
     }
+}
+
+void ViewModel::setStatus(QString text) {
+    if (m_statusText == text) {
+        return;
+    }
+    m_statusText = std::move(text);
+    Q_EMIT statusTextChanged(m_statusText);
 }
 
 }  // namespace Dss::Ui

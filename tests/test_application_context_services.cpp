@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 
 #include "dss/acquisition/i_camera_controller.h"
+#include "dss/acquisition/i_frame_source.h"
+#include "dss/acquisition/image_sequence_frame_source.h"
 #include "dss/app/application_context.h"
 #include "dss/comm/i_serial_channel.h"
 #include "dss/network/atmos_receiver.h"
@@ -8,7 +10,9 @@
 #include "dss/network/error_diagnostics.h"
 #include "dss/network/heartbeat.h"
 #include "dss/network/image_sender.h"
+#include "dss/processing/image_processor.h"
 #include "dss/storage/i_storage_backend.h"
+#include "dss/storage/local_image_storage_backend.h"
 
 TEST(ApplicationContextServices, RegistersCommunicationServicesWithoutOpeningPorts) {
     Dss::App::ApplicationContext context;
@@ -59,11 +63,31 @@ TEST(ApplicationContextServices, RegistersCommunicationServicesWithoutOpeningPor
     ASSERT_NE(camera, nullptr);
     EXPECT_FALSE(camera->isOpen());
 
+    const auto imageProcessor =
+        context.registry().get<Dss::Processing::ImageProcessor>("image_processor");
+    const auto replaySource =
+        context.registry().get<Dss::Acquisition::IFrameSource>("replay_source");
+    const auto imageSequenceSource =
+        context.registry().get<Dss::Acquisition::ImageSequenceFrameSource>("replay_source");
+
+    ASSERT_NE(imageProcessor, nullptr);
+    ASSERT_NE(replaySource, nullptr);
+    ASSERT_NE(imageSequenceSource, nullptr);
+    EXPECT_FALSE(imageProcessor->isRunning());
+    EXPECT_FALSE(replaySource->isRunning());
+    EXPECT_EQ(replaySource->frameWidth(), 0U);
+    EXPECT_EQ(replaySource->frameHeight(), 0U);
+    EXPECT_EQ(imageSequenceSource->frameCount(), 0U);
+
     const auto imageStorage =
         context.registry().get<Dss::Storage::IStorageBackend>("image_storage");
+    const auto localImageStorage =
+        context.registry().get<Dss::Storage::LocalImageStorageBackend>("image_storage");
 
     ASSERT_NE(imageStorage, nullptr);
+    ASSERT_NE(localImageStorage, nullptr);
     EXPECT_FALSE(imageStorage->isReady());
+    EXPECT_FALSE(localImageStorage->isRunning());
 
     const auto trackDataStorage =
         context.registry().get<Dss::Storage::IStorageBackend>("track_data_storage");
