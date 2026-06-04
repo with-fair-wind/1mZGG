@@ -1,11 +1,10 @@
-#include <gtest/gtest.h>
-
 #include <QApplication>
 #include <QImage>
 #include <QPoint>
 #include <QWheelEvent>
-
 #include <memory>
+
+#include <gtest/gtest.h>
 
 #include "dss/ui/image_display.h"
 

@@ -2,7 +2,7 @@
 
 > 本文档跟踪从旧版 qmake/OpenCL 单体代码 (`oldsrc/`) 到新版 CMake 模块化架构的迁移状态。
 >
-> 最近更新: 2026-06-03。当前策略仍是 `oldsrc/` 只读参考，不纳入新 CMake 构建。
+> 最近更新: 2026-06-04。当前策略仍是 `oldsrc/` 只读参考，不纳入新 CMake 构建。
 
 ## 迁移概览
 
@@ -27,7 +27,9 @@
 - 旧数学基础能力已迁入 `Dss::Math`: `mpolyfit`、`getperiod` 和 `mFFT::FFT_process` 的可观察行为已通过纯 C++ helper 与单元测试覆盖。
 - 图像序列回放首版已落地: `ImageSequenceFrameSource` 可选择 BMP/PNG/JPEG/TIFF/raw 序列，按 `IFrameSource` 回调输出 `FramePacket`，并通过 `ImageProcessor` 进入 `DisplayRefreshEvent` 和 UI 显示。
 - 本地图像存储 raw 异步写入 worker 已落地: UI 保存开关显式启动 `LocalImageStorageBackend`，回放帧进入处理器前可异步落盘，停止时 drain 队列。
-- 当前最大剩余面是 Manual/GEO 跟踪算法、完整图像处理策略、Sapera 真实采集器、LEO/SC 跟踪和 CUDA 管线封装；Sapera 已不是无硬件端到端开发的前置条件。
+- Manual 跟踪最小闭环已落地: UI 点击图像像素后会配置 `ManualTracker`，无处理 backend 的回放帧也能进入 tracking，发布 `TrackResultEvent` 并更新 UI 跟踪信息。
+- GEO 跟踪函数级切片继续推进: 星速估计、四帧初始关联、目标发现标记、基础跟踪维持、同帧测量复用抑制、预测越界结束、连续无效窗口结束目标，以及目标全部失活后重新进入四帧关联/重发现状态切换已有纯函数/策略实现与单元测试；完整 legacy 阈值、重发现去重/校验、TWDW/GDCL 仍待继续迁移。
+- 当前最大剩余面是 GEO 完整策略、LEO/SC 跟踪算法、Manual legacy 三帧关联细节、完整图像处理策略、Sapera 真实采集器和 CUDA 管线封装；Sapera 已不是无硬件端到端开发的前置条件。
 
 ---
 
@@ -70,16 +72,16 @@
 
 | 旧版文件 | 新版位置 | 已完成 | 待完成 |
 |---------|---------|--------|--------|
-| `TrackAlgo.h/.cpp` (GEO) | `dss/tracking/geo_tracker.*` | 类骨架、方法签名 | **所有核心算法** (calcStarSpeed, assoc4, findTargets, trackTargets) |
+| `TrackAlgo.h/.cpp` (GEO) | `dss/tracking/geo_tracker.*` | `calcStarSpeed` 纯 helper、星速 AE 换算、四帧初始关联首版、`findTargets`/`trackTargets` 基础维持、同帧测量复用抑制、预测越界/连续无效窗口 living 规则、目标丢失后重新进入四帧关联、`test_geo_tracker` 覆盖 | legacy 重发现去重/校验、完整阈值分支、TWDW/GDCL、目标 ID/会话策略 |
 | `TrackAlgo.h/.cpp` (LEO) | `dss/tracking/leo_tracker.*` | 类骨架 | **track() 算法体** |
 | `TrackAlgo.h/.cpp` (SC) | `dss/tracking/sc_tracker.*` | 类骨架 | **track() 算法体** |
-| `TrackAlgo.h/.cpp` (Manual) | `dss/tracking/manual_tracker.*` | 类骨架、setManualTarget | **track() 算法体** |
-| `ImageProcessor.h/.cpp` | `dss/processing/image_processor.*` | 工作线程、帧队列、事件发布、ApplicationContext 注册 | GPU/光度/星图集成 |
+| `TrackAlgo.h/.cpp` (Manual) | `dss/tracking/manual_tracker.*` | 手动选点人工 blob、AE 解算、TargetInfo 输出、UI/ImageProcessor 闭环 | legacy 三帧关联/Verify/TrackTarget 细节、TWDW/GDCL |
+| `ImageProcessor.h/.cpp` | `dss/processing/image_processor.*` | 工作线程、帧队列、事件发布、ApplicationContext 注册、Direct/Manual 无 backend 跟踪 | GPU/光度/星图集成 |
 | `ImageProcAlgo.h/.cpp` | `OpenCvProcessingStrategy` + CUDA kernels | OpenCV 参考实现 | 帧差法、定标、光度、TWDW、指向误差 |
 | `ImageStorage.h/.cpp` (I/O) | `LocalImageStorageBackend` | 格式定义、raw 异步写入 worker | BMP/IFM/会话索引、错误上报 |
 | `TrackDataStorage.h/.cpp` (I/O) | `TrackDataStorageBackend` | 格式定义、路径持有 | 文件 I/O 操作 |
 | `ImageReplayer.h/.cpp` | `ImageSequenceFrameSource` | 选择序列、QImage/raw 解码、后台回放、接入处理/显示 | 暂停续播进度、当前帧进度、更多 legacy 浏览行为 |
-| `UI_CtrlPad.h/.cpp/.ui` | `dss/ui/main_window.*` + `view_model.*` | 选择序列、开始/暂停回放、保存、跟踪模式 UI 首版 | 当前帧进度、处理策略开关、硬件命令入口 |
+| `UI_CtrlPad.h/.cpp/.ui` | `dss/ui/main_window.*` + `view_model.*` | 选择序列、开始/暂停回放、保存、Manual 选点跟踪 UI 首版 | 当前帧进度、处理策略开关、硬件命令入口、GEO/LEO/SC 策略切换 |
 
 ### 未开始 (Not Started)
 
@@ -117,9 +119,9 @@
 | **Phase 1** | 项目骨架: CMake、Core 类型/事件/配置、事件总线 | **已完成** |
 | **Phase 2** | 通信层: 串口协议编解码、通道实现、网络服务 | **已完成**，服务已注册但默认不开硬件端口 |
 | **Phase 3** | 处理管线: FramePacket、Pipeline、Labeler、OpenCV 后端 | **已完成** |
-| **Phase 4** | 跟踪算法: TrackManager 骨架、数学工具、Tracker 接口 | **数学工具完成，策略算法待移植** |
+| **Phase 4** | 跟踪算法: TrackManager 骨架、数学工具、Tracker 接口 | **数学工具完成，Manual 最小闭环完成，GEO 第一批函数级切片完成，LEO/SC 待移植** |
 | **Phase 5** | GPU 后端: CUDA 设备管理、核函数移植 | **核函数完成，管线集成待做** |
-| **Phase 6** | UI 集成: MainWindow、ViewModel、端到端接线 | **回放/保存首版已接线，硬件/策略命令待做** |
+| **Phase 6** | UI 集成: MainWindow、ViewModel、端到端接线 | **回放/保存/Manual 选点跟踪首版已接线，硬件/策略命令待做** |
 
 ### 后续迁移计划
 
@@ -129,8 +131,8 @@
 | 2 | 回放端到端处理链路 | 将回放帧接入 `ImageProcessor`/`ProcessingPipeline`/显示事件 | **首版完成**：无相机可驱动 UI 显示，6144 大图显示/滚轮缩放已在 `ImageDisplay` 支持 |
 | 3 | 存储 I/O 工作线程 | 将 `LocalImageStorageBackend` 从格式 helper 推进到实际异步写入 | **部分完成**：raw worker 和 drain 测试完成；BMP/IFM/轨迹文本待补 |
 | 4 | UI 回放/存储/处理命令 | 搭起选择序列、开始/暂停回放、保存、处理、跟踪等显式命令 | **部分完成**：选择序列、开始/暂停、保存、跟踪模式已接；处理策略开关/进度待补 |
-| 5 | Manual 跟踪最小策略 | 先迁移最简单的手动目标保持逻辑，打通 tracking event | 固定输入目标列表的确定性测试 |
-| 6 | GEO 跟踪策略 | 逐步迁移 `calcStarSpeed`、`assoc4`、`findTargets`、`trackTargets` | 以旧算法样例/合成帧做回归测试 |
+| 5 | Manual 跟踪最小策略 | 先迁移最简单的手动目标保持逻辑，打通 tracking event | **首版完成**：`test_manual_tracker`、`test_image_processor`、`test_view_model_tracking` 覆盖无 backend 回放闭环 |
+| 6 | GEO 跟踪策略 | 逐步迁移 `calcStarSpeed`、`assoc4`、`findTargets`、`trackTargets` | **继续推进**：星速估计、四帧关联、基础维持、测量复用抑制、越界/连续无效结束、丢失后重发现状态切换已由 `test_geo_tracker` 覆盖；下一步补完整 legacy 重发现/校验分支 |
 | 7 | Sapera 采集器 | 回放链路稳定后接真实 Sapera `Grabber` 为另一个 `IFrameSource` | 无 Sapera 时仍可启动；有硬件时显式打开 |
 | 8 | LEO/SC 跟踪策略 | 在 Manual/GEO 稳定后迁移剩余跟踪模式 | 与 GEO 共用测量 DTO 和回归样例 |
 | 9 | CUDA 管线封装 | 把 CUDA kernel 包装为 `IProcessingStrategy` 并接入 `ProcessingPipeline` | CPU/OpenCV 对照、CUDA 可选启用 |
@@ -141,7 +143,7 @@
 
 ### 高风险项
 
-1. **跟踪算法移植** — `TrackAlgo.cpp` 约 3000 行核心算法，是最大的迁移任务块。建议逐模式移植：先 Manual 打通用户选点与 tracking event，再 GEO，最后 LEO/SC。
+1. **跟踪算法移植** — `TrackAlgo.cpp` 约 3000 行核心算法，是最大的迁移任务块。Manual 最小闭环和 GEO 第一批函数级切片已打通，目标丢失后也能回到四帧关联入口；下一步继续补 GEO 的完整 legacy 重发现去重/校验和 TWDW/GDCL，之后进入 LEO/SC。
 
 2. **处理策略补齐** — 回放源已能驱动 `ImageProcessor` 原样显示，下一步需要把 legacy 图像处理/目标检测策略接入 `ProcessingPipeline`，为 Manual/GEO 提供测量输入。
 

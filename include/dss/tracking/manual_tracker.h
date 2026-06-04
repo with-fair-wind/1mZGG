@@ -25,6 +25,7 @@ private:
     std::deque<Dss::Core::FrameMeasurements> m_fifo;
     Dss::Core::TargetInfo m_currentTarget{};
     Dss::Core::MeasuredBlob m_manualBlob{};
+    bool m_hasManualBlob = false;
     std::mutex m_blobMutex;
 };
 

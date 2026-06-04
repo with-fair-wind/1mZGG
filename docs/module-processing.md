@@ -87,6 +87,8 @@ class IProcessingStrategy {
 | `setProcessingStrategy()` | 切换处理后端 |
 | `setTrackingStrategy()` | 切换跟踪策略 |
 
+无处理 backend 时，`ImageProcessor` 仍会把原始回放帧作为 Direct 帧发布显示；如果当前跟踪策略是 Manual 且已有 UI 选点，也会构造 `FrameMeasurements` 并发布 `TrackResultEvent`。这使无 Sapera、无 OpenCV/CUDA 策略的回放模式也能验证“选序列 → 显示 → 手动跟踪”的主链路。
+
 ### 7. Labeler (`labeler.h`)
 
 CPU 连通域检测与目标提取。
@@ -140,7 +142,7 @@ auto labelAndExtract(span<const uint8_t> binaryImage,
 | 帧差法未实现 | `ProcessingMode::Diff` 仅定义枚举，无实现 |
 | 光度测量未接入 | `photometryBuffer` 未使用 |
 | 星图匹配未接入 | `DSS_ENABLE_STARLIBS` 接口未实现 |
-| `ImageProcessor` 未注册 | 尚未接入 `ApplicationContext` |
+| 完整处理策略命令 | `ImageProcessor` 已注册；UI 处理策略开关和参数命令尚未完成 |
 
 ## 依赖关系
 

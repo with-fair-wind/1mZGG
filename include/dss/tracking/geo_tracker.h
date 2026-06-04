@@ -1,10 +1,31 @@
 #pragma once
 
 #include <deque>
+#include <span>
+#include <vector>
 
 #include "dss/tracking/i_tracking_strategy.h"
 
 namespace Dss::Tracking {
+
+enum class GeoStarSpeedStatus {
+    Ok,
+    InsufficientFrames,
+    MissingStars,
+    NoCandidates,
+};
+
+struct GeoStarSpeedResult {
+    GeoStarSpeedStatus status = GeoStarSpeedStatus::InsufficientFrames;
+    Dss::Core::Vec2f frameSpeed{};
+    Dss::Core::Vec2f aeSpeed{};
+    int matchCount = 0;
+};
+
+[[nodiscard]] auto estimateGeoStarSpeed(std::span<const Dss::Core::FrameMeasurements> frames,
+                                        float ratioFov, float radius,
+                                        const Dss::Core::OpticParams& opticParams)
+    -> GeoStarSpeedResult;
 
 class GeoTracker final : public ITrackingStrategy {
 public:
@@ -29,6 +50,8 @@ private:
     std::vector<Dss::Core::TargetInfo> m_targets;
     Dss::Core::Vec2f m_starSpeed{};
     Dss::Core::Vec2f m_starSpeedAe{};
+    float m_frameFreq = 1.0f;
+    int m_starMatchCount = 0;
     bool m_targetFound = false;
     bool m_targetVerified = false;
     uint64_t m_frameSeq = 0;

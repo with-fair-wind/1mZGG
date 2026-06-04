@@ -56,9 +56,9 @@ UI 状态中心，连接后端事件总线与前端 UI。
 | `selectReplayFiles(files)` | 选择图像序列 | 已接入 `ImageSequenceFrameSource` |
 | `startGrab()` | 开始回放/采集 | 已接入 `ImageProcessor` + `IFrameSource` |
 | `stopGrab()` | 暂停/停止回放 | 已停止回放源和处理器 |
-| `setTrackMode(mode)` | 切换跟踪模式 | UI 状态已接线，策略算法待迁移 |
+| `setTrackMode(mode)` | 切换跟踪模式 | Manual 会配置 `ManualTracker`，其他策略待算法迁移后接入 |
 | `setExposure(ms)` | 设置曝光时间 | UI 状态已接线，硬件命令待接 |
-| `selectTarget(pos)` | 手动选择目标 | 已发布 `ManualTargetSelectEvent` |
+| `selectTarget(pos)` | 手动选择目标 | 已配置 Manual 策略并发布 `ManualTargetSelectEvent` |
 | `startSaving()` | 开始存储 | 已启动 `LocalImageStorageBackend` worker |
 | `stopSaving()` | 停止存储 | 已停止并 drain 存储 worker |
 | `toggleZoom(level)` | 切换缩放级别 | 事件已发出；滚轮缩放在 `ImageDisplay` 内实现 |
@@ -142,7 +142,7 @@ signals:
 
 | 旧版 | 新版 | 状态 |
 |------|------|------|
-| `UI_CtrlPad` | `MainWindow` + `ViewModel` | 回放/保存/模式控制首版接线 |
+| `UI_CtrlPad` | `MainWindow` + `ViewModel` | 回放/保存/Manual 选点跟踪首版接线 |
 | `UI_DispPad` | `ImageDisplay` | 基本功能 + 滚轮缩放迁移 |
 | `UI_DispPadS` | `ImageDisplayCrop` | 基本功能迁移 |
 | `UI_InitDlg` | `InitDialog` | 已迁移 |
@@ -155,7 +155,7 @@ signals:
 | 缺口 | 说明 |
 |------|------|
 | 当前帧进度 | 已显示序列帧数，当前帧号/进度条尚未接线 |
-| 处理/跟踪策略选择 | UI 模式值已接线，Manual/GEO/LEO/SC 算法体尚待迁移 |
+| 处理/跟踪策略选择 | Manual 选点跟踪已接线；GEO/LEO/SC 模式等待算法体迁移后接入 |
 | 距离曲线图 | `UI_DistCurve` 未迁移 |
 | 页面布局 | MainWindow 各页面为桩实现 |
 | 主题/样式 | 未实现自定义样式，依赖 ElaWidgetTools 或默认样式 |

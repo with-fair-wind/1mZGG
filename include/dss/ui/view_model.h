@@ -5,6 +5,7 @@
 #include <QPointF>
 #include <QStringList>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "dss/core/constants.h"
@@ -87,6 +88,8 @@ private:
     void onProcessingComplete(const Dss::Core::ProcessingCompleteEvent& event);
     void onTrackResult(const Dss::Core::TrackResultEvent& event);
     void onMasterControl(const Dss::Core::MasterControlEvent& event);
+    void configureTrackingStrategy();
+    [[nodiscard]] static auto makeManualTarget(QPointF pos) -> Dss::Core::MeasuredBlob;
     void setStatus(QString text);
 
     MessageBus& m_bus;
@@ -99,6 +102,7 @@ private:
     bool m_saving = false;
     QString m_statusText = "Ready";
     int m_replayFrameCount = 0;
+    std::optional<Dss::Core::MeasuredBlob> m_manualTarget;
 
     std::vector<Dss::Evt::ScopedConnection> m_connections;
 };

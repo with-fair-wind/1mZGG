@@ -43,13 +43,13 @@ class ITrackingStrategy {
 
 GEO 目标跟踪器，对应旧版 `TrackAlgo` 中 GEO 模式的算法。
 
-**旧版核心算法 (待移植):**
+**旧版核心算法:**
 - `calcStarSpeed()` — 星体运动速度计算
 - `assoc4()` — 四帧关联
 - `findTargets()` — 新目标发现
 - `trackTargets()` — 已知目标跟踪维持
 
-**当前状态:** 类骨架已建立，所有核心方法体为 TODO。
+**当前状态:** 第一批函数级切片已完成并继续补齐。`estimateGeoStarSpeed()` 提供 Qt-free 纯函数用于估计中心视场星速和 AE 速度；`calcStarSpeed()` 已接入策略状态；`assoc4()` 已迁移确定性的四帧候选关联、星速过滤、运动一致性过滤和基础重复抑制；`findTargets()`/`trackTargets()` 已能发布基础目标并按预测位置维持，且会抑制同一帧测量被多个目标复用，并在预测越出图像边界或最近 `numFramesLiving` 帧全无效时结束目标。目标全部失活后会回到四帧关联入口，支持后续图像中重新发现目标。仍待迁移完整 legacy 分支，包括 `GEO_ReFindTargets` 的重发现去重/校验、全局阈值策略、TWDW/GDCL 和会话级目标 ID。
 
 ### 4. LeoTracker (`leo_tracker.h`)
 
@@ -69,10 +69,10 @@ LEO 目标跟踪器，对应 `TrackAlgo` 中 LEO 模式。
 
 | 方法 | 说明 |
 |------|------|
-| `setManualTarget(x, y)` | 设置手动选定的目标位置 |
-| `track(measurements)` | 在目标列表中搜索最近匹配 |
+| `setManualTarget(blob)` | 设置手动选定的人工目标 blob |
+| `track(measurements)` | 将人工 blob 转换为当前帧 `TargetInfo` 并维护预测状态 |
 
-**当前状态:** `track()` 方法体为 TODO。
+**当前状态:** Manual 最小闭环已完成。未选择目标时不输出结果；选择目标后会补齐人工 blob 的边界框、DN/area、AE 坐标、距离修正和相邻帧速度，并输出 `TargetInfo`。旧版 `MANUAL_Assoc3`、`MANUAL_VerifyTarget`、`MANUAL_TrackTarget` 的完整历史校验和 TWDW/GDCL 细节仍待后续迁移。
 
 ### 7. 数学工具 (`math_utils.h`) — 命名空间 `Dss::Math`
 
@@ -94,21 +94,23 @@ LEO 目标跟踪器，对应 `TrackAlgo` 中 LEO 模式。
 
 | 旧版 `TrackAlgo` 函数 | 新类 | 迁移状态 |
 |----------------------|------|---------|
-| `TrackProc_GEO()` | `GeoTracker::track()` | 骨架，算法未移植 |
+| `TrackProc_GEO()` | `GeoTracker::track()` | **函数级首版完成**，完整 legacy 分支待补 |
 | `TrackProc_LEO()` | `LeoTracker::track()` | 骨架，算法未移植 |
 | `TrackProc_SC()` | `ScTracker::track()` | 骨架，算法未移植 |
-| `TrackProc_MANUAL()` | `ManualTracker::track()` | 骨架，算法未移植 |
-| `calcStarSpeed()` | `GeoTracker` 内方法 | 骨架 |
-| `assoc4()` | `GeoTracker` 内方法 | 骨架 |
-| `findTargets()` | `GeoTracker` 内方法 | 骨架 |
-| `trackTargets()` | `GeoTracker` 内方法 | 骨架 |
+| `TrackProc_MANUAL()` | `ManualTracker::track()` | **最小闭环完成**，legacy 三帧关联/校验细节待迁移 |
+| `calcStarSpeed()` | `GeoTracker` / `estimateGeoStarSpeed()` | **首版完成**，中心视场星速和 AE 换算已覆盖 |
+| `assoc4()` | `GeoTracker` 内方法 | **首版完成**，四帧关联、星速过滤、运动一致性过滤已覆盖 |
+| `findTargets()` | `GeoTracker` 内方法 | **基础完成**，按关联结果设置发现/验证状态 |
+| `trackTargets()` | `GeoTracker` 内方法 | **基础完成**，按预测位置维持目标，已补同帧测量复用抑制、预测越界/连续无效结束和丢失后重发现状态切换，完整 legacy 校验待补 |
 | `mpolyfit` / `mfft` / `getperiod` | `Dss::Math::*` | **已完成**，包含 legacy FFT 频谱兼容 helper |
 
 ## 当前缺口
 
 | 缺口 | 严重程度 | 说明 |
 |------|---------|------|
-| 四种跟踪算法未移植 | **高** | 旧版 `TrackAlgo.cpp` (~3000行) 是最大的未迁移代码块 |
+| GEO 完整 legacy 分支待补 | **高** | 星速、四帧关联、基础维持、测量复用抑制、living 规则和丢失后重发现入口已迁移；完整 `GEO_ReFindTargets` 去重/校验、全局阈值、TWDW/GDCL 仍需继续对照旧版补齐 |
+| LEO/SC 算法未移植 | **高** | 旧版 `TrackAlgo.cpp` (~3000行) 仍有两个模式未迁移 |
+| Manual legacy 细节待补 | 中 | 最小选点闭环已完成，三帧关联、验证、TWDW/GDCL 仍需对照旧版迁移 |
 | `TrackManager::setMode()` 工厂 | 中 | 需实现按模式自动创建对应 Tracker 实例 |
 | 指向误差模型 | 中 | `PointingErrorResult` 已定义但计算逻辑未移植 |
 

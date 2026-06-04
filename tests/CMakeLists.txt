@@ -38,6 +38,8 @@ dss_add_test(test_config test_config.cpp dss_core)
 dss_add_test(test_service_host test_service_host.cpp dss_core)
 dss_add_test(test_service_registry test_service_registry.cpp dss_core)
 dss_add_test(test_math_utils test_math_utils.cpp dss_tracking)
+dss_add_test(test_manual_tracker test_manual_tracker.cpp dss_tracking)
+dss_add_test(test_geo_tracker test_geo_tracker.cpp dss_tracking)
 dss_add_test(test_bounded_channel test_bounded_channel.cpp dss_processing)
 dss_add_test(test_image_processor test_image_processor.cpp dss_processing)
 dss_add_test(test_frame_view test_frame_view.cpp dss_processing)
@@ -70,6 +72,10 @@ endif()
 if(TARGET dss_ui_qt)
     dss_add_qt_test(test_image_display
         test_image_display.cpp
+        dss_ui_qt
+    )
+    dss_add_qt_test(test_view_model_tracking
+        test_view_model_tracking.cpp
         dss_ui_qt
     )
 endif()

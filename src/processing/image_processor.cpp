@@ -82,15 +82,18 @@ void ImageProcessor::workerLoop(std::stop_token token) {
         std::vector<Dss::Core::TargetInfo> trackResults;
         {
             std::lock_guard lock(m_strategyMutex);
-            if (m_trackStrategy && procResult.success) {
+            const auto canTrackDirectFrame = !m_pipeline.hasBackend();
+            if (m_trackStrategy && (procResult.success || canTrackDirectFrame)) {
                 Dss::Core::FrameMeasurements meas{};
                 meas.frameSeq = packet.frameSeq;
                 meas.timestamp = packet.metadata.timestamp;
                 meas.fovCenterAe = packet.metadata.pointingAe;
                 meas.exposureTime = packet.metadata.exposureTime;
                 meas.frameFreq = packet.metadata.frameFrequency;
-                meas.targetBlobs = std::move(procResult.targetBlobs);
-                meas.starBlobs = std::move(procResult.starBlobs);
+                meas.targetBlobs = procResult.success ? std::move(procResult.targetBlobs)
+                                                      : std::move(packet.targetBlobs);
+                meas.starBlobs = procResult.success ? std::move(procResult.starBlobs)
+                                                    : std::move(packet.starBlobs);
 
                 trackResults = m_trackStrategy->track(meas);
             }

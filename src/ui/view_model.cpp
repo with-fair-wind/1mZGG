@@ -1,12 +1,15 @@
 #include "dss/ui/view_model.h"
 
 #include <filesystem>
+#include <memory>
 #include <vector>
 
 #include "dss/acquisition/i_frame_source.h"
 #include "dss/acquisition/image_sequence_frame_source.h"
+#include "dss/core/config.h"
 #include "dss/processing/image_processor.h"
 #include "dss/storage/local_image_storage_backend.h"
+#include "dss/tracking/manual_tracker.h"
 
 namespace Dss::Ui {
 
@@ -108,6 +111,7 @@ void ViewModel::setTrackMode(int mode) {
     if (m_trackMode != mode) {
         m_trackMode = mode;
         Q_EMIT trackModeChanged(mode);
+        configureTrackingStrategy();
     }
 }
 
@@ -119,8 +123,16 @@ void ViewModel::setExposure(double ms) {
 }
 
 void ViewModel::selectTarget(QPointF pos) {
+    m_manualTarget = makeManualTarget(pos);
     m_bus.emit(Dss::Core::ManualTargetSelectEvent{static_cast<float>(pos.x()),
                                                   static_cast<float>(pos.y())});
+    if (m_trackMode != static_cast<int>(Dss::Core::TrackMode::Manual)) {
+        setTrackMode(static_cast<int>(Dss::Core::TrackMode::Manual));
+    } else {
+        configureTrackingStrategy();
+    }
+    setStatus(
+        QString("Manual target selected: %1, %2").arg(pos.x(), 0, 'f', 1).arg(pos.y(), 0, 'f', 1));
 }
 
 void ViewModel::startSaving() {
@@ -224,6 +236,41 @@ void ViewModel::onMasterControl(const Dss::Core::MasterControlEvent& event) {
     } else if (!event.grab && m_grabbing) {
         stopGrab();
     }
+}
+
+void ViewModel::configureTrackingStrategy() {
+    auto processor = m_registry.tryGet<Dss::Processing::ImageProcessor>("image_processor");
+    if (!processor) {
+        setStatus("Image processor is not registered");
+        return;
+    }
+
+    if (m_trackMode != static_cast<int>(Dss::Core::TrackMode::Manual)) {
+        processor->setTrackingStrategy(nullptr);
+        return;
+    }
+
+    auto tracker = std::make_unique<Dss::Tracking::ManualTracker>(
+        Dss::Core::Config::instance().trackingSettings());
+    if (m_manualTarget.has_value()) {
+        tracker->setManualTarget(*m_manualTarget);
+    }
+    processor->setTrackingStrategy(std::move(tracker));
+    setStatus(m_manualTarget.has_value() ? "Manual tracking target armed"
+                                         : "Manual tracking enabled");
+}
+
+auto ViewModel::makeManualTarget(QPointF pos) -> Dss::Core::MeasuredBlob {
+    Dss::Core::MeasuredBlob blob{};
+    blob.id = "manual";
+    blob.centroid = Dss::Core::Vec2f{static_cast<float>(pos.x()), static_cast<float>(pos.y())};
+    blob.minX = blob.centroid.x - 10.0F;
+    blob.maxX = blob.centroid.x + 10.0F;
+    blob.minY = blob.centroid.y - 10.0F;
+    blob.maxY = blob.centroid.y + 10.0F;
+    blob.area = 100.0F;
+    blob.dn = 10000.0F;
+    return blob;
 }
 
 void ViewModel::setStatus(QString text) {
