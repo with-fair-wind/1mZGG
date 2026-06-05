@@ -1,3 +1,8 @@
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <string>
+
 #include <gtest/gtest.h>
 
 #include "dss/acquisition/i_camera_controller.h"
@@ -13,6 +18,48 @@
 #include "dss/processing/image_processor.h"
 #include "dss/storage/i_storage_backend.h"
 #include "dss/storage/local_image_storage_backend.h"
+#include "dss/storage/track_data_storage_backend.h"
+
+namespace {
+
+[[nodiscard]] auto tempContextTrackStorageDir() -> std::filesystem::path {
+    auto dir =
+        std::filesystem::temp_directory_path() / "dss_application_context_track_storage_test";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir);
+    return dir;
+}
+
+[[nodiscard]] auto readAllText(const std::filesystem::path& path) -> std::string {
+    std::ifstream input(path);
+    return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+}
+
+[[nodiscard]] auto trackEvent() -> Dss::Core::TrackResultEvent {
+    Dss::Core::MeasuredBlob blob{};
+    blob.centroid = Dss::Core::Vec2f{3072.0F, 3072.0F};
+    blob.area = 5.0F;
+
+    Dss::Core::TargetFrameInfo frame{};
+    frame.frameSeq = 9;
+    frame.timestamp = {.year = 2026, .month = 6, .day = 4, .hour = 1, .minute = 2, .second = 3};
+    frame.fovCenterAe = Dss::Core::Vec2f{1.0F, 2.0F};
+    frame.exposureTime = 0.02F;
+    frame.measuredBlob = blob;
+    frame.valid = true;
+
+    Dss::Core::TargetInfo target{};
+    target.targetId = "manual";
+    target.living = true;
+    target.frameInfos.push_back(frame);
+
+    Dss::Core::TrackResultEvent event{};
+    event.frameSeq = 9;
+    event.targets.push_back(std::move(target));
+    return event;
+}
+
+}  // namespace
 
 TEST(ApplicationContextServices, RegistersCommunicationServicesWithoutOpeningPorts) {
     Dss::App::ApplicationContext context;
@@ -91,7 +138,29 @@ TEST(ApplicationContextServices, RegistersCommunicationServicesWithoutOpeningPor
 
     const auto trackDataStorage =
         context.registry().get<Dss::Storage::IStorageBackend>("track_data_storage");
+    const auto concreteTrackDataStorage =
+        context.registry().get<Dss::Storage::TrackDataStorageBackend>("track_data_storage");
 
     ASSERT_NE(trackDataStorage, nullptr);
+    ASSERT_NE(concreteTrackDataStorage, nullptr);
     EXPECT_FALSE(trackDataStorage->isReady());
+    EXPECT_FALSE(concreteTrackDataStorage->isRunning());
+}
+
+TEST(ApplicationContextServices, RoutesTrackResultsToTrackDataStorage) {
+    Dss::App::ApplicationContext context;
+    context.registerCommunicationServices();
+
+    const auto trackDataStorage =
+        context.registry().get<Dss::Storage::TrackDataStorageBackend>("track_data_storage");
+    const auto dir = tempContextTrackStorageDir();
+    ASSERT_TRUE(trackDataStorage->init(dir).has_value());
+    ASSERT_TRUE(trackDataStorage->start().has_value());
+
+    context.bus().emit(trackEvent());
+
+    trackDataStorage->stop();
+
+    ASSERT_TRUE(std::filesystem::exists(trackDataStorage->outputPath()));
+    EXPECT_FALSE(readAllText(trackDataStorage->outputPath()).empty());
 }

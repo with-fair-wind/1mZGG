@@ -54,7 +54,7 @@ BoundedChannel<FramePacket, 4>  // 容量为 4 的帧缓冲
 
 ```cpp
 class IProcessingStrategy {
-    virtual void process(MutableFrameView view) = 0;
+    virtual auto process(const FramePacket& input) -> ProcessingResult = 0;
     virtual auto name() const -> std::string_view = 0;
     virtual auto mode() const -> ProcessingMode = 0;
 };
@@ -67,7 +67,9 @@ class IProcessingStrategy {
 | 方法 | 说明 |
 |------|------|
 | `setBackend(strategy)` | 切换处理后端 |
-| `process(view)` | 执行当前后端的处理 |
+| `process(packet)` | 执行当前后端的处理，返回 `ProcessingResult` |
+| `currentMode()` / `backendName()` | 查询当前后端模式和名称 |
+| `hasBackend()` | 判断是否启用了处理后端 |
 
 ### 6. ImageProcessor (`image_processor.h`)
 
@@ -86,6 +88,7 @@ class IProcessingStrategy {
 | `droppedFrames()` | 获取丢帧计数 |
 | `setProcessingStrategy()` | 切换处理后端 |
 | `setTrackingStrategy()` | 切换跟踪策略 |
+| `currentProcessingMode()` / `currentTrackMode()` | 查询当前处理/跟踪模式 |
 
 无处理 backend 时，`ImageProcessor` 仍会把原始回放帧作为 Direct 帧发布显示；如果当前跟踪策略是 Manual 且已有 UI 选点，也会构造 `FrameMeasurements` 并发布 `TrackResultEvent`。这使无 Sapera、无 OpenCV/CUDA 策略的回放模式也能验证“选序列 → 显示 → 手动跟踪”的主链路。
 
@@ -142,7 +145,7 @@ auto labelAndExtract(span<const uint8_t> binaryImage,
 | 帧差法未实现 | `ProcessingMode::Diff` 仅定义枚举，无实现 |
 | 光度测量未接入 | `photometryBuffer` 未使用 |
 | 星图匹配未接入 | `DSS_ENABLE_STARLIBS` 接口未实现 |
-| 完整处理策略命令 | `ImageProcessor` 已注册；UI 处理策略开关和参数命令尚未完成 |
+| 完整处理策略命令 | UI 已支持 None/OpenCV 切换；OpenCV 参数、Diff 模式和 CUDA 模式尚未接入 |
 
 ## 依赖关系
 

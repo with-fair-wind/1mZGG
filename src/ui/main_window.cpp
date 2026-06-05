@@ -86,8 +86,10 @@ void MainWindow::setupControlPage() {
     auto* btnSelectSequence = new QPushButton("Select Sequence");
 #endif
     auto* sequenceLabel = new QLabel("Frames: 0");
+    auto* currentFrameLabel = new QLabel("Current: 0/0");
     sequenceRow->addWidget(btnSelectSequence);
     sequenceRow->addWidget(sequenceLabel);
+    sequenceRow->addWidget(currentFrameLabel);
 
     connect(btnSelectSequence, &QPushButton::clicked, [this] {
         const auto files = QFileDialog::getOpenFileNames(
@@ -100,20 +102,50 @@ void MainWindow::setupControlPage() {
     connect(&m_vm, &ViewModel::replayFrameCountChanged, [sequenceLabel](int count) {
         sequenceLabel->setText(QString("Frames: %1").arg(count));
     });
+    connect(&m_vm, &ViewModel::replayFrameCountChanged, [this, currentFrameLabel](int count) {
+        currentFrameLabel->setText(
+            QString("Current: %1/%2").arg(m_vm.replayCurrentFrame()).arg(count));
+    });
+    connect(&m_vm, &ViewModel::replayCurrentFrameChanged, [this, currentFrameLabel](int frame) {
+        currentFrameLabel->setText(
+            QString("Current: %1/%2").arg(frame).arg(m_vm.replayFrameCount()));
+    });
 
     auto* grabRow = new QHBoxLayout;
 #ifdef DSS_HAS_ELA
     auto* btnStart = new ElaPushButton("Start Replay");
     auto* btnStop = new ElaPushButton("Pause Replay");
+    auto* btnStepForward = new ElaPushButton("Step Forward");
 #else
     auto* btnStart = new QPushButton("Start Replay");
     auto* btnStop = new QPushButton("Pause Replay");
+    auto* btnStepForward = new QPushButton("Step Forward");
 #endif
     grabRow->addWidget(btnStart);
     grabRow->addWidget(btnStop);
+    grabRow->addWidget(btnStepForward);
 
     connect(btnStart, &QPushButton::clicked, &m_vm, &ViewModel::startGrab);
     connect(btnStop, &QPushButton::clicked, &m_vm, &ViewModel::stopGrab);
+    connect(btnStepForward, &QPushButton::clicked, &m_vm, &ViewModel::stepReplayForward);
+
+    auto* processingRow = new QHBoxLayout;
+    processingRow->addWidget(new QLabel("Processing:"));
+#ifdef DSS_HAS_ELA
+    auto* processingCombo = new ElaComboBox;
+#else
+    auto* processingCombo = new QComboBox;
+#endif
+    processingCombo->addItems({"None", "OpenCV"});
+    processingRow->addWidget(processingCombo);
+
+    connect(processingCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            [this](int index) {
+                static constexpr int modeMap[] = {0, 3};
+                if (index >= 0 && index < 2) {
+                    m_vm.setProcessingMode(modeMap[index]);
+                }
+            });
 
     auto* modeRow = new QHBoxLayout;
     modeRow->addWidget(new QLabel("Track Mode:"));
@@ -167,6 +199,7 @@ void MainWindow::setupControlPage() {
 
     layout->addLayout(sequenceRow);
     layout->addLayout(grabRow);
+    layout->addLayout(processingRow);
     layout->addLayout(modeRow);
     layout->addLayout(expRow);
     layout->addLayout(saveRow);

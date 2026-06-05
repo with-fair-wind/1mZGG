@@ -9,6 +9,10 @@
 
 namespace Dss::Tracking {
 
+[[nodiscard]] auto makeTrackingStrategy(Dss::Core::TrackMode mode,
+                                        const Dss::Core::TrackingSettings& settings)
+    -> std::unique_ptr<ITrackingStrategy>;
+
 class TrackManager {
 public:
     TrackManager() = default;

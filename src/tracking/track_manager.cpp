@@ -1,6 +1,30 @@
 #include "dss/tracking/track_manager.h"
 
+#include <memory>
+
+#include "dss/tracking/geo_tracker.h"
+#include "dss/tracking/leo_tracker.h"
+#include "dss/tracking/manual_tracker.h"
+#include "dss/tracking/sc_tracker.h"
+
 namespace Dss::Tracking {
+
+auto makeTrackingStrategy(Dss::Core::TrackMode mode, const Dss::Core::TrackingSettings& settings)
+    -> std::unique_ptr<ITrackingStrategy> {
+    switch (mode) {
+        case Dss::Core::TrackMode::Geo:
+            return std::make_unique<GeoTracker>(settings);
+        case Dss::Core::TrackMode::SpaceCatalog:
+            return std::make_unique<ScTracker>(settings);
+        case Dss::Core::TrackMode::Leo:
+            return std::make_unique<LeoTracker>(settings);
+        case Dss::Core::TrackMode::Manual:
+            return std::make_unique<ManualTracker>(settings);
+        case Dss::Core::TrackMode::Init:
+            return nullptr;
+    }
+    return nullptr;
+}
 
 void TrackManager::setStrategy(std::unique_ptr<ITrackingStrategy> strategy) {
     std::lock_guard lock(m_mutex);
@@ -8,9 +32,7 @@ void TrackManager::setStrategy(std::unique_ptr<ITrackingStrategy> strategy) {
 }
 
 void TrackManager::setMode(Dss::Core::TrackMode mode, const Dss::Core::TrackingSettings& settings) {
-    // TODO: instantiate appropriate strategy based on mode
-    (void)mode;
-    (void)settings;
+    setStrategy(makeTrackingStrategy(mode, settings));
 }
 
 auto TrackManager::track(const Dss::Core::FrameMeasurements& measurements)

@@ -68,11 +68,17 @@ inline constexpr double kMinCosElevation = 1.0e-6;
 }
 
 [[nodiscard]] auto makeFrameInfo(const Dss::Core::FrameMeasurements& measurements,
-                                 const Dss::Core::MeasuredBlob& blob)
+                                 const Dss::Core::MeasuredBlob& blob,
+                                 const Dss::Core::TrackingSettings& settings)
     -> Dss::Core::TargetFrameInfo {
     Dss::Core::TargetFrameInfo info{};
     info.timestamp = measurements.timestamp;
     info.frameSeq = measurements.frameSeq;
+    info.fovCenterAe = measurements.fovCenterAe;
+    info.opticCenter =
+        Dss::Core::Vec2f{settings.opticParams.fovCenterX, settings.opticParams.fovCenterY};
+    info.exposureTime = measurements.exposureTime;
+    info.frameFreq = measurements.frameFreq;
     info.measuredBlob = blob;
     info.posZxdw = blob.posAe;
     info.posTwdw = blob.posAe;
@@ -101,7 +107,7 @@ auto ManualTracker::track(const Dss::Core::FrameMeasurements& measurements)
     }
 
     blob = enrichManualBlob(blob, measurements, m_settings);
-    const auto info = makeFrameInfo(measurements, blob);
+    const auto info = makeFrameInfo(measurements, blob, m_settings);
     const auto previousInfo =
         m_currentTarget.frameInfos.empty()
             ? std::optional<Dss::Core::TargetFrameInfo>{}

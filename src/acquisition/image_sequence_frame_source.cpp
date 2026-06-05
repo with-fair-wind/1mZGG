@@ -113,6 +113,7 @@ auto ImageSequenceFrameSource::setFiles(std::vector<std::filesystem::path> files
         m_files = std::move(files);
         m_width = 0;
         m_height = 0;
+        m_nextFrameIndex = 0;
         m_initialized = false;
     }
     if (frameCount() == 0U) {
@@ -126,9 +127,49 @@ auto ImageSequenceFrameSource::frameCount() const -> std::size_t {
     return m_files.size();
 }
 
+auto ImageSequenceFrameSource::nextFrameIndex() const -> std::size_t {
+    std::lock_guard lock(m_mutex);
+    return m_nextFrameIndex;
+}
+
 void ImageSequenceFrameSource::setFrameInterval(std::chrono::milliseconds interval) {
     std::lock_guard lock(m_mutex);
     m_frameInterval = interval;
+}
+
+auto ImageSequenceFrameSource::stepForward() -> std::expected<void, std::string> {
+    std::filesystem::path file;
+    std::size_t index = 0;
+    FrameCallback callback;
+    {
+        std::lock_guard lock(m_mutex);
+        if (m_files.empty()) {
+            return std::unexpected("image sequence is empty");
+        }
+        if (!m_callback) {
+            return std::unexpected("frame callback is not set");
+        }
+        if (m_nextFrameIndex >= m_files.size()) {
+            return std::unexpected("image sequence is at the end");
+        }
+        index = m_nextFrameIndex;
+        file = m_files[index];
+        callback = m_callback;
+    }
+
+    auto packet = loadFrame(file, static_cast<std::uint64_t>(index));
+    if (!packet.has_value()) {
+        return std::unexpected(packet.error());
+    }
+
+    callback(std::move(*packet));
+    {
+        std::lock_guard lock(m_mutex);
+        if (m_nextFrameIndex == index) {
+            ++m_nextFrameIndex;
+        }
+    }
+    return {};
 }
 
 auto ImageSequenceFrameSource::init() -> std::expected<void, std::string> {
@@ -150,6 +191,7 @@ auto ImageSequenceFrameSource::init() -> std::expected<void, std::string> {
         std::lock_guard lock(m_mutex);
         m_width = packet->width;
         m_height = packet->height;
+        m_nextFrameIndex = 0;
         m_initialized = true;
     }
     return {};
@@ -163,21 +205,23 @@ void ImageSequenceFrameSource::start() {
     std::vector<std::filesystem::path> files;
     std::chrono::milliseconds interval{0};
     FrameCallback callback;
+    std::size_t startIndex = 0;
     {
         std::lock_guard lock(m_mutex);
         files = m_files;
         interval = m_frameInterval;
         callback = m_callback;
+        startIndex = m_nextFrameIndex;
     }
 
-    if (files.empty() || !callback) {
+    if (files.empty() || !callback || startIndex >= files.size()) {
         m_running.store(false);
         return;
     }
 
-    m_worker = std::jthread([this, files = std::move(files), interval,
+    m_worker = std::jthread([this, files = std::move(files), interval, startIndex,
                              callback = std::move(callback)](std::stop_token token) mutable {
-        for (std::size_t index = 0; index < files.size(); ++index) {
+        for (std::size_t index = startIndex; index < files.size(); ++index) {
             if (token.stop_requested()) {
                 break;
             }
@@ -185,6 +229,10 @@ void ImageSequenceFrameSource::start() {
             auto packet = loadFrame(files[index], static_cast<std::uint64_t>(index));
             if (packet.has_value()) {
                 callback(std::move(*packet));
+                std::lock_guard lock(m_mutex);
+                if (m_nextFrameIndex <= index) {
+                    m_nextFrameIndex = index + 1U;
+                }
             }
 
             if (interval.count() > 0 && index + 1U < files.size()) {

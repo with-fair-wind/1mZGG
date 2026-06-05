@@ -32,12 +32,14 @@ dss_add_test(test_image_storage_format test_image_storage_format.cpp dss_core)
 dss_add_test(test_local_image_storage_backend test_local_image_storage_backend.cpp dss_core)
 dss_add_test(test_bmp_image_format test_bmp_image_format.cpp dss_core)
 dss_add_test(test_track_data_storage_format test_track_data_storage_format.cpp dss_core)
+dss_add_test(test_track_data_storage_backend test_track_data_storage_backend.cpp dss_core)
 dss_add_test(test_data_exchange_protocol test_data_exchange_protocol.cpp dss_core)
 dss_add_test(test_network_protocols test_network_protocols.cpp dss_core)
 dss_add_test(test_config test_config.cpp dss_core)
 dss_add_test(test_service_host test_service_host.cpp dss_core)
 dss_add_test(test_service_registry test_service_registry.cpp dss_core)
 dss_add_test(test_math_utils test_math_utils.cpp dss_tracking)
+dss_add_test(test_track_manager test_track_manager.cpp dss_tracking)
 dss_add_test(test_manual_tracker test_manual_tracker.cpp dss_tracking)
 dss_add_test(test_geo_tracker test_geo_tracker.cpp dss_tracking)
 dss_add_test(test_bounded_channel test_bounded_channel.cpp dss_processing)
@@ -76,6 +78,14 @@ if(TARGET dss_ui_qt)
     )
     dss_add_qt_test(test_view_model_tracking
         test_view_model_tracking.cpp
+        dss_ui_qt
+    )
+    dss_add_qt_test(test_view_model_processing
+        test_view_model_processing.cpp
+        dss_ui_qt
+    )
+    dss_add_qt_test(test_view_model_replay
+        test_view_model_replay.cpp
         dss_ui_qt
     )
 endif()

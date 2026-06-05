@@ -90,6 +90,10 @@ struct FrameMeasurements {
 struct TargetFrameInfo {
     Timestamp timestamp{};
     uint64_t frameSeq = 0;
+    Vec2f fovCenterAe{};
+    Vec2f opticCenter{};
+    float exposureTime = 0.0f;  // seconds
+    float frameFreq = 0.0f;     // Hz
     MeasuredBlob measuredBlob{};
     Vec2f posZxdw{};  // axis positioning
     Vec2f posTwdw{};  // astronomical positioning

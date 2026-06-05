@@ -22,7 +22,9 @@ public:
 
     auto setFiles(std::vector<std::filesystem::path> files) -> std::expected<void, std::string>;
     [[nodiscard]] auto frameCount() const -> std::size_t;
+    [[nodiscard]] auto nextFrameIndex() const -> std::size_t;
     void setFrameInterval(std::chrono::milliseconds interval);
+    auto stepForward() -> std::expected<void, std::string>;
 
     auto init() -> std::expected<void, std::string> override;
     void start() override;
@@ -39,6 +41,7 @@ private:
     std::chrono::milliseconds m_frameInterval{std::chrono::milliseconds{33}};
     std::uint32_t m_width = 0;
     std::uint32_t m_height = 0;
+    std::size_t m_nextFrameIndex = 0;
     bool m_initialized = false;
 
     std::jthread m_worker;

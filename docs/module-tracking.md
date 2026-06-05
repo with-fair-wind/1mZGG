@@ -34,7 +34,7 @@ class ITrackingStrategy {
 | 方法 | 说明 |
 |------|------|
 | `setStrategy(strategy)` | 替换跟踪策略 |
-| `setMode(mode, settings)` | 按模式切换策略 (含 TODO: 工厂方法) |
+| `setMode(mode, settings)` | 按模式创建并切换 GEO/Manual/LEO/SC 策略，`Init` 清空当前策略 |
 | `track(measurements)` | 委托当前策略执行跟踪 |
 | `currentMode()` | 获取当前跟踪模式 |
 | `reset()` | 重置策略状态 |
@@ -111,7 +111,6 @@ LEO 目标跟踪器，对应 `TrackAlgo` 中 LEO 模式。
 | GEO 完整 legacy 分支待补 | **高** | 星速、四帧关联、基础维持、测量复用抑制、living 规则和丢失后重发现入口已迁移；完整 `GEO_ReFindTargets` 去重/校验、全局阈值、TWDW/GDCL 仍需继续对照旧版补齐 |
 | LEO/SC 算法未移植 | **高** | 旧版 `TrackAlgo.cpp` (~3000行) 仍有两个模式未迁移 |
 | Manual legacy 细节待补 | 中 | 最小选点闭环已完成，三帧关联、验证、TWDW/GDCL 仍需对照旧版迁移 |
-| `TrackManager::setMode()` 工厂 | 中 | 需实现按模式自动创建对应 Tracker 实例 |
 | 指向误差模型 | 中 | `PointingErrorResult` 已定义但计算逻辑未移植 |
 
 ## 依赖关系

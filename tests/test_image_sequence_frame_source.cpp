@@ -92,6 +92,56 @@ TEST(ImageSequenceFrameSource, ReplaysSelectedImageFilesAsFramePackets) {
     EXPECT_EQ(frames[1].displayImage[0], 40U);
 }
 
+TEST(ImageSequenceFrameSource, StepForwardAdvancesReplayPositionBeforeContinuousReplay) {
+    QCoreApplicationFixture app;
+    const auto dir = tempSequenceDir();
+    const auto first = dir / "step_0001.bmp";
+    const auto second = dir / "step_0002.bmp";
+    const auto third = dir / "step_0003.bmp";
+    ASSERT_TRUE(writeGrayBmp(first, 10));
+    ASSERT_TRUE(writeGrayBmp(second, 40));
+    ASSERT_TRUE(writeGrayBmp(third, 70));
+
+    Dss::Acquisition::ImageSequenceFrameSource source;
+    source.setFrameInterval(std::chrono::milliseconds{0});
+    ASSERT_TRUE(source.setFiles({first, second, third}).has_value());
+    ASSERT_TRUE(source.init().has_value());
+
+    std::mutex mutex;
+    std::condition_variable cv;
+    std::vector<Dss::Processing::FramePacket> frames;
+    source.setFrameCallback([&](Dss::Processing::FramePacket packet) {
+        {
+            std::lock_guard lock(mutex);
+            frames.push_back(std::move(packet));
+        }
+        cv.notify_one();
+    });
+
+    ASSERT_TRUE(source.stepForward().has_value());
+    {
+        std::unique_lock lock(mutex);
+        ASSERT_TRUE(
+            cv.wait_for(lock, std::chrono::seconds{2}, [&] { return frames.size() == 1U; }));
+    }
+
+    source.start();
+    {
+        std::unique_lock lock(mutex);
+        ASSERT_TRUE(
+            cv.wait_for(lock, std::chrono::seconds{2}, [&] { return frames.size() == 3U; }));
+    }
+    source.stop();
+
+    ASSERT_EQ(frames.size(), 3U);
+    EXPECT_EQ(frames[0].frameSeq, 0U);
+    EXPECT_EQ(frames[1].frameSeq, 1U);
+    EXPECT_EQ(frames[2].frameSeq, 2U);
+    EXPECT_EQ(frames[0].displayImage[0], 10U);
+    EXPECT_EQ(frames[1].displayImage[0], 40U);
+    EXPECT_EQ(frames[2].displayImage[0], 70U);
+}
+
 TEST(ImageSequenceFrameSource, RejectsEmptySequence) {
     Dss::Acquisition::ImageSequenceFrameSource source;
     EXPECT_FALSE(source.setFiles({}).has_value());

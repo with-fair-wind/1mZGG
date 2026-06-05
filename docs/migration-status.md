@@ -26,8 +26,8 @@
 - 默认启动策略保持无硬件安全: 服务注册后 `isOpen() == false`，不会自动打开串口或绑定 UDP 端口。
 - 旧数学基础能力已迁入 `Dss::Math`: `mpolyfit`、`getperiod` 和 `mFFT::FFT_process` 的可观察行为已通过纯 C++ helper 与单元测试覆盖。
 - 图像序列回放首版已落地: `ImageSequenceFrameSource` 可选择 BMP/PNG/JPEG/TIFF/raw 序列，按 `IFrameSource` 回调输出 `FramePacket`，并通过 `ImageProcessor` 进入 `DisplayRefreshEvent` 和 UI 显示。
-- 本地图像存储 raw 异步写入 worker 已落地: UI 保存开关显式启动 `LocalImageStorageBackend`，回放帧进入处理器前可异步落盘，停止时 drain 队列。
-- Manual 跟踪最小闭环已落地: UI 点击图像像素后会配置 `ManualTracker`，无处理 backend 的回放帧也能进入 tracking，发布 `TrackResultEvent` 并更新 UI 跟踪信息。
+- 本地存储首批 worker 已落地: UI 保存开关显式启动 `LocalImageStorageBackend` 和 `TrackDataStorageBackend`，回放帧进入处理器前可异步落 raw，tracking event 可异步写入 `track_data.txt`，停止时 drain 队列。
+- Manual 跟踪最小闭环已落地: UI 点击图像像素后会配置 `ManualTracker`，无处理 backend 的回放帧也能进入 tracking，发布 `TrackResultEvent`，更新 UI 跟踪信息，并在保存开启时写入轨迹文本。
 - GEO 跟踪函数级切片继续推进: 星速估计、四帧初始关联、目标发现标记、基础跟踪维持、同帧测量复用抑制、预测越界结束、连续无效窗口结束目标，以及目标全部失活后重新进入四帧关联/重发现状态切换已有纯函数/策略实现与单元测试；完整 legacy 阈值、重发现去重/校验、TWDW/GDCL 仍待继续迁移。
 - 当前最大剩余面是 GEO 完整策略、LEO/SC 跟踪算法、Manual legacy 三帧关联细节、完整图像处理策略、Sapera 真实采集器和 CUDA 管线封装；Sapera 已不是无硬件端到端开发的前置条件。
 
@@ -79,9 +79,9 @@
 | `ImageProcessor.h/.cpp` | `dss/processing/image_processor.*` | 工作线程、帧队列、事件发布、ApplicationContext 注册、Direct/Manual 无 backend 跟踪 | GPU/光度/星图集成 |
 | `ImageProcAlgo.h/.cpp` | `OpenCvProcessingStrategy` + CUDA kernels | OpenCV 参考实现 | 帧差法、定标、光度、TWDW、指向误差 |
 | `ImageStorage.h/.cpp` (I/O) | `LocalImageStorageBackend` | 格式定义、raw 异步写入 worker | BMP/IFM/会话索引、错误上报 |
-| `TrackDataStorage.h/.cpp` (I/O) | `TrackDataStorageBackend` | 格式定义、路径持有 | 文件 I/O 操作 |
-| `ImageReplayer.h/.cpp` | `ImageSequenceFrameSource` | 选择序列、QImage/raw 解码、后台回放、接入处理/显示 | 暂停续播进度、当前帧进度、更多 legacy 浏览行为 |
-| `UI_CtrlPad.h/.cpp/.ui` | `dss/ui/main_window.*` + `view_model.*` | 选择序列、开始/暂停回放、保存、Manual 选点跟踪 UI 首版 | 当前帧进度、处理策略开关、硬件命令入口、GEO/LEO/SC 策略切换 |
+| `TrackDataStorage.h/.cpp` (I/O) | `TrackDataStorageBackend` | 格式定义、路径持有、`track_data.txt` 异步写入、`TrackResultEvent` 接线 | GAE/会话级轨迹文件、错误上报、高帧率背压 |
+| `ImageReplayer.h/.cpp` | `ImageSequenceFrameSource` | 选择序列、QImage/raw 解码、后台回放、保留下一帧索引、单帧前进、接入处理/显示 | 后退、进度定位、更多 legacy 浏览行为 |
+| `UI_CtrlPad.h/.cpp/.ui` | `dss/ui/main_window.*` + `view_model.*` | 选择序列、开始/暂停回放、当前帧进度、单帧前进、保存、None/OpenCV 处理开关、Manual 选点跟踪 UI 首版、GEO/LEO/SC 策略入口 | 进度条/后退、Diff/CUDA/参数化处理策略、硬件命令入口、LEO/SC 算法体 |
 
 ### 未开始 (Not Started)
 
@@ -129,9 +129,9 @@
 |------|--------|------|----------|
 | 1 | 回放模式帧源 | 迁移 `ImageReplayer` 思路，支持选择图像序列并作为 `IFrameSource` 推送帧 | **首版完成**：`test_image_sequence_frame_source` 覆盖固定序列 |
 | 2 | 回放端到端处理链路 | 将回放帧接入 `ImageProcessor`/`ProcessingPipeline`/显示事件 | **首版完成**：无相机可驱动 UI 显示，6144 大图显示/滚轮缩放已在 `ImageDisplay` 支持 |
-| 3 | 存储 I/O 工作线程 | 将 `LocalImageStorageBackend` 从格式 helper 推进到实际异步写入 | **部分完成**：raw worker 和 drain 测试完成；BMP/IFM/轨迹文本待补 |
-| 4 | UI 回放/存储/处理命令 | 搭起选择序列、开始/暂停回放、保存、处理、跟踪等显式命令 | **部分完成**：选择序列、开始/暂停、保存、跟踪模式已接；处理策略开关/进度待补 |
-| 5 | Manual 跟踪最小策略 | 先迁移最简单的手动目标保持逻辑，打通 tracking event | **首版完成**：`test_manual_tracker`、`test_image_processor`、`test_view_model_tracking` 覆盖无 backend 回放闭环 |
+| 3 | 存储 I/O 工作线程 | 将存储后端从格式 helper 推进到实际异步写入 | **部分完成**：raw worker、轨迹文本 worker 和 drain 测试完成；BMP/IFM/IMI/GAE/错误上报/背压待补 |
+| 4 | UI 回放/存储/处理命令 | 搭起选择序列、开始/暂停回放、保存、处理、跟踪等显式命令 | **部分完成**：选择序列、开始/暂停、当前帧进度、单帧前进、保存、None/OpenCV 处理开关、跟踪模式已接；进度条/后退、Diff/CUDA/参数化处理待补 |
+| 5 | Manual 跟踪最小策略 | 先迁移最简单的手动目标保持逻辑，打通 tracking event 和轨迹文本写入 | **首版完成**：`test_manual_tracker`、`test_image_processor`、`test_view_model_tracking`、`test_track_data_storage_backend` 覆盖无 backend 回放闭环和保存开关 |
 | 6 | GEO 跟踪策略 | 逐步迁移 `calcStarSpeed`、`assoc4`、`findTargets`、`trackTargets` | **继续推进**：星速估计、四帧关联、基础维持、测量复用抑制、越界/连续无效结束、丢失后重发现状态切换已由 `test_geo_tracker` 覆盖；下一步补完整 legacy 重发现/校验分支 |
 | 7 | Sapera 采集器 | 回放链路稳定后接真实 Sapera `Grabber` 为另一个 `IFrameSource` | 无 Sapera 时仍可启动；有硬件时显式打开 |
 | 8 | LEO/SC 跟踪策略 | 在 Manual/GEO 稳定后迁移剩余跟踪模式 | 与 GEO 共用测量 DTO 和回归样例 |
@@ -145,7 +145,7 @@
 
 1. **跟踪算法移植** — `TrackAlgo.cpp` 约 3000 行核心算法，是最大的迁移任务块。Manual 最小闭环和 GEO 第一批函数级切片已打通，目标丢失后也能回到四帧关联入口；下一步继续补 GEO 的完整 legacy 重发现去重/校验和 TWDW/GDCL，之后进入 LEO/SC。
 
-2. **处理策略补齐** — 回放源已能驱动 `ImageProcessor` 原样显示，下一步需要把 legacy 图像处理/目标检测策略接入 `ProcessingPipeline`，为 Manual/GEO 提供测量输入。
+2. **处理策略补齐** — 回放源已能驱动 `ImageProcessor` 原样显示，UI 已可切 None/OpenCV；下一步需要继续把 legacy 帧差法、参数化阈值、光度/星图能力接入 `ProcessingPipeline`，为 Manual/GEO 提供更完整测量输入。
 
 3. **硬件入口接线** — 当前通信/网络/存储/相机命令服务已注册，但启动策略仍是默认不打开硬件。后续需要 UI 或联调入口显式触发 open/bind/start，并把 Sapera 作为第二个 `IFrameSource` 接入。
 
@@ -153,4 +153,4 @@
 
 4. **GPU 管线集成** — CUDA 核函数已就绪但无 `IProcessingStrategy` 封装，无法通过 `ProcessingPipeline` 调用。
 
-5. **完整存储会话** — raw worker 已有，仍需补 BMP/IFM/IMI、轨迹文本、错误上报和高帧率背压策略。
+5. **完整存储会话** — raw worker 和轨迹文本 worker 已有，仍需补 BMP/IFM/IMI、GAE/会话索引、错误上报和高帧率背压策略。

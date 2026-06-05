@@ -53,6 +53,8 @@ void ApplicationContext::registerCommunicationServices() {
                       Dss::Core::Config::instance().commNet().cameraPort));
     auto localImageStorage = std::make_shared<Dss::Storage::LocalImageStorageBackend>(
         Dss::Core::Config::instance().paths().dataRoot);
+    auto trackDataStorage = std::make_shared<Dss::Storage::TrackDataStorageBackend>(
+        Dss::Core::Config::instance().paths().dataRoot);
     auto imageProcessor = std::make_shared<Dss::Processing::ImageProcessor>(m_bus);
     auto replaySource = std::make_shared<Dss::Acquisition::ImageSequenceFrameSource>();
     replaySource->setFrameCallback([imageProcessor,
@@ -71,6 +73,12 @@ void ApplicationContext::registerCommunicationServices() {
         }
         (void)imageProcessor->submitFrame(std::move(packet));
     });
+    m_connections.push_back(m_bus.subscribe<Dss::Core::TrackResultEvent>(
+        [trackDataStorage](const Dss::Core::TrackResultEvent& event) {
+            if (trackDataStorage->isRunning()) {
+                (void)trackDataStorage->enqueueTrackResult(event);
+            }
+        }));
 
     m_registry.registerService<Dss::Processing::ImageProcessor>("image_processor", imageProcessor);
     m_registry.registerService<Dss::Acquisition::ImageSequenceFrameSource>("replay_source",
@@ -81,9 +89,10 @@ void ApplicationContext::registerCommunicationServices() {
                                                                        localImageStorage);
     m_registry.registerService<Dss::Storage::IStorageBackend>("image_storage",
                                                               std::move(localImageStorage));
-    m_registry.registerService<Dss::Storage::IStorageBackend>(
-        "track_data_storage", std::make_shared<Dss::Storage::TrackDataStorageBackend>(
-                                  Dss::Core::Config::instance().paths().dataRoot));
+    m_registry.registerService<Dss::Storage::TrackDataStorageBackend>("track_data_storage",
+                                                                      trackDataStorage);
+    m_registry.registerService<Dss::Storage::IStorageBackend>("track_data_storage",
+                                                              std::move(trackDataStorage));
 #endif
 }
 

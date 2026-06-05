@@ -3,6 +3,7 @@
 #include <expected>
 #include <filesystem>
 #include <string>
+#include <vector>
 
 #include "dss/core/config.h"
 #include "dss/core/event_bus.h"
@@ -37,6 +38,7 @@ private:
     MessageBus m_bus;
     Dss::Core::ServiceRegistry m_registry;
     Dss::Core::ServiceHost m_services;
+    std::vector<Dss::Evt::ScopedConnection> m_connections;
 };
 
 }  // namespace Dss::App

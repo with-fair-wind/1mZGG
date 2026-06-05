@@ -239,6 +239,10 @@ if(DSS_BUILD_APP)
         target_link_libraries(dss_ui_qt PUBLIC elawidgettools)
     endif()
 
+    if(DSS_HAS_OPENCV)
+        target_link_libraries(dss_ui_qt PUBLIC dss_processing_opencv)
+    endif()
+
     add_executable(DSS_QT src/main.cpp)
     dss_target_defaults(DSS_QT)
     dss_qt_pch(DSS_QT)

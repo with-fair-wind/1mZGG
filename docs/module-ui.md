@@ -48,6 +48,7 @@ UI 状态中心，连接后端事件总线与前端 UI。
 | `isSaving` | `bool` | 是否正在存储 |
 | `statusText` | `QString` | 状态栏文本 |
 | `replayFrameCount` | `int` | 当前选择的回放序列帧数 |
+| `replayCurrentFrame` | `int` | 当前已显示的回放帧序号（1-based） |
 
 **命令方法 (Q_INVOKABLE):**
 
@@ -56,11 +57,13 @@ UI 状态中心，连接后端事件总线与前端 UI。
 | `selectReplayFiles(files)` | 选择图像序列 | 已接入 `ImageSequenceFrameSource` |
 | `startGrab()` | 开始回放/采集 | 已接入 `ImageProcessor` + `IFrameSource` |
 | `stopGrab()` | 暂停/停止回放 | 已停止回放源和处理器 |
-| `setTrackMode(mode)` | 切换跟踪模式 | Manual 会配置 `ManualTracker`，其他策略待算法迁移后接入 |
+| `stepReplayForward()` | 单帧前进 | 已接入 `ImageSequenceFrameSource::stepForward()`，可暂停后逐帧浏览 |
+| `setProcessingMode(mode)` | 切换处理模式 | 已支持 None/OpenCV，Diff/CUDA 待接入 |
+| `setTrackMode(mode)` | 切换跟踪模式 | 已通过策略工厂配置 GEO/Manual/LEO/SC，LEO/SC 算法体仍待迁移 |
 | `setExposure(ms)` | 设置曝光时间 | UI 状态已接线，硬件命令待接 |
 | `selectTarget(pos)` | 手动选择目标 | 已配置 Manual 策略并发布 `ManualTargetSelectEvent` |
-| `startSaving()` | 开始存储 | 已启动 `LocalImageStorageBackend` worker |
-| `stopSaving()` | 停止存储 | 已停止并 drain 存储 worker |
+| `startSaving()` | 开始存储 | 已启动图像 raw 与轨迹文本 worker |
+| `stopSaving()` | 停止存储 | 已停止并 drain 图像/轨迹存储 worker |
 | `toggleZoom(level)` | 切换缩放级别 | 事件已发出；滚轮缩放在 `ImageDisplay` 内实现 |
 
 **信号:**
@@ -142,7 +145,7 @@ signals:
 
 | 旧版 | 新版 | 状态 |
 |------|------|------|
-| `UI_CtrlPad` | `MainWindow` + `ViewModel` | 回放/保存/Manual 选点跟踪首版接线 |
+| `UI_CtrlPad` | `MainWindow` + `ViewModel` | 回放/保存/Manual 选点跟踪首版接线，OpenCV 处理和 GEO/LEO/SC 策略入口已接 |
 | `UI_DispPad` | `ImageDisplay` | 基本功能 + 滚轮缩放迁移 |
 | `UI_DispPadS` | `ImageDisplayCrop` | 基本功能迁移 |
 | `UI_InitDlg` | `InitDialog` | 已迁移 |
@@ -154,8 +157,8 @@ signals:
 
 | 缺口 | 说明 |
 |------|------|
-| 当前帧进度 | 已显示序列帧数，当前帧号/进度条尚未接线 |
-| 处理/跟踪策略选择 | Manual 选点跟踪已接线；GEO/LEO/SC 模式等待算法体迁移后接入 |
+| 当前帧进度 | 已显示序列总帧数和当前帧号，单帧前进按钮已接入；进度条、后退、拖动定位和完整 legacy 浏览行为待补 |
+| 处理/跟踪策略选择 | 已接入 None/OpenCV 与 GEO/Manual/LEO/SC；Diff/CUDA、OpenCV 参数和 LEO/SC 算法体仍待迁移 |
 | 距离曲线图 | `UI_DistCurve` 未迁移 |
 | 页面布局 | MainWindow 各页面为桩实现 |
 | 主题/样式 | 未实现自定义样式，依赖 ElaWidgetTools 或默认样式 |

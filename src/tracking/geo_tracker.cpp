@@ -191,11 +191,17 @@ inline constexpr double kTinyCos = 1.0e-8;
 }
 
 [[nodiscard]] auto makeFrameInfo(const Dss::Core::FrameMeasurements& frame,
-                                 const Dss::Core::MeasuredBlob& blob)
+                                 const Dss::Core::MeasuredBlob& blob,
+                                 const Dss::Core::TrackingSettings& settings)
     -> Dss::Core::TargetFrameInfo {
     Dss::Core::TargetFrameInfo info{};
     info.timestamp = frame.timestamp;
     info.frameSeq = frame.frameSeq;
+    info.fovCenterAe = frame.fovCenterAe;
+    info.opticCenter =
+        Dss::Core::Vec2f{settings.opticParams.fovCenterX, settings.opticParams.fovCenterY};
+    info.exposureTime = frame.exposureTime;
+    info.frameFreq = frame.frameFreq;
     info.measuredBlob = blob;
     info.posZxdw = blob.posAe;
     info.posTwdw = blob.posAe;
@@ -260,15 +266,15 @@ void updatePredictionFromHistory(Dss::Core::TargetInfo& target, float frameFrequ
 
 [[nodiscard]] auto makeAssociatedTarget(
     const std::array<const Dss::Core::FrameMeasurements*, 4>& frames,
-    const std::array<const Dss::Core::MeasuredBlob*, 4>& blobs, float frameFrequency)
-    -> Dss::Core::TargetInfo {
+    const std::array<const Dss::Core::MeasuredBlob*, 4>& blobs, float frameFrequency,
+    const Dss::Core::TrackingSettings& settings) -> Dss::Core::TargetInfo {
     Dss::Core::TargetInfo target{};
     target.targetId = "geo";
     target.validity = 1.0F;
     target.living = true;
 
     for (std::size_t index = 0; index < frames.size(); ++index) {
-        target.frameInfos.push_back(makeFrameInfo(*frames[index], *blobs[index]));
+        target.frameInfos.push_back(makeFrameInfo(*frames[index], *blobs[index], settings));
     }
     updatePredictionFromHistory(target, frameFrequency);
     return target;
@@ -510,7 +516,8 @@ int GeoTracker::assoc4() {
                         continue;
                     }
                     const std::array frames{&frame0, &frame1, &frame2, &frame3};
-                    associatedTargets.push_back(makeAssociatedTarget(frames, blobs, m_frameFreq));
+                    associatedTargets.push_back(
+                        makeAssociatedTarget(frames, blobs, m_frameFreq, m_settings));
                 }
             }
         }
@@ -546,11 +553,11 @@ int GeoTracker::trackTargets() {
             predictedBlob.id = target.targetId;
             predictedBlob.centroid = target.predictedPosFrame;
             predictedBlob.posAe = target.predictedPosAe;
-            auto info = makeFrameInfo(frame, predictedBlob);
+            auto info = makeFrameInfo(frame, predictedBlob, m_settings);
             info.valid = false;
             target.frameInfos.push_back(info);
         } else {
-            target.frameInfos.push_back(makeFrameInfo(frame, *matchedBlob));
+            target.frameInfos.push_back(makeFrameInfo(frame, *matchedBlob, m_settings));
             usedBlobs.push_back(*matchedBlob);
         }
 

@@ -8,8 +8,13 @@
 #include "dss/acquisition/image_sequence_frame_source.h"
 #include "dss/core/config.h"
 #include "dss/processing/image_processor.h"
+#ifdef DSS_HAS_OPENCV
+#include "dss/processing/opencv_processing_strategy.h"
+#endif
 #include "dss/storage/local_image_storage_backend.h"
+#include "dss/storage/track_data_storage_backend.h"
 #include "dss/tracking/manual_tracker.h"
+#include "dss/tracking/track_manager.h"
 
 namespace Dss::Ui {
 
@@ -43,6 +48,7 @@ bool ViewModel::selectReplayFiles(const QStringList& files) {
     auto result = replaySource->setFiles(std::move(paths));
     if (!result.has_value()) {
         m_replayFrameCount = 0;
+        setReplayCurrentFrame(0);
         Q_EMIT replayFrameCountChanged(m_replayFrameCount);
         setStatus(QString::fromStdString(result.error()));
         return false;
@@ -51,12 +57,14 @@ bool ViewModel::selectReplayFiles(const QStringList& files) {
     auto initResult = replaySource->init();
     if (!initResult.has_value()) {
         m_replayFrameCount = 0;
+        setReplayCurrentFrame(0);
         Q_EMIT replayFrameCountChanged(m_replayFrameCount);
         setStatus(QString::fromStdString(initResult.error()));
         return false;
     }
 
     m_replayFrameCount = static_cast<int>(replaySource->frameCount());
+    setReplayCurrentFrame(0);
     Q_EMIT replayFrameCountChanged(m_replayFrameCount);
     setStatus(QString("Sequence selected: %1 frames").arg(m_replayFrameCount));
     return true;
@@ -80,6 +88,7 @@ void ViewModel::startGrab() {
         return;
     }
 
+    setReplayCurrentFrame(0);
     processor->start();
     frameSource->start();
     m_grabbing = true;
@@ -105,6 +114,34 @@ void ViewModel::stopGrab() {
     Q_EMIT grabbingChanged(false);
     Q_EMIT statusTextChanged(m_statusText);
     m_bus.emit(Dss::Core::GrabStoppedEvent{});
+}
+
+bool ViewModel::stepReplayForward() {
+    if (m_grabbing) {
+        stopGrab();
+    }
+
+    auto replaySource =
+        m_registry.tryGet<Dss::Acquisition::ImageSequenceFrameSource>("replay_source");
+    if (!replaySource) {
+        setStatus("Replay source is not registered");
+        return false;
+    }
+
+    auto result = replaySource->stepForward();
+    if (!result.has_value()) {
+        setStatus(QString::fromStdString(result.error()));
+        return false;
+    }
+    return true;
+}
+
+void ViewModel::setProcessingMode(int mode) {
+    if (m_processingMode != mode) {
+        m_processingMode = mode;
+        Q_EMIT processingModeChanged(mode);
+    }
+    configureProcessingStrategy();
 }
 
 void ViewModel::setTrackMode(int mode) {
@@ -154,6 +191,25 @@ void ViewModel::startSaving() {
         return;
     }
 
+    auto trackStorage =
+        m_registry.tryGet<Dss::Storage::TrackDataStorageBackend>("track_data_storage");
+    if (trackStorage) {
+        if (!trackStorage->isReady()) {
+            auto initTrackResult = trackStorage->init(trackStorage->baseDir());
+            if (!initTrackResult.has_value()) {
+                storage->stop();
+                setStatus(QString::fromStdString(initTrackResult.error()));
+                return;
+            }
+        }
+        auto startTrackResult = trackStorage->start();
+        if (!startTrackResult.has_value()) {
+            storage->stop();
+            setStatus(QString::fromStdString(startTrackResult.error()));
+            return;
+        }
+    }
+
     m_saving = true;
     Q_EMIT savingChanged(true);
     setStatus("Saving enabled");
@@ -163,6 +219,11 @@ void ViewModel::stopSaving() {
     auto storage = m_registry.tryGet<Dss::Storage::LocalImageStorageBackend>("image_storage");
     if (storage) {
         storage->stop();
+    }
+    auto trackStorage =
+        m_registry.tryGet<Dss::Storage::TrackDataStorageBackend>("track_data_storage");
+    if (trackStorage) {
+        trackStorage->stop();
     }
     m_saving = false;
     Q_EMIT savingChanged(false);
@@ -200,6 +261,7 @@ void ViewModel::onDisplayRefresh(const Dss::Core::DisplayRefreshEvent& event) {
     QImage image(event.displayImage->data(), static_cast<int>(event.width),
                  static_cast<int>(event.height), static_cast<qsizetype>(event.stride),
                  QImage::Format_Grayscale8);
+    setReplayCurrentFrame(static_cast<int>(event.frameSeq) + 1);
     Q_EMIT displayImageReady(image.copy());
 }
 
@@ -238,6 +300,36 @@ void ViewModel::onMasterControl(const Dss::Core::MasterControlEvent& event) {
     }
 }
 
+void ViewModel::configureProcessingStrategy() {
+    auto processor = m_registry.tryGet<Dss::Processing::ImageProcessor>("image_processor");
+    if (!processor) {
+        setStatus("Image processor is not registered");
+        return;
+    }
+
+    const auto mode = static_cast<Dss::Core::ProcessingMode>(m_processingMode);
+    switch (mode) {
+        case Dss::Core::ProcessingMode::None:
+            processor->setProcessingStrategy(nullptr);
+            setStatus("Processing disabled");
+            break;
+        case Dss::Core::ProcessingMode::Direct:
+#ifdef DSS_HAS_OPENCV
+            processor->setProcessingStrategy(
+                std::make_unique<Dss::Processing::OpenCvProcessingStrategy>());
+            setStatus("OpenCV processing enabled");
+#else
+            processor->setProcessingStrategy(nullptr);
+            setStatus("OpenCV processing is not available");
+#endif
+            break;
+        case Dss::Core::ProcessingMode::Diff:
+            processor->setProcessingStrategy(nullptr);
+            setStatus("Processing mode is not available");
+            break;
+    }
+}
+
 void ViewModel::configureTrackingStrategy() {
     auto processor = m_registry.tryGet<Dss::Processing::ImageProcessor>("image_processor");
     if (!processor) {
@@ -245,19 +337,27 @@ void ViewModel::configureTrackingStrategy() {
         return;
     }
 
-    if (m_trackMode != static_cast<int>(Dss::Core::TrackMode::Manual)) {
+    const auto mode = static_cast<Dss::Core::TrackMode>(m_trackMode);
+    auto strategy =
+        Dss::Tracking::makeTrackingStrategy(mode, Dss::Core::Config::instance().trackingSettings());
+    if (!strategy) {
         processor->setTrackingStrategy(nullptr);
+        setStatus("Tracking disabled");
         return;
     }
 
-    auto tracker = std::make_unique<Dss::Tracking::ManualTracker>(
-        Dss::Core::Config::instance().trackingSettings());
-    if (m_manualTarget.has_value()) {
-        tracker->setManualTarget(*m_manualTarget);
+    if (auto* manualTracker = dynamic_cast<Dss::Tracking::ManualTracker*>(strategy.get())) {
+        if (m_manualTarget.has_value()) {
+            manualTracker->setManualTarget(*m_manualTarget);
+        }
+        processor->setTrackingStrategy(std::move(strategy));
+        setStatus(m_manualTarget.has_value() ? "Manual tracking target armed"
+                                             : "Manual tracking enabled");
+        return;
     }
-    processor->setTrackingStrategy(std::move(tracker));
-    setStatus(m_manualTarget.has_value() ? "Manual tracking target armed"
-                                         : "Manual tracking enabled");
+
+    processor->setTrackingStrategy(std::move(strategy));
+    setStatus("Tracking mode enabled");
 }
 
 auto ViewModel::makeManualTarget(QPointF pos) -> Dss::Core::MeasuredBlob {
@@ -271,6 +371,14 @@ auto ViewModel::makeManualTarget(QPointF pos) -> Dss::Core::MeasuredBlob {
     blob.area = 100.0F;
     blob.dn = 10000.0F;
     return blob;
+}
+
+void ViewModel::setReplayCurrentFrame(int frame) {
+    if (m_replayCurrentFrame == frame) {
+        return;
+    }
+    m_replayCurrentFrame = frame;
+    Q_EMIT replayCurrentFrameChanged(frame);
 }
 
 void ViewModel::setStatus(QString text) {
