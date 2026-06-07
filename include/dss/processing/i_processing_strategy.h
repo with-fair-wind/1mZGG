@@ -12,6 +12,7 @@ namespace Dss::Processing {
 struct ProcessingResult {
     Dss::Core::ImageStats stats{};
     std::vector<Dss::Core::MeasuredBlob> targetBlobs;
+    std::vector<Dss::Core::MeasuredBlob> validatedTargetBlobs;
     std::vector<Dss::Core::MeasuredBlob> starBlobs;
     std::vector<uint8_t> displayImage;
     bool success = false;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <deque>
+#include <vector>
 
 #include "dss/tracking/i_tracking_strategy.h"
 
@@ -21,6 +22,8 @@ private:
     Dss::Core::TrackingSettings m_settings;
     std::deque<Dss::Core::FrameMeasurements> m_fifo;
     Dss::Core::TargetInfo m_currentTarget{};
+    std::vector<Dss::Core::TargetInfo> m_candidates;
+    bool m_targetFound = false;
 };
 
 }  // namespace Dss::Tracking

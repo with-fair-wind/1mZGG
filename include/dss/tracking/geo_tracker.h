@@ -42,7 +42,9 @@ private:
     int calcStarSpeed();
     int assoc4();
     int findTargets();
+    int refindTargets();
     int trackTargets();
+    void assignTargetIds(std::vector<Dss::Core::TargetInfo>& targets);
 
     Dss::Core::TrackingSettings m_settings;
     std::deque<Dss::Core::FrameMeasurements> m_fifoTarget;
@@ -55,6 +57,7 @@ private:
     bool m_targetFound = false;
     bool m_targetVerified = false;
     uint64_t m_frameSeq = 0;
+    uint64_t m_nextTargetId = 1;
 };
 
 }  // namespace Dss::Tracking

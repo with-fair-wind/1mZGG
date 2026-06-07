@@ -55,13 +55,13 @@ GEO 目标跟踪器，对应旧版 `TrackAlgo` 中 GEO 模式的算法。
 
 LEO 目标跟踪器，对应 `TrackAlgo` 中 LEO 模式。
 
-**当前状态:** `track()` 方法体为 TODO。
+**当前状态:** `track()` 已完成 legacy `LEO_Assoc3`、`LEO_VerifyTarget` 和 `LEO_TrackTarget` 首批切片: 维护三帧 FIFO，按 AE 速度下限和两段 AE 运动一致性生成初始候选；第四帧可按预测 AE 位置匹配 blob，追加验证帧，用最近三段运动 median 更新预测，并选择 AE 速度最大的已验证目标；第四帧未命中时会追加 invalid 帧、丢弃未验证候选，并允许后续帧重新进入三帧关联完成重发现；验证后的第五帧有效测量会继续按预测 AE 匹配、追加并推进下一帧预测，后续单帧 miss 会按预测位置追加 invalid 帧并保持目标存活。`LEO_TrackTarget` 连续 invalid/living 完整规则和 TWDW/GDCL 仍待补齐。
 
 ### 5. ScTracker (`sc_tracker.h`)
 
 星表跟踪器 (Space Catalog)，对应 `TrackAlgo` 中 SC 模式。
 
-**当前状态:** `track()` 方法体为 TODO。
+**当前状态:** `track()` 已完成 legacy `SC_Assoc3` 首片: 维护三帧 FIFO，按像素位移半径、FOV 中心窗口和两段像素运动一致性生成初始候选，并输出三帧 `TargetInfo` 预测。`SC_VerifyTarget`、`SC_TrackTarget`、重复候选压缩完整覆盖和 TWDW/GDCL 仍待补齐。
 
 ### 6. ManualTracker (`manual_tracker.h`)
 
@@ -95,8 +95,8 @@ LEO 目标跟踪器，对应 `TrackAlgo` 中 LEO 模式。
 | 旧版 `TrackAlgo` 函数 | 新类 | 迁移状态 |
 |----------------------|------|---------|
 | `TrackProc_GEO()` | `GeoTracker::track()` | **函数级首版完成**，完整 legacy 分支待补 |
-| `TrackProc_LEO()` | `LeoTracker::track()` | 骨架，算法未移植 |
-| `TrackProc_SC()` | `ScTracker::track()` | 骨架，算法未移植 |
+| `TrackProc_LEO()` | `LeoTracker::track()` | **Assoc3/VerifyTarget/TrackTarget 首片完成**，三帧初始关联、第四帧验证、第五帧持续跟踪、单帧跟踪 miss 和验证失败后重发现已覆盖，连续 invalid/完整 living 待补 |
+| `TrackProc_SC()` | `ScTracker::track()` | **Assoc3 首片完成**，三帧初始关联和预测输出已覆盖，VerifyTarget/TrackTarget 待补 |
 | `TrackProc_MANUAL()` | `ManualTracker::track()` | **最小闭环完成**，legacy 三帧关联/校验细节待迁移 |
 | `calcStarSpeed()` | `GeoTracker` / `estimateGeoStarSpeed()` | **首版完成**，中心视场星速和 AE 换算已覆盖 |
 | `assoc4()` | `GeoTracker` 内方法 | **首版完成**，四帧关联、星速过滤、运动一致性过滤已覆盖 |
@@ -109,7 +109,7 @@ LEO 目标跟踪器，对应 `TrackAlgo` 中 LEO 模式。
 | 缺口 | 严重程度 | 说明 |
 |------|---------|------|
 | GEO 完整 legacy 分支待补 | **高** | 星速、四帧关联、基础维持、测量复用抑制、living 规则和丢失后重发现入口已迁移；完整 `GEO_ReFindTargets` 去重/校验、全局阈值、TWDW/GDCL 仍需继续对照旧版补齐 |
-| LEO/SC 算法未移植 | **高** | 旧版 `TrackAlgo.cpp` (~3000行) 仍有两个模式未迁移 |
+| LEO/SC 算法未完整移植 | **高** | LEO 三帧初始关联、第四帧验证、第五帧持续跟踪、单帧跟踪 miss 和验证失败后重发现首片已迁移；SC 三帧初始关联首片已迁移；LEO 连续 invalid/living 完整分支、SC VerifyTarget/TrackTarget 和 TWDW/GDCL 仍待补齐 |
 | Manual legacy 细节待补 | 中 | 最小选点闭环已完成，三帧关联、验证、TWDW/GDCL 仍需对照旧版迁移 |
 | 指向误差模型 | 中 | `PointingErrorResult` 已定义但计算逻辑未移植 |
 

@@ -81,6 +81,7 @@ struct FrameMeasurements {
     float exposureTime = 0.0f;  // seconds
     float frameFreq = 0.0f;     // Hz
     std::vector<MeasuredBlob> targetBlobs;
+    std::vector<MeasuredBlob> validatedTargetBlobs;
     std::vector<MeasuredBlob> starBlobs;
     double temperature = 0.0;
     double atmosPressure = 0.0;

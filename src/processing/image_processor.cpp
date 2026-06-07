@@ -92,6 +92,9 @@ void ImageProcessor::workerLoop(std::stop_token token) {
                 meas.frameFreq = packet.metadata.frameFrequency;
                 meas.targetBlobs = procResult.success ? std::move(procResult.targetBlobs)
                                                       : std::move(packet.targetBlobs);
+                meas.validatedTargetBlobs = procResult.success
+                                                ? std::move(procResult.validatedTargetBlobs)
+                                                : std::move(packet.validatedTargetBlobs);
                 meas.starBlobs = procResult.success ? std::move(procResult.starBlobs)
                                                     : std::move(packet.starBlobs);
 

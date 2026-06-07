@@ -5,6 +5,7 @@
 
 #include "dss/core/events.h"
 #include "dss/processing/image_processor.h"
+#include "dss/tracking/i_tracking_strategy.h"
 #include "dss/tracking/manual_tracker.h"
 
 using namespace std::chrono_literals;
@@ -29,6 +30,27 @@ public:
     [[nodiscard]] auto mode() const -> Dss::Core::ProcessingMode override {
         return Dss::Core::ProcessingMode::Direct;
     }
+};
+
+class CapturingTrackStrategy final : public Dss::Tracking::ITrackingStrategy {
+public:
+    explicit CapturingTrackStrategy(std::promise<Dss::Core::FrameMeasurements>& promise)
+        : m_promise(promise) {}
+
+    [[nodiscard]] auto mode() const -> Dss::Core::TrackMode override {
+        return Dss::Core::TrackMode::Geo;
+    }
+
+    auto track(const Dss::Core::FrameMeasurements& measurements)
+        -> std::vector<Dss::Core::TargetInfo> override {
+        m_promise.set_value(measurements);
+        return {};
+    }
+
+    void reset() override {}
+
+private:
+    std::promise<Dss::Core::FrameMeasurements>& m_promise;
 };
 
 }  // namespace
@@ -107,4 +129,34 @@ TEST(ImageProcessor, PublishesManualTrackResultsWithoutProcessingBackend) {
     EXPECT_TRUE(event.targets.front().living);
     EXPECT_FLOAT_EQ(event.targets.front().predictedPosFrame.x, 2.0F);
     EXPECT_FLOAT_EQ(event.targets.front().predictedPosFrame.y, 0.0F);
+}
+
+TEST(ImageProcessor, PassesValidatedTargetBlobsToTrackingWithoutProcessingBackend) {
+    Dss::Processing::ImageProcessor::MessageBus bus;
+    Dss::Processing::ImageProcessor processor(bus);
+
+    std::promise<Dss::Core::FrameMeasurements> measurementsPromise;
+    auto measurementsFuture = measurementsPromise.get_future();
+    processor.setTrackingStrategy(std::make_unique<CapturingTrackStrategy>(measurementsPromise));
+
+    Dss::Core::MeasuredBlob validatedBlob{};
+    validatedBlob.id = "geo";
+    validatedBlob.centroid = Dss::Core::Vec2f{131.0F, 122.0F};
+
+    Dss::Processing::FramePacket packet;
+    packet.frameSeq = 10;
+    packet.displayImage = {0, 1, 2, 3};
+    packet.validatedTargetBlobs.push_back(validatedBlob);
+
+    processor.start();
+    ASSERT_TRUE(processor.submitFrame(std::move(packet)));
+
+    ASSERT_EQ(measurementsFuture.wait_for(2s), std::future_status::ready);
+    processor.stop();
+
+    const auto measurements = measurementsFuture.get();
+    ASSERT_EQ(measurements.validatedTargetBlobs.size(), 1U);
+    EXPECT_EQ(measurements.validatedTargetBlobs.front().id, "geo");
+    EXPECT_FLOAT_EQ(measurements.validatedTargetBlobs.front().centroid.x, 131.0F);
+    EXPECT_FLOAT_EQ(measurements.validatedTargetBlobs.front().centroid.y, 122.0F);
 }

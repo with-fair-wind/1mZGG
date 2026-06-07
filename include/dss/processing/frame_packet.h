@@ -22,6 +22,7 @@ struct FramePacket {
     std::vector<float> photometryImage;
 
     std::vector<Dss::Core::MeasuredBlob> targetBlobs;
+    std::vector<Dss::Core::MeasuredBlob> validatedTargetBlobs;
     std::vector<Dss::Core::MeasuredBlob> starBlobs;
 };
 

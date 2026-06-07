@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <string>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -61,6 +63,13 @@ void addGeoTarget(Dss::Core::FrameMeasurements& frame, float x, float y) {
     const auto aeX = (x - 100.0F) * 0.01F;
     const auto aeY = (y - 100.0F) * 0.01F;
     frame.targetBlobs.push_back(makeBlob(x, y, aeX, aeY));
+}
+
+void addGeoTargetWithEquatorial(Dss::Core::FrameMeasurements& frame, float x, float y, double alpha,
+                                double sigma) {
+    addGeoTarget(frame, x, y);
+    frame.targetBlobs.back().alpha = alpha;
+    frame.targetBlobs.back().sigma = sigma;
 }
 
 }  // namespace
@@ -142,6 +151,233 @@ TEST(GeoTracker, ContinuesTrackedTargetOnNextFrame) {
     }
 }
 
+TEST(GeoTracker, AssignsStableUniqueIdsToAssociatedTargets) {
+    Dss::Tracking::GeoTracker tracker(makeSettings());
+    std::vector<std::string> initialIds;
+
+    for (uint64_t index = 0; index < 5; ++index) {
+        auto frame = makeFrame(index + 1, static_cast<int>(index));
+        addCenteredStars(frame, static_cast<float>(index), 0.0F);
+        addGeoTarget(frame, 105.0F + static_cast<float>(index) * 5.0F,
+                     100.0F + static_cast<float>(index) * 4.0F);
+        addGeoTarget(frame, 300.0F + static_cast<float>(index) * 3.0F,
+                     360.0F + static_cast<float>(index) * 5.0F);
+
+        const auto targets = tracker.track(frame);
+        if (index < 3) {
+            continue;
+        }
+
+        ASSERT_EQ(targets.size(), 2U);
+        if (index == 3) {
+            for (const auto& target : targets) {
+                ASSERT_FALSE(target.targetId.empty());
+                EXPECT_TRUE(target.targetId.starts_with("geo-"));
+                initialIds.push_back(target.targetId);
+            }
+            ASSERT_EQ(initialIds.size(), 2U);
+            EXPECT_NE(initialIds[0], initialIds[1]);
+            continue;
+        }
+
+        for (const auto& target : targets) {
+            EXPECT_NE(std::ranges::find(initialIds, target.targetId), initialIds.end());
+        }
+    }
+}
+
+TEST(GeoTracker, ExpandsTrackingSearchAfterRecentInvalidFrames) {
+    auto settings = makeSettings();
+    settings.searchRadius = 5.0F;
+    settings.numFramesLiving = 4;
+    Dss::Tracking::GeoTracker tracker(settings);
+
+    for (uint64_t index = 0; index < 6; ++index) {
+        auto frame = makeFrame(index + 1, static_cast<int>(index));
+        addCenteredStars(frame, 0.0F, 0.0F);
+        if (index < 4) {
+            addGeoTarget(frame, 105.0F + static_cast<float>(index) * 4.0F,
+                         100.0F + static_cast<float>(index) * 3.0F);
+        } else if (index == 5) {
+            addGeoTarget(frame, 130.5F, 115.0F);
+        }
+
+        const auto targets = tracker.track(frame);
+        if (index < 5) {
+            continue;
+        }
+
+        ASSERT_EQ(targets.size(), 1U);
+        const auto& target = targets.front();
+        ASSERT_EQ(target.frameInfos.size(), 6U);
+        EXPECT_FALSE(target.frameInfos[target.frameInfos.size() - 2U].valid);
+        EXPECT_TRUE(target.frameInfos.back().valid);
+        EXPECT_TRUE(target.living);
+        EXPECT_FLOAT_EQ(target.frameInfos.back().measuredBlob.centroid.x, 130.5F);
+        EXPECT_FLOAT_EQ(target.frameInfos.back().measuredBlob.centroid.y, 115.0F);
+        EXPECT_FLOAT_EQ(target.predictedSpdFrame.x, 4.0F);
+        EXPECT_FLOAT_EQ(target.predictedSpdFrame.y, 3.0F);
+        EXPECT_FLOAT_EQ(target.predictedPosFrame.x, 134.5F);
+        EXPECT_FLOAT_EQ(target.predictedPosFrame.y, 118.0F);
+    }
+}
+
+TEST(GeoTracker, RejectsTrackedMeasurementWhenFrameSpeedErrorIsTooLarge) {
+    Dss::Tracking::GeoTracker tracker(makeSettings());
+
+    for (uint64_t index = 0; index < 5; ++index) {
+        auto frame = makeFrame(index + 1, static_cast<int>(index));
+        addCenteredStars(frame, static_cast<float>(index), 0.0F);
+        if (index < 4) {
+            addGeoTarget(frame, 105.0F + static_cast<float>(index) * 5.0F,
+                         100.0F + static_cast<float>(index) * 4.0F);
+        } else {
+            addGeoTarget(frame, 133.0F, 116.0F);
+        }
+
+        const auto targets = tracker.track(frame);
+        if (index < 4) {
+            continue;
+        }
+
+        ASSERT_EQ(targets.size(), 1U);
+        const auto& target = targets.front();
+        ASSERT_EQ(target.frameInfos.size(), 5U);
+        EXPECT_FALSE(target.frameInfos.back().valid);
+        EXPECT_TRUE(target.living);
+        EXPECT_FLOAT_EQ(target.frameInfos.back().measuredBlob.centroid.x, 125.0F);
+        EXPECT_FLOAT_EQ(target.frameInfos.back().measuredBlob.centroid.y, 116.0F);
+    }
+}
+
+TEST(GeoTracker, RejectsTrackedMeasurementWhenAePositionErrorExceedsThreshold) {
+    auto settings = makeSettings();
+    settings.thresholdAe = 0.001F;
+    Dss::Tracking::GeoTracker tracker(settings);
+    Dss::Core::Vec2f predictedAe{};
+
+    for (uint64_t index = 0; index < 5; ++index) {
+        auto frame = makeFrame(index + 1, static_cast<int>(index));
+        addCenteredStars(frame, static_cast<float>(index), 0.0F);
+        addGeoTarget(frame, 105.0F + static_cast<float>(index) * 5.0F,
+                     100.0F + static_cast<float>(index) * 4.0F);
+        if (index == 4) {
+            frame.targetBlobs.back().posAe = Dss::Core::Vec2f{0.8F, 0.9F};
+        }
+
+        const auto targets = tracker.track(frame);
+        if (index == 3) {
+            ASSERT_EQ(targets.size(), 1U);
+            predictedAe = targets.front().predictedPosAe;
+            continue;
+        }
+
+        if (index < 4) {
+            continue;
+        }
+
+        ASSERT_EQ(targets.size(), 1U);
+        const auto& target = targets.front();
+        ASSERT_EQ(target.frameInfos.size(), 5U);
+        EXPECT_FALSE(target.frameInfos.back().valid);
+        EXPECT_TRUE(target.living);
+        EXPECT_FLOAT_EQ(target.frameInfos.back().measuredBlob.posAe.x, predictedAe.x);
+        EXPECT_FLOAT_EQ(target.frameInfos.back().measuredBlob.posAe.y, predictedAe.y);
+    }
+}
+
+TEST(GeoTracker, UsesExternalValidationBlobForInvalidGeoFrame) {
+    Dss::Tracking::GeoTracker tracker(makeSettings());
+    std::string targetId;
+
+    for (uint64_t index = 0; index < 5; ++index) {
+        auto frame = makeFrame(index + 1, static_cast<int>(index));
+        addCenteredStars(frame, static_cast<float>(index), 0.0F);
+        if (index < 4) {
+            addGeoTarget(frame, 105.0F + static_cast<float>(index) * 5.0F,
+                         100.0F + static_cast<float>(index) * 4.0F);
+        } else {
+            auto validationBlob = makeBlob(131.0F, 122.0F, 0.31F, 0.22F);
+            validationBlob.id = targetId;
+            validationBlob.alpha = 1.31;
+            validationBlob.sigma = 1.22;
+            frame.validatedTargetBlobs.push_back(validationBlob);
+        }
+
+        const auto targets = tracker.track(frame);
+        if (index == 3) {
+            ASSERT_EQ(targets.size(), 1U);
+            targetId = targets.front().targetId;
+            ASSERT_FALSE(targetId.empty());
+            continue;
+        }
+
+        if (index < 4) {
+            continue;
+        }
+
+        ASSERT_EQ(targets.size(), 1U);
+        const auto& target = targets.front();
+        ASSERT_EQ(target.frameInfos.size(), 5U);
+        EXPECT_FALSE(target.frameInfos.back().valid);
+        EXPECT_TRUE(target.living);
+        EXPECT_FLOAT_EQ(target.frameInfos.back().measuredBlob.centroid.x, 131.0F);
+        EXPECT_FLOAT_EQ(target.frameInfos.back().measuredBlob.centroid.y, 122.0F);
+        EXPECT_FLOAT_EQ(target.frameInfos.back().measuredBlob.posAe.x, 0.31F);
+        EXPECT_FLOAT_EQ(target.frameInfos.back().measuredBlob.posAe.y, 0.22F);
+    }
+}
+
+TEST(GeoTracker, UsesExternalValidationBlobOnlyForMatchingGeoTargetId) {
+    Dss::Tracking::GeoTracker tracker(makeSettings());
+    std::vector<Dss::Core::TargetInfo> associatedTargets;
+
+    for (uint64_t index = 0; index < 4; ++index) {
+        auto frame = makeFrame(index + 1, static_cast<int>(index));
+        addCenteredStars(frame, static_cast<float>(index), 0.0F);
+        addGeoTarget(frame, 105.0F + static_cast<float>(index) * 5.0F,
+                     100.0F + static_cast<float>(index) * 4.0F);
+        addGeoTarget(frame, 300.0F + static_cast<float>(index) * 3.0F,
+                     360.0F + static_cast<float>(index) * 5.0F);
+        associatedTargets = tracker.track(frame);
+    }
+
+    ASSERT_EQ(associatedTargets.size(), 2U);
+    const auto firstId = associatedTargets[0].targetId;
+    const auto secondId = associatedTargets[1].targetId;
+    ASSERT_NE(firstId, secondId);
+    const auto secondPredicted = associatedTargets[1].predictedPosFrame;
+
+    auto validationFrame = makeFrame(5, 4);
+    addCenteredStars(validationFrame, 4.0F, 0.0F);
+    auto matchedValidation = makeBlob(131.0F, 122.0F, 0.31F, 0.22F);
+    matchedValidation.id = firstId;
+    validationFrame.validatedTargetBlobs.push_back(matchedValidation);
+
+    const auto trackedTargets = tracker.track(validationFrame);
+    ASSERT_EQ(trackedTargets.size(), 2U);
+
+    const auto firstTarget = std::ranges::find_if(
+        trackedTargets,
+        [&firstId](const Dss::Core::TargetInfo& target) { return target.targetId == firstId; });
+    const auto secondTarget = std::ranges::find_if(
+        trackedTargets,
+        [&secondId](const Dss::Core::TargetInfo& target) { return target.targetId == secondId; });
+    ASSERT_NE(firstTarget, trackedTargets.end());
+    ASSERT_NE(secondTarget, trackedTargets.end());
+    ASSERT_FALSE(firstTarget->frameInfos.empty());
+    ASSERT_FALSE(secondTarget->frameInfos.empty());
+
+    const auto& firstLatest = firstTarget->frameInfos.back();
+    const auto& secondLatest = secondTarget->frameInfos.back();
+    EXPECT_FALSE(firstLatest.valid);
+    EXPECT_FLOAT_EQ(firstLatest.measuredBlob.centroid.x, matchedValidation.centroid.x);
+    EXPECT_FLOAT_EQ(firstLatest.measuredBlob.centroid.y, matchedValidation.centroid.y);
+    EXPECT_FALSE(secondLatest.valid);
+    EXPECT_FLOAT_EQ(secondLatest.measuredBlob.centroid.x, secondPredicted.x);
+    EXPECT_FLOAT_EQ(secondLatest.measuredBlob.centroid.y, secondPredicted.y);
+}
+
 TEST(GeoTracker, EndsTrackedTargetAfterConfiguredConsecutiveInvalidFrames) {
     auto settings = makeSettings();
     settings.numFramesLiving = 3;
@@ -204,10 +440,10 @@ TEST(GeoTracker, DoesNotReuseSameMeasurementForMultipleTrackedTargets) {
         if (index < 4) {
             addGeoTarget(frame, 105.0F + static_cast<float>(index) * 5.0F,
                          100.0F + static_cast<float>(index) * 4.0F);
-            addGeoTarget(frame, 125.0F + static_cast<float>(index) * 5.0F,
-                         120.0F + static_cast<float>(index) * 4.0F);
+            addGeoTarget(frame, 145.0F - static_cast<float>(index) * 5.0F,
+                         136.0F - static_cast<float>(index) * 4.0F);
         } else {
-            addGeoTarget(frame, 135.0F, 126.0F);
+            addGeoTarget(frame, 125.0F, 118.0F);
         }
 
         const auto targets = tracker.track(frame);
@@ -223,8 +459,8 @@ TEST(GeoTracker, DoesNotReuseSameMeasurementForMultipleTrackedTargets) {
             EXPECT_EQ(target.frameInfos.back().frameSeq, 5U);
             if (target.frameInfos.back().valid) {
                 ++validLatestCount;
-                EXPECT_FLOAT_EQ(target.frameInfos.back().measuredBlob.centroid.x, 135.0F);
-                EXPECT_FLOAT_EQ(target.frameInfos.back().measuredBlob.centroid.y, 126.0F);
+                EXPECT_FLOAT_EQ(target.frameInfos.back().measuredBlob.centroid.x, 125.0F);
+                EXPECT_FLOAT_EQ(target.frameInfos.back().measuredBlob.centroid.y, 118.0F);
             } else {
                 ++invalidLatestCount;
             }
@@ -266,5 +502,69 @@ TEST(GeoTracker, RediscoversTargetAfterTrackedTargetIsLost) {
         EXPECT_FLOAT_EQ(target.predictedSpdFrame.y, 5.0F);
         EXPECT_FLOAT_EQ(target.predictedPosFrame.x, 316.0F);
         EXPECT_FLOAT_EQ(target.predictedPosFrame.y, 370.0F);
+    }
+}
+
+TEST(GeoTracker, AddsNewTargetWhileExistingTargetContinuesTracking) {
+    Dss::Tracking::GeoTracker tracker(makeSettings());
+
+    for (uint64_t index = 0; index < 8; ++index) {
+        auto frame = makeFrame(index + 1, static_cast<int>(index));
+        addCenteredStars(frame, static_cast<float>(index), 0.0F);
+        addGeoTarget(frame, 105.0F + static_cast<float>(index) * 5.0F,
+                     100.0F + static_cast<float>(index) * 4.0F);
+        if (index >= 4) {
+            const auto newTrackIndex = static_cast<float>(index - 4U);
+            addGeoTarget(frame, 300.0F + newTrackIndex * 3.0F, 360.0F + newTrackIndex * 5.0F);
+        }
+
+        const auto targets = tracker.track(frame);
+        if (index < 7) {
+            continue;
+        }
+
+        ASSERT_EQ(targets.size(), 2U);
+        const auto discovered =
+            std::ranges::find_if(targets, [](const Dss::Core::TargetInfo& target) {
+                return !target.frameInfos.empty() && target.frameInfos.front().frameSeq == 5U;
+            });
+        ASSERT_NE(discovered, targets.end());
+        EXPECT_TRUE(discovered->living);
+        ASSERT_EQ(discovered->frameInfos.size(), 4U);
+        EXPECT_EQ(discovered->frameInfos.back().frameSeq, 8U);
+        EXPECT_FLOAT_EQ(discovered->predictedSpdFrame.x, 3.0F);
+        EXPECT_FLOAT_EQ(discovered->predictedSpdFrame.y, 5.0F);
+        EXPECT_FLOAT_EQ(discovered->predictedPosFrame.x, 312.0F);
+        EXPECT_FLOAT_EQ(discovered->predictedPosFrame.y, 380.0F);
+    }
+}
+
+TEST(GeoTracker, EndsTrackedTargetWhenConsecutiveMeasurementsRepeatEquatorialPoint) {
+    Dss::Tracking::GeoTracker tracker(makeSettings());
+    double previousAlpha = 0.0;
+    double previousSigma = 0.0;
+
+    for (uint64_t index = 0; index < 5; ++index) {
+        auto frame = makeFrame(index + 1, static_cast<int>(index));
+        addCenteredStars(frame, static_cast<float>(index), 0.0F);
+        if (index < 4) {
+            addGeoTarget(frame, 105.0F + static_cast<float>(index) * 5.0F,
+                         100.0F + static_cast<float>(index) * 4.0F);
+            previousAlpha = frame.targetBlobs.back().alpha;
+            previousSigma = frame.targetBlobs.back().sigma;
+        } else {
+            addGeoTargetWithEquatorial(frame, 125.0F, 116.0F, previousAlpha, previousSigma);
+        }
+
+        const auto targets = tracker.track(frame);
+        if (index < 4) {
+            continue;
+        }
+
+        ASSERT_EQ(targets.size(), 1U);
+        const auto& target = targets.front();
+        ASSERT_EQ(target.frameInfos.size(), 5U);
+        EXPECT_TRUE(target.frameInfos.back().valid);
+        EXPECT_FALSE(target.living);
     }
 }

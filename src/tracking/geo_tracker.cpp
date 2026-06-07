@@ -21,6 +21,12 @@ inline constexpr float kHighConfidenceGeoAssociationRadius = 30.0F;
 inline constexpr float kDenseFrameAssociationRadius = 8.0F;
 inline constexpr float kGeoMotionConsistencyThreshold = 2.5F;
 inline constexpr float kStarLikeSpeedThreshold = 3.0F;
+inline constexpr float kMaxGeoRediscoveryFrameSpeed = 100.0F;
+inline constexpr std::size_t kMaxGeoRediscoveryBlobCount = 20000U;
+inline constexpr int kGeoTrackingInvalidSearchWindow = 10;
+inline constexpr int kGeoTrackingRadiusInvalidLimit = 5;
+inline constexpr float kGeoTrackingRadiusInvalidStep = 10.0F;
+inline constexpr float kGeoTrackingBaseSpeedErrorThreshold = 5.0F;
 inline constexpr float kAngleAwayFromStarDegrees = 5.0F;
 inline constexpr float kSoftDenominatorOffset = 0.001F;
 inline constexpr double kGeoSameEquatorialThresholdDeg = 0.0015;
@@ -269,7 +275,6 @@ void updatePredictionFromHistory(Dss::Core::TargetInfo& target, float frameFrequ
     const std::array<const Dss::Core::MeasuredBlob*, 4>& blobs, float frameFrequency,
     const Dss::Core::TrackingSettings& settings) -> Dss::Core::TargetInfo {
     Dss::Core::TargetInfo target{};
-    target.targetId = "geo";
     target.validity = 1.0F;
     target.living = true;
 
@@ -325,9 +330,114 @@ void removeDuplicateAssociations(std::vector<Dss::Core::TargetInfo>& targets) {
     }
 }
 
+[[nodiscard]] auto associateFourFrameTargets(
+    const std::deque<Dss::Core::FrameMeasurements>& fifoTarget, int starMatchCount,
+    const Dss::Core::Vec2f& starSpeed, float frameFrequency,
+    const Dss::Core::TrackingSettings& settings) -> std::vector<Dss::Core::TargetInfo> {
+    if (fifoTarget.size() < 4U) {
+        return {};
+    }
+
+    const auto frameCount = fifoTarget.size();
+    const auto& frame0 = fifoTarget[frameCount - 4U];
+    const auto& frame1 = fifoTarget[frameCount - 3U];
+    const auto& frame2 = fifoTarget[frameCount - 2U];
+    const auto& frame3 = fifoTarget[frameCount - 1U];
+    if (frame0.targetBlobs.empty() || frame1.targetBlobs.empty() || frame2.targetBlobs.empty() ||
+        frame3.targetBlobs.empty()) {
+        return {};
+    }
+
+    const auto radius = associationRadius(settings, starMatchCount, frame3.targetBlobs.size());
+    std::vector<Dss::Core::TargetInfo> associatedTargets;
+
+    for (const auto& blob0 : frame0.targetBlobs) {
+        for (const auto& blob1 : frame1.targetBlobs) {
+            const auto motion10 = Dss::Core::Vec2f{blob1.centroid.x - blob0.centroid.x,
+                                                   blob1.centroid.y - blob0.centroid.y};
+            if (std::abs(motion10.x) >= radius || std::abs(motion10.y) >= radius ||
+                isMotionStarLike(motion10, starSpeed) ||
+                !isMotionAngleAwayFromStars(motion10, starSpeed)) {
+                continue;
+            }
+
+            for (const auto& blob2 : frame2.targetBlobs) {
+                const auto motion21 = Dss::Core::Vec2f{blob2.centroid.x - blob1.centroid.x,
+                                                       blob2.centroid.y - blob1.centroid.y};
+                if (std::abs(motion21.x) >= radius || std::abs(motion21.y) >= radius ||
+                    isMotionStarLike(motion21, starSpeed) ||
+                    std::abs(motion21.x - motion10.x) > kGeoMotionConsistencyThreshold ||
+                    std::abs(motion21.y - motion10.y) > kGeoMotionConsistencyThreshold ||
+                    !isMotionAngleAwayFromStars(motion21, starSpeed)) {
+                    continue;
+                }
+
+                for (const auto& blob3 : frame3.targetBlobs) {
+                    const auto motion32 = Dss::Core::Vec2f{blob3.centroid.x - blob2.centroid.x,
+                                                           blob3.centroid.y - blob2.centroid.y};
+                    if (std::abs(motion32.x) >= radius || std::abs(motion32.y) >= radius ||
+                        isMotionStarLike(motion32, starSpeed) ||
+                        std::abs(motion32.x - motion21.x) > kGeoMotionConsistencyThreshold ||
+                        std::abs(motion32.y - motion21.y) > kGeoMotionConsistencyThreshold ||
+                        std::abs(motion32.x - motion10.x) > kGeoMotionConsistencyThreshold ||
+                        std::abs(motion32.y - motion10.y) > kGeoMotionConsistencyThreshold ||
+                        !isMotionAngleAwayFromStars(motion32, starSpeed)) {
+                        continue;
+                    }
+
+                    const std::array blobs{&blob0, &blob1, &blob2, &blob3};
+                    if (hasRepeatedEquatorialPoint(blobs)) {
+                        continue;
+                    }
+                    const std::array frames{&frame0, &frame1, &frame2, &frame3};
+                    associatedTargets.push_back(
+                        makeAssociatedTarget(frames, blobs, frameFrequency, settings));
+                }
+            }
+        }
+    }
+
+    removeDuplicateAssociations(associatedTargets);
+    return associatedTargets;
+}
+
 [[nodiscard]] bool hasSameCentroid(const Dss::Core::MeasuredBlob& first,
                                    const Dss::Core::MeasuredBlob& second) {
     return first.centroid.x == second.centroid.x && first.centroid.y == second.centroid.y;
+}
+
+[[nodiscard]] bool sharesRecentMeasurement(const Dss::Core::TargetInfo& candidate,
+                                           const Dss::Core::TargetInfo& existingTarget) {
+    if (!existingTarget.living || candidate.frameInfos.empty() ||
+        existingTarget.frameInfos.empty()) {
+        return false;
+    }
+
+    const auto recentCount =
+        std::min(candidate.frameInfos.size(), existingTarget.frameInfos.size());
+    const auto recentStart = existingTarget.frameInfos.size() - recentCount;
+    for (const auto& candidateInfo : candidate.frameInfos) {
+        for (auto index = recentStart; index < existingTarget.frameInfos.size(); ++index) {
+            const auto& existingInfo = existingTarget.frameInfos[index];
+            if (candidateInfo.frameSeq == existingInfo.frameSeq &&
+                hasSameCentroid(candidateInfo.measuredBlob, existingInfo.measuredBlob)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] bool overlapsLivingTarget(const Dss::Core::TargetInfo& candidate,
+                                        const std::vector<Dss::Core::TargetInfo>& targets) {
+    return std::ranges::any_of(targets, [&](const Dss::Core::TargetInfo& target) {
+        return sharesRecentMeasurement(candidate, target);
+    });
+}
+
+[[nodiscard]] bool exceedsRediscoverySpeedLimit(const Dss::Core::TargetInfo& target) {
+    return std::abs(target.predictedSpdFrame.x) > kMaxGeoRediscoveryFrameSpeed ||
+           std::abs(target.predictedSpdFrame.y) > kMaxGeoRediscoveryFrameSpeed;
 }
 
 [[nodiscard]] bool isAlreadyUsed(const Dss::Core::MeasuredBlob& candidate,
@@ -337,26 +447,116 @@ void removeDuplicateAssociations(std::vector<Dss::Core::TargetInfo>& targets) {
         [&](const Dss::Core::MeasuredBlob& used) { return hasSameCentroid(candidate, used); });
 }
 
-[[nodiscard]] auto findNearestBlob(const std::vector<Dss::Core::MeasuredBlob>& blobs,
-                                   const Dss::Core::Vec2f& predicted, float radius,
-                                   const std::vector<Dss::Core::MeasuredBlob>& usedBlobs)
+[[nodiscard]] auto countRecentInvalidFrames(const Dss::Core::TargetInfo& target, int frameWindow)
+    -> int {
+    if (frameWindow <= 0 || target.frameInfos.empty()) {
+        return 0;
+    }
+
+    const auto checkCount =
+        std::min(target.frameInfos.size(), static_cast<std::size_t>(frameWindow));
+    return static_cast<int>(std::ranges::count_if(
+        target.frameInfos.end() - static_cast<std::ptrdiff_t>(checkCount), target.frameInfos.end(),
+        [](const Dss::Core::TargetFrameInfo& info) { return !info.valid; }));
+}
+
+[[nodiscard]] auto trackingSearchRadius(float baseRadius, int recentInvalidCount) -> float {
+    return baseRadius +
+           static_cast<float>(std::min(recentInvalidCount, kGeoTrackingRadiusInvalidLimit)) *
+               kGeoTrackingRadiusInvalidStep;
+}
+
+[[nodiscard]] auto trackingSpeedErrorThreshold(int recentInvalidCount) -> float {
+    return kGeoTrackingBaseSpeedErrorThreshold + static_cast<float>(recentInvalidCount);
+}
+
+[[nodiscard]] bool matchesAePositionGate(const Dss::Core::MeasuredBlob& candidate,
+                                         const Dss::Core::TargetInfo& target,
+                                         float aePositionThreshold) {
+    if (aePositionThreshold <= 0.0F) {
+        return true;
+    }
+
+    return std::abs(candidate.posAe.x - target.predictedPosAe.x) <= aePositionThreshold &&
+           std::abs(candidate.posAe.y - target.predictedPosAe.y) <= aePositionThreshold;
+}
+
+[[nodiscard]] bool matchesTrackingGate(const Dss::Core::MeasuredBlob& candidate,
+                                       const Dss::Core::TargetInfo& target, float searchRadius,
+                                       float speedErrorThreshold, float aePositionThreshold) {
+    if (target.frameInfos.empty()) {
+        return false;
+    }
+
+    const auto distanceFromPrediction =
+        Dss::Core::Vec2f{target.predictedPosFrame.x - candidate.centroid.x,
+                         target.predictedPosFrame.y - candidate.centroid.y};
+    const auto& latestBlob = target.frameInfos.back().measuredBlob;
+    const auto measuredFrameMotion = Dss::Core::Vec2f{candidate.centroid.x - latestBlob.centroid.x,
+                                                      candidate.centroid.y - latestBlob.centroid.y};
+    return std::abs(distanceFromPrediction.x) <= searchRadius &&
+           std::abs(distanceFromPrediction.y) <= searchRadius &&
+           std::abs(measuredFrameMotion.x - target.predictedSpdFrame.x) < speedErrorThreshold &&
+           std::abs(measuredFrameMotion.y - target.predictedSpdFrame.y) < speedErrorThreshold &&
+           matchesAePositionGate(candidate, target, aePositionThreshold);
+}
+
+[[nodiscard]] auto findNearestTrackedBlob(const std::vector<Dss::Core::MeasuredBlob>& blobs,
+                                          const Dss::Core::TargetInfo& target,
+                                          const Dss::Core::TrackingSettings& settings,
+                                          const std::vector<Dss::Core::MeasuredBlob>& usedBlobs)
     -> std::optional<Dss::Core::MeasuredBlob> {
-    const auto radiusSquared = radius * radius;
+    const auto recentInvalidCount =
+        countRecentInvalidFrames(target, kGeoTrackingInvalidSearchWindow);
+    const auto searchRadius = trackingSearchRadius(settings.searchRadius, recentInvalidCount);
+    const auto speedErrorThreshold = trackingSpeedErrorThreshold(recentInvalidCount);
     auto bestDistance = std::numeric_limits<float>::max();
     std::optional<Dss::Core::MeasuredBlob> bestBlob;
     for (const auto& blob : blobs) {
         if (isAlreadyUsed(blob, usedBlobs)) {
             continue;
         }
-        const auto dx = blob.centroid.x - predicted.x;
-        const auto dy = blob.centroid.y - predicted.y;
+        if (!matchesTrackingGate(blob, target, searchRadius, speedErrorThreshold,
+                                 settings.thresholdAe)) {
+            continue;
+        }
+
+        const auto dx = blob.centroid.x - target.predictedPosFrame.x;
+        const auto dy = blob.centroid.y - target.predictedPosFrame.y;
         const auto distance = dx * dx + dy * dy;
-        if (distance < radiusSquared && distance < bestDistance) {
+        if (distance < bestDistance) {
             bestDistance = distance;
             bestBlob = blob;
         }
     }
     return bestBlob;
+}
+
+[[nodiscard]] auto findValidatedBlobForTarget(
+    const std::vector<Dss::Core::MeasuredBlob>& validatedBlobs, const std::string& targetId)
+    -> std::optional<Dss::Core::MeasuredBlob> {
+    const auto match = std::ranges::find_if(
+        validatedBlobs, [&](const Dss::Core::MeasuredBlob& blob) { return blob.id == targetId; });
+    if (match == validatedBlobs.end()) {
+        return std::nullopt;
+    }
+    return *match;
+}
+
+[[nodiscard]] auto makeInvalidFrameBlob(const Dss::Core::FrameMeasurements& frame,
+                                        const Dss::Core::TargetInfo& target)
+    -> Dss::Core::MeasuredBlob {
+    if (const auto validatedBlob =
+            findValidatedBlobForTarget(frame.validatedTargetBlobs, target.targetId);
+        validatedBlob.has_value()) {
+        return *validatedBlob;
+    }
+
+    Dss::Core::MeasuredBlob predictedBlob{};
+    predictedBlob.id = target.targetId;
+    predictedBlob.centroid = target.predictedPosFrame;
+    predictedBlob.posAe = target.predictedPosAe;
+    return predictedBlob;
 }
 
 [[nodiscard]] bool isInsideImageBounds(const Dss::Core::Vec2f& position,
@@ -377,9 +577,27 @@ void removeDuplicateAssociations(std::vector<Dss::Core::TargetInfo>& targets) {
                        [](const Dss::Core::TargetFrameInfo& info) { return !info.valid; });
 }
 
+[[nodiscard]] bool latestValidMeasurementsRepeatEquatorialPoint(
+    const Dss::Core::TargetInfo& target) {
+    if (target.frameInfos.size() < 2U) {
+        return false;
+    }
+
+    const auto& latest = target.frameInfos.back();
+    const auto& previous = target.frameInfos[target.frameInfos.size() - 2U];
+    if (!latest.valid || !previous.valid) {
+        return false;
+    }
+    return isSameEquatorialPoint(previous.measuredBlob, latest.measuredBlob);
+}
+
 [[nodiscard]] bool hasLivingTarget(const std::vector<Dss::Core::TargetInfo>& targets) {
     return std::ranges::any_of(targets,
                                [](const Dss::Core::TargetInfo& target) { return target.living; });
+}
+
+[[nodiscard]] auto makeGeoTargetId(uint64_t targetNumber) -> std::string {
+    return "geo-" + std::to_string(targetNumber);
 }
 
 }  // namespace
@@ -417,6 +635,9 @@ auto GeoTracker::track(const Dss::Core::FrameMeasurements& measurements)
         findTargets();
     } else {
         trackTargets();
+        if (measurements.targetBlobs.size() < kMaxGeoRediscoveryBlobCount) {
+            refindTargets();
+        }
         m_targetFound = hasLivingTarget(m_targets);
         m_targetVerified = m_targetFound;
     }
@@ -435,6 +656,17 @@ void GeoTracker::reset() {
     m_targetFound = false;
     m_targetVerified = false;
     m_frameSeq = 0;
+    m_nextTargetId = 1;
+}
+
+void GeoTracker::assignTargetIds(std::vector<Dss::Core::TargetInfo>& targets) {
+    for (auto& target : targets) {
+        if (!target.targetId.empty() && target.targetId != "geo") {
+            continue;
+        }
+        target.targetId = makeGeoTargetId(m_nextTargetId);
+        ++m_nextTargetId;
+    }
 }
 
 int GeoTracker::calcStarSpeed() {
@@ -474,57 +706,9 @@ int GeoTracker::assoc4() {
         return 2;
     }
 
-    const auto radius = associationRadius(m_settings, m_starMatchCount, frame3.targetBlobs.size());
-    std::vector<Dss::Core::TargetInfo> associatedTargets;
-
-    for (const auto& blob0 : frame0.targetBlobs) {
-        for (const auto& blob1 : frame1.targetBlobs) {
-            const auto motion10 = Dss::Core::Vec2f{blob1.centroid.x - blob0.centroid.x,
-                                                   blob1.centroid.y - blob0.centroid.y};
-            if (std::abs(motion10.x) >= radius || std::abs(motion10.y) >= radius ||
-                isMotionStarLike(motion10, m_starSpeed) ||
-                !isMotionAngleAwayFromStars(motion10, m_starSpeed)) {
-                continue;
-            }
-
-            for (const auto& blob2 : frame2.targetBlobs) {
-                const auto motion21 = Dss::Core::Vec2f{blob2.centroid.x - blob1.centroid.x,
-                                                       blob2.centroid.y - blob1.centroid.y};
-                if (std::abs(motion21.x) >= radius || std::abs(motion21.y) >= radius ||
-                    isMotionStarLike(motion21, m_starSpeed) ||
-                    std::abs(motion21.x - motion10.x) > kGeoMotionConsistencyThreshold ||
-                    std::abs(motion21.y - motion10.y) > kGeoMotionConsistencyThreshold ||
-                    !isMotionAngleAwayFromStars(motion21, m_starSpeed)) {
-                    continue;
-                }
-
-                for (const auto& blob3 : frame3.targetBlobs) {
-                    const auto motion32 = Dss::Core::Vec2f{blob3.centroid.x - blob2.centroid.x,
-                                                           blob3.centroid.y - blob2.centroid.y};
-                    if (std::abs(motion32.x) >= radius || std::abs(motion32.y) >= radius ||
-                        isMotionStarLike(motion32, m_starSpeed) ||
-                        std::abs(motion32.x - motion21.x) > kGeoMotionConsistencyThreshold ||
-                        std::abs(motion32.y - motion21.y) > kGeoMotionConsistencyThreshold ||
-                        std::abs(motion32.x - motion10.x) > kGeoMotionConsistencyThreshold ||
-                        std::abs(motion32.y - motion10.y) > kGeoMotionConsistencyThreshold ||
-                        !isMotionAngleAwayFromStars(motion32, m_starSpeed)) {
-                        continue;
-                    }
-
-                    const std::array blobs{&blob0, &blob1, &blob2, &blob3};
-                    if (hasRepeatedEquatorialPoint(blobs)) {
-                        continue;
-                    }
-                    const std::array frames{&frame0, &frame1, &frame2, &frame3};
-                    associatedTargets.push_back(
-                        makeAssociatedTarget(frames, blobs, m_frameFreq, m_settings));
-                }
-            }
-        }
-    }
-
-    removeDuplicateAssociations(associatedTargets);
-    m_targets = std::move(associatedTargets);
+    m_targets = associateFourFrameTargets(m_fifoTarget, m_starMatchCount, m_starSpeed, m_frameFreq,
+                                          m_settings);
+    assignTargetIds(m_targets);
     return 0;
 }
 
@@ -532,6 +716,27 @@ int GeoTracker::findTargets() {
     m_targetFound = !m_targets.empty();
     m_targetVerified = m_targetFound;
     return m_targetFound ? 0 : 1;
+}
+
+int GeoTracker::refindTargets() {
+    if (m_fifoTarget.size() < 5U) {
+        return 1;
+    }
+
+    auto candidates = associateFourFrameTargets(m_fifoTarget, m_starMatchCount, m_starSpeed,
+                                                m_frameFreq, m_settings);
+    std::erase_if(candidates, [&](const Dss::Core::TargetInfo& candidate) {
+        return overlapsLivingTarget(candidate, m_targets) ||
+               exceedsRediscoverySpeedLimit(candidate);
+    });
+
+    if (candidates.empty()) {
+        return 2;
+    }
+
+    assignTargetIds(candidates);
+    m_targets.insert(m_targets.end(), candidates.begin(), candidates.end());
+    return 0;
 }
 
 int GeoTracker::trackTargets() {
@@ -546,14 +751,10 @@ int GeoTracker::trackTargets() {
             continue;
         }
 
-        const auto matchedBlob = findNearestBlob(frame.targetBlobs, target.predictedPosFrame,
-                                                 m_settings.searchRadius, usedBlobs);
+        const auto matchedBlob =
+            findNearestTrackedBlob(frame.targetBlobs, target, m_settings, usedBlobs);
         if (!matchedBlob.has_value()) {
-            Dss::Core::MeasuredBlob predictedBlob{};
-            predictedBlob.id = target.targetId;
-            predictedBlob.centroid = target.predictedPosFrame;
-            predictedBlob.posAe = target.predictedPosAe;
-            auto info = makeFrameInfo(frame, predictedBlob, m_settings);
+            auto info = makeFrameInfo(frame, makeInvalidFrameBlob(frame, target), m_settings);
             info.valid = false;
             target.frameInfos.push_back(info);
         } else {
@@ -567,7 +768,8 @@ int GeoTracker::trackTargets() {
         target.validity = ((sampleCount - 1.0F) * target.validity + latestValid) / sampleCount;
         target.living = target.living &&
                         isInsideImageBounds(target.predictedPosFrame, m_settings.opticParams) &&
-                        !latestFramesAreAllInvalid(target, m_settings.numFramesLiving);
+                        !latestFramesAreAllInvalid(target, m_settings.numFramesLiving) &&
+                        !latestValidMeasurementsRepeatEquatorialPoint(target);
     }
     return 0;
 }
