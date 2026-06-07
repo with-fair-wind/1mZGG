@@ -1,83 +1,29 @@
 #include "dss/tracking/leo_tracker.h"
 
-#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <deque>
-#include <limits>
 #include <string>
 #include <vector>
+
+#include "dss/tracking/prediction_utils.h"
 
 namespace {
 
 constexpr std::size_t kLeoAssocFrameCount = 3U;
 constexpr std::size_t kMaxLeoInitialBlobCount = 2000U;
 constexpr std::size_t kLeoTrackInvalidLivingFrameCount = 5U;
-constexpr float kInvalidBlobHalfExtent = 5.0F;
 
-[[nodiscard]] auto median3(float first, float second, float third) -> float {
-    const auto minValue = std::min(first, std::min(second, third));
-    const auto maxValue = std::max(first, std::max(second, third));
-    return first + second + third - minValue - maxValue;
-}
-
-[[nodiscard]] auto makeFrameInfo(const Dss::Core::FrameMeasurements& frame,
-                                 const Dss::Core::MeasuredBlob& blob,
-                                 const Dss::Core::TrackingSettings& settings)
-    -> Dss::Core::TargetFrameInfo {
-    Dss::Core::TargetFrameInfo info{};
-    info.timestamp = frame.timestamp;
-    info.frameSeq = frame.frameSeq;
-    info.fovCenterAe = frame.fovCenterAe;
-    info.opticCenter =
-        Dss::Core::Vec2f{settings.opticParams.fovCenterX, settings.opticParams.fovCenterY};
-    info.exposureTime = frame.exposureTime;
-    info.frameFreq = frame.frameFreq;
-    info.measuredBlob = blob;
-    info.posZxdw = blob.posAe;
-    info.posTwdw = blob.posAe;
-    info.valid = true;
-    return info;
-}
-
-[[nodiscard]] auto makeInvalidFrameInfo(const Dss::Core::FrameMeasurements& frame,
-                                        const Dss::Core::TargetInfo& target,
-                                        const Dss::Core::TrackingSettings& settings)
-    -> Dss::Core::TargetFrameInfo {
-    Dss::Core::MeasuredBlob predictedBlob{};
-    predictedBlob.id = target.targetId;
-    predictedBlob.centroid = target.predictedPosFrame;
-    predictedBlob.maxX = predictedBlob.centroid.x + kInvalidBlobHalfExtent;
-    predictedBlob.minX = predictedBlob.centroid.x - kInvalidBlobHalfExtent;
-    predictedBlob.maxY = predictedBlob.centroid.y + kInvalidBlobHalfExtent;
-    predictedBlob.minY = predictedBlob.centroid.y - kInvalidBlobHalfExtent;
-    predictedBlob.area = 0.0F;
-    predictedBlob.dn = 0.0F;
-    predictedBlob.posAe = target.predictedPosAe;
-
-    auto info = makeFrameInfo(frame, predictedBlob, settings);
-    info.valid = false;
-    return info;
-}
-
-[[nodiscard]] auto framePeriodSeconds(const Dss::Core::FrameMeasurements& frame) -> float {
-    return frame.frameFreq > 0.0F ? 1.0F / frame.frameFreq : 1.0F;
-}
-
-[[nodiscard]] auto framePeriodSecondsFromFrameInfo(const Dss::Core::TargetFrameInfo& frame)
-    -> float {
-    return frame.frameFreq > 0.0F ? 1.0F / frame.frameFreq : 1.0F;
-}
-
-[[nodiscard]] auto frameMotion(const Dss::Core::MeasuredBlob& from,
-                               const Dss::Core::MeasuredBlob& to) -> Dss::Core::Vec2f {
-    return Dss::Core::Vec2f{to.centroid.x - from.centroid.x, to.centroid.y - from.centroid.y};
-}
-
-[[nodiscard]] auto aeMotion(const Dss::Core::MeasuredBlob& from, const Dss::Core::MeasuredBlob& to)
-    -> Dss::Core::Vec2f {
-    return Dss::Core::Vec2f{to.posAe.x - from.posAe.x, to.posAe.y - from.posAe.y};
-}
+using Dss::Tracking::aeMotion;
+using Dss::Tracking::BlobMatchOptions;
+using Dss::Tracking::BlobMatchSpace;
+using Dss::Tracking::findNearestBlob;
+using Dss::Tracking::frameMotion;
+using Dss::Tracking::framePeriodSeconds;
+using Dss::Tracking::makeInvalidTargetFrameInfo;
+using Dss::Tracking::makeTargetFrameInfo;
+using Dss::Tracking::targetAeMotionAt;
+using Dss::Tracking::updatePredictionFromRecentFour;
 
 [[nodiscard]] bool passesLeoAssocGate(const Dss::Core::Vec2f& firstAeMotion,
                                       const Dss::Core::Vec2f& secondAeMotion,
@@ -101,9 +47,9 @@ constexpr float kInvalidBlobHalfExtent = 5.0F;
 
     Dss::Core::TargetInfo target{};
     target.targetId = "leo-" + std::to_string(targetIndex + 1U);
-    target.frameInfos.push_back(makeFrameInfo(firstFrame, firstBlob, settings));
-    target.frameInfos.push_back(makeFrameInfo(secondFrame, secondBlob, settings));
-    target.frameInfos.push_back(makeFrameInfo(thirdFrame, thirdBlob, settings));
+    target.frameInfos.push_back(makeTargetFrameInfo(firstFrame, firstBlob, settings));
+    target.frameInfos.push_back(makeTargetFrameInfo(secondFrame, secondBlob, settings));
+    target.frameInfos.push_back(makeTargetFrameInfo(thirdFrame, thirdBlob, settings));
     target.predictedSpdFrame = Dss::Core::Vec2f{(firstFrameMotion.x + secondFrameMotion.x) / 2.0F,
                                                 (firstFrameMotion.y + secondFrameMotion.y) / 2.0F};
     target.predictedPosFrame = Dss::Core::Vec2f{thirdBlob.centroid.x + target.predictedSpdFrame.x,
@@ -150,37 +96,14 @@ constexpr float kInvalidBlobHalfExtent = 5.0F;
     return targets;
 }
 
-[[nodiscard]] auto findNearestVerificationBlob(const Dss::Core::FrameMeasurements& frame,
-                                               const Dss::Core::TargetInfo& target,
-                                               float thresholdAe)
+[[nodiscard]] auto findNearestAeBlob(const Dss::Core::FrameMeasurements& frame,
+                                     const Dss::Core::TargetInfo& target,
+                                     const Dss::Core::TrackingSettings& settings)
     -> const Dss::Core::MeasuredBlob* {
-    const Dss::Core::MeasuredBlob* nearestBlob = nullptr;
-    auto nearestDistance = std::numeric_limits<float>::max();
-    for (const auto& blob : frame.targetBlobs) {
-        const auto dx = target.predictedPosAe.x - blob.posAe.x;
-        const auto dy = target.predictedPosAe.y - blob.posAe.y;
-        const auto distance = static_cast<float>(std::hypot(dx, dy));
-        if (std::abs(dx) < thresholdAe && std::abs(dy) < thresholdAe &&
-            distance <= nearestDistance) {
-            nearestBlob = &blob;
-            nearestDistance = distance;
-        }
-    }
-    return nearestBlob;
-}
-
-[[nodiscard]] auto targetFrameMotionAt(const Dss::Core::TargetInfo& target, std::size_t index)
-    -> Dss::Core::Vec2f {
-    const auto& current = target.frameInfos[index].measuredBlob;
-    const auto& previous = target.frameInfos[index - 1U].measuredBlob;
-    return frameMotion(previous, current);
-}
-
-[[nodiscard]] auto targetAeMotionAt(const Dss::Core::TargetInfo& target, std::size_t index)
-    -> Dss::Core::Vec2f {
-    const auto& current = target.frameInfos[index].measuredBlob;
-    const auto& previous = target.frameInfos[index - 1U].measuredBlob;
-    return aeMotion(previous, current);
+    BlobMatchOptions options{};
+    options.space = BlobMatchSpace::Ae;
+    options.threshold = settings.thresholdAe;
+    return findNearestBlob(frame, target, settings, options);
 }
 
 [[nodiscard]] bool hasConsistentRecentAeMotion(const Dss::Core::TargetInfo& target,
@@ -223,37 +146,6 @@ constexpr float kInvalidBlobHalfExtent = 5.0F;
     return true;
 }
 
-void updatePredictionFromRecentFour(Dss::Core::TargetInfo& target) {
-    const auto size = target.frameInfos.size();
-    if (size < 4U) {
-        return;
-    }
-
-    const auto frameMotion3 = targetFrameMotionAt(target, size - 1U);
-    const auto frameMotion2 = targetFrameMotionAt(target, size - 2U);
-    const auto frameMotion1 = targetFrameMotionAt(target, size - 3U);
-    const auto aeMotion3 = targetAeMotionAt(target, size - 1U);
-    const auto aeMotion2 = targetAeMotionAt(target, size - 2U);
-    const auto aeMotion1 = targetAeMotionAt(target, size - 3U);
-    const auto& latestBlob = target.frameInfos.back().measuredBlob;
-    const auto period = framePeriodSecondsFromFrameInfo(target.frameInfos.back());
-
-    target.predictedSpdFrame =
-        Dss::Core::Vec2f{median3(frameMotion3.x, frameMotion2.x, frameMotion1.x),
-                         median3(frameMotion3.y, frameMotion2.y, frameMotion1.y)};
-    target.predictedPosFrame = Dss::Core::Vec2f{latestBlob.centroid.x + target.predictedSpdFrame.x,
-                                                latestBlob.centroid.y + target.predictedSpdFrame.y};
-    target.predictedSpdAe =
-        Dss::Core::Vec2f{median3(aeMotion3.x, aeMotion2.x, aeMotion1.x) / period,
-                         median3(aeMotion3.y, aeMotion2.y, aeMotion1.y) / period};
-    target.predictedPosAe = Dss::Core::Vec2f{latestBlob.posAe.x + target.predictedSpdAe.x * period,
-                                             latestBlob.posAe.y + target.predictedSpdAe.y * period};
-
-    const auto latestValid = target.frameInfos.back().valid ? 1.0F : 0.0F;
-    target.validity = ((static_cast<float>(size - 1U) * target.validity) + latestValid) /
-                      static_cast<float>(size);
-}
-
 [[nodiscard]] auto aeSpeedMagnitude(const Dss::Core::TargetInfo& target) -> float {
     return static_cast<float>(std::hypot(target.predictedSpdAe.x, target.predictedSpdAe.y));
 }
@@ -267,12 +159,11 @@ void updatePredictionFromRecentFour(Dss::Core::TargetInfo& target) {
         if (!candidate.living) {
             continue;
         }
-        const auto* matchedBlob =
-            findNearestVerificationBlob(frame, candidate, settings.thresholdAe);
+        const auto* matchedBlob = findNearestAeBlob(frame, candidate, settings);
         auto verified = candidate;
         verified.frameInfos.push_back(matchedBlob == nullptr
-                                          ? makeInvalidFrameInfo(frame, verified, settings)
-                                          : makeFrameInfo(frame, *matchedBlob, settings));
+                                          ? makeInvalidTargetFrameInfo(frame, verified, settings)
+                                          : makeTargetFrameInfo(frame, *matchedBlob, settings));
         updatePredictionFromRecentFour(verified);
         verified.living = hasConsistentRecentAeMotion(verified, settings.thresholdAe);
         if (verified.living && verified.frameInfos.back().valid) {
@@ -305,10 +196,10 @@ void updatePredictionFromRecentFour(Dss::Core::TargetInfo& target) {
         return tracked;
     }
 
-    const auto* matchedBlob = findNearestVerificationBlob(frame, tracked, settings.thresholdAe);
+    const auto* matchedBlob = findNearestAeBlob(frame, tracked, settings);
     tracked.frameInfos.push_back(matchedBlob == nullptr
-                                     ? makeInvalidFrameInfo(frame, tracked, settings)
-                                     : makeFrameInfo(frame, *matchedBlob, settings));
+                                     ? makeInvalidTargetFrameInfo(frame, tracked, settings)
+                                     : makeTargetFrameInfo(frame, *matchedBlob, settings));
     updatePredictionFromRecentFour(tracked);
     tracked.living =
         tracked.living && !hasConsecutiveInvalidFrames(tracked, kLeoTrackInvalidLivingFrameCount);

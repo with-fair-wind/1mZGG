@@ -24,6 +24,7 @@ private:
     Dss::Core::TargetInfo m_currentTarget{};
     std::vector<Dss::Core::TargetInfo> m_candidates;
     bool m_targetFound = false;
+    bool m_targetVerified = false;
 };
 
 }  // namespace Dss::Tracking
