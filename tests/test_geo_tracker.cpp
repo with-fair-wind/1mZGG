@@ -4,6 +4,7 @@
 
 #include <gtest/gtest.h>
 
+#include "dss/core/constants.h"
 #include "dss/tracking/geo_tracker.h"
 
 namespace {
@@ -70,6 +71,13 @@ void addGeoTargetWithEquatorial(Dss::Core::FrameMeasurements& frame, float x, fl
     addGeoTarget(frame, x, y);
     frame.targetBlobs.back().alpha = alpha;
     frame.targetBlobs.back().sigma = sigma;
+}
+
+void addGeoTargetWithRaDec(Dss::Core::FrameMeasurements& frame, float x, float y, double ra,
+                           double dec) {
+    addGeoTarget(frame, x, y);
+    frame.targetBlobs.back().ra = ra;
+    frame.targetBlobs.back().dec = dec;
 }
 
 }  // namespace
@@ -283,6 +291,75 @@ TEST(GeoTracker, RejectsTrackedMeasurementWhenAePositionErrorExceedsThreshold) {
         EXPECT_TRUE(target.living);
         EXPECT_FLOAT_EQ(target.frameInfos.back().measuredBlob.posAe.x, predictedAe.x);
         EXPECT_FLOAT_EQ(target.frameInfos.back().measuredBlob.posAe.y, predictedAe.y);
+    }
+}
+
+TEST(GeoTracker, TracksNonFullLeoTargetInRaDecSpace) {
+    auto settings = makeSettings();
+    settings.geoFullLeo = false;
+    settings.geoRaSpeedThresholdArcsec = 60.0;
+    settings.geoDecSpeedThresholdArcsec = 60.0;
+    Dss::Tracking::GeoTracker tracker(settings);
+
+    for (uint64_t index = 0; index < 5; ++index) {
+        auto frame = makeFrame(index + 1, static_cast<int>(index));
+        addCenteredStars(frame, static_cast<float>(index), 0.0F);
+        if (index < 4) {
+            addGeoTargetWithRaDec(frame, 105.0F + static_cast<float>(index) * 5.0F,
+                                  100.0F + static_cast<float>(index) * 4.0F,
+                                  1.0 + static_cast<double>(index) * 0.0001,
+                                  0.5 + static_cast<double>(index) * 0.00007);
+        } else {
+            addGeoTargetWithRaDec(frame, 900.0F, 900.0F, 1.0004, 0.50028);
+        }
+
+        const auto targets = tracker.track(frame);
+        if (index < 4) {
+            continue;
+        }
+
+        ASSERT_EQ(targets.size(), 1U);
+        const auto& target = targets.front();
+        ASSERT_EQ(target.frameInfos.size(), 5U);
+        EXPECT_TRUE(target.frameInfos.back().valid);
+        EXPECT_TRUE(target.living);
+        EXPECT_FLOAT_EQ(target.frameInfos.back().measuredBlob.centroid.x, 900.0F);
+        EXPECT_FLOAT_EQ(target.frameInfos.back().measuredBlob.centroid.y, 900.0F);
+        EXPECT_NEAR(target.predictedPosFrame.x, 1.0005F, 1.0e-6F);
+        EXPECT_NEAR(target.predictedPosFrame.y, 0.50035F, 1.0e-6F);
+    }
+}
+
+TEST(GeoTracker, EndsNonFullLeoTargetWhenPredictedRaDecLeavesSkyBounds) {
+    auto settings = makeSettings();
+    settings.geoFullLeo = false;
+    settings.geoRaSpeedThresholdArcsec = 60.0;
+    settings.geoDecSpeedThresholdArcsec = 60.0;
+    Dss::Tracking::GeoTracker tracker(settings);
+
+    for (uint64_t index = 0; index < 5; ++index) {
+        auto frame = makeFrame(index + 1, static_cast<int>(index));
+        addCenteredStars(frame, static_cast<float>(index), 0.0F);
+        if (index < 4) {
+            addGeoTargetWithRaDec(frame, 105.0F + static_cast<float>(index) * 5.0F,
+                                  100.0F + static_cast<float>(index) * 4.0F,
+                                  6.2819 + static_cast<double>(index) * 0.0004,
+                                  0.5 + static_cast<double>(index) * 0.00007);
+        } else {
+            addGeoTargetWithRaDec(frame, 900.0F, 900.0F, 6.2835, 0.50028);
+        }
+
+        const auto targets = tracker.track(frame);
+        if (index < 4) {
+            continue;
+        }
+
+        ASSERT_EQ(targets.size(), 1U);
+        const auto& target = targets.front();
+        ASSERT_EQ(target.frameInfos.size(), 5U);
+        EXPECT_TRUE(target.frameInfos.back().valid);
+        EXPECT_GT(target.predictedPosFrame.x, static_cast<float>(2.0 * Dss::Core::Pi));
+        EXPECT_FALSE(target.living);
     }
 }
 

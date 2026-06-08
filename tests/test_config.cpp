@@ -37,7 +37,12 @@ TEST(ConfigTest, LoadsJsonWithoutQt) {
   },
   "tracking": {
     "thresholdLiving": 0.75,
-    "autoDecide": false
+    "autoDecide": false,
+    "geoFullLeo": false,
+    "geoRaThresholdArcsec": 5.4,
+    "geoDecThresholdArcsec": 3.0,
+    "geoRaSpeedThresholdArcsec": 10.0,
+    "geoDecSpeedThresholdArcsec": 6.0
   }
 })";
     }
@@ -65,6 +70,11 @@ TEST(ConfigTest, LoadsJsonWithoutQt) {
     EXPECT_DOUBLE_EQ(config.observatory().altitude, 35.0);
     EXPECT_FLOAT_EQ(config.trackingSettings().thresholdLiving, 0.75f);
     EXPECT_FALSE(config.trackingSettings().autoDecide);
+    EXPECT_FALSE(config.trackingSettings().geoFullLeo);
+    EXPECT_DOUBLE_EQ(config.trackingSettings().geoRaThresholdArcsec, 5.4);
+    EXPECT_DOUBLE_EQ(config.trackingSettings().geoDecThresholdArcsec, 3.0);
+    EXPECT_DOUBLE_EQ(config.trackingSettings().geoRaSpeedThresholdArcsec, 10.0);
+    EXPECT_DOUBLE_EQ(config.trackingSettings().geoDecSpeedThresholdArcsec, 6.0);
 
     const auto saved = config.save();
     ASSERT_TRUE(saved.has_value()) << saved.error();
@@ -75,6 +85,13 @@ TEST(ConfigTest, LoadsJsonWithoutQt) {
         EXPECT_EQ(savedJson.at("paths").at("dataRoot").get<std::string>(), "./data");
         EXPECT_EQ(savedJson.at("commNet").at("displayPort").at("baudRate").get<int>(), 115200);
         EXPECT_FALSE(savedJson.at("tracking").at("autoDecide").get<bool>());
+        EXPECT_FALSE(savedJson.at("tracking").at("geoFullLeo").get<bool>());
+        EXPECT_DOUBLE_EQ(savedJson.at("tracking").at("geoRaThresholdArcsec").get<double>(), 5.4);
+        EXPECT_DOUBLE_EQ(savedJson.at("tracking").at("geoDecThresholdArcsec").get<double>(), 3.0);
+        EXPECT_DOUBLE_EQ(savedJson.at("tracking").at("geoRaSpeedThresholdArcsec").get<double>(),
+                         10.0);
+        EXPECT_DOUBLE_EQ(savedJson.at("tracking").at("geoDecSpeedThresholdArcsec").get<double>(),
+                         6.0);
     }
 
     std::filesystem::remove(path);

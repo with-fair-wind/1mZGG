@@ -101,6 +101,30 @@ TEST(ScTracker, CompressesThreeFrameCandidatesThatReuseInitialMeasurements) {
     EXPECT_FLOAT_EQ(target.predictedPosFrame.y, 3069.0F);
 }
 
+TEST(ScTracker, CompressesTransitiveInitialMeasurementReuseLikeLegacyAssoc3) {
+    Dss::Tracking::ScTracker tracker(makeSettings());
+
+    EXPECT_TRUE(tracker
+                    .track(makeFrame(1, {makeBlob(3060.0F, 3060.0F, 1.00F, 2.00F),
+                                         makeBlob(3061.0F, 3060.0F, 1.10F, 2.00F)}))
+                    .empty());
+    EXPECT_TRUE(tracker
+                    .track(makeFrame(2, {makeBlob(3064.0F, 3063.0F, 1.01F, 2.01F),
+                                         makeBlob(3065.0F, 3063.0F, 1.11F, 2.01F)}))
+                    .empty());
+
+    const auto targets = tracker.track(makeFrame(
+        3, {makeBlob(3068.0F, 3066.0F, 1.02F, 2.02F), makeBlob(3070.0F, 3066.0F, 1.12F, 2.02F),
+            makeBlob(3069.0F, 3066.0F, 1.13F, 2.02F)}));
+
+    ASSERT_EQ(targets.size(), 1U);
+    const auto& target = targets.front();
+    ASSERT_EQ(target.frameInfos.size(), 3U);
+    EXPECT_FLOAT_EQ(target.frameInfos[0].measuredBlob.centroid.x, 3060.0F);
+    EXPECT_FLOAT_EQ(target.frameInfos[1].measuredBlob.centroid.x, 3064.0F);
+    EXPECT_FLOAT_EQ(target.frameInfos[2].measuredBlob.centroid.x, 3068.0F);
+}
+
 TEST(ScTracker, VerifiesTargetOnFourthFrameUsingPredictedFramePosition) {
     Dss::Tracking::ScTracker tracker(makeSettings());
 

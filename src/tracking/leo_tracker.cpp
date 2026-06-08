@@ -6,13 +6,14 @@
 #include <string>
 #include <vector>
 
+#include "dss/tracking/lifecycle_utils.h"
 #include "dss/tracking/prediction_utils.h"
 
 namespace {
 
 constexpr std::size_t kLeoAssocFrameCount = 3U;
 constexpr std::size_t kMaxLeoInitialBlobCount = 2000U;
-constexpr std::size_t kLeoTrackInvalidLivingFrameCount = 5U;
+constexpr int kLeoTrackInvalidLivingFrameCount = 5;
 
 using Dss::Tracking::aeMotion;
 using Dss::Tracking::BlobMatchOptions;
@@ -23,6 +24,9 @@ using Dss::Tracking::framePeriodSeconds;
 using Dss::Tracking::makeInvalidTargetFrameInfo;
 using Dss::Tracking::makeTargetFrameInfo;
 using Dss::Tracking::targetAeMotionAt;
+using Dss::Tracking::targetRemainsLiving;
+using Dss::Tracking::TrackLivingRule;
+using Dss::Tracking::TrackMissPolicy;
 using Dss::Tracking::updatePredictionFromRecentFour;
 
 [[nodiscard]] bool passesLeoAssocGate(const Dss::Core::Vec2f& firstAeMotion,
@@ -131,21 +135,6 @@ using Dss::Tracking::updatePredictionFromRecentFour;
     return validCount >= 6;
 }
 
-[[nodiscard]] bool hasConsecutiveInvalidFrames(const Dss::Core::TargetInfo& target,
-                                               std::size_t frameCount) {
-    if (target.frameInfos.size() < frameCount) {
-        return false;
-    }
-
-    const auto firstRecentIndex = target.frameInfos.size() - frameCount;
-    for (auto index = firstRecentIndex; index < target.frameInfos.size(); ++index) {
-        if (target.frameInfos[index].valid) {
-            return false;
-        }
-    }
-    return true;
-}
-
 [[nodiscard]] auto aeSpeedMagnitude(const Dss::Core::TargetInfo& target) -> float {
     return static_cast<float>(std::hypot(target.predictedSpdAe.x, target.predictedSpdAe.y));
 }
@@ -187,6 +176,13 @@ using Dss::Tracking::updatePredictionFromRecentFour;
     return selected;
 }
 
+[[nodiscard]] auto makeLeoTrackLivingRule() -> TrackLivingRule {
+    TrackLivingRule rule{};
+    rule.frameWindow = kLeoTrackInvalidLivingFrameCount;
+    rule.missPolicy = TrackMissPolicy::DropAfterConsecutiveInvalidFrames;
+    return rule;
+}
+
 [[nodiscard]] auto trackTargetOnFrame(const Dss::Core::FrameMeasurements& frame,
                                       const Dss::Core::TargetInfo& target,
                                       const Dss::Core::TrackingSettings& settings)
@@ -201,8 +197,7 @@ using Dss::Tracking::updatePredictionFromRecentFour;
                                      ? makeInvalidTargetFrameInfo(frame, tracked, settings)
                                      : makeTargetFrameInfo(frame, *matchedBlob, settings));
     updatePredictionFromRecentFour(tracked);
-    tracked.living =
-        tracked.living && !hasConsecutiveInvalidFrames(tracked, kLeoTrackInvalidLivingFrameCount);
+    tracked.living = tracked.living && targetRemainsLiving(tracked, makeLeoTrackLivingRule());
     return tracked;
 }
 

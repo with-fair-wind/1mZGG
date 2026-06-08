@@ -171,6 +171,22 @@ TEST(LeoTracker, KeepsVerifiedTargetLivingAfterSingleTrackMiss) {
     EXPECT_NEAR(target.predictedPosAe.y, 2.12F, 1.0e-6F);
 }
 
+TEST(LeoTracker, DropsTrackedTargetAfterFiveConsecutiveTrackMisses) {
+    Dss::Tracking::LeoTracker tracker(makeSettings());
+
+    ASSERT_TRUE(tracker.track(makeFrame(1, makeBlob(100.0F, 200.0F, 1.00F, 2.00F))).empty());
+    ASSERT_TRUE(tracker.track(makeFrame(2, makeBlob(110.0F, 208.0F, 1.03F, 2.02F))).empty());
+    ASSERT_EQ(tracker.track(makeFrame(3, makeBlob(120.0F, 216.0F, 1.06F, 2.04F))).size(), 1U);
+    ASSERT_EQ(tracker.track(makeFrame(4, makeBlob(130.0F, 224.0F, 1.09F, 2.06F))).size(), 1U);
+    ASSERT_EQ(tracker.track(makeFrame(5, makeBlob(140.0F, 232.0F, 1.12F, 2.08F))).size(), 1U);
+
+    EXPECT_EQ(tracker.track(makeEmptyFrame(6)).size(), 1U);
+    EXPECT_EQ(tracker.track(makeEmptyFrame(7)).size(), 1U);
+    EXPECT_EQ(tracker.track(makeEmptyFrame(8)).size(), 1U);
+    EXPECT_EQ(tracker.track(makeEmptyFrame(9)).size(), 1U);
+    EXPECT_TRUE(tracker.track(makeEmptyFrame(10)).empty());
+}
+
 TEST(LeoTracker, DropsUnverifiedCandidateAndAllowsRediscoveryAfterFourthFrameMiss) {
     Dss::Tracking::LeoTracker tracker(makeSettings());
 

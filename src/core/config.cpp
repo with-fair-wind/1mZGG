@@ -248,6 +248,11 @@ auto Config::load(const std::filesystem::path& configPath) -> std::expected<void
     m_tracking.spdLowAe = getFloat(tracking, "spdLowAe", 0.0f);
     m_tracking.spdHighAe = getFloat(tracking, "spdHighAe", 0.0f);
     m_tracking.thresholdAe = getFloat(tracking, "thresholdAe", 0.0f);
+    m_tracking.geoFullLeo = getBool(tracking, "geoFullLeo", true);
+    m_tracking.geoRaThresholdArcsec = getDouble(tracking, "geoRaThresholdArcsec", 5.4);
+    m_tracking.geoDecThresholdArcsec = getDouble(tracking, "geoDecThresholdArcsec", 3.0);
+    m_tracking.geoRaSpeedThresholdArcsec = getDouble(tracking, "geoRaSpeedThresholdArcsec", 10.0);
+    m_tracking.geoDecSpeedThresholdArcsec = getDouble(tracking, "geoDecSpeedThresholdArcsec", 6.0);
     m_tracking.opticParams = m_optics;
 
     return {};
@@ -305,6 +310,11 @@ auto Config::save() -> std::expected<void, std::string> {
              {"spdLowAe", m_tracking.spdLowAe},
              {"spdHighAe", m_tracking.spdHighAe},
              {"thresholdAe", m_tracking.thresholdAe},
+             {"geoFullLeo", m_tracking.geoFullLeo},
+             {"geoRaThresholdArcsec", m_tracking.geoRaThresholdArcsec},
+             {"geoDecThresholdArcsec", m_tracking.geoDecThresholdArcsec},
+             {"geoRaSpeedThresholdArcsec", m_tracking.geoRaSpeedThresholdArcsec},
+             {"geoDecSpeedThresholdArcsec", m_tracking.geoDecSpeedThresholdArcsec},
          }},
     };
 

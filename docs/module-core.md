@@ -29,7 +29,7 @@ Core 模块是整个系统的基础层，提供所有其他模块共享的类型
 | `TargetFrameInfo` | 单帧中单个目标的状态 |
 | `TargetInfo` | 跨帧的目标跟踪状态 (历史帧信息、预测位置/速度) |
 | `ImageStats` | 图像统计量 (最大/最小/均值/标准差) |
-| `TrackingSettings` | 跟踪参数 (搜索半径、活性阈值等) |
+| `TrackingSettings` | 跟踪参数 (搜索半径、活性阈值、GEO FullLEO/RA-Dec 阈值等) |
 | `ExposureDisplayData` | 曝光/显示同步数据 |
 | `ResultPacket` | 测量结果数据包 |
 | `PointingErrorResult` | 指向误差模型参数 |

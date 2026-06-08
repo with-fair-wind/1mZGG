@@ -5,8 +5,11 @@
 #include <deque>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
+#include "dss/tracking/candidate_utils.h"
+#include "dss/tracking/lifecycle_utils.h"
 #include "dss/tracking/prediction_utils.h"
 
 namespace {
@@ -17,12 +20,17 @@ constexpr float kScFovCenterHalfExtent = 128.0F;
 using Dss::Tracking::aeMotion;
 using Dss::Tracking::BlobMatchOptions;
 using Dss::Tracking::BlobMatchSpace;
+using Dss::Tracking::deduplicateInitialCandidatesByCentroid;
 using Dss::Tracking::findNearestBlob;
 using Dss::Tracking::frameMotion;
 using Dss::Tracking::framePeriodSeconds;
+using Dss::Tracking::InitialMeasurementDedupRule;
 using Dss::Tracking::isNearFovCenter;
 using Dss::Tracking::makeInvalidTargetFrameInfo;
 using Dss::Tracking::makeTargetFrameInfo;
+using Dss::Tracking::targetRemainsLiving;
+using Dss::Tracking::TrackLivingRule;
+using Dss::Tracking::TrackMissPolicy;
 using Dss::Tracking::updatePredictionFromRecentFour;
 
 [[nodiscard]] bool passesScAssocGate(const Dss::Core::Vec2f& firstFrameMotion,
@@ -65,40 +73,11 @@ using Dss::Tracking::updatePredictionFromRecentFour;
     return target;
 }
 
-[[nodiscard]] bool hasSameInitialMeasurement(const Dss::Core::TargetInfo& first,
-                                             const Dss::Core::TargetInfo& second,
-                                             std::size_t frameIndex) {
-    if (first.frameInfos.size() <= frameIndex || second.frameInfos.size() <= frameIndex) {
-        return false;
-    }
-
-    const auto& firstCentroid = first.frameInfos[frameIndex].measuredBlob.centroid;
-    const auto& secondCentroid = second.frameInfos[frameIndex].measuredBlob.centroid;
-    return firstCentroid.x == secondCentroid.x && firstCentroid.y == secondCentroid.y;
-}
-
-[[nodiscard]] bool reusesAnyInitialMeasurement(
-    const Dss::Core::TargetInfo& candidate, const std::vector<Dss::Core::TargetInfo>& keptTargets) {
-    for (const auto& keptTarget : keptTargets) {
-        for (std::size_t frameIndex = 0U; frameIndex < kScAssocFrameCount; ++frameIndex) {
-            if (hasSameInitialMeasurement(candidate, keptTarget, frameIndex)) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-[[nodiscard]] auto compressSimilarInitialCandidates(
-    const std::vector<Dss::Core::TargetInfo>& candidates) -> std::vector<Dss::Core::TargetInfo> {
-    std::vector<Dss::Core::TargetInfo> compressed;
-    compressed.reserve(candidates.size());
-    for (const auto& candidate : candidates) {
-        if (!reusesAnyInitialMeasurement(candidate, compressed)) {
-            compressed.push_back(candidate);
-        }
-    }
-    return compressed;
+[[nodiscard]] auto compressSimilarInitialCandidates(std::vector<Dss::Core::TargetInfo> candidates)
+    -> std::vector<Dss::Core::TargetInfo> {
+    InitialMeasurementDedupRule rule{};
+    rule.frameCount = kScAssocFrameCount;
+    return deduplicateInitialCandidatesByCentroid(std::move(candidates), rule);
 }
 
 [[nodiscard]] auto associateThreeFrameTargets(const std::deque<Dss::Core::FrameMeasurements>& fifo,
@@ -130,7 +109,7 @@ using Dss::Tracking::updatePredictionFromRecentFour;
             }
         }
     }
-    return compressSimilarInitialCandidates(targets);
+    return compressSimilarInitialCandidates(std::move(targets));
 }
 
 [[nodiscard]] auto findNearestFrameBlob(const Dss::Core::FrameMeasurements& frame,
@@ -145,15 +124,22 @@ using Dss::Tracking::updatePredictionFromRecentFour;
     return findNearestBlob(frame, target, settings, options);
 }
 
-[[nodiscard]] bool passesScVerifyLivingRule(const Dss::Core::TargetInfo& target,
-                                            const Dss::Core::TrackingSettings& settings) {
-    if (target.frameInfos.empty()) {
-        return false;
-    }
-    const auto livingWindow =
-        settings.numFramesLiving > 0 ? static_cast<std::size_t>(settings.numFramesLiving) : 0U;
-    return !(livingWindow > 0U && target.frameInfos.size() >= livingWindow &&
-             target.validity < settings.thresholdLiving && !target.frameInfos.back().valid);
+[[nodiscard]] auto makeScVerifyLivingRule(const Dss::Core::TrackingSettings& settings)
+    -> TrackLivingRule {
+    TrackLivingRule rule{};
+    rule.frameWindow = settings.numFramesLiving;
+    rule.threshold = settings.thresholdLiving;
+    rule.missPolicy = TrackMissPolicy::UseValidityWindow;
+    return rule;
+}
+
+[[nodiscard]] auto makeScTrackLivingRule(const Dss::Core::TrackingSettings& settings)
+    -> TrackLivingRule {
+    TrackLivingRule rule{};
+    rule.frameWindow = settings.numFramesLiving;
+    rule.threshold = settings.thresholdLiving;
+    rule.missPolicy = TrackMissPolicy::RequireLatestValid;
+    return rule;
 }
 
 [[nodiscard]] auto verifyTargetsOnFrame(const Dss::Core::FrameMeasurements& frame,
@@ -171,7 +157,7 @@ using Dss::Tracking::updatePredictionFromRecentFour;
                                           ? makeInvalidTargetFrameInfo(frame, verified, settings)
                                           : makeTargetFrameInfo(frame, *matchedBlob, settings));
         updatePredictionFromRecentFour(verified);
-        verified.living = passesScVerifyLivingRule(verified, settings);
+        verified.living = targetRemainsLiving(verified, makeScVerifyLivingRule(settings));
         if (verified.living) {
             verifiedTargets.push_back(verified);
         }
@@ -215,7 +201,7 @@ using Dss::Tracking::updatePredictionFromRecentFour;
                                      ? makeInvalidTargetFrameInfo(frame, tracked, settings)
                                      : makeTargetFrameInfo(frame, *matchedBlob, settings));
     updatePredictionFromRecentFour(tracked);
-    tracked.living = tracked.frameInfos.back().valid;
+    tracked.living = targetRemainsLiving(tracked, makeScTrackLivingRule(settings));
     return tracked;
 }
 

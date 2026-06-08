@@ -139,6 +139,11 @@ struct TrackingSettings {
     float spdLowAe = 0.0f;      // deg
     float spdHighAe = 0.0f;     // deg
     float thresholdAe = 0.0f;   // deg
+    bool geoFullLeo = true;
+    double geoRaThresholdArcsec = 5.4;
+    double geoDecThresholdArcsec = 3.0;
+    double geoRaSpeedThresholdArcsec = 10.0;
+    double geoDecSpeedThresholdArcsec = 6.0;
 };
 
 // --- Exposure/display synchronized data ---

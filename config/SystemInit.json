@@ -84,7 +84,12 @@
         "thresholdMeo": 5.0,
         "spdLowAe": 0.0,
         "spdHighAe": 0.0,
-        "thresholdAe": 0.0
+        "thresholdAe": 0.0,
+        "geoFullLeo": true,
+        "geoRaThresholdArcsec": 5.4,
+        "geoDecThresholdArcsec": 3.0,
+        "geoRaSpeedThresholdArcsec": 10.0,
+        "geoDecSpeedThresholdArcsec": 6.0
     },
     "camera": {
         "triggerMode": 0,
