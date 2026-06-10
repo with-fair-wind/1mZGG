@@ -20,6 +20,7 @@ namespace {
 
 namespace Dss::Tracking {
 
+/// 判断两个候选在指定初始帧窗口内是否存在同帧同质心测量
 bool sharesInitialCentroidAtSameFrameIndex(const Core::TargetInfo& first,
                                            const Core::TargetInfo& second,
                                            const InitialMeasurementDedupRule& rule) {
@@ -36,6 +37,7 @@ bool sharesInitialCentroidAtSameFrameIndex(const Core::TargetInfo& first,
     return false;
 }
 
+/// 两两比对候选并移除重复项，保留先出现的候选
 auto deduplicateInitialCandidatesByCentroid(std::vector<Core::TargetInfo> candidates,
                                             const InitialMeasurementDedupRule& rule)
     -> std::vector<Core::TargetInfo> {

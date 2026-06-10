@@ -13,6 +13,11 @@
 namespace Dss::Acquisition {
 namespace {
 
+/**
+ * @brief 将 16 位 RAW 像素转换为 8 位显示像素
+ * @param raw 16 位 RAW 像素数据
+ * @return 取高 8 位后的显示像素向量
+ */
 [[nodiscard]] auto rawToDisplay(std::span<const std::uint16_t> raw) -> std::vector<std::uint8_t> {
     std::vector<std::uint8_t> display;
     display.reserve(raw.size());
@@ -30,6 +35,12 @@ namespace {
     return ext == L".raw";
 }
 
+/**
+ * @brief 从 .raw 文件加载一帧
+ * @param path RAW 图像文件路径
+ * @param frameSeq 帧序号
+ * @return 解码后的帧数据包；打开或解码失败时返回错误
+ */
 [[nodiscard]] auto loadRawFrame(const std::filesystem::path& path, std::uint64_t frameSeq)
     -> std::expected<Dss::Processing::FramePacket, std::string> {
     std::ifstream input(path, std::ios::binary);
@@ -57,6 +68,12 @@ namespace {
     return packet;
 }
 
+/**
+ * @brief 从通用图像文件（PNG/JPG 等）加载一帧
+ * @param path 图像文件路径
+ * @param frameSeq 帧序号
+ * @return 转换后的帧数据包；加载失败时返回错误
+ */
 [[nodiscard]] auto loadImageFrame(const std::filesystem::path& path, std::uint64_t frameSeq)
     -> std::expected<Dss::Processing::FramePacket, std::string> {
     QImage image(QString::fromStdWString(path.wstring()));
@@ -86,6 +103,12 @@ namespace {
     return packet;
 }
 
+/**
+ * @brief 根据文件扩展名选择加载方式
+ * @param path 图像文件路径
+ * @param frameSeq 帧序号
+ * @return 帧数据包；加载失败时返回错误
+ */
 [[nodiscard]] auto loadFrame(const std::filesystem::path& path, std::uint64_t frameSeq)
     -> std::expected<Dss::Processing::FramePacket, std::string> {
     if (isRawFile(path)) {
@@ -105,6 +128,11 @@ ImageSequenceFrameSource::~ImageSequenceFrameSource() {
     stop();
 }
 
+/**
+ * @brief 替换文件列表并重置播放状态
+ * @param files 新的图像文件路径序列
+ * @return 列表为空时返回错误
+ */
 auto ImageSequenceFrameSource::setFiles(std::vector<std::filesystem::path> files)
     -> std::expected<void, std::string> {
     stop();
@@ -137,6 +165,10 @@ void ImageSequenceFrameSource::setFrameInterval(std::chrono::milliseconds interv
     m_frameInterval = interval;
 }
 
+/**
+ * @brief 同步加载当前索引帧并触发回调，随后推进索引
+ * @return 序列为空、未设置回调、已到末尾或加载失败时返回错误
+ */
 auto ImageSequenceFrameSource::stepForward() -> std::expected<void, std::string> {
     std::filesystem::path file;
     std::size_t index = 0;
@@ -172,6 +204,10 @@ auto ImageSequenceFrameSource::stepForward() -> std::expected<void, std::string>
     return {};
 }
 
+/**
+ * @brief 加载首帧以确定帧尺寸并重置播放索引
+ * @return 序列为空或首帧加载失败时返回错误
+ */
 auto ImageSequenceFrameSource::init() -> std::expected<void, std::string> {
     std::vector<std::filesystem::path> files;
     {
@@ -197,6 +233,9 @@ auto ImageSequenceFrameSource::init() -> std::expected<void, std::string> {
     return {};
 }
 
+/**
+ * @brief 在后台线程中从当前索引连续回放至序列末尾
+ */
 void ImageSequenceFrameSource::start() {
     if (m_running.exchange(true)) {
         return;

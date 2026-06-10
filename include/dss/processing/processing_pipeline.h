@@ -7,17 +7,33 @@
 
 namespace Dss::Processing {
 
+/// 处理管线，封装可替换的处理策略后端
 class ProcessingPipeline {
 public:
+    /**
+     * @brief 设置处理策略后端
+     * @param backend 处理策略实例的所有权
+     */
     void setBackend(std::unique_ptr<IProcessingStrategy> backend);
 
+    /**
+     * @brief 处理单帧图像
+     * @param packet 输入帧数据包
+     * @return 处理结果；无后端时返回空结果
+     */
     [[nodiscard]] auto process(const FramePacket& packet) -> ProcessingResult;
+
+    /// 当前后端的处理模式；无后端时返回 ProcessingMode::None
     [[nodiscard]] auto currentMode() const -> Dss::Core::ProcessingMode;
+
+    /// 当前后端名称；无后端时返回 "none"
     [[nodiscard]] auto backendName() const -> std::string_view;
+
+    /// 是否已设置处理后端
     [[nodiscard]] bool hasBackend() const;
 
 private:
-    std::unique_ptr<IProcessingStrategy> m_backend;
+    std::unique_ptr<IProcessingStrategy> m_backend;  ///< 当前处理策略后端
 };
 
 }  // namespace Dss::Processing

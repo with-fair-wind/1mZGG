@@ -30,6 +30,11 @@ inline constexpr double kMinCosElevation = 1.0e-6;
     return 1.0F;
 }
 
+/**
+ * @brief 补全手动目标像斑的默认属性并计算方位-俯仰坐标
+ *
+ * 根据光学参数与视场中心，由像素质心推算 distAzi/distEle 及 posAe。
+ */
 [[nodiscard]] auto enrichManualBlob(Dss::Core::MeasuredBlob blob,
                                     const Dss::Core::FrameMeasurements& measurements,
                                     const Dss::Core::TrackingSettings& settings)
@@ -90,6 +95,7 @@ inline constexpr double kMinCosElevation = 1.0e-6;
 
 ManualTracker::ManualTracker(const Dss::Core::TrackingSettings& settings) : m_settings(settings) {}
 
+/// 基于手动指定目标更新轨迹，并推算帧间速度与预测位置
 auto ManualTracker::track(const Dss::Core::FrameMeasurements& measurements)
     -> std::vector<Dss::Core::TargetInfo> {
     m_fifo.push_back(measurements);

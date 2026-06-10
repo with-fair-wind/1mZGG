@@ -45,6 +45,7 @@ auto makeTargetFrameInfo(const Core::FrameMeasurements& frame, const Core::Measu
     return info;
 }
 
+/// 构造未匹配帧的占位信息，使用预测位置填充像斑字段
 auto makeInvalidTargetFrameInfo(const Core::FrameMeasurements& frame,
                                 const Core::TargetInfo& target,
                                 const Core::TrackingSettings& settings, float halfExtent)
@@ -99,6 +100,7 @@ bool isNearFovCenter(const Core::MeasuredBlob& blob, const Core::TrackingSetting
            std::abs(blob.centroid.y - settings.opticParams.fovCenterY) < halfExtent;
 }
 
+/// 在阈值门限内搜索距预测位置最近的像斑，可选视场中心约束
 auto findNearestBlob(const Core::FrameMeasurements& frame, const Core::TargetInfo& target,
                      const Core::TrackingSettings& settings, const BlobMatchOptions& options)
     -> const Core::MeasuredBlob* {
@@ -124,6 +126,7 @@ auto findNearestBlob(const Core::FrameMeasurements& frame, const Core::TargetInf
     return nearestBlob;
 }
 
+/// 取最近三帧像面/AE 运动的中位数更新预测，并滚动更新有效性
 void updatePredictionFromRecentFour(Core::TargetInfo& target) {
     const auto size = target.frameInfos.size();
     if (size < 4U) {

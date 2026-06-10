@@ -34,6 +34,7 @@ InitDialog::InitDialog(QWidget* parent) : QDialog(parent) {
     mainLayout->addWidget(m_statusLabel);
 }
 
+/// 追加模块初始化结果行并更新成功计数
 void InitDialog::setStatus(const QString& module, bool success) {
     auto* label = new QLabel(QString("%1 %2").arg(success ? "✓" : "✗").arg(module));
     label->setStyleSheet(success ? "color: green;" : "color: red; font-weight: bold;");
@@ -47,6 +48,7 @@ void InitDialog::setStatus(const QString& module, bool success) {
     m_statusLabel->setText(QString("Modules: %1/%2 OK").arg(m_successCount).arg(m_moduleCount));
 }
 
+/// 更新进度条；达到 100% 时发出 initComplete 信号
 void InitDialog::setProgress(int value) {
     m_progress->setValue(value);
     if (value >= 100) {

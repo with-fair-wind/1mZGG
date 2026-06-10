@@ -11,10 +11,22 @@ namespace Dss::Processing {
 
 namespace {
 
+/**
+ * @brief 计算帧图像的期望像素总数
+ * @param input 输入帧数据包
+ * @return 宽度 × 高度
+ */
 [[nodiscard]] auto expectedPixelCount(const FramePacket& input) -> std::size_t {
     return static_cast<std::size_t>(input.width) * static_cast<std::size_t>(input.height);
 }
 
+/**
+ * @brief 从 OpenCV 连通域统计结果构造 MeasuredBlob
+ * @param stats connectedComponentsWithStats 输出的统计矩阵
+ * @param centroids 连通域质心矩阵
+ * @param label 连通域标签索引
+ * @return 对应标签的光斑测量结果
+ */
 [[nodiscard]] auto makeBlob(const cv::Mat& stats, const cv::Mat& centroids, int label)
     -> Dss::Core::MeasuredBlob {
     const auto left = stats.at<int>(label, cv::CC_STAT_LEFT);

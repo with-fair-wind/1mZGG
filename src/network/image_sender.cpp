@@ -9,15 +9,17 @@ namespace Dss::Network {
 
 namespace {
 
-constexpr uint32_t ImagePacketMagic = 0xAAAA5555U;
-constexpr uint8_t MonoChannelCount = 1U;
-constexpr uint8_t EightBitDepth = 8U;
+constexpr uint32_t ImagePacketMagic = 0xAAAA5555U;  ///< 图像分片魔数标识
+constexpr uint8_t MonoChannelCount = 1U;            ///< 单通道灰度图像
+constexpr uint8_t EightBitDepth = 8U;               ///< 8 位像素深度
 
+/// 向缓冲区指定偏移写入大端序 16 位无符号整数
 void writeU16Be(std::vector<uint8_t>& buffer, size_t offset, uint16_t value) {
     buffer[offset] = static_cast<uint8_t>((value >> 8U) & 0xFFU);
     buffer[offset + 1U] = static_cast<uint8_t>(value & 0xFFU);
 }
 
+/// 向缓冲区指定偏移写入大端序 32 位无符号整数
 void writeU32Be(std::vector<uint8_t>& buffer, size_t offset, uint32_t value) {
     buffer[offset] = static_cast<uint8_t>((value >> 24U) & 0xFFU);
     buffer[offset + 1U] = static_cast<uint8_t>((value >> 16U) & 0xFFU);
@@ -25,6 +27,7 @@ void writeU32Be(std::vector<uint8_t>& buffer, size_t offset, uint32_t value) {
     buffer[offset + 3U] = static_cast<uint8_t>(value & 0xFFU);
 }
 
+/// 向缓冲区指定偏移写入小端序 32 位无符号整数
 void writeU32Le(std::vector<uint8_t>& buffer, size_t offset, uint32_t value) {
     buffer[offset] = static_cast<uint8_t>(value & 0xFFU);
     buffer[offset + 1U] = static_cast<uint8_t>((value >> 8U) & 0xFFU);
@@ -32,6 +35,13 @@ void writeU32Le(std::vector<uint8_t>& buffer, size_t offset, uint32_t value) {
     buffer[offset + 3U] = static_cast<uint8_t>((value >> 24U) & 0xFFU);
 }
 
+/**
+ * @brief 为原始像素数据添加图像编码头（长度、宽高、通道数、位深）
+ * @param imageData 原始像素数据
+ * @param width 图像宽度（像素）
+ * @param height 图像高度（像素）
+ * @return 带 10 字节头部的完整编码缓冲区
+ */
 [[nodiscard]] auto buildEncodedImage(std::span<const uint8_t> imageData, uint32_t width,
                                      uint32_t height) -> std::vector<uint8_t> {
     std::vector<uint8_t> encoded(ImageSender::ImageHeaderSize + imageData.size());

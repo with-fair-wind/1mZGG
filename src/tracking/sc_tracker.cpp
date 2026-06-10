@@ -80,6 +80,11 @@ using Dss::Tracking::updatePredictionFromRecentFour;
     return deduplicateInitialCandidatesByCentroid(std::move(candidates), rule);
 }
 
+/**
+ * @brief 对最近三帧执行恒星校准目标关联
+ *
+ * 要求像面运动在搜索半径内、第二帧位于视场中心，且运动一致性满足 MEO 门限。
+ */
 [[nodiscard]] auto associateThreeFrameTargets(const std::deque<Dss::Core::FrameMeasurements>& fifo,
                                               const Dss::Core::TrackingSettings& settings)
     -> std::vector<Dss::Core::TargetInfo> {
@@ -142,6 +147,7 @@ using Dss::Tracking::updatePredictionFromRecentFour;
     return rule;
 }
 
+/// 在当前帧验证各候选目标，按有效性窗口规则判定存活
 [[nodiscard]] auto verifyTargetsOnFrame(const Dss::Core::FrameMeasurements& frame,
                                         const std::vector<Dss::Core::TargetInfo>& candidates,
                                         const Dss::Core::TrackingSettings& settings)
@@ -165,6 +171,7 @@ using Dss::Tracking::updatePredictionFromRecentFour;
     return verifiedTargets;
 }
 
+/// 从验证通过的候选中选择最新帧像斑面积最大的目标
 [[nodiscard]] auto selectLargestLatestAreaTarget(const std::vector<Dss::Core::TargetInfo>& targets)
     -> std::optional<Dss::Core::TargetInfo> {
     const Dss::Core::TargetInfo* selectedTarget = nullptr;
@@ -187,6 +194,7 @@ using Dss::Tracking::updatePredictionFromRecentFour;
     return *selectedTarget;
 }
 
+/// 对选定目标执行单帧像面空间匹配，要求候选位于视场中心
 [[nodiscard]] auto trackTargetOnFrame(const Dss::Core::FrameMeasurements& frame,
                                       const Dss::Core::TargetInfo& target,
                                       const Dss::Core::TrackingSettings& settings)
@@ -211,6 +219,7 @@ namespace Dss::Tracking {
 
 ScTracker::ScTracker(const Dss::Core::TrackingSettings& settings) : m_settings(settings) {}
 
+/// 恒星校准跟踪主流程：三帧关联 → 验证 → 选最大面积目标 → 持续跟踪
 auto ScTracker::track(const Dss::Core::FrameMeasurements& measurements)
     -> std::vector<Dss::Core::TargetInfo> {
     m_fifo.push_back(measurements);

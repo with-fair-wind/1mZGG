@@ -69,6 +69,9 @@ void UdpChannel::setReceiveCallback(
     m_recvCallback = std::move(cb);
 }
 
+/**
+ * @brief 处理 Qt readyRead 信号，循环读取待处理数据报并触发回调
+ */
 void UdpChannel::onReadyRead() {
     while (m_socket && m_socket->hasPendingDatagrams()) {
         QNetworkDatagram datagram = m_socket->receiveDatagram();

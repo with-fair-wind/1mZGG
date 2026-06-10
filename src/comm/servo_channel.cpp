@@ -12,9 +12,7 @@ void ServoChannel::setTrackResult(const Dss::Core::TargetInfo& target) {
     requestSend();
 }
 
-void ServoChannel::decodeFrame(std::span<const uint8_t> /*data*/) {
-    // Servo receive path not used in original code
-}
+void ServoChannel::decodeFrame(std::span<const uint8_t> /*data*/) {}
 
 void ServoChannel::encodeFrame(std::span<uint8_t> buffer) {
     std::lock_guard lock(m_targetMutex);

@@ -48,6 +48,7 @@ MainWindow::MainWindow(ViewModel& vm, QWidget* parent) : QMainWindow(parent), m_
 
 MainWindow::~MainWindow() = default;
 
+/// 创建各功能页并注册到导航（Ela 侧栏或 QTabWidget）
 void MainWindow::setupNavigation() {
     setupControlPage();
     setupDisplayPage();
@@ -75,6 +76,7 @@ void MainWindow::setupNavigation() {
 #endif
 }
 
+/// 构建序列选择、回放控制、处理/跟踪模式及统计信息显示
 void MainWindow::setupControlPage() {
     m_controlPage = new QWidget;
     auto* layout = new QVBoxLayout(m_controlPage);
@@ -220,6 +222,7 @@ void MainWindow::setupControlPage() {
     layout->addStretch();
 }
 
+/// 放置主图像显示控件，并绑定 ViewModel 与 AppEvent
 void MainWindow::setupDisplayPage() {
     m_displayPage = new QWidget;
     auto* layout = new QHBoxLayout(m_displayPage);
@@ -269,6 +272,7 @@ void MainWindow::setupLogPage() {
 #endif
 }
 
+/// 连接 AppEvent 与 ViewModel，并在状态栏/MessageBar 显示反馈
 void MainWindow::connectSignals() {
     connect(&AppEvent::instance(), &AppEvent::targetPositionSelected, &m_vm,
             &ViewModel::selectTarget);
@@ -292,3 +296,4 @@ void MainWindow::connectSignals() {
 }
 
 }  // namespace Dss::Ui
+

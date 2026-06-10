@@ -321,6 +321,22 @@ if(DSS_BUILD_APP)
     dss_enable_qt_deploy(DSS_QT)
 endif()
 
+find_package(Doxygen QUIET)
+if(DOXYGEN_FOUND)
+    set(DOXYGEN_OUTPUT_DIR "${CMAKE_BINARY_DIR}/docs")
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile.in"
+        "${CMAKE_BINARY_DIR}/Doxyfile"
+        @ONLY
+    )
+    add_custom_target(doxygen
+        COMMAND ${DOXYGEN_EXECUTABLE} "${CMAKE_BINARY_DIR}/Doxyfile"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        COMMENT "Generating API documentation with Doxygen"
+        VERBATIM
+    )
+endif()
+
 if(DSS_ENABLE_TESTS)
     enable_testing()
     add_subdirectory(tests)

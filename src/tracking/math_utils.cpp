@@ -18,6 +18,7 @@ auto isPowerOfTwo(std::size_t value) -> bool {
     return value != 0 && (value & (value - std::size_t{1})) == 0;
 }
 
+/// 离散傅里叶变换（朴素 DFT 实现，用于 FFT/IFFT 及旧版频谱分析）
 void discreteFourierTransform(std::span<const double> inputReal, std::span<const double> inputImag,
                               std::span<double> outputReal, std::span<double> outputImag) {
     const auto n = inputReal.size();
@@ -42,6 +43,7 @@ auto validFitInput(std::span<const double> x, std::span<const double> y, int ord
            x.size() >= static_cast<std::size_t>(order + 1);
 }
 
+/// 高斯消元法求解线性方程组，用于多项式最小二乘
 auto solveLinearSystem(std::vector<double> matrix, std::vector<double> rhs, int size)
     -> std::optional<std::vector<double>> {
     for (int column = 0; column < size; ++column) {
@@ -90,6 +92,7 @@ auto solveLinearSystem(std::vector<double> matrix, std::vector<double> rhs, int 
     return solution;
 }
 
+/// 构建正规方程并求解多项式拟合系数
 auto fitCoefficients(std::span<const double> x, std::span<const double> y, int order)
     -> std::optional<std::vector<double>> {
     if (!validFitInput(x, y, order)) {
@@ -184,6 +187,7 @@ auto linearFit(std::span<const double> x, std::span<const double> y, bool saveFi
     return polynomialFit(x, y, 1, saveFittedY);
 }
 
+/// 评估给定采样周期下各时间戳相对周期的最大偏差
 auto samplePeriodError(std::span<const double> samples, double samplePeriod)
     -> std::optional<double> {
     if (samples.empty() || samplePeriod <= 0.0) {
@@ -218,6 +222,7 @@ auto samplePeriodError(std::span<const double> samples, double samplePeriod)
     return maxError;
 }
 
+/// 从相邻时间戳差分出发，搜索满足误差率约束的最小采样周期
 auto minimumSamplePeriod(std::span<const double> samples, double errorLimitRate)
     -> std::optional<SamplePeriodEstimate> {
     if (samples.size() < 2 || errorLimitRate < 0.0) {
@@ -247,6 +252,7 @@ auto minimumSamplePeriod(std::span<const double> samples, double errorLimitRate)
     return std::nullopt;
 }
 
+/// 拟合多项式趋势并从原始序列中减去，得到残差
 auto removePolynomialTrend(std::span<const double> x, std::span<const double> y, int order)
     -> std::optional<DetrendedSeries> {
     const auto fit = polynomialFit(x, y, order, true);
@@ -264,6 +270,7 @@ auto removePolynomialTrend(std::span<const double> x, std::span<const double> y,
     return detrended;
 }
 
+/// 最近邻插值：对每个目标 x 选取距离最近的已知采样点 y 值
 auto legacyNearestSampleInterpolate(std::span<const double> x, std::span<const double> y,
                                     std::span<const double> targetX)
     -> std::optional<std::vector<double>> {
@@ -331,6 +338,7 @@ auto legacyFftSpectrum(std::span<const double> real, double sampleInterval)
     return legacyFftSpectrum(real, zeroImag, sampleInterval);
 }
 
+/// 零填充至 2 的幂后执行 DFT，计算幅值、相位与基频（兼容旧版接口）
 auto legacyFftSpectrum(std::span<const double> real, std::span<const double> imag,
                        double sampleInterval) -> std::optional<LegacyFftSpectrum> {
     if (real.empty() || real.size() != imag.size() || sampleInterval <= 0.0 ||
@@ -399,6 +407,7 @@ void ifft(std::span<const double> inputReal, std::span<const double> inputImag,
     }
 }
 
+/// 通过 FFT 主频 bin 估算信号基波周期
 auto estimatePeriod(std::span<const double> signal, double sampleRate) -> double {
     const auto n = signal.size();
     std::vector<double> real(n);

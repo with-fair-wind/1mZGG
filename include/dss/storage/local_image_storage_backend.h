@@ -19,8 +19,13 @@
 
 namespace Dss::Storage {
 
+/// 本地 RAW 图像异步存储后端，通过后台线程写入磁盘
 class LocalImageStorageBackend final : public IStorageBackend {
 public:
+    /**
+     * @brief 构造本地图像存储后端
+     * @param baseDir 默认存储根目录
+     */
     explicit LocalImageStorageBackend(std::filesystem::path baseDir)
         : m_baseDir(std::move(baseDir)) {}
 
@@ -28,6 +33,11 @@ public:
         stop();
     }
 
+    /**
+     * @brief 初始化存储目录
+     * @param baseDir 存储根目录路径
+     * @return 成功时返回空值；目录创建失败时返回错误描述
+     */
     auto init(const std::filesystem::path& baseDir) -> std::expected<void, std::string> override {
         m_baseDir = baseDir;
         std::error_code error;
@@ -40,14 +50,20 @@ public:
         return {};
     }
 
+    /// 查询存储后端是否已初始化
     [[nodiscard]] bool isReady() const override {
         return m_ready.load();
     }
 
+    /// 获取当前存储根目录
     [[nodiscard]] auto baseDir() const -> const std::filesystem::path& {
         return m_baseDir;
     }
 
+    /**
+     * @brief 启动后台写入工作线程
+     * @return 成功时返回空值；未初始化时返回错误描述
+     */
     auto start() -> std::expected<void, std::string> {
         if (!m_ready.load()) {
             return std::unexpected("storage backend is not initialized");
@@ -61,6 +77,7 @@ public:
         return {};
     }
 
+    /// 停止后台写入工作线程并等待其退出
     void stop() {
         if (m_worker.joinable()) {
             m_worker.request_stop();
@@ -70,10 +87,18 @@ public:
         m_running = false;
     }
 
+    /// 查询后台写入线程是否正在运行
     [[nodiscard]] bool isRunning() const {
         return m_running;
     }
 
+    /**
+     * @brief 将 RAW 帧加入异步写入队列
+     * @param relativePath 相对或绝对文件路径
+     * @param metadata 帧元数据
+     * @param pixels 16 位像素数据
+     * @return 成功时返回空值；未初始化或未运行时返回错误描述
+     */
     auto enqueueRawFrame(std::filesystem::path relativePath, RawImageMetadata metadata,
                          std::span<const std::uint16_t> pixels)
         -> std::expected<void, std::string> {
@@ -97,12 +122,14 @@ public:
     }
 
 private:
+    /// 待写入的 RAW 帧请求
     struct SaveRawFrameRequest {
-        std::filesystem::path path;
-        RawImageMetadata metadata{};
-        std::vector<std::uint16_t> pixels;
+        std::filesystem::path path;           ///< 目标文件路径
+        RawImageMetadata metadata{};          ///< 帧元数据
+        std::vector<std::uint16_t> pixels;    ///< 16 位像素数据
     };
 
+    /// 将相对路径解析为基于存储根目录的绝对路径
     [[nodiscard]] auto resolvePath(std::filesystem::path path) const -> std::filesystem::path {
         if (path.is_absolute()) {
             return path;
@@ -110,6 +137,7 @@ private:
         return m_baseDir / path;
     }
 
+    /// 后台工作线程主循环，从队列取出请求并写入磁盘
     void workerLoop(std::stop_token token) {
         while (true) {
             SaveRawFrameRequest request;
@@ -128,6 +156,7 @@ private:
         }
     }
 
+    /// 将单帧 RAW 数据编码并写入指定路径
     static void writeRawFrame(const SaveRawFrameRequest& request) {
         std::error_code error;
         std::filesystem::create_directories(request.path.parent_path(), error);
@@ -144,13 +173,13 @@ private:
                      static_cast<std::streamsize>(bytes.size()));
     }
 
-    std::filesystem::path m_baseDir;
-    std::atomic<bool> m_ready{false};
-    std::atomic<bool> m_running{false};
-    std::jthread m_worker;
-    std::mutex m_queueMutex;
-    std::condition_variable_any m_queueCv;
-    std::deque<SaveRawFrameRequest> m_queue;
+    std::filesystem::path m_baseDir;              ///< 存储根目录
+    std::atomic<bool> m_ready{false};             ///< 是否已完成初始化
+    std::atomic<bool> m_running{false};           ///< 后台线程是否正在运行
+    std::jthread m_worker;                        ///< 后台写入工作线程
+    std::mutex m_queueMutex;                      ///< 保护写入队列的互斥锁
+    std::condition_variable_any m_queueCv;        ///< 写入队列条件变量
+    std::deque<SaveRawFrameRequest> m_queue;      ///< 待写入帧队列
 };
 
 }  // namespace Dss::Storage

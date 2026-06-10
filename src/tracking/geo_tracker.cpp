@@ -119,6 +119,12 @@ using Dss::Tracking::updateValidityWithLatestFrame;
     return std::pair{bestMotion, bestCount};
 }
 
+/**
+ * @brief 由相邻两帧恒星测量估算背景恒星速度
+ *
+ * 在视场中心区域内匹配恒星对，统计出现频率最高的像素位移作为恒星速度，
+ * 并结合视场中心方位-俯仰变化换算 AE 速度。
+ */
 [[nodiscard]] auto estimateGeoStarSpeedFromPair(const Dss::Core::FrameMeasurements& previous,
                                                 const Dss::Core::FrameMeasurements& current,
                                                 float ratioFov, float radius,
@@ -247,6 +253,7 @@ using Dss::Tracking::updateValidityWithLatestFrame;
     return info;
 }
 
+/// 根据目标历史帧运动（最近三帧中位数）更新预测位置与速度
 void updatePredictionFromHistory(Dss::Core::TargetInfo& target, float frameFrequency,
                                  const Dss::Core::TrackingSettings& settings) {
     if (target.frameInfos.empty()) {
@@ -335,6 +342,11 @@ void updatePredictionFromHistory(Dss::Core::TargetInfo& target, float frameFrequ
     return std::min(radius, settings.searchRadius);
 }
 
+/**
+ * @brief 对最近四帧目标像斑执行链式关联，生成 GEO 初始候选
+ *
+ * 过滤恒星背景运动与方向不一致的候选，并去除赤道坐标重复的关联链。
+ */
 [[nodiscard]] auto associateFourFrameTargets(
     const std::deque<Dss::Core::FrameMeasurements>& fifoTarget, int starMatchCount,
     const Dss::Core::Vec2f& starSpeed, float frameFrequency,
@@ -525,6 +537,11 @@ void updatePredictionFromHistory(Dss::Core::TargetInfo& target, float frameFrequ
            std::abs(measuredMotion.y - target.predictedSpdFrame.y) < decSpeedThreshold;
 }
 
+/**
+ * @brief 在当前帧中为已有目标查找满足跟踪门限的最近像斑
+ *
+ * 根据连续无效帧数动态扩大搜索半径，支持像面与赤经赤纬两种跟踪空间。
+ */
 [[nodiscard]] auto findNearestTrackedBlob(const std::vector<Dss::Core::MeasuredBlob>& blobs,
                                           const Dss::Core::TargetInfo& target,
                                           const Dss::Core::TrackingSettings& settings,
@@ -638,6 +655,7 @@ void updatePredictionFromHistory(Dss::Core::TargetInfo& target, float frameFrequ
 
 }  // namespace
 
+/// 取帧序列末尾两帧执行恒星速度估算
 auto estimateGeoStarSpeed(std::span<const Dss::Core::FrameMeasurements> frames, float ratioFov,
                           float radius, const Dss::Core::OpticParams& opticParams)
     -> GeoStarSpeedResult {
@@ -650,6 +668,7 @@ auto estimateGeoStarSpeed(std::span<const Dss::Core::FrameMeasurements> frames, 
 
 GeoTracker::GeoTracker(const Dss::Core::TrackingSettings& settings) : m_settings(settings) {}
 
+/// 主跟踪流程：估算恒星速度 → 四帧关联发现目标 → 逐帧跟踪与重发现
 auto GeoTracker::track(const Dss::Core::FrameMeasurements& measurements)
     -> std::vector<Dss::Core::TargetInfo> {
     m_fifoTarget.push_back(measurements);
@@ -705,6 +724,7 @@ void GeoTracker::assignTargetIds(std::vector<Dss::Core::TargetInfo>& targets) {
     }
 }
 
+/// 利用恒星 FIFO 估算背景速度，匹配数足够时更新 m_starSpeed
 int GeoTracker::calcStarSpeed() {
     if (m_fifoStar.size() < 2U) {
         return 1;
@@ -727,6 +747,7 @@ int GeoTracker::calcStarSpeed() {
     return 0;
 }
 
+/// 对目标 FIFO 执行四帧关联并分配目标 ID
 int GeoTracker::assoc4() {
     if (m_fifoTarget.size() < 4U) {
         return 1;
@@ -754,6 +775,7 @@ int GeoTracker::findTargets() {
     return m_targetFound ? 0 : 1;
 }
 
+/// 在跟踪阶段重新执行四帧关联，过滤与已有目标重叠或超速的候选
 int GeoTracker::refindTargets() {
     if (m_fifoTarget.size() < 5U) {
         return 1;
@@ -775,6 +797,7 @@ int GeoTracker::refindTargets() {
     return 0;
 }
 
+/// 对活跃目标逐帧匹配像斑，更新预测、有效性与存活状态
 int GeoTracker::trackTargets() {
     if (m_targets.empty() || m_fifoTarget.empty()) {
         return 1;

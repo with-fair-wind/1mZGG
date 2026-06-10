@@ -9,6 +9,7 @@
 
 namespace Dss::Tracking {
 
+/// 按跟踪模式工厂方法创建 Geo/SC/LEO/Manual 策略实例
 auto makeTrackingStrategy(Dss::Core::TrackMode mode, const Dss::Core::TrackingSettings& settings)
     -> std::unique_ptr<ITrackingStrategy> {
     switch (mode) {

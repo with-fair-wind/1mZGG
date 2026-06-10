@@ -12,8 +12,6 @@ void DisplayChannel::decodeFrame(std::span<const uint8_t> data) {
     }
 }
 
-void DisplayChannel::encodeFrame(std::span<uint8_t> /*buffer*/) {
-    // Display channel send path is mostly empty in original code
-}
+void DisplayChannel::encodeFrame(std::span<uint8_t> /*buffer*/) {}
 
 }  // namespace Dss::Comm

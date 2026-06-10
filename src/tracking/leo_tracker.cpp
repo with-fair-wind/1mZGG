@@ -67,6 +67,11 @@ using Dss::Tracking::updatePredictionFromRecentFour;
     return target;
 }
 
+/**
+ * @brief 对最近三帧执行 LEO 目标关联
+ *
+ * 要求相邻帧 AE 运动满足速度下限与一致性门限，生成初始候选列表。
+ */
 [[nodiscard]] auto associateThreeFrameTargets(const std::deque<Dss::Core::FrameMeasurements>& fifo,
                                               const Dss::Core::TrackingSettings& settings)
     -> std::vector<Dss::Core::TargetInfo> {
@@ -110,6 +115,7 @@ using Dss::Tracking::updatePredictionFromRecentFour;
     return findNearestBlob(frame, target, settings, options);
 }
 
+/// 检查最近四帧 AE 运动的一致性，用于 LEO 目标验证
 [[nodiscard]] bool hasConsistentRecentAeMotion(const Dss::Core::TargetInfo& target,
                                                float thresholdAe) {
     if (target.frameInfos.size() < 4U) {
@@ -139,6 +145,7 @@ using Dss::Tracking::updatePredictionFromRecentFour;
     return static_cast<float>(std::hypot(target.predictedSpdAe.x, target.predictedSpdAe.y));
 }
 
+/// 在当前帧验证各候选目标，保留 AE 运动一致且最新帧有效的候选
 [[nodiscard]] auto verifyTargetsOnFrame(const Dss::Core::FrameMeasurements& frame,
                                         const std::vector<Dss::Core::TargetInfo>& candidates,
                                         const Dss::Core::TrackingSettings& settings)
@@ -162,6 +169,7 @@ using Dss::Tracking::updatePredictionFromRecentFour;
     return verifiedTargets;
 }
 
+/// 从验证通过的候选中选择 AE 速度最大的目标
 [[nodiscard]] auto selectFastestAeTarget(const std::vector<Dss::Core::TargetInfo>& targets)
     -> Dss::Core::TargetInfo {
     Dss::Core::TargetInfo selected{};
@@ -183,6 +191,7 @@ using Dss::Tracking::updatePredictionFromRecentFour;
     return rule;
 }
 
+/// 对选定目标执行单帧 AE 空间匹配并更新存活状态
 [[nodiscard]] auto trackTargetOnFrame(const Dss::Core::FrameMeasurements& frame,
                                       const Dss::Core::TargetInfo& target,
                                       const Dss::Core::TrackingSettings& settings)
@@ -207,6 +216,7 @@ namespace Dss::Tracking {
 
 LeoTracker::LeoTracker(const Dss::Core::TrackingSettings& settings) : m_settings(settings) {}
 
+/// LEO 跟踪主流程：三帧关联 → 验证 → 选定最快目标 → 持续跟踪
 auto LeoTracker::track(const Dss::Core::FrameMeasurements& measurements)
     -> std::vector<Dss::Core::TargetInfo> {
     m_fifo.push_back(measurements);

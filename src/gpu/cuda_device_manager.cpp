@@ -4,6 +4,7 @@
 
 namespace Dss::Gpu {
 
+/// 析构时销毁所有已创建的 CUDA 流
 CudaDeviceManager::~CudaDeviceManager() {
     if (m_initialized) {
         for (auto& s : m_streams) {
@@ -15,6 +16,10 @@ CudaDeviceManager::~CudaDeviceManager() {
     }
 }
 
+/**
+ * @brief 选择首个可用 CUDA 设备，查询属性并创建流
+ * @return 成功时返回空值；无设备或 CUDA API 失败时返回错误描述
+ */
 auto CudaDeviceManager::init() -> std::expected<void, std::string> {
     int deviceCount = 0;
     auto err = cudaGetDeviceCount(&deviceCount);
@@ -52,6 +57,11 @@ auto CudaDeviceManager::init() -> std::expected<void, std::string> {
     return {};
 }
 
+/**
+ * @brief 按索引返回预创建的 CUDA 流
+ * @param index 流索引，范围 [0, NumStreams)
+ * @return 有效流句柄；索引越界时返回 nullptr
+ */
 auto CudaDeviceManager::stream(int index) const -> cudaStream_t {
     if (index < 0 || index >= NumStreams) {
         return nullptr;
@@ -59,6 +69,7 @@ auto CudaDeviceManager::stream(int index) const -> cudaStream_t {
     return m_streams[static_cast<size_t>(index)];
 }
 
+/// 依次同步全部 NumStreams 条 CUDA 流
 void CudaDeviceManager::synchronizeAll() const {
     for (const auto& s : m_streams) {
         if (s) {
@@ -67,6 +78,10 @@ void CudaDeviceManager::synchronizeAll() const {
     }
 }
 
+/**
+ * @brief 同步指定索引的 CUDA 流
+ * @param streamIndex 流索引；越界时无操作
+ */
 void CudaDeviceManager::synchronize(int streamIndex) const {
     if (auto s = stream(streamIndex)) {
         cudaStreamSynchronize(s);

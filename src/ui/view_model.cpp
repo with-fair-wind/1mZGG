@@ -25,6 +25,11 @@ ViewModel::ViewModel(MessageBus& bus, Dss::Core::ServiceRegistry& registry, QObj
 
 ViewModel::~ViewModel() = default;
 
+/**
+ * @brief 加载回放文件列表并初始化序列源
+ * @param files 图像文件路径列表
+ * @return 成功返回 true
+ */
 bool ViewModel::selectReplayFiles(const QStringList& files) {
     if (m_grabbing) {
         stopGrab();
@@ -70,6 +75,7 @@ bool ViewModel::selectReplayFiles(const QStringList& files) {
     return true;
 }
 
+/// 启动帧源与图像处理器，进入回放状态
 void ViewModel::startGrab() {
     if (m_grabbing) {
         return;
@@ -98,6 +104,7 @@ void ViewModel::startGrab() {
     m_bus.emit(Dss::Core::GrabStartedEvent{frameSource->frameWidth(), frameSource->frameHeight()});
 }
 
+/// 停止帧源与图像处理器，退出回放状态
 void ViewModel::stopGrab() {
     auto frameSource = m_registry.tryGet<Dss::Acquisition::IFrameSource>("replay_source");
     if (frameSource) {
@@ -116,6 +123,7 @@ void ViewModel::stopGrab() {
     m_bus.emit(Dss::Core::GrabStoppedEvent{});
 }
 
+/// 单步前进一帧；若正在连续回放则先停止
 bool ViewModel::stepReplayForward() {
     if (m_grabbing) {
         stopGrab();
@@ -159,6 +167,7 @@ void ViewModel::setExposure(double ms) {
     }
 }
 
+/// 记录手动目标并切换/刷新手动跟踪策略
 void ViewModel::selectTarget(QPointF pos) {
     m_manualTarget = makeManualTarget(pos);
     m_bus.emit(Dss::Core::ManualTargetSelectEvent{static_cast<float>(pos.x()),
@@ -172,6 +181,10 @@ void ViewModel::selectTarget(QPointF pos) {
         QString("Manual target selected: %1, %2").arg(pos.x(), 0, 'f', 1).arg(pos.y(), 0, 'f', 1));
 }
 
+/**
+ * @brief 启动图像与跟踪数据本地存储
+ * 若存储后端未就绪则先初始化；任一环节失败则回滚已启动的后端
+ */
 void ViewModel::startSaving() {
     auto storage = m_registry.tryGet<Dss::Storage::LocalImageStorageBackend>("image_storage");
     if (!storage) {
@@ -215,6 +228,7 @@ void ViewModel::startSaving() {
     setStatus("Saving enabled");
 }
 
+/// 停止图像与跟踪数据存储
 void ViewModel::stopSaving() {
     auto storage = m_registry.tryGet<Dss::Storage::LocalImageStorageBackend>("image_storage");
     if (storage) {
@@ -234,6 +248,7 @@ void ViewModel::toggleZoom(int level) {
     m_bus.emit(Dss::Core::ZoomChangeEvent{level});
 }
 
+/// 订阅显示刷新、处理完成、跟踪结果与主控事件
 void ViewModel::setupSubscriptions() {
     m_connections.push_back(m_bus.subscribe<Dss::Core::DisplayRefreshEvent>(
         [this](const Dss::Core::DisplayRefreshEvent& e) { onDisplayRefresh(e); }));
@@ -248,6 +263,10 @@ void ViewModel::setupSubscriptions() {
         [this](const Dss::Core::MasterControlEvent& e) { onMasterControl(e); }));
 }
 
+/**
+ * @brief 将 DisplayRefreshEvent 中的灰度缓冲转为 QImage 并通知 UI
+ * @param event 显示刷新事件
+ */
 void ViewModel::onDisplayRefresh(const Dss::Core::DisplayRefreshEvent& event) {
     if (!event.displayImage || event.width == 0 || event.height == 0 || event.stride == 0) {
         return;
@@ -265,11 +284,13 @@ void ViewModel::onDisplayRefresh(const Dss::Core::DisplayRefreshEvent& event) {
     Q_EMIT displayImageReady(image.copy());
 }
 
+/// 转发图像统计量至 UI
 void ViewModel::onProcessingComplete(const Dss::Core::ProcessingCompleteEvent& event) {
     const auto& s = event.stats;
     Q_EMIT imageStatsUpdated(s.minVal, s.maxVal, s.avg, s.stdDev);
 }
 
+/// 更新目标数量与首个目标的跟踪信息
 void ViewModel::onTrackResult(const Dss::Core::TrackResultEvent& event) {
     Q_EMIT targetListUpdated(static_cast<int>(event.targets.size()));
 
@@ -283,6 +304,10 @@ void ViewModel::onTrackResult(const Dss::Core::TrackResultEvent& event) {
     }
 }
 
+/**
+ * @brief 响应外部主控指令，同步曝光、跟踪模式、保存与采集状态
+ * @param event 主控事件
+ */
 void ViewModel::onMasterControl(const Dss::Core::MasterControlEvent& event) {
     setExposure(event.exposure);
     setTrackMode(event.trackMode);
@@ -300,6 +325,7 @@ void ViewModel::onMasterControl(const Dss::Core::MasterControlEvent& event) {
     }
 }
 
+/// 按 ProcessingMode 为 ImageProcessor 绑定或清除处理策略
 void ViewModel::configureProcessingStrategy() {
     auto processor = m_registry.tryGet<Dss::Processing::ImageProcessor>("image_processor");
     if (!processor) {
@@ -330,6 +356,7 @@ void ViewModel::configureProcessingStrategy() {
     }
 }
 
+/// 按 TrackMode 创建跟踪策略；手动模式时注入已选目标
 void ViewModel::configureTrackingStrategy() {
     auto processor = m_registry.tryGet<Dss::Processing::ImageProcessor>("image_processor");
     if (!processor) {
@@ -360,6 +387,7 @@ void ViewModel::configureTrackingStrategy() {
     setStatus("Tracking mode enabled");
 }
 
+/// 以点击位置为中心构造固定尺寸的 MeasuredBlob
 auto ViewModel::makeManualTarget(QPointF pos) -> Dss::Core::MeasuredBlob {
     Dss::Core::MeasuredBlob blob{};
     blob.id = "manual";
@@ -390,3 +418,4 @@ void ViewModel::setStatus(QString text) {
 }
 
 }  // namespace Dss::Ui
+

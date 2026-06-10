@@ -18,6 +18,7 @@ namespace {
 
 namespace Dss::Tracking {
 
+/// 统计最近窗口内无效帧数量
 auto countRecentInvalidFrames(const Core::TargetInfo& target, int frameWindow) -> int {
     const auto checkCount = clampedRecentFrameCount(target, frameWindow);
     if (checkCount == 0U) {
@@ -60,6 +61,7 @@ bool passesRecentValidityRule(const Core::TargetInfo& target, int frameWindow, f
     return target.validity >= threshold || latestFrameIsValid(target);
 }
 
+/// 按 missPolicy 策略综合判定目标是否仍存活
 bool targetRemainsLiving(const Core::TargetInfo& target, const TrackLivingRule& rule) {
     if (target.frameInfos.empty()) {
         return false;
@@ -77,6 +79,7 @@ bool targetRemainsLiving(const Core::TargetInfo& target, const TrackLivingRule& 
     return false;
 }
 
+/// 用指数滑动方式将最新帧有效状态融入 validity 指标
 void updateValidityWithLatestFrame(Core::TargetInfo& target) {
     if (target.frameInfos.empty()) {
         return;
