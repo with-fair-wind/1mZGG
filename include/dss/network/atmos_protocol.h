@@ -8,11 +8,12 @@
 
 namespace Dss::Network {
 
-inline constexpr size_t AtmosPacketSize = sizeof(int32_t) + 3U * sizeof(double);  ///< 气象报文固定字节长度
+inline constexpr size_t AtmosPacketSize =
+    sizeof(int32_t) + 3U * sizeof(double);  ///< 气象报文固定字节长度
 
 /// 解码后的气象采样数据
 struct AtmosSample {
-    int32_t frameHead = 0;   ///< 帧头标识
+    int32_t frameHead = 0;     ///< 帧头标识
     double temperature = 0.0;  ///< 温度（摄氏度）
     double humidity = 0.0;     ///< 相对湿度
     double pressure = 0.0;     ///< 大气压（已换算为百帕）

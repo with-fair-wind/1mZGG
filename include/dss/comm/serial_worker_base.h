@@ -96,19 +96,19 @@ private:
     /// 编码一帧并通过串口发送
     void sendFrameInternal();
 
-    MessageBus& m_bus;                              ///< 事件总线引用
-    SerialConfig m_config{};                        ///< 当前串口配置
-    std::unique_ptr<QSerialPort> m_serialPort;      ///< Qt 串口对象
-    std::jthread m_workerThread;                    ///< 收发工作线程
+    MessageBus& m_bus;                          ///< 事件总线引用
+    SerialConfig m_config{};                    ///< 当前串口配置
+    std::unique_ptr<QSerialPort> m_serialPort;  ///< Qt 串口对象
+    std::jthread m_workerThread;                ///< 收发工作线程
 
-    std::mutex m_sendMutex;                         ///< 发送请求互斥锁
-    bool m_sendRequested = false;                     ///< 是否有待发送帧
+    std::mutex m_sendMutex;        ///< 发送请求互斥锁
+    bool m_sendRequested = false;  ///< 是否有待发送帧
 
     std::atomic<Dss::Core::Status> m_status{Dss::Core::Status::Init};  ///< 通道运行状态
-    std::atomic<int> m_recvFps{0};                  ///< 接收帧速率（帧/秒）
-    std::atomic<int> m_sendFps{0};                  ///< 发送帧速率（帧/秒）
-    std::atomic<int> m_recvCount{0};                ///< 当前统计周期内接收帧计数
-    std::atomic<int> m_sendCount{0};                ///< 当前统计周期内发送帧计数
+    std::atomic<int> m_recvFps{0};                                     ///< 接收帧速率（帧/秒）
+    std::atomic<int> m_sendFps{0};                                     ///< 发送帧速率（帧/秒）
+    std::atomic<int> m_recvCount{0};                                   ///< 当前统计周期内接收帧计数
+    std::atomic<int> m_sendCount{0};                                   ///< 当前统计周期内发送帧计数
 };
 
 }  // namespace Dss::Comm

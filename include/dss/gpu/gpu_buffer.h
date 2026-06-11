@@ -131,8 +131,8 @@ private:
         }
     }
 
-    T* m_ptr = nullptr;      ///< 设备端数据指针
-    size_t m_count = 0;      ///< 元素个数
+    T* m_ptr = nullptr;  ///< 设备端数据指针
+    size_t m_count = 0;  ///< 元素个数
 };
 
 }  // namespace Dss::Gpu

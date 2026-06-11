@@ -8,9 +8,9 @@
 
 namespace Dss::Network {
 
-inline constexpr size_t GxtcHeaderSize = 35;   ///< GXTC 协议包头字节数
-inline constexpr size_t GxtcTargetSize = 29;   ///< GXTC 协议单个目标记录字节数
-inline constexpr size_t GdclPacketSize = 34;   ///< GDCL 协议固定报文长度
+inline constexpr size_t GxtcHeaderSize = 35;  ///< GXTC 协议包头字节数
+inline constexpr size_t GxtcTargetSize = 29;  ///< GXTC 协议单个目标记录字节数
+inline constexpr size_t GdclPacketSize = 34;  ///< GDCL 协议固定报文长度
 
 /// GXTC 报文头部元数据
 struct GxtcMetadata {
@@ -25,13 +25,13 @@ struct GxtcMetadata {
 
 /// GXTC 报文中的单个目标信息
 struct GxtcTarget {
-    uint8_t mainFlag = 0xFF;                      ///< 主目标标志
-    int32_t targetId = 0;                         ///< 目标编号
-    int32_t azimuthArcsec = 0;                    ///< 方位角（角秒）
-    int32_t elevationArcsec = 0;                  ///< 俯仰角（角秒）
-    int32_t azimuthSpeedArcsecPerSecond = 0;      ///< 方位角速度（角秒/秒）
-    int32_t elevationSpeedArcsecPerSecond = 0;    ///< 俯仰角速度（角秒/秒）
-    double magnitude = 0.0;                       ///< 星等
+    uint8_t mainFlag = 0xFF;                    ///< 主目标标志
+    int32_t targetId = 0;                       ///< 目标编号
+    int32_t azimuthArcsec = 0;                  ///< 方位角（角秒）
+    int32_t elevationArcsec = 0;                ///< 俯仰角（角秒）
+    int32_t azimuthSpeedArcsecPerSecond = 0;    ///< 方位角速度（角秒/秒）
+    int32_t elevationSpeedArcsecPerSecond = 0;  ///< 俯仰角速度（角秒/秒）
+    double magnitude = 0.0;                     ///< 星等
 };
 
 /// GDCL 测量结果报文

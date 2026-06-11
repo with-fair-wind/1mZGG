@@ -6,21 +6,21 @@ namespace Dss::Tracking {
 
 /// 最近帧窗口检查模式
 enum class RecentFrameWindowMode {
-    RequireFullWindow,  ///< 要求帧数达到完整窗口才判定
-    UseAvailableFrames, ///< 使用当前已有的帧数进行判定
+    RequireFullWindow,   ///< 要求帧数达到完整窗口才判定
+    UseAvailableFrames,  ///< 使用当前已有的帧数进行判定
 };
 
 /// 目标丢失时的存活判定策略
 enum class TrackMissPolicy {
-    UseValidityWindow,                    ///< 基于有效性窗口与阈值判定
-    RequireLatestValid,                   ///< 要求最新帧必须有效
-    DropAfterConsecutiveInvalidFrames,    ///< 连续无效帧达到窗口上限则丢弃
+    UseValidityWindow,                  ///< 基于有效性窗口与阈值判定
+    RequireLatestValid,                 ///< 要求最新帧必须有效
+    DropAfterConsecutiveInvalidFrames,  ///< 连续无效帧达到窗口上限则丢弃
 };
 
 /// 目标存活判定规则
 struct TrackLivingRule {
-    int frameWindow = 0;                              ///< 检查的最近帧窗口大小
-    float threshold = 0.0F;                           ///< 有效性阈值（用于 UseValidityWindow）
+    int frameWindow = 0;     ///< 检查的最近帧窗口大小
+    float threshold = 0.0F;  ///< 有效性阈值（用于 UseValidityWindow）
     TrackMissPolicy missPolicy = TrackMissPolicy::UseValidityWindow;  ///< 丢失判定策略
 };
 

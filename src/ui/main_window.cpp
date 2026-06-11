@@ -296,4 +296,3 @@ void MainWindow::connectSignals() {
 }
 
 }  // namespace Dss::Ui
-

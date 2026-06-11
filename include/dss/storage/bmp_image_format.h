@@ -11,36 +11,36 @@
 
 namespace Dss::Storage {
 
-inline constexpr auto kBitmapFileHeaderSize = 14U;       ///< BMP 文件头字节长度
-inline constexpr auto kBitmapInfoHeaderSize = 40U;       ///< BMP 信息头字节长度
-inline constexpr auto kLegacyBmpAttributeSize = 60U;     ///< 遗留 BMP 自定义属性块字节长度
-inline constexpr auto kLegacyBmpPaletteEntries = 256U;    ///< 遗留 BMP 调色板条目数
+inline constexpr auto kBitmapFileHeaderSize = 14U;      ///< BMP 文件头字节长度
+inline constexpr auto kBitmapInfoHeaderSize = 40U;      ///< BMP 信息头字节长度
+inline constexpr auto kLegacyBmpAttributeSize = 60U;    ///< 遗留 BMP 自定义属性块字节长度
+inline constexpr auto kLegacyBmpPaletteEntries = 256U;  ///< 遗留 BMP 调色板条目数
 
 /// 遗留 BMP 自定义属性元数据，嵌入文件头与像素数据之间
 struct LegacyBmpMetadata {
-    std::uint32_t targetId = 0;              ///< 目标编号
-    std::uint16_t telescopeId = 0;           ///< 望远镜编号
-    Dss::Core::Timestamp timestamp{};        ///< 采集时间戳
-    std::uint16_t ztCode = 0;                ///< 状态/类型编码
-    double deltaX = 0.0;                       ///< X 方向偏差
-    double deltaY = 0.0;                       ///< Y 方向偏差
-    std::uint8_t pixelScaleX = 0;            ///< X 方向像素尺度
-    std::uint8_t pixelScaleY = 0;            ///< Y 方向像素尺度
-    double azimuthDegrees = 0.0;             ///< 方位角（度）
-    double elevationDegrees = 0.0;           ///< 俯仰角（度）
-    double distance = 0.0;                     ///< 距离
-    double focalLength = 0.0;                  ///< 焦距
-    double frameRate = 0.0;                    ///< 帧率
-    double temperature = 0.0;                  ///< 温度
-    double humidity = 0.0;                     ///< 湿度
-    double atmosPressure = 0.0;                ///< 大气压
-    double windSpeed = 0.0;                    ///< 风速
-    double cloudCover = 0.0;                   ///< 云量
-    double exposure = 0.0;                     ///< 曝光量
-    std::uint32_t width = 0;                 ///< 图像宽度（像素）
-    std::uint32_t height = 0;                ///< 图像高度（像素）
-    std::uint16_t pixelColor = 1;            ///< 像素通道数
-    std::uint16_t pixelBit = 16;             ///< 每像素位深
+    std::uint32_t targetId = 0;        ///< 目标编号
+    std::uint16_t telescopeId = 0;     ///< 望远镜编号
+    Dss::Core::Timestamp timestamp{};  ///< 采集时间戳
+    std::uint16_t ztCode = 0;          ///< 状态/类型编码
+    double deltaX = 0.0;               ///< X 方向偏差
+    double deltaY = 0.0;               ///< Y 方向偏差
+    std::uint8_t pixelScaleX = 0;      ///< X 方向像素尺度
+    std::uint8_t pixelScaleY = 0;      ///< Y 方向像素尺度
+    double azimuthDegrees = 0.0;       ///< 方位角（度）
+    double elevationDegrees = 0.0;     ///< 俯仰角（度）
+    double distance = 0.0;             ///< 距离
+    double focalLength = 0.0;          ///< 焦距
+    double frameRate = 0.0;            ///< 帧率
+    double temperature = 0.0;          ///< 温度
+    double humidity = 0.0;             ///< 湿度
+    double atmosPressure = 0.0;        ///< 大气压
+    double windSpeed = 0.0;            ///< 风速
+    double cloudCover = 0.0;           ///< 云量
+    double exposure = 0.0;             ///< 曝光量
+    std::uint32_t width = 0;           ///< 图像宽度（像素）
+    std::uint32_t height = 0;          ///< 图像高度（像素）
+    std::uint16_t pixelColor = 1;      ///< 像素通道数
+    std::uint16_t pixelBit = 16;       ///< 每像素位深
 };
 
 /// 标准 BMP 文件头（BITMAPFILEHEADER）

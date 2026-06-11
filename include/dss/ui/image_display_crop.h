@@ -17,8 +17,8 @@ public:
     void setCropSize(int size);
 
 private:
-    QPointF m_cropCenter{}; ///< 裁剪区域中心（图像坐标）
-    int m_cropSize = 128; ///< 裁剪区域边长（像素）
+    QPointF m_cropCenter{};  ///< 裁剪区域中心（图像坐标）
+    int m_cropSize = 128;    ///< 裁剪区域边长（像素）
 };
 
 }  // namespace Dss::Ui

@@ -200,13 +200,13 @@ private:
         }
     }
 
-    std::filesystem::path m_baseDir;                          ///< 存储根目录
-    std::atomic<bool> m_ready{false};                       ///< 是否已完成初始化
-    std::atomic<bool> m_running{false};                     ///< 后台线程是否正在运行
-    std::jthread m_worker;                                  ///< 后台写入工作线程
-    std::mutex m_queueMutex;                                ///< 保护写入队列的互斥锁
-    std::condition_variable_any m_queueCv;                  ///< 写入队列条件变量
-    std::deque<std::vector<TrackDataRecord>> m_queue;       ///< 待写入记录批次队列
+    std::filesystem::path m_baseDir;                   ///< 存储根目录
+    std::atomic<bool> m_ready{false};                  ///< 是否已完成初始化
+    std::atomic<bool> m_running{false};                ///< 后台线程是否正在运行
+    std::jthread m_worker;                             ///< 后台写入工作线程
+    std::mutex m_queueMutex;                           ///< 保护写入队列的互斥锁
+    std::condition_variable_any m_queueCv;             ///< 写入队列条件变量
+    std::deque<std::vector<TrackDataRecord>> m_queue;  ///< 待写入记录批次队列
 };
 
 }  // namespace Dss::Storage

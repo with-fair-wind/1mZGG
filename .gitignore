@@ -41,3 +41,4 @@ CMakeUserPresets.json
 moc_*.cpp
 ui_*.h
 qrc_*.cpp
+.qtcreator/

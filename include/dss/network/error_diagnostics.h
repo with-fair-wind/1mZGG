@@ -56,10 +56,10 @@ private:
     [[nodiscard]] auto statusSnapshot() const -> DiagnosticStatus;
 
     [[maybe_unused]] MessageBus& m_bus;  ///< 事件总线引用（预留扩展）
-    UdpChannel m_channel;                  ///< 诊断报文 UDP 通道
-    std::jthread m_workerThread;           ///< 周期性发送工作线程
-    mutable std::mutex m_statusMutex;      ///< 保护诊断状态的互斥锁
-    DiagnosticStatus m_status{};           ///< 当前诊断状态快照
+    UdpChannel m_channel;                ///< 诊断报文 UDP 通道
+    std::jthread m_workerThread;         ///< 周期性发送工作线程
+    mutable std::mutex m_statusMutex;    ///< 保护诊断状态的互斥锁
+    DiagnosticStatus m_status{};         ///< 当前诊断状态快照
 };
 
 }  // namespace Dss::Network

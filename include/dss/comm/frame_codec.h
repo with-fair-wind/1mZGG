@@ -11,7 +11,7 @@ namespace Dss::Comm {
 class FrameCodec {
 public:
     static constexpr uint8_t HEADER = Dss::Core::FrameHeader;  ///< 帧头标识字节
-    static constexpr uint8_t TAIL = Dss::Core::FrameTail;        ///< 帧尾标识字节
+    static constexpr uint8_t TAIL = Dss::Core::FrameTail;      ///< 帧尾标识字节
 
     /**
      * @brief 校验帧长度及头尾标识

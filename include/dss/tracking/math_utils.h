@@ -13,8 +13,8 @@ struct PolynomialFitResult {
     std::vector<double> fittedY;       ///< 各采样点的拟合值
     double ssr = 0.0;                  ///< 回归平方和
     double sse = 0.0;                  ///< 残差平方和
-    double rmse = 0.0;                   ///< 均方根误差
-    double rSquared = 0.0;               ///< 决定系数 R²
+    double rmse = 0.0;                 ///< 均方根误差
+    double rSquared = 0.0;             ///< 决定系数 R²
 };
 
 /// 采样周期估算结果

@@ -418,4 +418,3 @@ void ViewModel::setStatus(QString text) {
 }
 
 }  // namespace Dss::Ui
-

@@ -19,9 +19,9 @@ enum class GeoStarSpeedStatus {
 /// 地球同步轨道恒星速度估算结果
 struct GeoStarSpeedResult {
     GeoStarSpeedStatus status = GeoStarSpeedStatus::InsufficientFrames;  ///< 估算状态
-    Dss::Core::Vec2f frameSpeed{};                                         ///< 像面坐标系下的恒星速度（像素/帧）
-    Dss::Core::Vec2f aeSpeed{};                                            ///< 方位-俯仰坐标系下的恒星速度
-    int matchCount = 0;                                                    ///< 参与统计的恒星匹配对数
+    Dss::Core::Vec2f frameSpeed{};  ///< 像面坐标系下的恒星速度（像素/帧）
+    Dss::Core::Vec2f aeSpeed{};     ///< 方位-俯仰坐标系下的恒星速度
+    int matchCount = 0;             ///< 参与统计的恒星匹配对数
 };
 
 /**
@@ -72,18 +72,18 @@ private:
     /// 为尚未分配 ID 的目标生成唯一标识
     void assignTargetIds(std::vector<Dss::Core::TargetInfo>& targets);
 
-    Dss::Core::TrackingSettings m_settings;                    ///< 跟踪算法参数
-    std::deque<Dss::Core::FrameMeasurements> m_fifoTarget;     ///< 目标测量帧 FIFO
-    std::deque<Dss::Core::FrameMeasurements> m_fifoStar;       ///< 恒星测量帧 FIFO
-    std::vector<Dss::Core::TargetInfo> m_targets;              ///< 当前跟踪的目标集合
-    Dss::Core::Vec2f m_starSpeed{};                            ///< 像面恒星背景速度
-    Dss::Core::Vec2f m_starSpeedAe{};                          ///< 方位-俯仰恒星背景速度
-    float m_frameFreq = 1.0f;                                  ///< 当前帧频率（Hz）
-    int m_starMatchCount = 0;                                  ///< 最近一次恒星速度匹配的恒星对数
-    bool m_targetFound = false;                                ///< 是否已发现目标
-    bool m_targetVerified = false;                             ///< 目标是否已通过验证
-    uint64_t m_frameSeq = 0;                                   ///< 最近处理的帧序号
-    uint64_t m_nextTargetId = 1;                               ///< 下一个待分配的目标编号
+    Dss::Core::TrackingSettings m_settings;                 ///< 跟踪算法参数
+    std::deque<Dss::Core::FrameMeasurements> m_fifoTarget;  ///< 目标测量帧 FIFO
+    std::deque<Dss::Core::FrameMeasurements> m_fifoStar;    ///< 恒星测量帧 FIFO
+    std::vector<Dss::Core::TargetInfo> m_targets;           ///< 当前跟踪的目标集合
+    Dss::Core::Vec2f m_starSpeed{};                         ///< 像面恒星背景速度
+    Dss::Core::Vec2f m_starSpeedAe{};                       ///< 方位-俯仰恒星背景速度
+    float m_frameFreq = 1.0f;                               ///< 当前帧频率（Hz）
+    int m_starMatchCount = 0;                               ///< 最近一次恒星速度匹配的恒星对数
+    bool m_targetFound = false;                             ///< 是否已发现目标
+    bool m_targetVerified = false;                          ///< 目标是否已通过验证
+    uint64_t m_frameSeq = 0;                                ///< 最近处理的帧序号
+    uint64_t m_nextTargetId = 1;                            ///< 下一个待分配的目标编号
 };
 
 }  // namespace Dss::Tracking

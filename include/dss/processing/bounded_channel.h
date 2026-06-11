@@ -124,14 +124,14 @@ public:
     }
 
 private:
-    mutable std::mutex m_mutex;                    ///< 保护缓冲区及状态
-    std::condition_variable_any m_notEmpty;        ///< 队列非空条件变量
-    std::condition_variable_any m_notFull;         ///< 队列未满条件变量
-    std::array<T, Capacity> m_buffer{};            ///< 环形缓冲区
-    size_t m_head = 0;                             ///< 读指针
-    size_t m_tail = 0;                             ///< 写指针
-    size_t m_count = 0;                            ///< 当前元素数量
-    bool m_closed = false;                         ///< 通道是否已关闭
+    mutable std::mutex m_mutex;              ///< 保护缓冲区及状态
+    std::condition_variable_any m_notEmpty;  ///< 队列非空条件变量
+    std::condition_variable_any m_notFull;   ///< 队列未满条件变量
+    std::array<T, Capacity> m_buffer{};      ///< 环形缓冲区
+    size_t m_head = 0;                       ///< 读指针
+    size_t m_tail = 0;                       ///< 写指针
+    size_t m_count = 0;                      ///< 当前元素数量
+    bool m_closed = false;                   ///< 通道是否已关闭
 };
 
 }  // namespace Dss::Processing

@@ -26,10 +26,10 @@ enum class SerialProtocol {
 
 /// 各协议帧的布局描述
 struct SerialFrameLayout {
-    SerialProtocol protocol;  ///< 协议类型
-    std::string_view name;    ///< 协议名称（用于错误信息）
-    std::size_t recvSize = 0; ///< 接收帧字节长度
-    std::size_t sendSize = 0; ///< 发送帧字节长度
+    SerialProtocol protocol;   ///< 协议类型
+    std::string_view name;     ///< 协议名称（用于错误信息）
+    std::size_t recvSize = 0;  ///< 接收帧字节长度
+    std::size_t sendSize = 0;  ///< 发送帧字节长度
 };
 
 /// 四种协议帧布局的查找表
@@ -89,44 +89,45 @@ enum class ExposureTriggerMode {
 struct ExposureCommand {
     ExposureTriggerMode triggerMode = ExposureTriggerMode::External;  ///< 触发模式
     uint8_t frameFrequencyCode = 0x01;                                ///< 帧频编码
-    uint32_t exposureDelayTicks = 0;                                    ///< 曝光延迟（时钟节拍）
+    uint32_t exposureDelayTicks = 0;                                  ///< 曝光延迟（时钟节拍）
 };
 
 /// 主控通道接收到的指令
 struct MasterControlCommand {
-    float exposure = 0.0F;      ///< 曝光时间
-    uint8_t mode1 = 0;          ///< 主控模式字 1
-    uint8_t mode2 = 0;          ///< 主控模式字 2
-    int trackMode = -1;         ///< 跟踪模式（由 mode1/mode2 映射）
-    bool track = false;         ///< 是否跟踪
-    bool save = false;          ///< 是否保存
-    bool grab = false;          ///< 是否抓取
-    uint32_t targetId = 0;      ///< 目标编号
-    uint32_t taskId = 0;        ///< 任务编号
+    float exposure = 0.0F;         ///< 曝光时间
+    uint8_t mode1 = 0;             ///< 主控模式字 1
+    uint8_t mode2 = 0;             ///< 主控模式字 2
+    int trackMode = -1;            ///< 跟踪模式（由 mode1/mode2 映射）
+    bool track = false;            ///< 是否跟踪
+    bool save = false;             ///< 是否保存
+    bool grab = false;             ///< 是否抓取
+    uint32_t targetId = 0;         ///< 目标编号
+    uint32_t taskId = 0;           ///< 任务编号
     Dss::Core::TimeOfDay start{};  ///< 任务开始时刻
     Dss::Core::TimeOfDay end{};    ///< 任务结束时刻
 };
 
 /// 伺服修正量
 struct ServoCorrection {
-    bool distanceValid = false;                       ///< 距离修正量是否有效
-    bool speedValid = false;                          ///< 速度修正量是否有效
-    Dss::Core::Vec2f distanceArcsec{};                ///< 距离修正（角秒）
-    Dss::Core::Vec2f speedArcsecPerSec{};             ///< 速度修正（角秒/秒）
-    uint8_t mode = 0x19;                              ///< 伺服工作模式
+    bool distanceValid = false;            ///< 距离修正量是否有效
+    bool speedValid = false;               ///< 速度修正量是否有效
+    Dss::Core::Vec2f distanceArcsec{};     ///< 距离修正（角秒）
+    Dss::Core::Vec2f speedArcsecPerSec{};  ///< 速度修正（角秒/秒）
+    uint8_t mode = 0x19;                   ///< 伺服工作模式
 };
 
 /// 主控通道发送的状态帧内容
 struct MasterControlStatus {
-    ServoCorrection correction{};     ///< 伺服修正量
-    Dss::Core::Timestamp timestamp{}; ///< 时间戳
-    Dss::Core::Vec2f pointingAe{};    ///< 指向角（方位/俯仰，度）
+    ServoCorrection correction{};      ///< 伺服修正量
+    Dss::Core::Timestamp timestamp{};  ///< 时间戳
+    Dss::Core::Vec2f pointingAe{};     ///< 指向角（方位/俯仰，度）
 };
 
 /// 编解码内部辅助函数与常量
 namespace detail {
 
-inline constexpr double AngleCodeDenominator = static_cast<double>(1ULL << 29U);  ///< 角度编码分母（2^29）
+inline constexpr double AngleCodeDenominator =
+    static_cast<double>(1ULL << 29U);  ///< 角度编码分母（2^29）
 
 /**
  * @brief 生成帧校验失败时的错误描述

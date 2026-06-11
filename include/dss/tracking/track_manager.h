@@ -49,8 +49,8 @@ public:
     void reset();
 
 private:
-    mutable std::mutex m_mutex;                              ///< 保护策略访问的互斥锁
-    std::unique_ptr<ITrackingStrategy> m_strategy;           ///< 当前活跃的跟踪策略
+    mutable std::mutex m_mutex;                     ///< 保护策略访问的互斥锁
+    std::unique_ptr<ITrackingStrategy> m_strategy;  ///< 当前活跃的跟踪策略
 };
 
 }  // namespace Dss::Tracking

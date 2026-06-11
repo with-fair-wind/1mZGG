@@ -60,10 +60,10 @@ public:
     void stopServices() noexcept;
 
 private:
-    MessageBus m_bus;                                           ///< 应用内消息总线
-    Dss::Core::ServiceRegistry m_registry;                      ///< 服务注册表
-    Dss::Core::ServiceHost m_services;                          ///< 服务生命周期管理器
-    std::vector<Dss::Evt::ScopedConnection> m_connections;      ///< 事件订阅连接，随上下文析构自动取消
+    MessageBus m_bus;                                       ///< 应用内消息总线
+    Dss::Core::ServiceRegistry m_registry;                  ///< 服务注册表
+    Dss::Core::ServiceHost m_services;                      ///< 服务生命周期管理器
+    std::vector<Dss::Evt::ScopedConnection> m_connections;  ///< 事件订阅连接，随上下文析构自动取消
 };
 
 }  // namespace Dss::App

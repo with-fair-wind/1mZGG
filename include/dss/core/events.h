@@ -30,10 +30,10 @@ struct GrabStoppedEvent {};
 
 /// 处理事件：请求刷新显示
 struct DisplayRefreshEvent {
-    uint64_t frameSeq = 0;  ///< 帧序号
-    uint32_t width = 0;     ///< 图像宽度（像素）
-    uint32_t height = 0;    ///< 图像高度（像素）
-    uint32_t stride = 0;    ///< 行跨度（字节）
+    uint64_t frameSeq = 0;                                     ///< 帧序号
+    uint32_t width = 0;                                        ///< 图像宽度（像素）
+    uint32_t height = 0;                                       ///< 图像高度（像素）
+    uint32_t stride = 0;                                       ///< 行跨度（字节）
     std::shared_ptr<const std::vector<uint8_t>> displayImage;  ///< 显示用图像数据
 };
 
@@ -50,8 +50,8 @@ struct RotatedFrameReadyEvent {
 
 /// 跟踪事件：跟踪结果更新
 struct TrackResultEvent {
-    uint64_t frameSeq = 0;           ///< 帧序号
-    std::vector<TargetInfo> targets;   ///< 当前跟踪目标列表
+    uint64_t frameSeq = 0;            ///< 帧序号
+    std::vector<TargetInfo> targets;  ///< 当前跟踪目标列表
 };
 
 /// 网络事件：请求发送图像

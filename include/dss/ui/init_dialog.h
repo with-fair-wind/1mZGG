@@ -33,12 +33,11 @@ signals:
     void initComplete(bool success);
 
 private:
-    QLabel* m_statusLabel = nullptr;   ///< 汇总状态标签
-    QProgressBar* m_progress = nullptr; ///< 进度条
-    QVBoxLayout* m_statusList = nullptr; ///< 各模块状态列表布局
-    int m_moduleCount = 0;             ///< 已报告模块总数
-    int m_successCount = 0;            ///< 成功模块数
+    QLabel* m_statusLabel = nullptr;      ///< 汇总状态标签
+    QProgressBar* m_progress = nullptr;   ///< 进度条
+    QVBoxLayout* m_statusList = nullptr;  ///< 各模块状态列表布局
+    int m_moduleCount = 0;                ///< 已报告模块总数
+    int m_successCount = 0;               ///< 成功模块数
 };
 
 }  // namespace Dss::Ui
-

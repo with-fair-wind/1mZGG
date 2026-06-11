@@ -103,11 +103,11 @@ public:
 private:
     Config() = default;
 
-    PathConfig m_paths{};              ///< 路径配置
-    CommNetConfig m_commNet{};         ///< 通信网络配置
-    OpticParams m_optics{};            ///< 光学参数
-    ObservatoryConfig m_observatory{}; ///< 台站坐标
-    TrackingSettings m_tracking{};     ///< 跟踪参数
+    PathConfig m_paths{};               ///< 路径配置
+    CommNetConfig m_commNet{};          ///< 通信网络配置
+    OpticParams m_optics{};             ///< 光学参数
+    ObservatoryConfig m_observatory{};  ///< 台站坐标
+    TrackingSettings m_tracking{};      ///< 跟踪参数
 };
 
 }  // namespace Dss::Core

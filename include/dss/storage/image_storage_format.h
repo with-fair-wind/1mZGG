@@ -19,24 +19,24 @@ inline constexpr auto kRawImageHeaderSize = 31U;  ///< RAW 图像文件头字节
 
 /// RAW 图像元数据，对应 31 字节文件头字段
 struct RawImageMetadata {
-    std::uint32_t width = 0;                       ///< 图像宽度（像素）
-    std::uint32_t height = 0;                      ///< 图像高度（像素）
-    Dss::Core::ExposureDisplayData exposure{};     ///< 曝光与指向显示数据
-    int triggerMode = 0;                           ///< 触发模式
-    double frameFrequency = 0.0;                   ///< 帧频（Hz）
-    double exposureTimeMilliseconds = 0.0;         ///< 曝光时间（毫秒）
+    std::uint32_t width = 0;                    ///< 图像宽度（像素）
+    std::uint32_t height = 0;                   ///< 图像高度（像素）
+    Dss::Core::ExposureDisplayData exposure{};  ///< 曝光与指向显示数据
+    int triggerMode = 0;                        ///< 触发模式
+    double frameFrequency = 0.0;                ///< 帧频（Hz）
+    double exposureTimeMilliseconds = 0.0;      ///< 曝光时间（毫秒）
 };
 
 /// 图像存储路径与命名规则参数
 struct ImageStorageNaming {
-    std::filesystem::path rootPath;     ///< 存储根目录
-    std::string startTime;              ///< 会话开始时间字符串
-    std::string endTime;                ///< 会话结束时间字符串
-    std::string taskId;                 ///< 任务编号
-    std::string targetId;               ///< 目标编号
-    std::string observatoryId;          ///< 观测站编号
-    std::string imageFormat = "raw";    ///< 图像文件扩展名
-    bool searchMode = false;            ///< 是否为搜索模式（目标段使用占位符）
+    std::filesystem::path rootPath;   ///< 存储根目录
+    std::string startTime;            ///< 会话开始时间字符串
+    std::string endTime;              ///< 会话结束时间字符串
+    std::string taskId;               ///< 任务编号
+    std::string targetId;             ///< 目标编号
+    std::string observatoryId;        ///< 观测站编号
+    std::string imageFormat = "raw";  ///< 图像文件扩展名
+    bool searchMode = false;          ///< 是否为搜索模式（目标段使用占位符）
 };
 
 /// 解码后的 RAW 图像文件内容
@@ -241,7 +241,7 @@ inline auto decodeRawImageHeader(std::span<const std::uint8_t> header)
         static_cast<float>(Detail::readBigEndian24(header, 15) / 10000.0);
     metadata.exposure.pointingAe.y =
         static_cast<float>(Detail::readBigEndian24(header, 18) / 10000.0);
-    metadata.exposureTimeMilliseconds = Detail::readBigEndian16(header, 21) / 1000.0;
+    metadata.exposureTimeMilliseconds = Detail::readBigEndian24(header, 21) / 1000.0;
     metadata.triggerMode = static_cast<int>(header[24]);
     metadata.frameFrequency = Detail::readBigEndian16(header, 25) / 1000.0;
     if (header[27] != 0U) {

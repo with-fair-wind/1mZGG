@@ -376,10 +376,10 @@ class EventCore {
 public:
     using Id = std::size_t;  ///< 处理器槽位 ID
     struct Slot {
-        Id id;              ///< 槽位 ID
-        Handler handler;    ///< 处理器
+        Id id;            ///< 槽位 ID
+        Handler handler;  ///< 处理器
     };
-    using HandlerList = std::vector<Slot>;  ///< 处理器列表
+    using HandlerList = std::vector<Slot>;                 ///< 处理器列表
     using StoredArgs = std::tuple<std::decay_t<Args>...>;  ///< 待派发参数元组
 
     EventCore() : m_handlers(std::make_shared<HandlerList>()) {}
@@ -457,10 +457,10 @@ private:
         }
     }
 
-    mutable LockPolicy m_lock;                      ///< 锁策略
-    std::shared_ptr<HandlerList> m_handlers;        ///< 处理器列表（COW）
-    Id m_nextId = 1;                                ///< 下一个槽位 ID
-    std::vector<StoredArgs> m_pending;              ///< 待派发参数队列
+    mutable LockPolicy m_lock;                ///< 锁策略
+    std::shared_ptr<HandlerList> m_handlers;  ///< 处理器列表（COW）
+    Id m_nextId = 1;                          ///< 下一个槽位 ID
+    std::vector<StoredArgs> m_pending;        ///< 待派发参数队列
 };
 
 }  // namespace detail
@@ -612,9 +612,9 @@ private:
 template <typename R, typename... Args, template <typename> class CombinerT, typename LockPolicy>
 class Event<R(Args...), CombinerT, LockPolicy> : private detail::MovePolicy<true> {
 public:
-    using Handler = Delegate<R(Args...)>;       ///< 处理器类型
-    using Id = std::size_t;                     ///< 槽位 ID
-    using Combiner = CombinerT<R>;              ///< 组合器类型
+    using Handler = Delegate<R(Args...)>;               ///< 处理器类型
+    using Id = std::size_t;                             ///< 槽位 ID
+    using Combiner = CombinerT<R>;                      ///< 组合器类型
     using ResultType = typename Combiner::result_type;  ///< 组合结果类型
 
 private:
@@ -886,7 +886,7 @@ private:
                                       : nullptr;
     }
 
-    mutable LockPolicy m_lock;  ///< 锁策略
+    mutable LockPolicy m_lock;                                                  ///< 锁策略
     std::unordered_map<std::type_index, std::unique_ptr<IChannel>> m_channels;  ///< 消息通道表
 };
 

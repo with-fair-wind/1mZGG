@@ -65,17 +65,17 @@ public:
     [[nodiscard]] auto frameHeight() const -> std::uint32_t override;
 
 private:
-    mutable std::mutex m_mutex;                       ///< 保护共享状态的互斥锁
-    std::vector<std::filesystem::path> m_files;       ///< 待回放的图像文件路径列表
-    FrameCallback m_callback;                         ///< 帧就绪回调
+    mutable std::mutex m_mutex;                  ///< 保护共享状态的互斥锁
+    std::vector<std::filesystem::path> m_files;  ///< 待回放的图像文件路径列表
+    FrameCallback m_callback;                    ///< 帧就绪回调
     std::chrono::milliseconds m_frameInterval{std::chrono::milliseconds{33}};  ///< 连续回放帧间隔
-    std::uint32_t m_width = 0;                        ///< 帧宽度（像素）
-    std::uint32_t m_height = 0;                       ///< 帧高度（像素）
-    std::size_t m_nextFrameIndex = 0;                 ///< 下一帧待播放索引
-    bool m_initialized = false;                       ///< 是否已完成初始化
+    std::uint32_t m_width = 0;                                                 ///< 帧宽度（像素）
+    std::uint32_t m_height = 0;                                                ///< 帧高度（像素）
+    std::size_t m_nextFrameIndex = 0;                                          ///< 下一帧待播放索引
+    bool m_initialized = false;                                                ///< 是否已完成初始化
 
-    std::jthread m_worker;                            ///< 后台回放工作线程
-    std::atomic<bool> m_running{false};               ///< 是否正在连续回放
+    std::jthread m_worker;               ///< 后台回放工作线程
+    std::atomic<bool> m_running{false};  ///< 是否正在连续回放
 };
 
 }  // namespace Dss::Acquisition

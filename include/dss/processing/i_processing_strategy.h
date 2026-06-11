@@ -13,9 +13,9 @@ namespace Dss::Processing {
 struct ProcessingResult {
     Dss::Core::ImageStats stats{};                              ///< 图像统计信息
     std::vector<Dss::Core::MeasuredBlob> targetBlobs;           ///< 检测到的目标光斑
-    std::vector<Dss::Core::MeasuredBlob> validatedTargetBlobs; ///< 校验通过的目标光斑
-    std::vector<Dss::Core::MeasuredBlob> starBlobs;           ///< 检测到的恒星光斑
-    std::vector<uint8_t> displayImage;                           ///< 8 位显示用图像
+    std::vector<Dss::Core::MeasuredBlob> validatedTargetBlobs;  ///< 校验通过的目标光斑
+    std::vector<Dss::Core::MeasuredBlob> starBlobs;             ///< 检测到的恒星光斑
+    std::vector<uint8_t> displayImage;                          ///< 8 位显示用图像
     bool success = false;                                       ///< 处理是否成功
 };
 

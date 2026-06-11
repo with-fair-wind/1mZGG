@@ -52,18 +52,17 @@ private:
     /// 连接 ViewModel 与 AppEvent 信号槽
     void connectSignals();
 
-    ViewModel& m_vm; ///< ViewModel 引用
+    ViewModel& m_vm;  ///< ViewModel 引用
 
-    QWidget* m_controlPage = nullptr;  ///< 控制页容器
-    QWidget* m_displayPage = nullptr;  ///< 显示页容器
-    QWidget* m_analysisPage = nullptr; ///< 分析页容器
-    QWidget* m_commPage = nullptr;     ///< 通信状态页容器
-    QWidget* m_settingsPage = nullptr; ///< 设置页容器
-    QWidget* m_logPage = nullptr;      ///< 日志页容器
+    QWidget* m_controlPage = nullptr;   ///< 控制页容器
+    QWidget* m_displayPage = nullptr;   ///< 显示页容器
+    QWidget* m_analysisPage = nullptr;  ///< 分析页容器
+    QWidget* m_commPage = nullptr;      ///< 通信状态页容器
+    QWidget* m_settingsPage = nullptr;  ///< 设置页容器
+    QWidget* m_logPage = nullptr;       ///< 日志页容器
 
-    ImageDisplay* m_imageDisplay = nullptr;         ///< 主图像显示控件
-    ImageDisplayCrop* m_imageDisplayCrop = nullptr; ///< 裁剪区域显示控件
+    ImageDisplay* m_imageDisplay = nullptr;          ///< 主图像显示控件
+    ImageDisplayCrop* m_imageDisplayCrop = nullptr;  ///< 裁剪区域显示控件
 };
 
 }  // namespace Dss::Ui
-

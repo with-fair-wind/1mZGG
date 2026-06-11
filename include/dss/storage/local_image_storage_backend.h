@@ -124,9 +124,9 @@ public:
 private:
     /// 待写入的 RAW 帧请求
     struct SaveRawFrameRequest {
-        std::filesystem::path path;           ///< 目标文件路径
-        RawImageMetadata metadata{};          ///< 帧元数据
-        std::vector<std::uint16_t> pixels;    ///< 16 位像素数据
+        std::filesystem::path path;         ///< 目标文件路径
+        RawImageMetadata metadata{};        ///< 帧元数据
+        std::vector<std::uint16_t> pixels;  ///< 16 位像素数据
     };
 
     /// 将相对路径解析为基于存储根目录的绝对路径
@@ -173,13 +173,13 @@ private:
                      static_cast<std::streamsize>(bytes.size()));
     }
 
-    std::filesystem::path m_baseDir;              ///< 存储根目录
-    std::atomic<bool> m_ready{false};             ///< 是否已完成初始化
-    std::atomic<bool> m_running{false};           ///< 后台线程是否正在运行
-    std::jthread m_worker;                        ///< 后台写入工作线程
-    std::mutex m_queueMutex;                      ///< 保护写入队列的互斥锁
-    std::condition_variable_any m_queueCv;        ///< 写入队列条件变量
-    std::deque<SaveRawFrameRequest> m_queue;      ///< 待写入帧队列
+    std::filesystem::path m_baseDir;          ///< 存储根目录
+    std::atomic<bool> m_ready{false};         ///< 是否已完成初始化
+    std::atomic<bool> m_running{false};       ///< 后台线程是否正在运行
+    std::jthread m_worker;                    ///< 后台写入工作线程
+    std::mutex m_queueMutex;                  ///< 保护写入队列的互斥锁
+    std::condition_variable_any m_queueCv;    ///< 写入队列条件变量
+    std::deque<SaveRawFrameRequest> m_queue;  ///< 待写入帧队列
 };
 
 }  // namespace Dss::Storage

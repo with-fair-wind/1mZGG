@@ -53,9 +53,9 @@ private:
     /// 限制偏移量与缩放比例在有效范围内
     void clampOffset();
 
-    QImage m_currentImage;      ///< 当前显示图像
-    double m_scaleFactor = 1.0; ///< 当前缩放比例
-    QPointF m_offset{};         ///< 图像左上角在控件中的偏移
+    QImage m_currentImage;       ///< 当前显示图像
+    double m_scaleFactor = 1.0;  ///< 当前缩放比例
+    QPointF m_offset{};          ///< 图像左上角在控件中的偏移
 };
 
 }  // namespace Dss::Ui

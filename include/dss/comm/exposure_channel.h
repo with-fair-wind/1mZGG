@@ -40,8 +40,8 @@ protected:
     void encodeFrame(std::span<uint8_t> buffer) override;
 
 private:
-    mutable std::mutex m_dataMutex;                     ///< 保护最新数据的互斥锁
-    Dss::Core::ExposureDisplayData m_latestData{};      ///< 最近一次解码成功的显示数据
+    mutable std::mutex m_dataMutex;                 ///< 保护最新数据的互斥锁
+    Dss::Core::ExposureDisplayData m_latestData{};  ///< 最近一次解码成功的显示数据
 };
 
 }  // namespace Dss::Comm

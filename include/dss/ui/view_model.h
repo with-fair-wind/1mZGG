@@ -165,18 +165,18 @@ private:
     /// 更新状态文本并发出信号
     void setStatus(QString text);
 
-    MessageBus& m_bus;                        ///< 事件总线引用
-    Dss::Core::ServiceRegistry& m_registry;   ///< 服务注册表引用
+    MessageBus& m_bus;                       ///< 事件总线引用
+    Dss::Core::ServiceRegistry& m_registry;  ///< 服务注册表引用
 
-    bool m_grabbing = false;                  ///< 是否正在采集/回放
-    double m_frameRate = 0.0;                 ///< 当前帧率
+    bool m_grabbing = false;   ///< 是否正在采集/回放
+    double m_frameRate = 0.0;  ///< 当前帧率
     int m_processingMode = static_cast<int>(Dss::Core::ProcessingMode::None);  ///< 处理模式
     int m_trackMode = static_cast<int>(Dss::Core::TrackMode::Init);            ///< 跟踪模式
-    double m_exposure = 0.0;                  ///< 曝光时间（毫秒）
-    bool m_saving = false;                    ///< 是否正在保存
-    QString m_statusText = "Ready";           ///< 状态栏文本
-    int m_replayFrameCount = 0;               ///< 回放序列总帧数
-    int m_replayCurrentFrame = 0;             ///< 回放当前帧索引
+    double m_exposure = 0.0;                                                   ///< 曝光时间（毫秒）
+    bool m_saving = false;                                                     ///< 是否正在保存
+    QString m_statusText = "Ready";                                            ///< 状态栏文本
+    int m_replayFrameCount = 0;                                                ///< 回放序列总帧数
+    int m_replayCurrentFrame = 0;                                              ///< 回放当前帧索引
     std::optional<Dss::Core::MeasuredBlob> m_manualTarget;  ///< 手动选定的跟踪目标
 
     std::vector<Dss::Evt::ScopedConnection> m_connections;  ///< 事件订阅连接列表

@@ -163,7 +163,7 @@ private:
         return message;
     }
 
-    mutable std::shared_mutex m_mutex;  ///< 读写锁，保护服务表
+    mutable std::shared_mutex m_mutex;                                    ///< 读写锁，保护服务表
     std::unordered_map<ServiceKey, std::any, ServiceKeyHash> m_services;  ///< 已注册服务表
 };
 

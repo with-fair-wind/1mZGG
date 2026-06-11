@@ -71,14 +71,14 @@ private:
      */
     void workerLoop(std::stop_token token);
 
-    MessageBus& m_bus;                                              ///< 事件消息总线
-    BoundedChannel<FramePacket, 4> m_frameChannel;                  ///< 帧输入有界通道
-    std::jthread m_workerThread;                                    ///< 后台处理线程
-    std::atomic<bool> m_running{false};                             ///< 运行状态标志
-    std::atomic<uint64_t> m_droppedFrames{0};                       ///< 丢弃帧计数
+    MessageBus& m_bus;                              ///< 事件消息总线
+    BoundedChannel<FramePacket, 4> m_frameChannel;  ///< 帧输入有界通道
+    std::jthread m_workerThread;                    ///< 后台处理线程
+    std::atomic<bool> m_running{false};             ///< 运行状态标志
+    std::atomic<uint64_t> m_droppedFrames{0};       ///< 丢弃帧计数
 
-    mutable std::mutex m_strategyMutex;                             ///< 保护策略对象的互斥锁
-    ProcessingPipeline m_pipeline;                                  ///< 图像处理管线
+    mutable std::mutex m_strategyMutex;                                 ///< 保护策略对象的互斥锁
+    ProcessingPipeline m_pipeline;                                      ///< 图像处理管线
     std::unique_ptr<Dss::Tracking::ITrackingStrategy> m_trackStrategy;  ///< 跟踪策略
 };
 

@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <string>
 #include <vector>
 
@@ -343,10 +344,10 @@ TEST(GeoTracker, EndsNonFullLeoTargetWhenPredictedRaDecLeavesSkyBounds) {
         if (index < 4) {
             addGeoTargetWithRaDec(frame, 105.0F + static_cast<float>(index) * 5.0F,
                                   100.0F + static_cast<float>(index) * 4.0F,
-                                  6.2819 + static_cast<double>(index) * 0.0004,
+                                  6.2824 + static_cast<double>(index) * 0.00019,
                                   0.5 + static_cast<double>(index) * 0.00007);
         } else {
-            addGeoTargetWithRaDec(frame, 900.0F, 900.0F, 6.2835, 0.50028);
+            addGeoTargetWithRaDec(frame, 900.0F, 900.0F, 6.28316, 0.50028);
         }
 
         const auto targets = tracker.track(frame);
@@ -360,6 +361,60 @@ TEST(GeoTracker, EndsNonFullLeoTargetWhenPredictedRaDecLeavesSkyBounds) {
         EXPECT_TRUE(target.frameInfos.back().valid);
         EXPECT_GT(target.predictedPosFrame.x, static_cast<float>(2.0 * Dss::Core::Pi));
         EXPECT_FALSE(target.living);
+    }
+}
+
+TEST(GeoTracker, FindsInitialNonFullLeoTargetInRaDecSpaceEvenWhenPixelsJump) {
+    auto settings = makeSettings();
+    settings.geoFullLeo = false;
+    Dss::Tracking::GeoTracker tracker(settings);
+
+    const std::array<Dss::Core::Vec2f, 4> pixelPositions{
+        Dss::Core::Vec2f{105.0F, 100.0F},
+        Dss::Core::Vec2f{900.0F, 210.0F},
+        Dss::Core::Vec2f{120.0F, 850.0F},
+        Dss::Core::Vec2f{760.0F, 730.0F},
+    };
+
+    for (uint64_t index = 0; index < pixelPositions.size(); ++index) {
+        auto frame = makeFrame(index + 1, static_cast<int>(index));
+        addCenteredStars(frame, static_cast<float>(index), 0.0F);
+        addGeoTargetWithRaDec(frame, pixelPositions[index].x, pixelPositions[index].y,
+                              1.0 + static_cast<double>(index) * 0.0001,
+                              0.5 + static_cast<double>(index) * 0.00007);
+
+        const auto targets = tracker.track(frame);
+        if (index < 3) {
+            EXPECT_TRUE(targets.empty());
+            continue;
+        }
+
+        ASSERT_EQ(targets.size(), 1U);
+        const auto& target = targets.front();
+        EXPECT_TRUE(target.living);
+        ASSERT_EQ(target.frameInfos.size(), 4U);
+        EXPECT_NEAR(target.predictedSpdFrame.x, 0.0001F, 1.0e-7F);
+        EXPECT_NEAR(target.predictedSpdFrame.y, 0.00007F, 1.0e-7F);
+        EXPECT_NEAR(target.predictedPosFrame.x, 1.0004F, 1.0e-6F);
+        EXPECT_NEAR(target.predictedPosFrame.y, 0.50028F, 1.0e-6F);
+    }
+}
+
+TEST(GeoTracker, RejectsInitialNonFullLeoTargetWhenRaDecMotionIsBelowThreshold) {
+    auto settings = makeSettings();
+    settings.geoFullLeo = false;
+    Dss::Tracking::GeoTracker tracker(settings);
+
+    for (uint64_t index = 0; index < 4; ++index) {
+        auto frame = makeFrame(index + 1, static_cast<int>(index));
+        addCenteredStars(frame, static_cast<float>(index), 0.0F);
+        addGeoTargetWithRaDec(frame, 105.0F + static_cast<float>(index) * 5.0F,
+                              100.0F + static_cast<float>(index) * 4.0F,
+                              1.0 + static_cast<double>(index) * Dss::Core::ArcSecToRad,
+                              0.5 + static_cast<double>(index) * 0.5 * Dss::Core::ArcSecToRad);
+
+        const auto targets = tracker.track(frame);
+        EXPECT_TRUE(targets.empty());
     }
 }
 

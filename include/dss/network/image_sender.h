@@ -21,10 +21,10 @@ class ImageSender {
 public:
     using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;  ///< 事件总线类型别名
 
-    static constexpr std::size_t MaxUdpPayload = 60U * 1024U;   ///< 单个 UDP 分片最大载荷（字节）
-    static constexpr std::size_t PacketHeaderSize = 20U;        ///< 分片包头长度（字节）
-    static constexpr std::size_t ImageHeaderSize = 10U;           ///< 图像编码头长度（字节）
-    static constexpr std::size_t PacketPaddingSize = 4U;          ///< 分片尾部填充长度（字节）
+    static constexpr std::size_t MaxUdpPayload = 60U * 1024U;  ///< 单个 UDP 分片最大载荷（字节）
+    static constexpr std::size_t PacketHeaderSize = 20U;       ///< 分片包头长度（字节）
+    static constexpr std::size_t ImageHeaderSize = 10U;        ///< 图像编码头长度（字节）
+    static constexpr std::size_t PacketPaddingSize = 4U;       ///< 分片尾部填充长度（字节）
 
     /**
      * @brief 构造图像发送服务
@@ -73,16 +73,16 @@ private:
      */
     void workerLoop(std::stop_token token);
 
-    MessageBus& m_bus;                      ///< 事件总线引用
-    UdpChannel m_channel;                   ///< 图像 UDP 通道
-    std::jthread m_workerThread;            ///< 异步发送工作线程
+    MessageBus& m_bus;            ///< 事件总线引用
+    UdpChannel m_channel;         ///< 图像 UDP 通道
+    std::jthread m_workerThread;  ///< 异步发送工作线程
 
-    std::mutex m_bufferMutex;               ///< 保护待发送缓冲区的互斥锁
-    std::condition_variable_any m_bufferCv; ///< 待发送图像就绪条件变量
-    std::vector<uint8_t> m_pendingImage;    ///< 待发送像素数据
-    uint32_t m_pendingWidth = 0;            ///< 待发送图像宽度
-    uint32_t m_pendingHeight = 0;           ///< 待发送图像高度
-    bool m_hasPending = false;              ///< 是否有待发送图像
+    std::mutex m_bufferMutex;                ///< 保护待发送缓冲区的互斥锁
+    std::condition_variable_any m_bufferCv;  ///< 待发送图像就绪条件变量
+    std::vector<uint8_t> m_pendingImage;     ///< 待发送像素数据
+    uint32_t m_pendingWidth = 0;             ///< 待发送图像宽度
+    uint32_t m_pendingHeight = 0;            ///< 待发送图像高度
+    bool m_hasPending = false;               ///< 是否有待发送图像
 };
 
 }  // namespace Dss::Network

@@ -43,8 +43,8 @@ protected:
     void encodeFrame(std::span<uint8_t> buffer) override;
 
 private:
-    std::mutex m_targetMutex;                   ///< 保护当前目标的互斥锁
-    Dss::Core::TargetInfo m_currentTarget{};    ///< 当前跟踪目标信息
+    std::mutex m_targetMutex;                 ///< 保护当前目标的互斥锁
+    Dss::Core::TargetInfo m_currentTarget{};  ///< 当前跟踪目标信息
 };
 
 }  // namespace Dss::Comm

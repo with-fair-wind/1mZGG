@@ -28,12 +28,12 @@ public:
     void reset() override;
 
 private:
-    Dss::Core::TrackingSettings m_settings;                ///< 跟踪算法参数
-    std::deque<Dss::Core::FrameMeasurements> m_fifo;         ///< 最近三帧测量 FIFO
-    Dss::Core::TargetInfo m_currentTarget{};               ///< 当前选定的跟踪目标
-    std::vector<Dss::Core::TargetInfo> m_candidates;         ///< 三帧关联产生的候选目标
-    bool m_targetFound = false;                              ///< 是否已发现候选目标
-    bool m_targetVerified = false;                           ///< 候选目标是否已通过验证
+    Dss::Core::TrackingSettings m_settings;           ///< 跟踪算法参数
+    std::deque<Dss::Core::FrameMeasurements> m_fifo;  ///< 最近三帧测量 FIFO
+    Dss::Core::TargetInfo m_currentTarget{};          ///< 当前选定的跟踪目标
+    std::vector<Dss::Core::TargetInfo> m_candidates;  ///< 三帧关联产生的候选目标
+    bool m_targetFound = false;                       ///< 是否已发现候选目标
+    bool m_targetVerified = false;                    ///< 候选目标是否已通过验证
 };
 
 }  // namespace Dss::Tracking

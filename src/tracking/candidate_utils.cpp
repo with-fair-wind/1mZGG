@@ -1,5 +1,6 @@
 #include "dss/tracking/candidate_utils.h"
 
+#include <algorithm>
 #include <utility>
 #include <vector>
 
@@ -10,36 +11,82 @@ namespace {
     return frameCount > 0U && target.frameInfos.size() >= frameCount;
 }
 
-[[nodiscard]] bool hasSameCentroid(const Dss::Core::TargetFrameInfo& first,
-                                   const Dss::Core::TargetFrameInfo& second) {
-    return first.measuredBlob.centroid.x == second.measuredBlob.centroid.x &&
-           first.measuredBlob.centroid.y == second.measuredBlob.centroid.y;
-}
-
 }  // namespace
 
 namespace Dss::Tracking {
 
-/// 判断两个候选在指定初始帧窗口内是否存在同帧同质心测量
-bool sharesInitialCentroidAtSameFrameIndex(const Core::TargetInfo& first,
-                                           const Core::TargetInfo& second,
-                                           const InitialMeasurementDedupRule& rule) {
+bool hasSameMeasurement(const Core::MeasuredBlob& first, const Core::MeasuredBlob& second,
+                        CandidateMeasurementSpace space) {
+    if (space == CandidateMeasurementSpace::RaDec) {
+        const auto firstHasRaDec = first.ra != 0.0 || first.dec != 0.0;
+        const auto secondHasRaDec = second.ra != 0.0 || second.dec != 0.0;
+        return firstHasRaDec && secondHasRaDec && first.ra == second.ra && first.dec == second.dec;
+    }
+    return first.centroid.x == second.centroid.x && first.centroid.y == second.centroid.y;
+}
+
+bool hasSameMeasurement(const Core::TargetFrameInfo& first, const Core::TargetFrameInfo& second,
+                        CandidateMeasurementSpace space) {
+    return hasSameMeasurement(first.measuredBlob, second.measuredBlob, space);
+}
+
+bool sharesInitialMeasurementAtSameFrameIndex(const Core::TargetInfo& first,
+                                              const Core::TargetInfo& second,
+                                              const InitialMeasurementDedupRule& rule,
+                                              CandidateMeasurementSpace space) {
     if (!hasEnoughInitialFrames(first, rule.frameCount) ||
         !hasEnoughInitialFrames(second, rule.frameCount)) {
         return false;
     }
 
     for (std::size_t frameIndex = 0U; frameIndex < rule.frameCount; ++frameIndex) {
-        if (hasSameCentroid(first.frameInfos[frameIndex], second.frameInfos[frameIndex])) {
+        if (hasSameMeasurement(first.frameInfos[frameIndex], second.frameInfos[frameIndex],
+                               space)) {
             return true;
         }
     }
     return false;
 }
 
-/// 两两比对候选并移除重复项，保留先出现的候选
-auto deduplicateInitialCandidatesByCentroid(std::vector<Core::TargetInfo> candidates,
-                                            const InitialMeasurementDedupRule& rule)
+bool sharesInitialCentroidAtSameFrameIndex(const Core::TargetInfo& first,
+                                           const Core::TargetInfo& second,
+                                           const InitialMeasurementDedupRule& rule) {
+    return sharesInitialMeasurementAtSameFrameIndex(first, second, rule,
+                                                    CandidateMeasurementSpace::Centroid);
+}
+
+bool sharesRecentMeasurementAtSameFrameIndex(const Core::TargetInfo& candidate,
+                                             const Core::TargetInfo& existingTarget,
+                                             const RecentMeasurementOverlapRule& rule) {
+    if (rule.frameCount == 0U || candidate.frameInfos.size() < rule.frameCount ||
+        existingTarget.frameInfos.size() < rule.frameCount) {
+        return false;
+    }
+
+    const auto candidateStart = candidate.frameInfos.size() - rule.frameCount;
+    const auto existingStart = existingTarget.frameInfos.size() - rule.frameCount;
+    for (std::size_t offset = 0U; offset < rule.frameCount; ++offset) {
+        const auto& candidateInfo = candidate.frameInfos[candidateStart + offset];
+        const auto& existingInfo = existingTarget.frameInfos[existingStart + offset];
+        if (candidateInfo.frameSeq == existingInfo.frameSeq &&
+            hasSameMeasurement(candidateInfo, existingInfo, rule.space)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool overlapsAnyLivingTarget(const Core::TargetInfo& candidate,
+                             std::span<const Core::TargetInfo> targets,
+                             const RecentMeasurementOverlapRule& rule) {
+    return std::ranges::any_of(targets, [&](const Core::TargetInfo& target) {
+        return target.living && sharesRecentMeasurementAtSameFrameIndex(candidate, target, rule);
+    });
+}
+
+auto deduplicateInitialCandidates(std::vector<Core::TargetInfo> candidates,
+                                  const InitialMeasurementDedupRule& rule,
+                                  CandidateMeasurementSpace space)
     -> std::vector<Core::TargetInfo> {
     if (candidates.size() < 2U || rule.frameCount == 0U) {
         return candidates;
@@ -49,8 +96,8 @@ auto deduplicateInitialCandidatesByCentroid(std::vector<Core::TargetInfo> candid
     for (std::size_t firstIndex = 0U; firstIndex < candidates.size(); ++firstIndex) {
         for (std::size_t secondIndex = firstIndex + 1U; secondIndex < candidates.size();
              ++secondIndex) {
-            if (sharesInitialCentroidAtSameFrameIndex(candidates[firstIndex],
-                                                      candidates[secondIndex], rule)) {
+            if (sharesInitialMeasurementAtSameFrameIndex(candidates[firstIndex],
+                                                         candidates[secondIndex], rule, space)) {
                 shouldRemove[secondIndex] = true;
             }
         }
@@ -64,6 +111,13 @@ auto deduplicateInitialCandidatesByCentroid(std::vector<Core::TargetInfo> candid
         }
     }
     return deduplicated;
+}
+
+auto deduplicateInitialCandidatesByCentroid(std::vector<Core::TargetInfo> candidates,
+                                            const InitialMeasurementDedupRule& rule)
+    -> std::vector<Core::TargetInfo> {
+    return deduplicateInitialCandidates(std::move(candidates), rule,
+                                        CandidateMeasurementSpace::Centroid);
 }
 
 }  // namespace Dss::Tracking

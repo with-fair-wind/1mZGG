@@ -43,8 +43,8 @@ private:
      */
     void onData(std::span<const uint8_t> data, const std::string& sender, uint16_t port);
 
-    MessageBus& m_bus;    ///< 事件总线引用
-    UdpChannel m_channel; ///< 气象数据 UDP 通道
+    MessageBus& m_bus;     ///< 事件总线引用
+    UdpChannel m_channel;  ///< 气象数据 UDP 通道
 };
 
 }  // namespace Dss::Network

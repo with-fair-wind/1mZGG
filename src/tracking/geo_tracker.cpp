@@ -35,21 +35,35 @@ inline constexpr float kSoftDenominatorOffset = 0.001F;
 inline constexpr double kGeoSameEquatorialThresholdDeg = 0.0015;
 inline constexpr double kTinyCos = 1.0e-8;
 
+/**
+ * @brief GEO 关联与跟踪门限内部使用的坐标空间。
+ */
 enum class GeoTrackingSpace {
-    Frame,
-    RaDec,
+    Frame,  ///< 使用像面质心坐标。
+    RaDec,  ///< 使用赤经/赤纬坐标。
 };
 
+using Dss::Tracking::CandidateMeasurementSpace;
 using Dss::Tracking::countRecentInvalidFrames;
-using Dss::Tracking::deduplicateInitialCandidatesByCentroid;
+using Dss::Tracking::deduplicateInitialCandidates;
 using Dss::Tracking::InitialMeasurementDedupRule;
 using Dss::Tracking::latestFramesAreAllInvalid;
+using Dss::Tracking::overlapsAnyLivingTarget;
 using Dss::Tracking::RecentFrameWindowMode;
+using Dss::Tracking::RecentMeasurementOverlapRule;
 using Dss::Tracking::updateValidityWithLatestFrame;
 
 [[nodiscard]] auto geoTrackingSpace(const Dss::Core::TrackingSettings& settings)
     -> GeoTrackingSpace {
     return settings.geoFullLeo ? GeoTrackingSpace::Frame : GeoTrackingSpace::RaDec;
+}
+
+/**
+ * @brief 将 GEO 跟踪坐标空间映射为候选去重使用的测量空间。
+ */
+[[nodiscard]] auto candidateMeasurementSpace(GeoTrackingSpace space) -> CandidateMeasurementSpace {
+    return space == GeoTrackingSpace::RaDec ? CandidateMeasurementSpace::RaDec
+                                            : CandidateMeasurementSpace::Centroid;
 }
 
 [[nodiscard]] auto arcsecToRad(double arcsec) -> float {
@@ -120,10 +134,12 @@ using Dss::Tracking::updateValidityWithLatestFrame;
 }
 
 /**
- * @brief 由相邻两帧恒星测量估算背景恒星速度
+ * @brief 由相邻两帧恒星测量估算背景恒星速度。
  *
- * 在视场中心区域内匹配恒星对，统计出现频率最高的像素位移作为恒星速度，
- * 并结合视场中心方位-俯仰变化换算 AE 速度。
+ *
+ * 在视场中心区域内匹配恒星对，统计出现频率最高的像素位移作为背景像面速度，
+
+ * * 并结合视场中心方位/俯仰变化换算 AE 速度。
  */
 [[nodiscard]] auto estimateGeoStarSpeedFromPair(const Dss::Core::FrameMeasurements& previous,
                                                 const Dss::Core::FrameMeasurements& current,
@@ -210,6 +226,29 @@ using Dss::Tracking::updateValidityWithLatestFrame;
     return Dss::Core::Vec2f{static_cast<float>(blob.ra), static_cast<float>(blob.dec)};
 }
 
+[[nodiscard]] auto blobPositionInSpace(const Dss::Core::MeasuredBlob& blob, GeoTrackingSpace space)
+    -> std::optional<Dss::Core::Vec2f> {
+    if (space == GeoTrackingSpace::RaDec) {
+        if (!hasRaDecCoordinates(blob)) {
+            return std::nullopt;
+        }
+        return raDecPosition(blob);
+    }
+    return blob.centroid;
+}
+
+[[nodiscard]] auto motionBetween(const Dss::Core::MeasuredBlob& current,
+                                 const Dss::Core::MeasuredBlob& previous, GeoTrackingSpace space)
+    -> std::optional<Dss::Core::Vec2f> {
+    const auto currentPosition = blobPositionInSpace(current, space);
+    const auto previousPosition = blobPositionInSpace(previous, space);
+    if (!currentPosition.has_value() || !previousPosition.has_value()) {
+        return std::nullopt;
+    }
+    return Dss::Core::Vec2f{currentPosition->x - previousPosition->x,
+                            currentPosition->y - previousPosition->y};
+}
+
 [[nodiscard]] bool isSameEquatorialPoint(const Dss::Core::MeasuredBlob& first,
                                          const Dss::Core::MeasuredBlob& second) {
     if (!hasEquatorialCoordinates(first) || !hasEquatorialCoordinates(second)) {
@@ -253,7 +292,9 @@ using Dss::Tracking::updateValidityWithLatestFrame;
     return info;
 }
 
-/// 根据目标历史帧运动（最近三帧中位数）更新预测位置与速度
+/**
+ * @brief 根据目标最近历史帧的三段运动中位数更新预测位置与速度。
+ */
 void updatePredictionFromHistory(Dss::Core::TargetInfo& target, float frameFrequency,
                                  const Dss::Core::TrackingSettings& settings) {
     if (target.frameInfos.empty()) {
@@ -342,10 +383,97 @@ void updatePredictionFromHistory(Dss::Core::TargetInfo& target, float frameFrequ
     return std::min(radius, settings.searchRadius);
 }
 
+[[nodiscard]] bool matchesFrameAssociationMotion(const Dss::Core::Vec2f& motion,
+                                                 const Dss::Core::Vec2f& starSpeed, float radius) {
+    return std::abs(motion.x) < radius && std::abs(motion.y) < radius &&
+           !isMotionStarLike(motion, starSpeed) && isMotionAngleAwayFromStars(motion, starSpeed);
+}
+
+[[nodiscard]] bool matchesConsistentFrameAssociationMotion(const Dss::Core::Vec2f& motion,
+                                                           const Dss::Core::Vec2f& previousMotion,
+                                                           const Dss::Core::Vec2f& firstMotion,
+                                                           const Dss::Core::Vec2f& starSpeed,
+                                                           float radius) {
+    return matchesFrameAssociationMotion(motion, starSpeed, radius) &&
+           std::abs(motion.x - previousMotion.x) <= kGeoMotionConsistencyThreshold &&
+           std::abs(motion.y - previousMotion.y) <= kGeoMotionConsistencyThreshold &&
+           std::abs(motion.x - firstMotion.x) <= kGeoMotionConsistencyThreshold &&
+           std::abs(motion.y - firstMotion.y) <= kGeoMotionConsistencyThreshold;
+}
+
+[[nodiscard]] bool isWithinRaDecAssociationRadius(const Dss::Core::Vec2f& motion) {
+    const auto radius = arcsecToRad(kGeoRaDecTrackingRadiusArcsec);
+    return std::abs(motion.x) < radius && std::abs(motion.y) < radius;
+}
+
+[[nodiscard]] bool exceedsRaDecMinimumMotion(const Dss::Core::Vec2f& motion,
+                                             const Dss::Core::TrackingSettings& settings) {
+    const auto raThreshold = arcsecToRad(settings.geoRaThresholdArcsec);
+    const auto decThreshold = arcsecToRad(settings.geoDecThresholdArcsec);
+    return !(std::abs(motion.x) < raThreshold && std::abs(motion.y) < decThreshold);
+}
+
+[[nodiscard]] bool matchesRaDecSpeedConsistency(const Dss::Core::Vec2f& motion,
+                                                const Dss::Core::Vec2f& referenceMotion,
+                                                const Dss::Core::TrackingSettings& settings) {
+    const auto raSpeedThreshold = arcsecToRad(settings.geoRaSpeedThresholdArcsec);
+    const auto decSpeedThreshold = arcsecToRad(settings.geoDecSpeedThresholdArcsec);
+    return std::abs(motion.x - referenceMotion.x) <= raSpeedThreshold &&
+           std::abs(motion.y - referenceMotion.y) <= decSpeedThreshold;
+}
+
+[[nodiscard]] bool matchesRaDecAssociationMotion(const Dss::Core::Vec2f& motion,
+                                                 const Dss::Core::TrackingSettings& settings) {
+    return isWithinRaDecAssociationRadius(motion) && exceedsRaDecMinimumMotion(motion, settings);
+}
+
+[[nodiscard]] bool matchesConsistentRaDecAssociationMotion(
+    const Dss::Core::Vec2f& motion, const Dss::Core::Vec2f& previousMotion,
+    const Dss::Core::Vec2f& firstMotion, const Dss::Core::TrackingSettings& settings) {
+    return matchesRaDecAssociationMotion(motion, settings) &&
+           matchesRaDecSpeedConsistency(motion, previousMotion, settings) &&
+           matchesRaDecSpeedConsistency(motion, firstMotion, settings);
+}
+
+[[nodiscard]] bool matchesFirstAssociationMotion(const Dss::Core::Vec2f& motion,
+                                                 GeoTrackingSpace space,
+                                                 const Dss::Core::Vec2f& starSpeed,
+                                                 float frameRadius,
+                                                 const Dss::Core::TrackingSettings& settings) {
+    return space == GeoTrackingSpace::RaDec
+               ? matchesRaDecAssociationMotion(motion, settings)
+               : matchesFrameAssociationMotion(motion, starSpeed, frameRadius);
+}
+
+[[nodiscard]] bool matchesSecondAssociationMotion(const Dss::Core::Vec2f& motion,
+                                                  const Dss::Core::Vec2f& firstMotion,
+                                                  GeoTrackingSpace space,
+                                                  const Dss::Core::Vec2f& starSpeed,
+                                                  float frameRadius,
+                                                  const Dss::Core::TrackingSettings& settings) {
+    return space == GeoTrackingSpace::RaDec
+               ? matchesConsistentRaDecAssociationMotion(motion, firstMotion, firstMotion, settings)
+               : matchesConsistentFrameAssociationMotion(motion, firstMotion, firstMotion,
+                                                         starSpeed, frameRadius);
+}
+
+[[nodiscard]] bool matchesThirdAssociationMotion(
+    const Dss::Core::Vec2f& motion, const Dss::Core::Vec2f& previousMotion,
+    const Dss::Core::Vec2f& firstMotion, GeoTrackingSpace space, const Dss::Core::Vec2f& starSpeed,
+    float frameRadius, const Dss::Core::TrackingSettings& settings) {
+    return space == GeoTrackingSpace::RaDec
+               ? matchesConsistentRaDecAssociationMotion(motion, previousMotion, firstMotion,
+                                                         settings)
+               : matchesConsistentFrameAssociationMotion(motion, previousMotion, firstMotion,
+                                                         starSpeed, frameRadius);
+}
+
 /**
- * @brief 对最近四帧目标像斑执行链式关联，生成 GEO 初始候选
+ * @brief 对最近四帧目标像斑执行链式关联，生成 GEO 初始候选。
  *
- * 过滤恒星背景运动与方向不一致的候选，并去除赤道坐标重复的关联链。
+ *
+ * 过滤与背景恒星运动一致的候选，并在当前测量空间中去除重复关联链。
+
  */
 [[nodiscard]] auto associateFourFrameTargets(
     const std::deque<Dss::Core::FrameMeasurements>& fifoTarget, int starMatchCount,
@@ -365,40 +493,31 @@ void updatePredictionFromHistory(Dss::Core::TargetInfo& target, float frameFrequ
         return {};
     }
 
-    const auto radius = associationRadius(settings, starMatchCount, frame3.targetBlobs.size());
+    const auto space = geoTrackingSpace(settings);
+    const auto frameRadius = associationRadius(settings, starMatchCount, frame3.targetBlobs.size());
     std::vector<Dss::Core::TargetInfo> associatedTargets;
 
     for (const auto& blob0 : frame0.targetBlobs) {
         for (const auto& blob1 : frame1.targetBlobs) {
-            const auto motion10 = Dss::Core::Vec2f{blob1.centroid.x - blob0.centroid.x,
-                                                   blob1.centroid.y - blob0.centroid.y};
-            if (std::abs(motion10.x) >= radius || std::abs(motion10.y) >= radius ||
-                isMotionStarLike(motion10, starSpeed) ||
-                !isMotionAngleAwayFromStars(motion10, starSpeed)) {
+            const auto motion10 = motionBetween(blob1, blob0, space);
+            if (!motion10.has_value() || !matchesFirstAssociationMotion(*motion10, space, starSpeed,
+                                                                        frameRadius, settings)) {
                 continue;
             }
 
             for (const auto& blob2 : frame2.targetBlobs) {
-                const auto motion21 = Dss::Core::Vec2f{blob2.centroid.x - blob1.centroid.x,
-                                                       blob2.centroid.y - blob1.centroid.y};
-                if (std::abs(motion21.x) >= radius || std::abs(motion21.y) >= radius ||
-                    isMotionStarLike(motion21, starSpeed) ||
-                    std::abs(motion21.x - motion10.x) > kGeoMotionConsistencyThreshold ||
-                    std::abs(motion21.y - motion10.y) > kGeoMotionConsistencyThreshold ||
-                    !isMotionAngleAwayFromStars(motion21, starSpeed)) {
+                const auto motion21 = motionBetween(blob2, blob1, space);
+                if (!motion21.has_value() ||
+                    !matchesSecondAssociationMotion(*motion21, *motion10, space, starSpeed,
+                                                    frameRadius, settings)) {
                     continue;
                 }
 
                 for (const auto& blob3 : frame3.targetBlobs) {
-                    const auto motion32 = Dss::Core::Vec2f{blob3.centroid.x - blob2.centroid.x,
-                                                           blob3.centroid.y - blob2.centroid.y};
-                    if (std::abs(motion32.x) >= radius || std::abs(motion32.y) >= radius ||
-                        isMotionStarLike(motion32, starSpeed) ||
-                        std::abs(motion32.x - motion21.x) > kGeoMotionConsistencyThreshold ||
-                        std::abs(motion32.y - motion21.y) > kGeoMotionConsistencyThreshold ||
-                        std::abs(motion32.x - motion10.x) > kGeoMotionConsistencyThreshold ||
-                        std::abs(motion32.y - motion10.y) > kGeoMotionConsistencyThreshold ||
-                        !isMotionAngleAwayFromStars(motion32, starSpeed)) {
+                    const auto motion32 = motionBetween(blob3, blob2, space);
+                    if (!motion32.has_value() ||
+                        !matchesThirdAssociationMotion(*motion32, *motion21, *motion10, space,
+                                                       starSpeed, frameRadius, settings)) {
                         continue;
                     }
 
@@ -416,41 +535,8 @@ void updatePredictionFromHistory(Dss::Core::TargetInfo& target, float frameFrequ
 
     InitialMeasurementDedupRule dedupRule{};
     dedupRule.frameCount = 3U;
-    return deduplicateInitialCandidatesByCentroid(std::move(associatedTargets), dedupRule);
-}
-
-[[nodiscard]] bool hasSameCentroid(const Dss::Core::MeasuredBlob& first,
-                                   const Dss::Core::MeasuredBlob& second) {
-    return first.centroid.x == second.centroid.x && first.centroid.y == second.centroid.y;
-}
-
-[[nodiscard]] bool sharesRecentMeasurement(const Dss::Core::TargetInfo& candidate,
-                                           const Dss::Core::TargetInfo& existingTarget) {
-    if (!existingTarget.living || candidate.frameInfos.empty() ||
-        existingTarget.frameInfos.empty()) {
-        return false;
-    }
-
-    const auto recentCount =
-        std::min(candidate.frameInfos.size(), existingTarget.frameInfos.size());
-    const auto recentStart = existingTarget.frameInfos.size() - recentCount;
-    for (const auto& candidateInfo : candidate.frameInfos) {
-        for (auto index = recentStart; index < existingTarget.frameInfos.size(); ++index) {
-            const auto& existingInfo = existingTarget.frameInfos[index];
-            if (candidateInfo.frameSeq == existingInfo.frameSeq &&
-                hasSameCentroid(candidateInfo.measuredBlob, existingInfo.measuredBlob)) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-[[nodiscard]] bool overlapsLivingTarget(const Dss::Core::TargetInfo& candidate,
-                                        const std::vector<Dss::Core::TargetInfo>& targets) {
-    return std::ranges::any_of(targets, [&](const Dss::Core::TargetInfo& target) {
-        return sharesRecentMeasurement(candidate, target);
-    });
+    return deduplicateInitialCandidates(std::move(associatedTargets), dedupRule,
+                                        candidateMeasurementSpace(space));
 }
 
 [[nodiscard]] bool exceedsRediscoverySpeedLimit(const Dss::Core::TargetInfo& target) {
@@ -467,7 +553,8 @@ void updatePredictionFromHistory(Dss::Core::TargetInfo& target, float frameFrequ
                                hasRaDecCoordinates(used)) {
                                return candidate.ra == used.ra || candidate.dec == used.dec;
                            }
-                           return hasSameCentroid(candidate, used);
+                           return candidate.centroid.x == used.centroid.x &&
+                                  candidate.centroid.y == used.centroid.y;
                        });
 }
 
@@ -538,9 +625,11 @@ void updatePredictionFromHistory(Dss::Core::TargetInfo& target, float frameFrequ
 }
 
 /**
- * @brief 在当前帧中为已有目标查找满足跟踪门限的最近像斑
+ * @brief 在当前帧中查找满足 GEO 跟踪门限的最近像斑。
  *
- * 根据连续无效帧数动态扩大搜索半径，支持像面与赤经赤纬两种跟踪空间。
+ *
+ * 搜索半径会随最近无效帧数扩大，并支持像面与赤经/赤纬两种跟踪空间。
+
  */
 [[nodiscard]] auto findNearestTrackedBlob(const std::vector<Dss::Core::MeasuredBlob>& blobs,
                                           const Dss::Core::TargetInfo& target,
@@ -655,7 +744,9 @@ void updatePredictionFromHistory(Dss::Core::TargetInfo& target, float frameFrequ
 
 }  // namespace
 
-/// 取帧序列末尾两帧执行恒星速度估算
+/**
+ * @brief 使用帧序列末尾两帧估算 GEO 背景恒星速度。
+ */
 auto estimateGeoStarSpeed(std::span<const Dss::Core::FrameMeasurements> frames, float ratioFov,
                           float radius, const Dss::Core::OpticParams& opticParams)
     -> GeoStarSpeedResult {
@@ -668,7 +759,9 @@ auto estimateGeoStarSpeed(std::span<const Dss::Core::FrameMeasurements> frames, 
 
 GeoTracker::GeoTracker(const Dss::Core::TrackingSettings& settings) : m_settings(settings) {}
 
-/// 主跟踪流程：估算恒星速度 → 四帧关联发现目标 → 逐帧跟踪与重发现
+/**
+ * @brief 执行单帧 GEO 跟踪主流程。
+ */
 auto GeoTracker::track(const Dss::Core::FrameMeasurements& measurements)
     -> std::vector<Dss::Core::TargetInfo> {
     m_fifoTarget.push_back(measurements);
@@ -724,7 +817,9 @@ void GeoTracker::assignTargetIds(std::vector<Dss::Core::TargetInfo>& targets) {
     }
 }
 
-/// 利用恒星 FIFO 估算背景速度，匹配数足够时更新 m_starSpeed
+/**
+ * @brief 在匹配恒星数量足够时更新缓存的背景恒星速度。
+ */
 int GeoTracker::calcStarSpeed() {
     if (m_fifoStar.size() < 2U) {
         return 1;
@@ -747,7 +842,9 @@ int GeoTracker::calcStarSpeed() {
     return 0;
 }
 
-/// 对目标 FIFO 执行四帧关联并分配目标 ID
+/**
+ * @brief 对目标 FIFO 执行四帧关联并分配目标 ID。
+ */
 int GeoTracker::assoc4() {
     if (m_fifoTarget.size() < 4U) {
         return 1;
@@ -769,13 +866,18 @@ int GeoTracker::assoc4() {
     return 0;
 }
 
+/**
+ * @brief 根据关联结果更新 GEO 目标发现状态。
+ */
 int GeoTracker::findTargets() {
     m_targetFound = !m_targets.empty();
     m_targetVerified = m_targetFound;
     return m_targetFound ? 0 : 1;
 }
 
-/// 在跟踪阶段重新执行四帧关联，过滤与已有目标重叠或超速的候选
+/**
+ * @brief 在跟踪阶段重新执行四帧关联，并追加有效的重发现候选。
+ */
 int GeoTracker::refindTargets() {
     if (m_fifoTarget.size() < 5U) {
         return 1;
@@ -783,9 +885,13 @@ int GeoTracker::refindTargets() {
 
     auto candidates = associateFourFrameTargets(m_fifoTarget, m_starMatchCount, m_starSpeed,
                                                 m_frameFreq, m_settings);
+    RecentMeasurementOverlapRule overlapRule{};
+    overlapRule.frameCount = 4U;
+    overlapRule.space = candidateMeasurementSpace(geoTrackingSpace(m_settings));
     std::erase_if(candidates, [&](const Dss::Core::TargetInfo& candidate) {
-        return overlapsLivingTarget(candidate, m_targets) ||
-               exceedsRediscoverySpeedLimit(candidate);
+        return overlapsAnyLivingTarget(candidate, m_targets, overlapRule) ||
+               exceedsRediscoverySpeedLimit(candidate) ||
+               !isInsideTrackingBounds(candidate.predictedPosFrame, m_settings);
     });
 
     if (candidates.empty()) {
@@ -797,7 +903,11 @@ int GeoTracker::refindTargets() {
     return 0;
 }
 
-/// 对活跃目标逐帧匹配像斑，更新预测、有效性与存活状态
+/**
+ * @brief
+ * 将活跃目标与当前帧像斑匹配，并刷新预测、有效性与存活状态。
+
+ */
 int GeoTracker::trackTargets() {
     if (m_targets.empty() || m_fifoTarget.empty()) {
         return 1;

@@ -9,24 +9,24 @@ namespace Dss::Processing {
 
 /// 只读帧视图，通过 span 引用 FramePacket 中的图像数据
 struct FrameView {
-    uint64_t frameSeq = 0;              ///< 帧序号
-    uint32_t width = 0;                 ///< 图像宽度（像素）
-    uint32_t height = 0;                ///< 图像高度（像素）
-    std::span<const uint16_t> rawImage;         ///< 原始 16 位灰度图像视图
-    std::span<const uint16_t> rotatedImage;     ///< 旋转校正后的 16 位图像视图
-    std::span<const uint8_t> displayImage;      ///< 8 位显示用图像视图
-    std::span<const float> photometryImage;     ///< 测光用浮点图像视图
+    uint64_t frameSeq = 0;                   ///< 帧序号
+    uint32_t width = 0;                      ///< 图像宽度（像素）
+    uint32_t height = 0;                     ///< 图像高度（像素）
+    std::span<const uint16_t> rawImage;      ///< 原始 16 位灰度图像视图
+    std::span<const uint16_t> rotatedImage;  ///< 旋转校正后的 16 位图像视图
+    std::span<const uint8_t> displayImage;   ///< 8 位显示用图像视图
+    std::span<const float> photometryImage;  ///< 测光用浮点图像视图
 };
 
 /// 可写帧视图，通过 span 引用 FramePacket 中的图像数据
 struct MutableFrameView {
-    uint64_t frameSeq = 0;              ///< 帧序号
-    uint32_t width = 0;                 ///< 图像宽度（像素）
-    uint32_t height = 0;                ///< 图像高度（像素）
-    std::span<uint16_t> rawImage;         ///< 原始 16 位灰度图像视图
-    std::span<uint16_t> rotatedImage;     ///< 旋转校正后的 16 位图像视图
-    std::span<uint8_t> displayImage;      ///< 8 位显示用图像视图
-    std::span<float> photometryImage;     ///< 测光用浮点图像视图
+    uint64_t frameSeq = 0;             ///< 帧序号
+    uint32_t width = 0;                ///< 图像宽度（像素）
+    uint32_t height = 0;               ///< 图像高度（像素）
+    std::span<uint16_t> rawImage;      ///< 原始 16 位灰度图像视图
+    std::span<uint16_t> rotatedImage;  ///< 旋转校正后的 16 位图像视图
+    std::span<uint8_t> displayImage;   ///< 8 位显示用图像视图
+    std::span<float> photometryImage;  ///< 测光用浮点图像视图
 };
 
 /**

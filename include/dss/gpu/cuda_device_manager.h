@@ -64,12 +64,12 @@ public:
     }
 
 private:
-    bool m_initialized = false;                       ///< 是否已完成初始化
-    int m_deviceId = 0;                               ///< 当前使用的 CUDA 设备 ID
-    int m_ccMajor = 0;                                ///< 计算能力主版本号
-    int m_ccMinor = 0;                                ///< 计算能力次版本号
-    size_t m_totalMemory = 0;                         ///< 设备全局内存总量（字节）
-    std::string m_deviceName;                         ///< 设备名称
+    bool m_initialized = false;                        ///< 是否已完成初始化
+    int m_deviceId = 0;                                ///< 当前使用的 CUDA 设备 ID
+    int m_ccMajor = 0;                                 ///< 计算能力主版本号
+    int m_ccMinor = 0;                                 ///< 计算能力次版本号
+    size_t m_totalMemory = 0;                          ///< 设备全局内存总量（字节）
+    std::string m_deviceName;                          ///< 设备名称
     std::array<cudaStream_t, NumStreams> m_streams{};  ///< 预创建的 CUDA 流数组
 };
 
