@@ -16,18 +16,16 @@ constexpr std::size_t kMaxLeoInitialBlobCount = 2000U;
 constexpr int kLeoTrackInvalidLivingFrameCount = 5;
 
 using Dss::Tracking::aeMotion;
+using Dss::Tracking::appendMatchedFrameAndUpdatePrediction;
 using Dss::Tracking::BlobMatchOptions;
 using Dss::Tracking::BlobMatchSpace;
-using Dss::Tracking::findNearestBlob;
 using Dss::Tracking::frameMotion;
 using Dss::Tracking::framePeriodSeconds;
-using Dss::Tracking::makeInvalidTargetFrameInfo;
 using Dss::Tracking::makeTargetFrameInfo;
 using Dss::Tracking::targetAeMotionAt;
 using Dss::Tracking::targetRemainsLiving;
 using Dss::Tracking::TrackLivingRule;
 using Dss::Tracking::TrackMissPolicy;
-using Dss::Tracking::updatePredictionFromRecentFour;
 
 [[nodiscard]] bool passesLeoAssocGate(const Dss::Core::Vec2f& firstAeMotion,
                                       const Dss::Core::Vec2f& secondAeMotion,
@@ -105,14 +103,12 @@ using Dss::Tracking::updatePredictionFromRecentFour;
     return targets;
 }
 
-[[nodiscard]] auto findNearestAeBlob(const Dss::Core::FrameMeasurements& frame,
-                                     const Dss::Core::TargetInfo& target,
-                                     const Dss::Core::TrackingSettings& settings)
-    -> const Dss::Core::MeasuredBlob* {
+[[nodiscard]] auto makeLeoBlobMatchOptions(const Dss::Core::TrackingSettings& settings)
+    -> BlobMatchOptions {
     BlobMatchOptions options{};
     options.space = BlobMatchSpace::Ae;
     options.threshold = settings.thresholdAe;
-    return findNearestBlob(frame, target, settings, options);
+    return options;
 }
 
 /// 检查最近四帧 AE 运动的一致性，用于 LEO 目标验证
@@ -151,16 +147,13 @@ using Dss::Tracking::updatePredictionFromRecentFour;
                                         const Dss::Core::TrackingSettings& settings)
     -> std::vector<Dss::Core::TargetInfo> {
     std::vector<Dss::Core::TargetInfo> verifiedTargets;
+    const auto matchOptions = makeLeoBlobMatchOptions(settings);
     for (const auto& candidate : candidates) {
         if (!candidate.living) {
             continue;
         }
-        const auto* matchedBlob = findNearestAeBlob(frame, candidate, settings);
-        auto verified = candidate;
-        verified.frameInfos.push_back(matchedBlob == nullptr
-                                          ? makeInvalidTargetFrameInfo(frame, verified, settings)
-                                          : makeTargetFrameInfo(frame, *matchedBlob, settings));
-        updatePredictionFromRecentFour(verified);
+        auto verified =
+            appendMatchedFrameAndUpdatePrediction(frame, candidate, settings, matchOptions);
         verified.living = hasConsistentRecentAeMotion(verified, settings.thresholdAe);
         if (verified.living && verified.frameInfos.back().valid) {
             verifiedTargets.push_back(verified);
@@ -201,11 +194,8 @@ using Dss::Tracking::updatePredictionFromRecentFour;
         return tracked;
     }
 
-    const auto* matchedBlob = findNearestAeBlob(frame, tracked, settings);
-    tracked.frameInfos.push_back(matchedBlob == nullptr
-                                     ? makeInvalidTargetFrameInfo(frame, tracked, settings)
-                                     : makeTargetFrameInfo(frame, *matchedBlob, settings));
-    updatePredictionFromRecentFour(tracked);
+    tracked = appendMatchedFrameAndUpdatePrediction(frame, tracked, settings,
+                                                    makeLeoBlobMatchOptions(settings));
     tracked.living = tracked.living && targetRemainsLiving(tracked, makeLeoTrackLivingRule());
     return tracked;
 }

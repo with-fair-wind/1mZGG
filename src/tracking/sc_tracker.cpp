@@ -18,20 +18,18 @@ constexpr std::size_t kScAssocFrameCount = 3U;
 constexpr float kScFovCenterHalfExtent = 128.0F;
 
 using Dss::Tracking::aeMotion;
+using Dss::Tracking::appendMatchedFrameAndUpdatePrediction;
 using Dss::Tracking::BlobMatchOptions;
 using Dss::Tracking::BlobMatchSpace;
 using Dss::Tracking::deduplicateInitialCandidatesByCentroid;
-using Dss::Tracking::findNearestBlob;
 using Dss::Tracking::frameMotion;
 using Dss::Tracking::framePeriodSeconds;
 using Dss::Tracking::InitialMeasurementDedupRule;
 using Dss::Tracking::isNearFovCenter;
-using Dss::Tracking::makeInvalidTargetFrameInfo;
 using Dss::Tracking::makeTargetFrameInfo;
 using Dss::Tracking::targetRemainsLiving;
 using Dss::Tracking::TrackLivingRule;
 using Dss::Tracking::TrackMissPolicy;
-using Dss::Tracking::updatePredictionFromRecentFour;
 
 [[nodiscard]] bool passesScAssocGate(const Dss::Core::Vec2f& firstFrameMotion,
                                      const Dss::Core::Vec2f& secondFrameMotion,
@@ -117,16 +115,14 @@ using Dss::Tracking::updatePredictionFromRecentFour;
     return compressSimilarInitialCandidates(std::move(targets));
 }
 
-[[nodiscard]] auto findNearestFrameBlob(const Dss::Core::FrameMeasurements& frame,
-                                        const Dss::Core::TargetInfo& target,
-                                        const Dss::Core::TrackingSettings& settings,
-                                        bool requireFovCenter) -> const Dss::Core::MeasuredBlob* {
+[[nodiscard]] auto makeScFrameBlobMatchOptions(const Dss::Core::TrackingSettings& settings,
+                                               bool requireFovCenter) -> BlobMatchOptions {
     BlobMatchOptions options{};
     options.space = BlobMatchSpace::Frame;
     options.threshold = settings.thresholdMeo;
     options.requireFovCenter = requireFovCenter;
     options.fovCenterHalfExtent = kScFovCenterHalfExtent;
-    return findNearestBlob(frame, target, settings, options);
+    return options;
 }
 
 [[nodiscard]] auto makeScVerifyLivingRule(const Dss::Core::TrackingSettings& settings)
@@ -153,16 +149,13 @@ using Dss::Tracking::updatePredictionFromRecentFour;
                                         const Dss::Core::TrackingSettings& settings)
     -> std::vector<Dss::Core::TargetInfo> {
     std::vector<Dss::Core::TargetInfo> verifiedTargets;
+    const auto matchOptions = makeScFrameBlobMatchOptions(settings, false);
     for (const auto& candidate : candidates) {
         if (!candidate.living) {
             continue;
         }
-        const auto* matchedBlob = findNearestFrameBlob(frame, candidate, settings, false);
-        auto verified = candidate;
-        verified.frameInfos.push_back(matchedBlob == nullptr
-                                          ? makeInvalidTargetFrameInfo(frame, verified, settings)
-                                          : makeTargetFrameInfo(frame, *matchedBlob, settings));
-        updatePredictionFromRecentFour(verified);
+        auto verified =
+            appendMatchedFrameAndUpdatePrediction(frame, candidate, settings, matchOptions);
         verified.living = targetRemainsLiving(verified, makeScVerifyLivingRule(settings));
         if (verified.living) {
             verifiedTargets.push_back(verified);
@@ -204,11 +197,8 @@ using Dss::Tracking::updatePredictionFromRecentFour;
         return tracked;
     }
 
-    const auto* matchedBlob = findNearestFrameBlob(frame, tracked, settings, true);
-    tracked.frameInfos.push_back(matchedBlob == nullptr
-                                     ? makeInvalidTargetFrameInfo(frame, tracked, settings)
-                                     : makeTargetFrameInfo(frame, *matchedBlob, settings));
-    updatePredictionFromRecentFour(tracked);
+    tracked = appendMatchedFrameAndUpdatePrediction(frame, tracked, settings,
+                                                    makeScFrameBlobMatchOptions(settings, true));
     tracked.living = targetRemainsLiving(tracked, makeScTrackLivingRule(settings));
     return tracked;
 }

@@ -85,6 +85,70 @@ TEST(TrackingPredictionUtils, BuildsValidAndInvalidFrameInfoFromMeasurements) {
     expectVecNear(invalidInfo.measuredBlob.posAe, Dss::Core::Vec2f{3.0F, 4.0F});
 }
 
+TEST(TrackingPredictionUtils, FindsValidatedBlobForTargetById) {
+    const std::vector<Dss::Core::MeasuredBlob> validatedBlobs{
+        makeBlob("other", 10.0F, 20.0F, 1.0F, 2.0F),
+        makeBlob("target-1", 30.0F, 40.0F, 3.0F, 4.0F),
+    };
+
+    const auto* matched = Dss::Tracking::findValidatedBlobForTarget(validatedBlobs, "target-1");
+
+    ASSERT_NE(matched, nullptr);
+    EXPECT_EQ(matched->id, "target-1");
+    expectVecNear(matched->centroid, Dss::Core::Vec2f{30.0F, 40.0F});
+    EXPECT_EQ(Dss::Tracking::findValidatedBlobForTarget(validatedBlobs, "missing"), nullptr);
+}
+
+TEST(TrackingPredictionUtils, BuildsInvalidFallbackBlobFromValidatedOrPrediction) {
+    Dss::Core::TargetInfo target{};
+    target.targetId = "target-1";
+    target.predictedPosFrame = Dss::Core::Vec2f{22.0F, 16.0F};
+    target.predictedPosAe = Dss::Core::Vec2f{1.6F, 2.9F};
+    auto frame = makeFrame(4U, 1.0F, {});
+    frame.validatedTargetBlobs.push_back(makeBlob("target-1", 30.0F, 40.0F, 3.0F, 4.0F));
+
+    const auto validatedFallback = Dss::Tracking::makeInvalidFallbackBlob(frame, target);
+
+    EXPECT_EQ(validatedFallback.id, "target-1");
+    expectVecNear(validatedFallback.centroid, Dss::Core::Vec2f{30.0F, 40.0F});
+    expectVecNear(validatedFallback.posAe, Dss::Core::Vec2f{3.0F, 4.0F});
+
+    frame.validatedTargetBlobs.clear();
+    Dss::Tracking::InvalidFallbackBlobOptions options{};
+    options.halfExtent = 3.0F;
+    options.copyPredictedFrameToRaDec = true;
+
+    const auto predictedFallback = Dss::Tracking::makeInvalidFallbackBlob(frame, target, options);
+
+    EXPECT_EQ(predictedFallback.id, "target-1");
+    expectVecNear(predictedFallback.centroid, Dss::Core::Vec2f{22.0F, 16.0F});
+    EXPECT_FLOAT_EQ(predictedFallback.minX, 19.0F);
+    EXPECT_FLOAT_EQ(predictedFallback.maxX, 25.0F);
+    EXPECT_FLOAT_EQ(predictedFallback.minY, 13.0F);
+    EXPECT_FLOAT_EQ(predictedFallback.maxY, 19.0F);
+    EXPECT_FLOAT_EQ(predictedFallback.area, 0.0F);
+    EXPECT_FLOAT_EQ(predictedFallback.dn, 0.0F);
+    EXPECT_DOUBLE_EQ(predictedFallback.ra, 22.0);
+    EXPECT_DOUBLE_EQ(predictedFallback.dec, 16.0);
+}
+
+TEST(TrackingPredictionUtils, UsesValidatedBlobForInvalidTargetFrameInfo) {
+    const auto settings = makeSettings();
+    Dss::Core::TargetInfo target{};
+    target.targetId = "target-1";
+    target.predictedPosFrame = Dss::Core::Vec2f{22.0F, 16.0F};
+    target.predictedPosAe = Dss::Core::Vec2f{1.6F, 2.9F};
+    auto frame = makeFrame(4U, 1.0F, {});
+    frame.validatedTargetBlobs.push_back(makeBlob("target-1", 30.0F, 40.0F, 3.0F, 4.0F));
+
+    const auto invalidInfo = Dss::Tracking::makeInvalidTargetFrameInfo(frame, target, settings);
+
+    EXPECT_FALSE(invalidInfo.valid);
+    EXPECT_EQ(invalidInfo.measuredBlob.id, "target-1");
+    expectVecNear(invalidInfo.measuredBlob.centroid, Dss::Core::Vec2f{30.0F, 40.0F});
+    expectVecNear(invalidInfo.measuredBlob.posAe, Dss::Core::Vec2f{3.0F, 4.0F});
+}
+
 TEST(TrackingPredictionUtils, UpdatesPredictionFromRecentFourWithMedianMotion) {
     const auto settings = makeSettings();
     Dss::Core::TargetInfo target{};
@@ -143,4 +207,58 @@ TEST(TrackingPredictionUtils, FindsNearestBlobInFrameOrAeSpaceWithOptionalFovGat
     const auto* aeMatch = Dss::Tracking::findNearestBlob(frame, target, settings, aeOptions);
     ASSERT_NE(aeMatch, nullptr);
     EXPECT_EQ(aeMatch->id, "outside-near");
+}
+
+TEST(TrackingPredictionUtils, AppendsMatchedFrameAndUpdatesPrediction) {
+    const auto settings = makeSettings();
+    Dss::Core::TargetInfo target{};
+    target.targetId = "target-1";
+    target.validity = 1.0F;
+    target.predictedPosFrame = Dss::Core::Vec2f{22.0F, 16.0F};
+    target.predictedPosAe = Dss::Core::Vec2f{1.6F, 2.9F};
+    target.frameInfos.push_back(Dss::Tracking::makeTargetFrameInfo(
+        makeFrame(1U, 1.0F, {}), makeBlob("a", 10.0F, 10.0F, 1.0F, 2.0F), settings));
+    target.frameInfos.push_back(Dss::Tracking::makeTargetFrameInfo(
+        makeFrame(2U, 1.0F, {}), makeBlob("b", 14.0F, 12.0F, 1.2F, 2.3F), settings));
+    target.frameInfos.push_back(Dss::Tracking::makeTargetFrameInfo(
+        makeFrame(3U, 1.0F, {}), makeBlob("c", 18.0F, 14.0F, 1.4F, 2.6F), settings));
+
+    const auto frame = makeFrame(4U, 1.0F, {makeBlob("match", 22.0F, 16.0F, 1.6F, 2.9F)});
+    Dss::Tracking::BlobMatchOptions options{};
+    options.space = Dss::Tracking::BlobMatchSpace::Frame;
+    options.threshold = 1.0F;
+
+    const auto updated =
+        Dss::Tracking::appendMatchedFrameAndUpdatePrediction(frame, target, settings, options);
+
+    ASSERT_EQ(updated.frameInfos.size(), 4U);
+    EXPECT_TRUE(updated.frameInfos.back().valid);
+    EXPECT_EQ(updated.frameInfos.back().measuredBlob.id, "match");
+    expectVecNear(updated.predictedSpdFrame, Dss::Core::Vec2f{4.0F, 2.0F});
+    expectVecNear(updated.predictedPosFrame, Dss::Core::Vec2f{26.0F, 18.0F});
+    expectVecNear(updated.predictedSpdAe, Dss::Core::Vec2f{0.2F, 0.3F});
+    expectVecNear(updated.predictedPosAe, Dss::Core::Vec2f{1.8F, 3.2F});
+}
+
+TEST(TrackingPredictionUtils, AppendsInvalidFrameWhenNoBlobMatches) {
+    const auto settings = makeSettings();
+    Dss::Core::TargetInfo target{};
+    target.targetId = "target-1";
+    target.predictedPosFrame = Dss::Core::Vec2f{22.0F, 16.0F};
+    target.predictedPosAe = Dss::Core::Vec2f{1.6F, 2.9F};
+
+    const auto frame = makeFrame(4U, 1.0F, {});
+    Dss::Tracking::BlobMatchOptions options{};
+    options.space = Dss::Tracking::BlobMatchSpace::Frame;
+    options.threshold = 1.0F;
+
+    const auto updated =
+        Dss::Tracking::appendMatchedFrameAndUpdatePrediction(frame, target, settings, options);
+
+    ASSERT_EQ(updated.frameInfos.size(), 1U);
+    const auto& invalidFrame = updated.frameInfos.back();
+    EXPECT_FALSE(invalidFrame.valid);
+    EXPECT_EQ(invalidFrame.measuredBlob.id, "target-1");
+    expectVecNear(invalidFrame.measuredBlob.centroid, Dss::Core::Vec2f{22.0F, 16.0F});
+    expectVecNear(invalidFrame.measuredBlob.posAe, Dss::Core::Vec2f{1.6F, 2.9F});
 }

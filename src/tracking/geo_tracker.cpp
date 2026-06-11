@@ -12,6 +12,7 @@
 #include "dss/core/constants.h"
 #include "dss/tracking/candidate_utils.h"
 #include "dss/tracking/lifecycle_utils.h"
+#include "dss/tracking/prediction_utils.h"
 
 namespace Dss::Tracking {
 
@@ -47,7 +48,9 @@ using Dss::Tracking::CandidateMeasurementSpace;
 using Dss::Tracking::countRecentInvalidFrames;
 using Dss::Tracking::deduplicateInitialCandidates;
 using Dss::Tracking::InitialMeasurementDedupRule;
+using Dss::Tracking::InvalidFallbackBlobOptions;
 using Dss::Tracking::latestFramesAreAllInvalid;
+using Dss::Tracking::makeInvalidFallbackBlob;
 using Dss::Tracking::overlapsAnyLivingTarget;
 using Dss::Tracking::RecentFrameWindowMode;
 using Dss::Tracking::RecentMeasurementOverlapRule;
@@ -669,38 +672,6 @@ void updatePredictionFromHistory(Dss::Core::TargetInfo& target, float frameFrequ
     return bestBlob;
 }
 
-[[nodiscard]] auto findValidatedBlobForTarget(
-    const std::vector<Dss::Core::MeasuredBlob>& validatedBlobs, const std::string& targetId)
-    -> std::optional<Dss::Core::MeasuredBlob> {
-    const auto match = std::ranges::find_if(
-        validatedBlobs, [&](const Dss::Core::MeasuredBlob& blob) { return blob.id == targetId; });
-    if (match == validatedBlobs.end()) {
-        return std::nullopt;
-    }
-    return *match;
-}
-
-[[nodiscard]] auto makeInvalidFrameBlob(const Dss::Core::FrameMeasurements& frame,
-                                        const Dss::Core::TargetInfo& target,
-                                        const Dss::Core::TrackingSettings& settings)
-    -> Dss::Core::MeasuredBlob {
-    if (const auto validatedBlob =
-            findValidatedBlobForTarget(frame.validatedTargetBlobs, target.targetId);
-        validatedBlob.has_value()) {
-        return *validatedBlob;
-    }
-
-    Dss::Core::MeasuredBlob predictedBlob{};
-    predictedBlob.id = target.targetId;
-    predictedBlob.centroid = target.predictedPosFrame;
-    predictedBlob.posAe = target.predictedPosAe;
-    if (geoTrackingSpace(settings) == GeoTrackingSpace::RaDec) {
-        predictedBlob.ra = target.predictedPosFrame.x;
-        predictedBlob.dec = target.predictedPosFrame.y;
-    }
-    return predictedBlob;
-}
-
 [[nodiscard]] bool isInsideImageBounds(const Dss::Core::Vec2f& position,
                                        const Dss::Core::OpticParams& opticParams) {
     return position.x > 0.0F && position.x < static_cast<float>(opticParams.imageWidth) &&
@@ -923,8 +894,11 @@ int GeoTracker::trackTargets() {
         const auto matchedBlob =
             findNearestTrackedBlob(frame.targetBlobs, target, m_settings, usedBlobs);
         if (!matchedBlob.has_value()) {
-            auto info =
-                makeFrameInfo(frame, makeInvalidFrameBlob(frame, target, m_settings), m_settings);
+            InvalidFallbackBlobOptions fallbackOptions{};
+            fallbackOptions.copyPredictedFrameToRaDec =
+                geoTrackingSpace(m_settings) == GeoTrackingSpace::RaDec;
+            auto info = makeFrameInfo(
+                frame, makeInvalidFallbackBlob(frame, target, fallbackOptions), m_settings);
             info.valid = false;
             target.frameInfos.push_back(info);
         } else {

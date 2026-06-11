@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstddef>
+#include <span>
+#include <string_view>
 
 #include "dss/core/types.h"
 
@@ -20,8 +22,34 @@ struct BlobMatchOptions {
     float fovCenterHalfExtent = 128.0F;            ///< 视场中心区域的半宽（像素）
 };
 
+/// 未匹配帧 fallback 像斑构造选项
+struct InvalidFallbackBlobOptions {
+    float halfExtent = 5.0F;                 ///< 预测占位像斑半宽（像素）
+    bool copyPredictedFrameToRaDec = false;  ///< 是否把预测跟踪坐标同步写入赤经/赤纬字段
+};
+
 /// 计算三个浮点数的中位数
 [[nodiscard]] auto median3(float first, float second, float third) -> float;
+
+/// 按目标编号查找外部校验通过的目标像斑。
+///
+/// @param validatedBlobs 外部校验目标像斑列表。
+/// @param targetId 当前目标编号。
+/// @return 匹配到的像斑指针；未找到时返回 nullptr。
+[[nodiscard]] auto findValidatedBlobForTarget(std::span<const Core::MeasuredBlob> validatedBlobs,
+                                              std::string_view targetId)
+    -> const Core::MeasuredBlob*;
+
+/// 构造未匹配帧使用的 fallback 像斑。
+///
+/// @param frame 当前帧测量数据。
+/// @param target 当前目标状态。
+/// @param options fallback 构造选项。
+/// @return 优先返回同 ID 的外部校验像斑，否则返回预测占位像斑。
+[[nodiscard]] auto makeInvalidFallbackBlob(const Core::FrameMeasurements& frame,
+                                           const Core::TargetInfo& target,
+                                           const InvalidFallbackBlobOptions& options = {})
+    -> Core::MeasuredBlob;
 
 /**
  * @brief 由帧测量与像斑构造有效的目标帧信息
@@ -102,6 +130,17 @@ struct BlobMatchOptions {
                                    const Core::TargetInfo& target,
                                    const Core::TrackingSettings& settings,
                                    const BlobMatchOptions& options) -> const Core::MeasuredBlob*;
+
+/// 为目标追加当前帧匹配结果并刷新最近四帧预测。
+///
+/// `options` 决定匹配坐标空间和门限；未匹配时使用 `invalidHalfExtent`
+/// 构造预测占位像斑。本函数只追加帧和更新预测，不修改 living 语义。
+[[nodiscard]] auto appendMatchedFrameAndUpdatePrediction(const Core::FrameMeasurements& frame,
+                                                         const Core::TargetInfo& target,
+                                                         const Core::TrackingSettings& settings,
+                                                         const BlobMatchOptions& options,
+                                                         float invalidHalfExtent = 5.0F)
+    -> Core::TargetInfo;
 
 /// 根据最近四帧运动的中位数更新目标预测位置与速度
 void updatePredictionFromRecentFour(Core::TargetInfo& target);

@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <memory>
 
 namespace {
 
@@ -28,6 +29,38 @@ auto median3(float first, float second, float third) -> float {
     return first + second + third - minValue - maxValue;
 }
 
+auto findValidatedBlobForTarget(std::span<const Core::MeasuredBlob> validatedBlobs,
+                                std::string_view targetId) -> const Core::MeasuredBlob* {
+    const auto match = std::ranges::find_if(
+        validatedBlobs, [targetId](const Core::MeasuredBlob& blob) { return blob.id == targetId; });
+    return match == validatedBlobs.end() ? nullptr : std::addressof(*match);
+}
+
+auto makeInvalidFallbackBlob(const Core::FrameMeasurements& frame, const Core::TargetInfo& target,
+                             const InvalidFallbackBlobOptions& options) -> Core::MeasuredBlob {
+    if (const auto* validatedBlob =
+            findValidatedBlobForTarget(frame.validatedTargetBlobs, target.targetId);
+        validatedBlob != nullptr) {
+        return *validatedBlob;
+    }
+
+    Core::MeasuredBlob predictedBlob{};
+    predictedBlob.id = target.targetId;
+    predictedBlob.centroid = target.predictedPosFrame;
+    predictedBlob.maxX = predictedBlob.centroid.x + options.halfExtent;
+    predictedBlob.minX = predictedBlob.centroid.x - options.halfExtent;
+    predictedBlob.maxY = predictedBlob.centroid.y + options.halfExtent;
+    predictedBlob.minY = predictedBlob.centroid.y - options.halfExtent;
+    predictedBlob.area = 0.0F;
+    predictedBlob.dn = 0.0F;
+    predictedBlob.posAe = target.predictedPosAe;
+    if (options.copyPredictedFrameToRaDec) {
+        predictedBlob.ra = target.predictedPosFrame.x;
+        predictedBlob.dec = target.predictedPosFrame.y;
+    }
+    return predictedBlob;
+}
+
 auto makeTargetFrameInfo(const Core::FrameMeasurements& frame, const Core::MeasuredBlob& blob,
                          const Core::TrackingSettings& settings) -> Core::TargetFrameInfo {
     Core::TargetFrameInfo info{};
@@ -50,18 +83,11 @@ auto makeInvalidTargetFrameInfo(const Core::FrameMeasurements& frame,
                                 const Core::TargetInfo& target,
                                 const Core::TrackingSettings& settings, float halfExtent)
     -> Core::TargetFrameInfo {
-    Core::MeasuredBlob predictedBlob{};
-    predictedBlob.id = target.targetId;
-    predictedBlob.centroid = target.predictedPosFrame;
-    predictedBlob.maxX = predictedBlob.centroid.x + halfExtent;
-    predictedBlob.minX = predictedBlob.centroid.x - halfExtent;
-    predictedBlob.maxY = predictedBlob.centroid.y + halfExtent;
-    predictedBlob.minY = predictedBlob.centroid.y - halfExtent;
-    predictedBlob.area = 0.0F;
-    predictedBlob.dn = 0.0F;
-    predictedBlob.posAe = target.predictedPosAe;
+    InvalidFallbackBlobOptions options{};
+    options.halfExtent = halfExtent;
+    const auto fallbackBlob = makeInvalidFallbackBlob(frame, target, options);
 
-    auto info = makeTargetFrameInfo(frame, predictedBlob, settings);
+    auto info = makeTargetFrameInfo(frame, fallbackBlob, settings);
     info.valid = false;
     return info;
 }
@@ -124,6 +150,21 @@ auto findNearestBlob(const Core::FrameMeasurements& frame, const Core::TargetInf
         }
     }
     return nearestBlob;
+}
+
+auto appendMatchedFrameAndUpdatePrediction(const Core::FrameMeasurements& frame,
+                                           const Core::TargetInfo& target,
+                                           const Core::TrackingSettings& settings,
+                                           const BlobMatchOptions& options, float invalidHalfExtent)
+    -> Core::TargetInfo {
+    auto updated = target;
+    const auto* matchedBlob = findNearestBlob(frame, updated, settings, options);
+    updated.frameInfos.push_back(
+        matchedBlob == nullptr
+            ? makeInvalidTargetFrameInfo(frame, updated, settings, invalidHalfExtent)
+            : makeTargetFrameInfo(frame, *matchedBlob, settings));
+    updatePredictionFromRecentFour(updated);
+    return updated;
 }
 
 /// 取最近三帧像面/AE 运动的中位数更新预测，并滚动更新有效性
