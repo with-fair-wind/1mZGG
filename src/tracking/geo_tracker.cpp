@@ -44,13 +44,31 @@ enum class GeoTrackingSpace {
     RaDec,  ///< 使用赤经/赤纬坐标。
 };
 
+/// GEO 跟踪阶段使用的动态门限参数。
+struct GeoTrackingGateOptions {
+    GeoTrackingSpace space = GeoTrackingSpace::Frame;  ///< 跟踪匹配使用的坐标空间。
+    CandidateMeasurementSpace measurementSpace =
+        CandidateMeasurementSpace::Centroid;  ///< 候选测量位置使用的坐标空间。
+    MeasurementReuseRule reuseRule{};         ///< 当前帧测量复用判断规则。
+    float searchRadius = 0.0F;                ///< 像面预测位置搜索半径（像素）。
+    float frameSpeedErrorThreshold = 0.0F;    ///< 像面速度误差门限（像素/帧）。
+    float aePositionThreshold = 0.0F;         ///< AE 预测位置门限。
+    float raDecTrackingRadius = 0.0F;         ///< RA/Dec 预测位置搜索半径（弧度）。
+    float raSpeedThreshold = 0.0F;            ///< RA 方向速度误差门限（弧度/帧）。
+    float decSpeedThreshold = 0.0F;           ///< Dec 方向速度误差门限（弧度/帧）。
+};
+
 using Dss::Tracking::CandidateMeasurementSpace;
 using Dss::Tracking::countRecentInvalidFrames;
 using Dss::Tracking::deduplicateInitialCandidates;
 using Dss::Tracking::InitialMeasurementDedupRule;
 using Dss::Tracking::InvalidFallbackBlobOptions;
+using Dss::Tracking::isMeasurementAlreadyUsed;
 using Dss::Tracking::latestFramesAreAllInvalid;
 using Dss::Tracking::makeInvalidFallbackBlob;
+using Dss::Tracking::measurementMotion;
+using Dss::Tracking::measurementPosition;
+using Dss::Tracking::MeasurementReuseRule;
 using Dss::Tracking::overlapsAnyLivingTarget;
 using Dss::Tracking::RecentFrameWindowMode;
 using Dss::Tracking::RecentMeasurementOverlapRule;
@@ -221,37 +239,6 @@ using Dss::Tracking::updateValidityWithLatestFrame;
     return blob.alpha != 0.0 || blob.sigma != 0.0 || blob.ra != 0.0 || blob.dec != 0.0;
 }
 
-[[nodiscard]] bool hasRaDecCoordinates(const Dss::Core::MeasuredBlob& blob) {
-    return blob.ra != 0.0 || blob.dec != 0.0;
-}
-
-[[nodiscard]] auto raDecPosition(const Dss::Core::MeasuredBlob& blob) -> Dss::Core::Vec2f {
-    return Dss::Core::Vec2f{static_cast<float>(blob.ra), static_cast<float>(blob.dec)};
-}
-
-[[nodiscard]] auto blobPositionInSpace(const Dss::Core::MeasuredBlob& blob, GeoTrackingSpace space)
-    -> std::optional<Dss::Core::Vec2f> {
-    if (space == GeoTrackingSpace::RaDec) {
-        if (!hasRaDecCoordinates(blob)) {
-            return std::nullopt;
-        }
-        return raDecPosition(blob);
-    }
-    return blob.centroid;
-}
-
-[[nodiscard]] auto motionBetween(const Dss::Core::MeasuredBlob& current,
-                                 const Dss::Core::MeasuredBlob& previous, GeoTrackingSpace space)
-    -> std::optional<Dss::Core::Vec2f> {
-    const auto currentPosition = blobPositionInSpace(current, space);
-    const auto previousPosition = blobPositionInSpace(previous, space);
-    if (!currentPosition.has_value() || !previousPosition.has_value()) {
-        return std::nullopt;
-    }
-    return Dss::Core::Vec2f{currentPosition->x - previousPosition->x,
-                            currentPosition->y - previousPosition->y};
-}
-
 [[nodiscard]] bool isSameEquatorialPoint(const Dss::Core::MeasuredBlob& first,
                                          const Dss::Core::MeasuredBlob& second) {
     if (!hasEquatorialCoordinates(first) || !hasEquatorialCoordinates(second)) {
@@ -307,8 +294,9 @@ void updatePredictionFromHistory(Dss::Core::TargetInfo& target, float frameFrequ
     const auto period = frameFrequency > 0.0F ? 1.0F / frameFrequency : 1.0F;
     const auto& latest = target.frameInfos.back().measuredBlob;
     const auto space = geoTrackingSpace(settings);
-    const auto positionOf = [space](const Dss::Core::MeasuredBlob& blob) {
-        return space == GeoTrackingSpace::RaDec ? raDecPosition(blob) : blob.centroid;
+    const auto measurementSpace = candidateMeasurementSpace(space);
+    const auto positionOf = [measurementSpace](const Dss::Core::MeasuredBlob& blob) {
+        return measurementPosition(blob, measurementSpace).value_or(Dss::Core::Vec2f{});
     };
 
     if (target.frameInfos.size() < 2) {
@@ -497,19 +485,20 @@ void updatePredictionFromHistory(Dss::Core::TargetInfo& target, float frameFrequ
     }
 
     const auto space = geoTrackingSpace(settings);
+    const auto measurementSpace = candidateMeasurementSpace(space);
     const auto frameRadius = associationRadius(settings, starMatchCount, frame3.targetBlobs.size());
     std::vector<Dss::Core::TargetInfo> associatedTargets;
 
     for (const auto& blob0 : frame0.targetBlobs) {
         for (const auto& blob1 : frame1.targetBlobs) {
-            const auto motion10 = motionBetween(blob1, blob0, space);
+            const auto motion10 = measurementMotion(blob1, blob0, measurementSpace);
             if (!motion10.has_value() || !matchesFirstAssociationMotion(*motion10, space, starSpeed,
                                                                         frameRadius, settings)) {
                 continue;
             }
 
             for (const auto& blob2 : frame2.targetBlobs) {
-                const auto motion21 = motionBetween(blob2, blob1, space);
+                const auto motion21 = measurementMotion(blob2, blob1, measurementSpace);
                 if (!motion21.has_value() ||
                     !matchesSecondAssociationMotion(*motion21, *motion10, space, starSpeed,
                                                     frameRadius, settings)) {
@@ -517,7 +506,7 @@ void updatePredictionFromHistory(Dss::Core::TargetInfo& target, float frameFrequ
                 }
 
                 for (const auto& blob3 : frame3.targetBlobs) {
-                    const auto motion32 = motionBetween(blob3, blob2, space);
+                    const auto motion32 = measurementMotion(blob3, blob2, measurementSpace);
                     if (!motion32.has_value() ||
                         !matchesThirdAssociationMotion(*motion32, *motion21, *motion10, space,
                                                        starSpeed, frameRadius, settings)) {
@@ -538,27 +527,12 @@ void updatePredictionFromHistory(Dss::Core::TargetInfo& target, float frameFrequ
 
     InitialMeasurementDedupRule dedupRule{};
     dedupRule.frameCount = 3U;
-    return deduplicateInitialCandidates(std::move(associatedTargets), dedupRule,
-                                        candidateMeasurementSpace(space));
+    return deduplicateInitialCandidates(std::move(associatedTargets), dedupRule, measurementSpace);
 }
 
 [[nodiscard]] bool exceedsRediscoverySpeedLimit(const Dss::Core::TargetInfo& target) {
     return std::abs(target.predictedSpdFrame.x) > kMaxGeoRediscoveryFrameSpeed ||
            std::abs(target.predictedSpdFrame.y) > kMaxGeoRediscoveryFrameSpeed;
-}
-
-[[nodiscard]] bool isAlreadyUsed(const Dss::Core::MeasuredBlob& candidate,
-                                 const std::vector<Dss::Core::MeasuredBlob>& usedBlobs,
-                                 GeoTrackingSpace space) {
-    return std::any_of(usedBlobs.begin(), usedBlobs.end(),
-                       [&](const Dss::Core::MeasuredBlob& used) {
-                           if (space == GeoTrackingSpace::RaDec && hasRaDecCoordinates(candidate) &&
-                               hasRaDecCoordinates(used)) {
-                               return candidate.ra == used.ra || candidate.dec == used.dec;
-                           }
-                           return candidate.centroid.x == used.centroid.x &&
-                                  candidate.centroid.y == used.centroid.y;
-                       });
 }
 
 [[nodiscard]] auto trackingSearchRadius(float baseRadius, int recentInvalidCount) -> float {
@@ -569,6 +543,26 @@ void updatePredictionFromHistory(Dss::Core::TargetInfo& target, float frameFrequ
 
 [[nodiscard]] auto trackingSpeedErrorThreshold(int recentInvalidCount) -> float {
     return kGeoTrackingBaseSpeedErrorThreshold + static_cast<float>(recentInvalidCount);
+}
+
+[[nodiscard]] auto makeTrackingGateOptions(const Dss::Core::TrackingSettings& settings,
+                                           int recentInvalidCount) -> GeoTrackingGateOptions {
+    const auto space = geoTrackingSpace(settings);
+    const auto measurementSpace = candidateMeasurementSpace(space);
+    MeasurementReuseRule reuseRule{};
+    reuseRule.space = measurementSpace;
+    reuseRule.matchAnyRaDecAxis = space == GeoTrackingSpace::RaDec;
+    return GeoTrackingGateOptions{
+        .space = space,
+        .measurementSpace = measurementSpace,
+        .reuseRule = reuseRule,
+        .searchRadius = trackingSearchRadius(settings.searchRadius, recentInvalidCount),
+        .frameSpeedErrorThreshold = trackingSpeedErrorThreshold(recentInvalidCount),
+        .aePositionThreshold = settings.thresholdAe,
+        .raDecTrackingRadius = arcsecToRad(kGeoRaDecTrackingRadiusArcsec),
+        .raSpeedThreshold = arcsecToRad(settings.geoRaSpeedThresholdArcsec),
+        .decSpeedThreshold = arcsecToRad(settings.geoDecSpeedThresholdArcsec),
+    };
 }
 
 [[nodiscard]] bool matchesAePositionGate(const Dss::Core::MeasuredBlob& candidate,
@@ -583,8 +577,8 @@ void updatePredictionFromHistory(Dss::Core::TargetInfo& target, float frameFrequ
 }
 
 [[nodiscard]] bool matchesFrameTrackingGate(const Dss::Core::MeasuredBlob& candidate,
-                                            const Dss::Core::TargetInfo& target, float searchRadius,
-                                            float speedErrorThreshold, float aePositionThreshold) {
+                                            const Dss::Core::TargetInfo& target,
+                                            const GeoTrackingGateOptions& options) {
     if (target.frameInfos.empty()) {
         return false;
     }
@@ -595,36 +589,37 @@ void updatePredictionFromHistory(Dss::Core::TargetInfo& target, float frameFrequ
     const auto& latestBlob = target.frameInfos.back().measuredBlob;
     const auto measuredFrameMotion = Dss::Core::Vec2f{candidate.centroid.x - latestBlob.centroid.x,
                                                       candidate.centroid.y - latestBlob.centroid.y};
-    return std::abs(distanceFromPrediction.x) <= searchRadius &&
-           std::abs(distanceFromPrediction.y) <= searchRadius &&
-           std::abs(measuredFrameMotion.x - target.predictedSpdFrame.x) < speedErrorThreshold &&
-           std::abs(measuredFrameMotion.y - target.predictedSpdFrame.y) < speedErrorThreshold &&
-           matchesAePositionGate(candidate, target, aePositionThreshold);
+    return std::abs(distanceFromPrediction.x) <= options.searchRadius &&
+           std::abs(distanceFromPrediction.y) <= options.searchRadius &&
+           std::abs(measuredFrameMotion.x - target.predictedSpdFrame.x) <
+               options.frameSpeedErrorThreshold &&
+           std::abs(measuredFrameMotion.y - target.predictedSpdFrame.y) <
+               options.frameSpeedErrorThreshold &&
+           matchesAePositionGate(candidate, target, options.aePositionThreshold);
 }
 
 [[nodiscard]] bool matchesRaDecTrackingGate(const Dss::Core::MeasuredBlob& candidate,
                                             const Dss::Core::TargetInfo& target,
-                                            const Dss::Core::TrackingSettings& settings) {
-    if (target.frameInfos.empty() || !hasRaDecCoordinates(candidate)) {
+                                            const GeoTrackingGateOptions& options) {
+    if (target.frameInfos.empty()) {
         return false;
     }
 
     const auto& latestBlob = target.frameInfos.back().measuredBlob;
-    if (!hasRaDecCoordinates(latestBlob)) {
+    const auto candidatePosition = measurementPosition(candidate, CandidateMeasurementSpace::RaDec);
+    const auto latestPosition = measurementPosition(latestBlob, CandidateMeasurementSpace::RaDec);
+    if (!candidatePosition.has_value() || !latestPosition.has_value()) {
         return false;
     }
 
-    const auto candidatePosition = raDecPosition(candidate);
-    const auto latestPosition = raDecPosition(latestBlob);
-    const auto measuredMotion = Dss::Core::Vec2f{candidatePosition.x - latestPosition.x,
-                                                 candidatePosition.y - latestPosition.y};
-    const auto radius = arcsecToRad(kGeoRaDecTrackingRadiusArcsec);
-    const auto raSpeedThreshold = arcsecToRad(settings.geoRaSpeedThresholdArcsec);
-    const auto decSpeedThreshold = arcsecToRad(settings.geoDecSpeedThresholdArcsec);
-    return std::abs(target.predictedPosFrame.x - candidatePosition.x) <= radius &&
-           std::abs(target.predictedPosFrame.y - candidatePosition.y) <= radius &&
-           std::abs(measuredMotion.x - target.predictedSpdFrame.x) < raSpeedThreshold &&
-           std::abs(measuredMotion.y - target.predictedSpdFrame.y) < decSpeedThreshold;
+    const auto measuredMotion = Dss::Core::Vec2f{candidatePosition->x - latestPosition->x,
+                                                 candidatePosition->y - latestPosition->y};
+    return std::abs(target.predictedPosFrame.x - candidatePosition->x) <=
+               options.raDecTrackingRadius &&
+           std::abs(target.predictedPosFrame.y - candidatePosition->y) <=
+               options.raDecTrackingRadius &&
+           std::abs(measuredMotion.x - target.predictedSpdFrame.x) < options.raSpeedThreshold &&
+           std::abs(measuredMotion.y - target.predictedSpdFrame.y) < options.decSpeedThreshold;
 }
 
 /**
@@ -641,28 +636,26 @@ void updatePredictionFromHistory(Dss::Core::TargetInfo& target, float frameFrequ
     -> std::optional<Dss::Core::MeasuredBlob> {
     const auto recentInvalidCount =
         countRecentInvalidFrames(target, kGeoTrackingInvalidSearchWindow);
-    const auto searchRadius = trackingSearchRadius(settings.searchRadius, recentInvalidCount);
-    const auto speedErrorThreshold = trackingSpeedErrorThreshold(recentInvalidCount);
-    const auto space = geoTrackingSpace(settings);
+    const auto options = makeTrackingGateOptions(settings, recentInvalidCount);
     auto bestDistance = std::numeric_limits<float>::max();
     std::optional<Dss::Core::MeasuredBlob> bestBlob;
     for (const auto& blob : blobs) {
-        if (isAlreadyUsed(blob, usedBlobs, space)) {
+        if (isMeasurementAlreadyUsed(blob, usedBlobs, options.reuseRule)) {
             continue;
         }
-        const auto matched =
-            space == GeoTrackingSpace::RaDec
-                ? matchesRaDecTrackingGate(blob, target, settings)
-                : matchesFrameTrackingGate(blob, target, searchRadius, speedErrorThreshold,
-                                           settings.thresholdAe);
+        const auto matched = options.space == GeoTrackingSpace::RaDec
+                                 ? matchesRaDecTrackingGate(blob, target, options)
+                                 : matchesFrameTrackingGate(blob, target, options);
         if (!matched) {
             continue;
         }
 
-        const auto candidatePosition =
-            space == GeoTrackingSpace::RaDec ? raDecPosition(blob) : blob.centroid;
-        const auto dx = candidatePosition.x - target.predictedPosFrame.x;
-        const auto dy = candidatePosition.y - target.predictedPosFrame.y;
+        const auto candidatePosition = measurementPosition(blob, options.measurementSpace);
+        if (!candidatePosition.has_value()) {
+            continue;
+        }
+        const auto dx = candidatePosition->x - target.predictedPosFrame.x;
+        const auto dy = candidatePosition->y - target.predictedPosFrame.y;
         const auto distance = dx * dx + dy * dy;
         if (distance < bestDistance) {
             bestDistance = distance;

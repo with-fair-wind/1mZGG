@@ -31,8 +31,18 @@ Core 模块是整个系统的基础层，提供所有其他模块共享的类型
 | `ImageStats` | 图像统计量 (最大/最小/均值/标准差) |
 | `TrackingSettings` | 跟踪参数 (搜索半径、活性阈值、GEO FullLEO/RA-Dec 阈值等) |
 | `ExposureDisplayData` | 曝光/显示同步数据 |
-| `ResultPacket` | 测量结果数据包 |
+| `ResultPacket` | 测量结果数据包，作为 UI、存储和后续 GXTC/GDCL 映射的共享 DTO |
 | `PointingErrorResult` | 指向误差模型参数 |
+
+### 1.1 结果包工具 (`result_packet_utils.h`)
+
+将跟踪策略输出的 `TargetInfo` 归一为 `ResultPacket`，避免 UI、存储、网络分别读取 `frameInfos.back()` 并重复拼字段。
+
+| 函数 | 说明 |
+|------|------|
+| `latestTargetFrameInfo(target)` | 获取目标轨迹最新帧，空轨迹返回 `nullptr` |
+| `makeResultPacket(target)` | 从最新帧构造通用测量结果数据包，空轨迹返回空 |
+| `makeResultPackets(targets)` | 批量构造结果包并跳过空轨迹 |
 
 ### 2. 常量 (`constants.h`)
 

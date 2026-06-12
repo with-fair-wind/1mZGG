@@ -24,6 +24,34 @@ struct TrackDataRecord {
     double magnitude = 13.2;                ///< 星等
 };
 
+/// 由通用测量结果数据包构造遗留跟踪数据记录。
+///
+/// @param packet 通用测量结果数据包。
+/// @param defaultOpticCenter 数据包未携带光学中心时使用的默认光学中心。
+/// @return 可直接写入遗留文本格式的跟踪数据记录。
+[[nodiscard]] inline auto makeTrackDataRecord(const Dss::Core::ResultPacket& packet,
+                                              Dss::Core::Vec2f defaultOpticCenter = {})
+    -> TrackDataRecord {
+    TrackDataRecord record{};
+    record.frameSeq = packet.frameSeq;
+    record.timestamp = packet.timestamp;
+    record.fovCenterAe = packet.fovCenterAe;
+    if (record.fovCenterAe.x == 0.0F && record.fovCenterAe.y == 0.0F) {
+        record.fovCenterAe = packet.fovCenterAeModified;
+    }
+    record.blobPosition = packet.targetPosFrame;
+    record.opticCenter = packet.opticCenter;
+    if (record.opticCenter.x == 0.0F && record.opticCenter.y == 0.0F) {
+        record.opticCenter = defaultOpticCenter;
+    }
+    record.area = packet.blob.area;
+    record.exposureTimeMilliseconds = static_cast<double>(packet.exposureTime) * 1000.0;
+    if (packet.targetMvGdcl != 0.0F) {
+        record.magnitude = packet.targetMvGdcl;
+    }
+    return record;
+}
+
 namespace Detail {
 
 /**

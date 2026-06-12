@@ -41,11 +41,11 @@ class ITrackingStrategy {
 
 ### 公共候选/预测/匹配与生命周期工具
 
-LEO/SC/GEO 迁移中抽出的 Qt-free 纯函数层，用于复用候选去重、目标帧信息构造、预测 fallback、外部校验 fallback、blob 匹配、匹配帧追加和基础生命周期判断。策略模式仍由 `ITrackingStrategy`、`GeoTracker`、`LeoTracker`、`ScTracker` 等类承担；公共 helper 只提供可组合的算法积木，具体候选生成、门限和 legacy policy 选择仍保留在各策略中。
+LEO/SC/GEO 迁移中抽出的 Qt-free 纯函数层，用于复用测量坐标/运动、候选去重、目标帧信息构造、预测 fallback、外部校验 fallback、blob 匹配、匹配帧追加和基础生命周期判断。策略模式仍由 `ITrackingStrategy`、`GeoTracker`、`LeoTracker`、`ScTracker` 等类承担；公共 helper 只提供可组合的算法积木，具体候选生成、门限和 legacy policy 选择仍保留在各策略中。
 
 | 函数/类型 | 说明 |
 |-----------|------|
-| `candidate_utils.h` | 按初始帧同 index 测量复用进行候选去重，保留 oldsrc 基于原始候选全集比较、保留首个候选的压缩语义 |
+| `candidate_utils.h` | 测量坐标/运动读取、单帧测量占用判断、按初始帧同 index 测量复用进行候选去重，保留 oldsrc 基于原始候选全集比较、保留首个候选的压缩语义 |
 | `prediction_utils.h` | 目标帧信息、预测、运动量、最近 blob 匹配、外部校验 fallback 和匹配/invalid 帧追加 helper |
 | `makeTargetFrameInfo()` / `makeInvalidTargetFrameInfo()` | 构造有效测量帧和预测 invalid 帧 |
 | `frameMotion()` / `aeMotion()` / `target*MotionAt()` | 计算像素空间和 AE 空间运动量 |
@@ -63,7 +63,7 @@ GEO 目标跟踪器，对应旧版 `TrackAlgo` 中 GEO 模式的算法。
 - `findTargets()` — 新目标发现
 - `trackTargets()` — 已知目标跟踪维持
 
-**当前状态:** 第一批函数级切片已完成并继续补齐。`estimateGeoStarSpeed()` 提供 Qt-free 纯函数用于估计中心视场星速和 AE 速度；`calcStarSpeed()` 已接入策略状态；`assoc4()` 已迁移确定性的四帧候选关联、星速过滤、运动一致性过滤和基础重复抑制；`findTargets()`/`trackTargets()` 已能发布基础目标并按预测位置维持，且会抑制同一帧测量被多个目标复用，并在预测越出图像边界或最近 `numFramesLiving` 帧全无效时结束目标。最近 invalid 计数、连续 invalid 判断和有效率更新已复用 `lifecycle_utils`。`geoFullLeo=false` 时，初始 `Assoc4` 和 `TrackTarget` 已按 legacy 非 FullLEO 分支使用 RA/Dec 半径、最小 RA/Dec 位移、RA/Dec 速度阈值和天区边界判断，配置项 `geoRa*Arcsec`/`geoDec*Arcsec` 已接入 JSON 读写；公共候选 helper 支持按 RA/Dec 去重，也支持按最近帧窗口判断 living-target 重叠。目标全部失活后会回到四帧关联入口，支持后续图像中重新发现目标；已有目标存活时也能追加新四帧候选，并按当前测量空间过滤最近四帧重叠轨迹。外部校验 blob 的消费端 fallback 已收敛到 `prediction_utils`，GEO 继续复用该入口。仍待迁移完整 legacy 分支，包括外部校验 blob 生成、全局阈值策略和 TWDW/GDCL。
+**当前状态:** 第一批函数级切片已完成并继续补齐。`estimateGeoStarSpeed()` 提供 Qt-free 纯函数用于估计中心视场星速和 AE 速度；`calcStarSpeed()` 已接入策略状态；`assoc4()` 已迁移确定性的四帧候选关联、星速过滤、运动一致性过滤和基础重复抑制；`findTargets()`/`trackTargets()` 已能发布基础目标并按预测位置维持，且会抑制同一帧测量被多个目标复用，并在预测越出图像边界或最近 `numFramesLiving` 帧全无效时结束目标。最近 invalid 计数、连续 invalid 判断和有效率更新已复用 `lifecycle_utils`。`geoFullLeo=false` 时，初始 `Assoc4` 和 `TrackTarget` 已按 legacy 非 FullLEO 分支使用 RA/Dec 半径、最小 RA/Dec 位移、RA/Dec 速度阈值和天区边界判断，配置项 `geoRa*Arcsec`/`geoDec*Arcsec` 已接入 JSON 读写；公共候选 helper 支持按 RA/Dec 读取测量位置/运动、按 RA/Dec 去重、同帧测量占用判断，也支持按最近帧窗口判断 living-target 重叠。GEO 跟踪阶段的动态搜索半径、像面速度误差、AE gate、RA/Dec gate 和测量占用规则已集中为内部 gate options，便于后续外部校验与 TWDW/GDCL 分支复用同一套门限配置。目标全部失活后会回到四帧关联入口，支持后续图像中重新发现目标；已有目标存活时也能追加新四帧候选，并按当前测量空间过滤最近四帧重叠轨迹。外部校验 blob 的消费端 fallback 已收敛到 `prediction_utils`，GEO 继续复用该入口。仍待迁移完整 legacy 分支，包括外部校验 blob 生成、全局阈值策略和 TWDW/GDCL。
 
 ### 4. LeoTracker (`leo_tracker.h`)
 
@@ -115,14 +115,14 @@ LEO 目标跟踪器，对应 `TrackAlgo` 中 LEO 模式。
 | `calcStarSpeed()` | `GeoTracker` / `estimateGeoStarSpeed()` | **首版完成**，中心视场星速和 AE 换算已覆盖 |
 | `assoc4()` | `GeoTracker` 内方法 | **继续推进**，FullLEO 像素四帧关联、星速过滤、运动一致性过滤已覆盖；非 FullLEO RA/Dec 四帧 gate、最小位移阈值和速度一致性已覆盖 |
 | `findTargets()` | `GeoTracker` 内方法 | **基础完成**，按关联结果设置发现/验证状态 |
-| `trackTargets()` | `GeoTracker` 内方法 | **基础完成**，按预测位置维持目标，已补同帧测量复用抑制、预测越界/连续无效结束和丢失后重发现状态切换，完整 legacy 校验待补 |
+| `trackTargets()` | `GeoTracker` 内方法 | **基础完成**，按预测位置维持目标，已通过公共测量占用规则补同帧测量复用抑制、预测越界/连续无效结束和丢失后重发现状态切换，完整 legacy 校验待补 |
 | `mpolyfit` / `mfft` / `getperiod` | `Dss::Math::*` | **已完成**，包含 legacy FFT 频谱兼容 helper |
 
 ## 当前缺口
 
 | 缺口 | 严重程度 | 说明 |
 |------|---------|------|
-| GEO 完整 legacy 分支待补 | **高** | 星速、四帧关联、基础维持、测量复用抑制、living 规则、非 FullLEO RA/Dec `Assoc4`/`TrackTarget` 首片、丢失后重发现入口和 `GEO_ReFindTargets` living-target 重叠去重细节已迁移；外部校验 blob 生成、全局阈值、TWDW/GDCL 仍需继续对照旧版补齐 |
+| GEO 完整 legacy 分支待补 | **高** | 星速、四帧关联、基础维持、公共测量占用规则、living 规则、非 FullLEO RA/Dec `Assoc4`/`TrackTarget` 首片、丢失后重发现入口和 `GEO_ReFindTargets` living-target 重叠去重细节已迁移；外部校验 blob 生成、全局阈值、TWDW/GDCL 仍需继续对照旧版补齐 |
 | LEO/SC 算法未完整移植 | **高** | LEO 三帧初始关联、第四帧验证、第五帧持续跟踪、单帧跟踪 miss、连续 5 帧 miss 释放目标和验证失败后重发现首片已迁移；SC 三帧初始关联、重复候选压缩、第四帧验证、verify/track living policy、第五帧持续跟踪和 miss 后重发现首片已迁移；两者已复用 `candidate_utils`、`prediction_utils` 和 `lifecycle_utils` 的公共 helper；TWDW/GDCL 仍待补齐 |
 | Manual legacy 细节待补 | 中 | 最小选点闭环已完成，三帧关联、验证、TWDW/GDCL 仍需对照旧版迁移 |
 | 指向误差模型 | 中 | `PointingErrorResult` 已定义但计算逻辑未移植 |

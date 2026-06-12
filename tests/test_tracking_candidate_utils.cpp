@@ -64,7 +64,104 @@ auto makeTargetWithFrameSeq(std::string targetId, std::initializer_list<Dss::Cor
     return target;
 }
 
+auto makeMeasurementBlob(Dss::Core::Vec2f centroid, Dss::Core::Vec2d raDec = {})
+    -> Dss::Core::MeasuredBlob {
+    Dss::Core::MeasuredBlob blob{};
+    blob.centroid = centroid;
+    blob.ra = raDec.x;
+    blob.dec = raDec.y;
+    return blob;
+}
+
 }  // namespace
+
+TEST(TrackingCandidateUtils, ReadsMeasurementPositionBySpace) {
+    const auto blob = makeMeasurementBlob({12.0F, 24.0F}, {1.5, 0.75});
+
+    const auto centroidPosition = Dss::Tracking::measurementPosition(
+        blob, Dss::Tracking::CandidateMeasurementSpace::Centroid);
+    ASSERT_TRUE(centroidPosition.has_value());
+    EXPECT_FLOAT_EQ(centroidPosition->x, 12.0F);
+    EXPECT_FLOAT_EQ(centroidPosition->y, 24.0F);
+
+    const auto raDecPosition =
+        Dss::Tracking::measurementPosition(blob, Dss::Tracking::CandidateMeasurementSpace::RaDec);
+    ASSERT_TRUE(raDecPosition.has_value());
+    EXPECT_FLOAT_EQ(raDecPosition->x, 1.5F);
+    EXPECT_FLOAT_EQ(raDecPosition->y, 0.75F);
+}
+
+TEST(TrackingCandidateUtils, RejectsMissingRaDecMeasurementPosition) {
+    const auto blob = makeMeasurementBlob({12.0F, 24.0F});
+
+    EXPECT_FALSE(Dss::Tracking::hasRaDecMeasurement(blob));
+    EXPECT_FALSE(
+        Dss::Tracking::measurementPosition(blob, Dss::Tracking::CandidateMeasurementSpace::RaDec)
+            .has_value());
+}
+
+TEST(TrackingCandidateUtils, ComputesMeasurementMotionBySpace) {
+    const auto previous = makeMeasurementBlob({10.0F, 20.0F}, {1.0, 0.5});
+    const auto current = makeMeasurementBlob({13.0F, 18.0F}, {1.0002, 0.5001});
+
+    const auto centroidMotion = Dss::Tracking::measurementMotion(
+        current, previous, Dss::Tracking::CandidateMeasurementSpace::Centroid);
+    ASSERT_TRUE(centroidMotion.has_value());
+    EXPECT_FLOAT_EQ(centroidMotion->x, 3.0F);
+    EXPECT_FLOAT_EQ(centroidMotion->y, -2.0F);
+
+    const auto raDecMotion = Dss::Tracking::measurementMotion(
+        current, previous, Dss::Tracking::CandidateMeasurementSpace::RaDec);
+    ASSERT_TRUE(raDecMotion.has_value());
+    EXPECT_NEAR(raDecMotion->x, 0.0002F, 1.0e-7F);
+    EXPECT_NEAR(raDecMotion->y, 0.0001F, 1.0e-7F);
+
+    const auto missingRaDec = makeMeasurementBlob({14.0F, 19.0F});
+    EXPECT_FALSE(Dss::Tracking::measurementMotion(missingRaDec, previous,
+                                                  Dss::Tracking::CandidateMeasurementSpace::RaDec)
+                     .has_value());
+}
+
+TEST(TrackingCandidateUtils, DetectsUsedCentroidMeasurement) {
+    Dss::Tracking::MeasurementReuseRule rule{};
+    rule.space = Dss::Tracking::CandidateMeasurementSpace::Centroid;
+    const std::vector<Dss::Core::MeasuredBlob> usedBlobs{makeMeasurementBlob({10.0F, 20.0F}),
+                                                         makeMeasurementBlob({30.0F, 40.0F})};
+
+    EXPECT_TRUE(Dss::Tracking::isMeasurementAlreadyUsed(makeMeasurementBlob({10.0F, 20.0F}),
+                                                        usedBlobs, rule));
+    EXPECT_FALSE(Dss::Tracking::isMeasurementAlreadyUsed(makeMeasurementBlob({11.0F, 20.0F}),
+                                                         usedBlobs, rule));
+}
+
+TEST(TrackingCandidateUtils, DetectsUsedRaDecMeasurementByExactOrAnyAxis) {
+    Dss::Tracking::MeasurementReuseRule rule{};
+    rule.space = Dss::Tracking::CandidateMeasurementSpace::RaDec;
+    const auto used = makeMeasurementBlob({10.0F, 20.0F}, {1.25, 0.75});
+    const auto exact = makeMeasurementBlob({99.0F, 99.0F}, {1.25, 0.75});
+    const auto sameRaOnly = makeMeasurementBlob({99.0F, 99.0F}, {1.25, 0.5});
+    const auto sameDecOnly = makeMeasurementBlob({99.0F, 99.0F}, {1.5, 0.75});
+
+    EXPECT_TRUE(Dss::Tracking::hasReusedMeasurement(exact, used, rule));
+    EXPECT_FALSE(Dss::Tracking::hasReusedMeasurement(sameRaOnly, used, rule));
+    EXPECT_FALSE(Dss::Tracking::hasReusedMeasurement(sameDecOnly, used, rule));
+
+    rule.matchAnyRaDecAxis = true;
+    EXPECT_TRUE(Dss::Tracking::hasReusedMeasurement(sameRaOnly, used, rule));
+    EXPECT_TRUE(Dss::Tracking::hasReusedMeasurement(sameDecOnly, used, rule));
+}
+
+TEST(TrackingCandidateUtils, FallsBackToCentroidReuseWhenRaDecMissing) {
+    Dss::Tracking::MeasurementReuseRule rule{};
+    rule.space = Dss::Tracking::CandidateMeasurementSpace::RaDec;
+    rule.matchAnyRaDecAxis = true;
+    const std::vector<Dss::Core::MeasuredBlob> usedBlobs{makeMeasurementBlob({10.0F, 20.0F})};
+
+    EXPECT_TRUE(Dss::Tracking::isMeasurementAlreadyUsed(makeMeasurementBlob({10.0F, 20.0F}),
+                                                        usedBlobs, rule));
+    EXPECT_FALSE(Dss::Tracking::isMeasurementAlreadyUsed(makeMeasurementBlob({10.0F, 21.0F}),
+                                                         usedBlobs, rule));
+}
 
 TEST(TrackingCandidateUtils, DetectsSharedInitialCentroidByMatchingFrameIndex) {
     Dss::Tracking::InitialMeasurementDedupRule rule{};

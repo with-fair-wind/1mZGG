@@ -41,7 +41,7 @@ class IStorageBackend : public IService {
 |------|------|
 | `init(baseDir)` | 创建/设置轨迹数据目录 |
 | `start()` / `stop()` | 启动/停止后台写入线程，停止时 drain 队列 |
-| `enqueueTrackResult(event)` | 将 `TrackResultEvent` 转为 legacy 轨迹文本记录并入队 |
+| `enqueueTrackResult(event)` | 将 `TrackResultEvent` 先归一为 `ResultPacket`，再转为 legacy 轨迹文本记录并入队 |
 | `outputPath()` | 返回当前 `track_data.txt` 输出路径 |
 | `isRunning()` | 查询 worker 状态 |
 
@@ -72,6 +72,7 @@ class IStorageBackend : public IService {
 | 内容 | 说明 |
 |------|------|
 | 行格式 | 每行一帧的跟踪结果文本表示 |
+| `makeTrackDataRecord(packet)` | 从通用 `ResultPacket` 构造 legacy 文本记录，复用同一结果 DTO |
 | GAE 文件 | 方位/俯仰数据文件 |
 
 ## 旧版对照
@@ -81,7 +82,7 @@ class IStorageBackend : public IService {
 | `ImageCode.h/.cpp` (RAW编解码) | `image_storage_format.h` | 格式定义已迁移 |
 | `ImageCode.h/.cpp` (BMP编解码) | `bmp_image_format.h` | 格式定义已迁移 |
 | `ImageStorage.h/.cpp` (文件I/O) | `LocalImageStorageBackend` | raw 异步写入首版已迁移 |
-| `TrackDataStorage.h/.cpp` | `TrackDataStorageBackend` + format | 轨迹文本格式和 `track_data.txt` 异步写入首版已迁移 |
+| `TrackDataStorage.h/.cpp` | `TrackDataStorageBackend` + format | 轨迹文本格式、`ResultPacket` 归一化和 `track_data.txt` 异步写入首版已迁移 |
 | `ImageReplayer.h/.cpp` | `ImageSequenceFrameSource` | 图像序列回放首版已迁移 |
 
 ## 当前缺口

@@ -28,3 +28,26 @@ TEST(TrackDataStorageFormat, AllowsLegacyDefaultRangeAndMagnitudeOverrides) {
 
     EXPECT_TRUE(line.ends_with("2 0.695859 0 42.25 -1.5"));
 }
+
+TEST(TrackDataStorageFormat, BuildsRecordFromResultPacket) {
+    Dss::Core::ResultPacket packet{};
+    packet.frameSeq = 321U;
+    packet.timestamp = {
+        .year = 2026, .month = 6, .day = 12, .hour = 1, .minute = 2, .second = 3, .millisecond = 4};
+    packet.fovCenterAeModified = Dss::Core::Vec2f{11.25F, -22.5F};
+    packet.targetPosFrame = Dss::Core::Vec2f{3100.0F, 3050.0F};
+    packet.blob.area = 4.0F;
+    packet.exposureTime = 0.033F;
+    packet.targetMvGdcl = 12.75F;
+
+    const auto record =
+        Dss::Storage::makeTrackDataRecord(packet, Dss::Core::Vec2f{3072.0F, 3072.0F});
+
+    EXPECT_EQ(record.frameSeq, 321U);
+    EXPECT_FLOAT_EQ(record.fovCenterAe.x, 11.25F);
+    EXPECT_FLOAT_EQ(record.blobPosition.y, 3050.0F);
+    EXPECT_FLOAT_EQ(record.opticCenter.x, 3072.0F);
+    EXPECT_FLOAT_EQ(record.area, 4.0F);
+    EXPECT_NEAR(record.exposureTimeMilliseconds, 33.0, 1.0e-5);
+    EXPECT_DOUBLE_EQ(record.magnitude, 12.75);
+}

@@ -15,12 +15,58 @@ namespace {
 
 namespace Dss::Tracking {
 
+bool hasRaDecMeasurement(const Core::MeasuredBlob& blob) {
+    return blob.ra != 0.0 || blob.dec != 0.0;
+}
+
+auto measurementPosition(const Core::MeasuredBlob& blob, CandidateMeasurementSpace space)
+    -> std::optional<Core::Vec2f> {
+    if (space == CandidateMeasurementSpace::RaDec) {
+        if (!hasRaDecMeasurement(blob)) {
+            return std::nullopt;
+        }
+        return Core::Vec2f{static_cast<float>(blob.ra), static_cast<float>(blob.dec)};
+    }
+    return blob.centroid;
+}
+
+auto measurementMotion(const Core::MeasuredBlob& current, const Core::MeasuredBlob& previous,
+                       CandidateMeasurementSpace space) -> std::optional<Core::Vec2f> {
+    const auto currentPosition = measurementPosition(current, space);
+    const auto previousPosition = measurementPosition(previous, space);
+    if (!currentPosition.has_value() || !previousPosition.has_value()) {
+        return std::nullopt;
+    }
+    return Core::Vec2f{currentPosition->x - previousPosition->x,
+                       currentPosition->y - previousPosition->y};
+}
+
+bool hasReusedMeasurement(const Core::MeasuredBlob& candidate, const Core::MeasuredBlob& used,
+                          const MeasurementReuseRule& rule) {
+    if (rule.space == CandidateMeasurementSpace::RaDec && hasRaDecMeasurement(candidate) &&
+        hasRaDecMeasurement(used)) {
+        if (rule.matchAnyRaDecAxis) {
+            return candidate.ra == used.ra || candidate.dec == used.dec;
+        }
+        return candidate.ra == used.ra && candidate.dec == used.dec;
+    }
+
+    return candidate.centroid.x == used.centroid.x && candidate.centroid.y == used.centroid.y;
+}
+
+bool isMeasurementAlreadyUsed(const Core::MeasuredBlob& candidate,
+                              std::span<const Core::MeasuredBlob> usedBlobs,
+                              const MeasurementReuseRule& rule) {
+    return std::ranges::any_of(usedBlobs, [&](const Core::MeasuredBlob& used) {
+        return hasReusedMeasurement(candidate, used, rule);
+    });
+}
+
 bool hasSameMeasurement(const Core::MeasuredBlob& first, const Core::MeasuredBlob& second,
                         CandidateMeasurementSpace space) {
     if (space == CandidateMeasurementSpace::RaDec) {
-        const auto firstHasRaDec = first.ra != 0.0 || first.dec != 0.0;
-        const auto secondHasRaDec = second.ra != 0.0 || second.dec != 0.0;
-        return firstHasRaDec && secondHasRaDec && first.ra == second.ra && first.dec == second.dec;
+        return hasRaDecMeasurement(first) && hasRaDecMeasurement(second) && first.ra == second.ra &&
+               first.dec == second.dec;
     }
     return first.centroid.x == second.centroid.x && first.centroid.y == second.centroid.y;
 }

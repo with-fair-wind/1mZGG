@@ -169,6 +169,7 @@ struct ResultPacket {
     MeasuredBlob blob{};             ///< 测量光斑
     Vec2f fovCenterAe{};             ///< 视场中心方位/俯仰（度）
     Vec2f fovCenterAeModified{};     ///< 修正后的视场中心方位/俯仰（度）
+    Vec2f opticCenter{};             ///< 光学中心坐标（像素）
     Vec2f targetPosFrame{};          ///< 目标位置（像素）
     Vec2f targetDistAe{};            ///< 目标角距（度）
     Vec2f targetPosZxdw{};           ///< 目标轴系坐标

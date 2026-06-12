@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "dss/core/events.h"
+#include "dss/core/result_packet_utils.h"
 #include "dss/storage/i_storage_backend.h"
 #include "dss/storage/track_data_storage_format.h"
 
@@ -132,33 +133,16 @@ private:
 
         const auto optic = Dss::Core::OpticParams{};
         const auto opticCenter = Dss::Core::Vec2f{optic.fovCenterX, optic.fovCenterY};
-        for (const auto& target : event.targets) {
-            if (target.frameInfos.empty()) {
+        const auto packets = Dss::Core::makeResultPackets(event.targets);
+        for (const auto& packet : packets) {
+            if (!packet.valid) {
                 continue;
             }
 
-            const auto& frame = target.frameInfos.back();
-            if (!frame.valid) {
-                continue;
+            auto record = makeTrackDataRecord(packet, opticCenter);
+            if (record.frameSeq == 0U) {
+                record.frameSeq = event.frameSeq;
             }
-
-            const auto& blob = frame.measuredBlob;
-            TrackDataRecord record{};
-            record.frameSeq = frame.frameSeq != 0U ? frame.frameSeq : event.frameSeq;
-            record.timestamp = frame.timestamp;
-            record.fovCenterAe = frame.fovCenterAe;
-            if (record.fovCenterAe.x == 0.0F && record.fovCenterAe.y == 0.0F) {
-                record.fovCenterAe =
-                    Dss::Core::Vec2f{blob.fovCenterAziModify, blob.fovCenterEleModify};
-            }
-            record.blobPosition = blob.centroid;
-            record.opticCenter = frame.opticCenter;
-            if (record.opticCenter.x == 0.0F && record.opticCenter.y == 0.0F) {
-                record.opticCenter = opticCenter;
-            }
-            record.area = blob.area;
-            record.exposureTimeMilliseconds = static_cast<double>(frame.exposureTime) * 1000.0;
-            record.magnitude = frame.magnitude != 0.0F ? frame.magnitude : record.magnitude;
             records.push_back(record);
         }
         return records;
