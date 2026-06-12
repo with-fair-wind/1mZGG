@@ -27,10 +27,8 @@ auto UdpChannel::bind(const UdpEndpointConfig& config) -> std::expected<void, st
         addr = QHostAddress(QString::fromStdString(m_config.localIp));
     }
 
-    if (m_config.localPort > 0) {
-        if (!m_socket->bind(addr, m_config.localPort)) {
-            return std::unexpected("Failed to bind UDP: " + m_socket->errorString().toStdString());
-        }
+    if (!m_socket->bind(addr, m_config.localPort)) {
+        return std::unexpected("Failed to bind UDP: " + m_socket->errorString().toStdString());
     }
 
     QObject::connect(m_socket.get(), &QUdpSocket::readyRead, [this]() { onReadyRead(); });

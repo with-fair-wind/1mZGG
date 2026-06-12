@@ -39,6 +39,7 @@ dss_add_test(test_network_protocols test_network_protocols.cpp dss_core)
 dss_add_test(test_config test_config.cpp dss_core)
 dss_add_test(test_service_host test_service_host.cpp dss_core)
 dss_add_test(test_service_registry test_service_registry.cpp dss_core)
+dss_add_test(test_track_result_data_exchange_bridge test_track_result_data_exchange_bridge.cpp dss_app)
 dss_add_test(test_math_utils test_math_utils.cpp dss_tracking)
 dss_add_test(test_tracking_candidate_utils test_tracking_candidate_utils.cpp dss_tracking)
 dss_add_test(test_tracking_lifecycle_utils test_tracking_lifecycle_utils.cpp dss_tracking)
@@ -54,6 +55,7 @@ dss_add_test(test_frame_view test_frame_view.cpp dss_processing)
 dss_add_test(test_processing_pipeline test_processing_pipeline.cpp dss_processing)
 
 if(TARGET dss_network_qt)
+    dss_add_test(test_data_exchange test_data_exchange.cpp dss_network_qt)
     dss_add_test(test_image_sender test_image_sender.cpp dss_network_qt)
     dss_add_test(test_heartbeat test_heartbeat.cpp dss_network_qt)
 endif()
@@ -92,6 +94,10 @@ if(TARGET dss_ui_qt)
     )
     dss_add_qt_test(test_view_model_replay
         test_view_model_replay.cpp
+        dss_ui_qt
+    )
+    dss_add_qt_test(test_view_model_network
+        test_view_model_network.cpp
         dss_ui_qt
     )
 endif()

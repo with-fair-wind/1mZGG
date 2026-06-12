@@ -8,6 +8,7 @@
 #include "dss/acquisition/i_camera_controller.h"
 #include "dss/acquisition/i_frame_source.h"
 #include "dss/acquisition/image_sequence_frame_source.h"
+#include "dss/app/track_result_data_exchange_bridge.h"
 #include "dss/comm/display_channel.h"
 #include "dss/comm/exposure_channel.h"
 #include "dss/comm/i_serial_channel.h"
@@ -44,8 +45,23 @@ void ApplicationContext::registerCommunicationServices() {
         "heartbeat", std::make_shared<Dss::Network::Heartbeat>(m_bus));
     m_registry.registerService<Dss::Network::ErrorDiagnostics>(
         "error_diagnostics", std::make_shared<Dss::Network::ErrorDiagnostics>(m_bus));
-    m_registry.registerService<Dss::Network::DataExchange>(
-        "data_exchange", std::make_shared<Dss::Network::DataExchange>(m_bus));
+    auto dataExchange = std::make_shared<Dss::Network::DataExchange>(m_bus);
+    m_registry.registerService<Dss::Network::DataExchange>("data_exchange", dataExchange);
+    auto trackResultDataExchangeBridge = std::make_shared<Dss::App::TrackResultDataExchangeBridge>(
+        m_bus,
+        [dataExchange](const Dss::Network::GxtcMetadata& metadata,
+                       std::span<const Dss::Network::GxtcTarget> targets) {
+            if (dataExchange->isOpen()) {
+                (void)dataExchange->sendGxtc(metadata, targets);
+            }
+        },
+        [dataExchange](const Dss::Network::GdclMeasurement& measurement) {
+            if (dataExchange->isOpen()) {
+                (void)dataExchange->sendGdcl(measurement);
+            }
+        });
+    m_registry.registerService<Dss::App::TrackResultDataExchangeBridge>(
+        "track_result_data_exchange_bridge", std::move(trackResultDataExchangeBridge));
     m_registry.registerService<Dss::Network::AtmosReceiver>(
         "atmos_receiver", std::make_shared<Dss::Network::AtmosReceiver>(m_bus));
     m_registry.registerService<Dss::Acquisition::ICameraController>(

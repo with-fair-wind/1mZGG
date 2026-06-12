@@ -1,5 +1,9 @@
 #include "dss/network/data_exchange.h"
 
+#include <utility>
+
+#include "dss/core/events.h"
+
 namespace Dss::Network {
 
 DataExchange::DataExchange(MessageBus& bus) : m_bus(bus) {}
@@ -24,22 +28,42 @@ bool DataExchange::isOpen() const {
     return m_gxtcChannel.isBound() && m_gdclChannel.isBound();
 }
 
-void DataExchange::sendGxtc(std::span<const uint8_t> data) {
-    m_gxtcChannel.send(data);
+auto DataExchange::sendGxtc(std::span<const uint8_t> data) -> std::expected<int64_t, std::string> {
+    return sendPacket("gxtc", m_gxtcChannel, data);
 }
 
-void DataExchange::sendGxtc(const GxtcMetadata& metadata, std::span<const GxtcTarget> targets) {
+auto DataExchange::sendGxtc(const GxtcMetadata& metadata, std::span<const GxtcTarget> targets)
+    -> std::expected<int64_t, std::string> {
     const auto packet = buildGxtcPacket(metadata, targets);
-    m_gxtcChannel.send(packet);
+    return sendGxtc(packet);
 }
 
-void DataExchange::sendGdcl(std::span<const uint8_t> data) {
-    m_gdclChannel.send(data);
+auto DataExchange::sendGdcl(std::span<const uint8_t> data) -> std::expected<int64_t, std::string> {
+    return sendPacket("gdcl", m_gdclChannel, data);
 }
 
-void DataExchange::sendGdcl(const GdclMeasurement& measurement) {
+auto DataExchange::sendGdcl(const GdclMeasurement& measurement)
+    -> std::expected<int64_t, std::string> {
     const auto packet = buildGdclPacket(measurement);
-    m_gdclChannel.send(packet);
+    return sendGdcl(packet);
+}
+
+auto DataExchange::sendPacket(std::string_view channelName, UdpChannel& channel,
+                              std::span<const uint8_t> data)
+    -> std::expected<int64_t, std::string> {
+    const auto sent = channel.send(data);
+    if (sent >= 0) {
+        return sent;
+    }
+
+    auto channelLabel = std::string(channelName);
+    auto message = channelLabel + " UDP channel is not open or send failed";
+    m_bus.emit(Dss::Core::NetworkTransmissionErrorEvent{
+        .channel = std::move(channelLabel),
+        .message = message,
+        .attemptedBytes = static_cast<uint64_t>(data.size()),
+    });
+    return std::unexpected(std::move(message));
 }
 
 }  // namespace Dss::Network

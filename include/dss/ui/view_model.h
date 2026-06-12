@@ -27,6 +27,7 @@ class ViewModel : public QObject {
     Q_PROPERTY(int trackMode READ trackMode WRITE setTrackMode NOTIFY trackModeChanged)
     Q_PROPERTY(double exposure READ exposure WRITE setExposure NOTIFY exposureChanged)
     Q_PROPERTY(bool isSaving READ isSaving NOTIFY savingChanged)
+    Q_PROPERTY(bool isDataExchangeOpen READ isDataExchangeOpen NOTIFY dataExchangeOpenChanged)
     Q_PROPERTY(QString statusText READ statusText NOTIFY statusTextChanged)
     Q_PROPERTY(int replayFrameCount READ replayFrameCount NOTIFY replayFrameCountChanged)
     Q_PROPERTY(int replayCurrentFrame READ replayCurrentFrame NOTIFY replayCurrentFrameChanged)
@@ -68,6 +69,10 @@ public:
     [[nodiscard]] bool isSaving() const {
         return m_saving;
     }
+    /// 数据交换 UDP 是否已显式打开
+    [[nodiscard]] bool isDataExchangeOpen() const {
+        return m_dataExchangeOpen;
+    }
     /// 状态栏文本
     [[nodiscard]] QString statusText() const {
         return m_statusText;
@@ -108,6 +113,11 @@ public:
     Q_INVOKABLE void startSaving();
     /// 停止保存
     Q_INVOKABLE void stopSaving();
+    /// 显式打开 GXTC/GDCL 数据交换 UDP 通道
+    /// 成功返回 true，失败返回 false
+    Q_INVOKABLE bool openDataExchange();
+    /// 显式关闭 GXTC/GDCL 数据交换 UDP 通道
+    Q_INVOKABLE void closeDataExchange();
     /// 切换缩放级别
     Q_INVOKABLE void toggleZoom(int level);
 
@@ -124,6 +134,8 @@ signals:
     void exposureChanged(double ms);
     /// 保存状态变化
     void savingChanged(bool value);
+    /// 数据交换 UDP 打开状态变化
+    void dataExchangeOpenChanged(bool value);
     /// 状态文本变化
     void statusTextChanged(const QString& text);
     /// 回放总帧数变化
@@ -154,6 +166,8 @@ private:
     void onTrackResult(const Dss::Core::TrackResultEvent& event);
     /// 处理主控指令事件
     void onMasterControl(const Dss::Core::MasterControlEvent& event);
+    /// 处理网络发送失败事件
+    void onNetworkTransmissionError(const Dss::Core::NetworkTransmissionErrorEvent& event);
     /// 根据当前模式配置处理策略
     void configureProcessingStrategy();
     /// 根据当前模式配置跟踪策略
@@ -162,6 +176,8 @@ private:
     [[nodiscard]] static auto makeManualTarget(QPointF pos) -> Dss::Core::MeasuredBlob;
     /// 设置回放当前帧并发出信号
     void setReplayCurrentFrame(int frame);
+    /// 设置数据交换 UDP 打开状态并发出信号
+    void setDataExchangeOpen(bool value);
     /// 更新状态文本并发出信号
     void setStatus(QString text);
 
@@ -174,9 +190,10 @@ private:
     int m_trackMode = static_cast<int>(Dss::Core::TrackMode::Init);            ///< 跟踪模式
     double m_exposure = 0.0;                                                   ///< 曝光时间（毫秒）
     bool m_saving = false;                                                     ///< 是否正在保存
-    QString m_statusText = "Ready";                                            ///< 状态栏文本
-    int m_replayFrameCount = 0;                                                ///< 回放序列总帧数
-    int m_replayCurrentFrame = 0;                                              ///< 回放当前帧索引
+    bool m_dataExchangeOpen = false;                        ///< 数据交换 UDP 是否已显式打开
+    QString m_statusText = "Ready";                         ///< 状态栏文本
+    int m_replayFrameCount = 0;                             ///< 回放序列总帧数
+    int m_replayCurrentFrame = 0;                           ///< 回放当前帧索引
     std::optional<Dss::Core::MeasuredBlob> m_manualTarget;  ///< 手动选定的跟踪目标
 
     std::vector<Dss::Evt::ScopedConnection> m_connections;  ///< 事件订阅连接列表

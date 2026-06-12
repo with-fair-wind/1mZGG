@@ -26,8 +26,10 @@ public:
 
     /**
      * @brief 绑定本地 UDP 端点
-     * @param config UDP 端点配置（本地 IP、端口及默认远程目标）
-     * @return 成功返回空值，失败返回错误描述
+     * @param config UDP 端点配置（本地
+     * IP、端口及默认远程目标；端口 0 表示由系统分配）
+     * @return
+     * 成功返回空值，失败返回错误描述
      */
     auto bind(const UdpEndpointConfig& config) -> std::expected<void, std::string>;
 

@@ -226,6 +226,7 @@ if(DSS_BUILD_APP)
         PUBLIC
             dss_core
             dss_acquisition_qt
+            dss_network_qt
             dss_processing
             dss_tracking
             Qt6::Core

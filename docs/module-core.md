@@ -31,12 +31,12 @@ Core 模块是整个系统的基础层，提供所有其他模块共享的类型
 | `ImageStats` | 图像统计量 (最大/最小/均值/标准差) |
 | `TrackingSettings` | 跟踪参数 (搜索半径、活性阈值、GEO FullLEO/RA-Dec 阈值等) |
 | `ExposureDisplayData` | 曝光/显示同步数据 |
-| `ResultPacket` | 测量结果数据包，作为 UI、存储和后续 GXTC/GDCL 映射的共享 DTO |
+| `ResultPacket` | 测量结果数据包，作为 UI、存储和 GXTC/GDCL 映射的共享 DTO，包含目标位置、角速度、光度和环境数据 |
 | `PointingErrorResult` | 指向误差模型参数 |
 
 ### 1.1 结果包工具 (`result_packet_utils.h`)
 
-将跟踪策略输出的 `TargetInfo` 归一为 `ResultPacket`，避免 UI、存储、网络分别读取 `frameInfos.back()` 并重复拼字段。
+将跟踪策略输出的 `TargetInfo` 归一为 `ResultPacket`，避免 UI、存储、网络分别读取 `frameInfos.back()` 并重复拼字段。当前结果包会带出最新帧测量、轴系/天文定位、预测角速度和星等，供轨迹文本和 GXTC/GDCL 协议 adapter 复用。
 
 | 函数 | 说明 |
 |------|------|
@@ -78,6 +78,7 @@ Core 模块是整个系统的基础层，提供所有其他模块共享的类型
 | `RotatedFrameReadyEvent` | ImageProcessor | Storage |
 | `TrackResultEvent` | TrackManager | ViewModel, ServoChannel |
 | `ImageSendEvent` | ImageSender | — |
+| `NetworkTransmissionErrorEvent` | DataExchange | ViewModel/Logger |
 | `MasterControlEvent` | MasterControlChannel | ViewModel |
 | `ExposureSyncEvent` | ExposureChannel | ImageProcessor |
 | `Sync25HzEvent` | DisplayChannel | ImageProcessor |

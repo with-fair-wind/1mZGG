@@ -1,7 +1,10 @@
 #pragma once
 
+#include <cstdint>
 #include <expected>
 #include <span>
+#include <string>
+#include <string_view>
 
 #include "dss/core/event_bus.h"
 #include "dss/network/data_exchange_protocol.h"
@@ -38,32 +41,47 @@ public:
     /**
      * @brief 发送原始 GXTC 报文
      * @param data 已编码的字节数据
+     * @return 成功返回发送字节数，失败返回错误描述并发布网络错误事件
      */
-    void sendGxtc(std::span<const uint8_t> data);
+    auto sendGxtc(std::span<const uint8_t> data) -> std::expected<int64_t, std::string>;
 
     /**
      * @brief 编码并发送 GXTC 报文
      * @param metadata 报文头部元数据
      * @param targets 目标列表
+     * @return 成功返回发送字节数，失败返回错误描述并发布网络错误事件
      */
-    void sendGxtc(const GxtcMetadata& metadata, std::span<const GxtcTarget> targets);
+    auto sendGxtc(const GxtcMetadata& metadata, std::span<const GxtcTarget> targets)
+        -> std::expected<int64_t, std::string>;
 
     /**
      * @brief 发送原始 GDCL 报文
      * @param data 已编码的字节数据
+     * @return 成功返回发送字节数，失败返回错误描述并发布网络错误事件
      */
-    void sendGdcl(std::span<const uint8_t> data);
+    auto sendGdcl(std::span<const uint8_t> data) -> std::expected<int64_t, std::string>;
 
     /**
      * @brief 编码并发送 GDCL 报文
      * @param measurement 测量结果
+     * @return 成功返回发送字节数，失败返回错误描述并发布网络错误事件
      */
-    void sendGdcl(const GdclMeasurement& measurement);
+    auto sendGdcl(const GdclMeasurement& measurement) -> std::expected<int64_t, std::string>;
 
 private:
-    [[maybe_unused]] MessageBus& m_bus;  ///< 事件总线引用（预留扩展）
-    UdpChannel m_gxtcChannel;            ///< GXTC 协议 UDP 通道
-    UdpChannel m_gdclChannel;            ///< GDCL 协议 UDP 通道
+    /**
+     * @brief 发送已编码网络报文并统一处理失败事件
+     * @param channelName 协议通道名称
+     * @param channel UDP 通道
+     * @param data 已编码的字节数据
+     * @return 成功返回发送字节数，失败返回错误描述
+     */
+    auto sendPacket(std::string_view channelName, UdpChannel& channel,
+                    std::span<const uint8_t> data) -> std::expected<int64_t, std::string>;
+
+    MessageBus& m_bus;         ///< 事件总线引用
+    UdpChannel m_gxtcChannel;  ///< GXTC 协议 UDP 通道
+    UdpChannel m_gdclChannel;  ///< GDCL 协议 UDP 通道
 };
 
 }  // namespace Dss::Network

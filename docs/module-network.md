@@ -32,7 +32,7 @@ Qt `QUdpSocket` 封装（pimpl 隐藏 Qt 依赖）：
 
 | 方法 | 说明 |
 |------|------|
-| `bind(port)` | 绑定本地端口 |
+| `bind(config)` | 绑定本地端点；本地端口为 0 时由系统分配临时端口 |
 | `send(data)` | 发送到预设目标 |
 | `sendTo(data, host, port)` | 发送到指定目标 |
 | `setReceiveCallback(fn)` | 设置接收回调 |
@@ -75,8 +75,12 @@ GXTC/GDCL 协议数据交换（从旧版 `NetExchange` 迁移）。
 
 | 方法 | 说明 |
 |------|------|
-| `sendGxtc(data)` | 发送 GXTC 协议数据包 |
-| `sendGdcl(data)` | 发送 GDCL 协议数据包 |
+| `sendGxtc(data)` | 发送 GXTC 协议数据包，失败时返回错误并发布 `NetworkTransmissionErrorEvent` |
+| `sendGdcl(data)` | 发送 GDCL 协议数据包，失败时返回错误并发布 `NetworkTransmissionErrorEvent` |
+| `makeGxtcMetadata(packet, options)` | 从 `ResultPacket` 构造 GXTC 头部 DTO |
+| `makeGxtcTarget(packet, options)` | 从 `ResultPacket` 构造 GXTC 目标 DTO |
+| `makeGdclMeasurement(packet, options)` | 从 `ResultPacket` 构造 GDCL 测量 DTO |
+| `makeJms1970Centiseconds(timestamp)` | 将通用时间戳换算为旧协议 JMS1970 百分之一秒 |
 
 ### 7. AtmosReceiver (`atmos_receiver.h`)
 
@@ -93,14 +97,16 @@ GXTC/GDCL 协议数据交换（从旧版 `NetExchange` 迁移）。
 | 文件 | 用途 |
 |------|------|
 | `atmos_protocol.h` | 大气数据包编解码 |
-| `data_exchange_protocol.h` | GXTC/GDCL 数据包编解码 |
+| `data_exchange_protocol.h` | GXTC/GDCL 数据包编解码，以及 `ResultPacket` 到协议 DTO 的纯映射 |
 | `diagnostic_protocol.h` | 诊断 JSON 报文构建 |
 
 ## 当前缺口
 
 | 缺口 | 说明 |
 |------|------|
-| 网络打开/bind 命令未接线 | 网络服务已注册到 `ServiceRegistry`，但默认 `isOpen() == false`；需要 UI/联调入口显式打开或绑定 |
+| 通用网络打开/bind 命令未接线 | 网络服务已注册到 `ServiceRegistry`，但默认 `isOpen() == false`；除数据交换外，图像发送、心跳、诊断和大气接收仍需要 UI/联调入口显式打开或绑定 |
+| GXTC/GDCL UDP 参数化入口待完善 | `ViewModel::openDataExchange()` 已可显式打开 `DataExchange`，GDCL 临时沿用旧版 GXTC+1 端口约定；后续需要独立配置项和界面参数编辑 |
+| 网络错误日志呈现待完善 | `DataExchange` 已发布 `NetworkTransmissionErrorEvent` 并由 ViewModel 显示状态文本，日志面板订阅和分级展示待补 |
 | `NetApp` 接收侧逻辑 | 旧版 `NetApp` 的接收处理未完全复制 |
 | `ENetServer` | 旧版的可靠 UDP (ENet) 未迁移 |
 

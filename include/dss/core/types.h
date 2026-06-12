@@ -172,6 +172,7 @@ struct ResultPacket {
     Vec2f opticCenter{};             ///< 光学中心坐标（像素）
     Vec2f targetPosFrame{};          ///< 目标位置（像素）
     Vec2f targetDistAe{};            ///< 目标角距（度）
+    Vec2f targetSpdAe{};             ///< 目标方位/俯仰角速度（度/秒）
     Vec2f targetPosZxdw{};           ///< 目标轴系坐标
     Vec2f targetPosTwdw{};           ///< 目标天文坐标
     float targetMvGdcl = 0.0f;       ///< 目标光度

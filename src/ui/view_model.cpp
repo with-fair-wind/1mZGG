@@ -1,12 +1,15 @@
 #include "dss/ui/view_model.h"
 
 #include <filesystem>
+#include <limits>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "dss/acquisition/i_frame_source.h"
 #include "dss/acquisition/image_sequence_frame_source.h"
 #include "dss/core/config.h"
+#include "dss/network/data_exchange.h"
 #include "dss/processing/image_processor.h"
 #ifdef DSS_HAS_OPENCV
 #include "dss/processing/opencv_processing_strategy.h"
@@ -17,6 +20,38 @@
 #include "dss/tracking/track_manager.h"
 
 namespace Dss::Ui {
+
+namespace {
+
+/// 计算下一个 UDP 端口；到达 uint16 上限时返回空值
+[[nodiscard]] auto nextUdpPort(uint16_t port) -> std::optional<uint16_t> {
+    if (port == std::numeric_limits<uint16_t>::max()) {
+        return std::nullopt;
+    }
+    return static_cast<uint16_t>(port + 1U);
+}
+
+/// 基于 GXTC 端点推导 GDCL 端点，兼容旧版 GDCL=GXTC+1 的端口约定
+[[nodiscard]] auto makeGdclExchangeConfig(const Dss::Core::UdpEndpointConfig& gxtcConfig)
+    -> std::optional<Dss::Core::UdpEndpointConfig> {
+    auto gdclConfig = gxtcConfig;
+    if (gdclConfig.localPort != 0) {
+        auto localPort = nextUdpPort(gdclConfig.localPort);
+        if (!localPort.has_value()) {
+            return std::nullopt;
+        }
+        gdclConfig.localPort = *localPort;
+    }
+
+    auto remotePort = nextUdpPort(gdclConfig.remotePort);
+    if (!remotePort.has_value()) {
+        return std::nullopt;
+    }
+    gdclConfig.remotePort = *remotePort;
+    return gdclConfig;
+}
+
+}  // namespace
 
 ViewModel::ViewModel(MessageBus& bus, Dss::Core::ServiceRegistry& registry, QObject* parent)
     : QObject(parent), m_bus(bus), m_registry(registry) {
@@ -244,11 +279,57 @@ void ViewModel::stopSaving() {
     setStatus("Saving stopped");
 }
 
+/// 显式打开数据交换服务；GDCL 端口沿用旧版 GXTC+1 的兼容约定
+bool ViewModel::openDataExchange() {
+    auto dataExchange = m_registry.tryGet<Dss::Network::DataExchange>("data_exchange");
+    if (!dataExchange) {
+        setDataExchangeOpen(false);
+        setStatus("Data exchange service is not registered");
+        return false;
+    }
+
+    const auto& exchangeConfig = Dss::Core::Config::instance().commNet().exchange;
+    auto gdclConfig = makeGdclExchangeConfig(exchangeConfig);
+    if (!gdclConfig.has_value()) {
+        setDataExchangeOpen(false);
+        setStatus("Data exchange GDCL port cannot be derived");
+        return false;
+    }
+
+    auto result = dataExchange->open(exchangeConfig, *gdclConfig);
+    if (!result.has_value()) {
+        dataExchange->close();
+        setDataExchangeOpen(false);
+        setStatus(QString::fromStdString(result.error()));
+        return false;
+    }
+
+    setDataExchangeOpen(dataExchange->isOpen());
+    if (!m_dataExchangeOpen) {
+        dataExchange->close();
+        setStatus("Data exchange UDP open failed");
+        return false;
+    }
+
+    setStatus("Data exchange UDP opened");
+    return true;
+}
+
+/// 显式关闭数据交换服务
+void ViewModel::closeDataExchange() {
+    auto dataExchange = m_registry.tryGet<Dss::Network::DataExchange>("data_exchange");
+    if (dataExchange) {
+        dataExchange->close();
+    }
+    setDataExchangeOpen(false);
+    setStatus("Data exchange UDP closed");
+}
+
 void ViewModel::toggleZoom(int level) {
     m_bus.emit(Dss::Core::ZoomChangeEvent{level});
 }
 
-/// 订阅显示刷新、处理完成、跟踪结果与主控事件
+/// 订阅显示刷新、处理完成、跟踪结果、主控和网络错误事件
 void ViewModel::setupSubscriptions() {
     m_connections.push_back(m_bus.subscribe<Dss::Core::DisplayRefreshEvent>(
         [this](const Dss::Core::DisplayRefreshEvent& e) { onDisplayRefresh(e); }));
@@ -261,6 +342,11 @@ void ViewModel::setupSubscriptions() {
 
     m_connections.push_back(m_bus.subscribe<Dss::Core::MasterControlEvent>(
         [this](const Dss::Core::MasterControlEvent& e) { onMasterControl(e); }));
+
+    m_connections.push_back(m_bus.subscribe<Dss::Core::NetworkTransmissionErrorEvent>(
+        [this](const Dss::Core::NetworkTransmissionErrorEvent& e) {
+            onNetworkTransmissionError(e);
+        }));
 }
 
 /**
@@ -323,6 +409,13 @@ void ViewModel::onMasterControl(const Dss::Core::MasterControlEvent& event) {
     } else if (!event.grab && m_grabbing) {
         stopGrab();
     }
+}
+
+/// 将网络发送失败事件同步到状态栏
+void ViewModel::onNetworkTransmissionError(const Dss::Core::NetworkTransmissionErrorEvent& event) {
+    setStatus(QString("Network send failed (%1): %2")
+                  .arg(QString::fromStdString(event.channel))
+                  .arg(QString::fromStdString(event.message)));
 }
 
 /// 按 ProcessingMode 为 ImageProcessor 绑定或清除处理策略
@@ -407,6 +500,14 @@ void ViewModel::setReplayCurrentFrame(int frame) {
     }
     m_replayCurrentFrame = frame;
     Q_EMIT replayCurrentFrameChanged(frame);
+}
+
+void ViewModel::setDataExchangeOpen(bool value) {
+    if (m_dataExchangeOpen == value) {
+        return;
+    }
+    m_dataExchangeOpen = value;
+    Q_EMIT dataExchangeOpenChanged(value);
 }
 
 void ViewModel::setStatus(QString text) {

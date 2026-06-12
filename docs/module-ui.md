@@ -6,7 +6,7 @@
 >
 > 源文件: `src/ui/`
 >
-> 依赖: `dss_core`, `dss_processing`, `dss_tracking`, `Qt6::Core/Gui/Widgets/Charts`
+> 依赖: `dss_core`, `dss_network_qt`, `dss_processing`, `dss_tracking`, `Qt6::Core/Gui/Widgets/Charts`
 
 ## 模块职责
 
@@ -46,6 +46,7 @@ UI 状态中心，连接后端事件总线与前端 UI。
 | `trackMode` | `int` | 当前跟踪模式 |
 | `exposure` | `double` | 当前曝光时间 (ms) |
 | `isSaving` | `bool` | 是否正在存储 |
+| `isDataExchangeOpen` | `bool` | GXTC/GDCL 数据交换 UDP 是否已显式打开 |
 | `statusText` | `QString` | 状态栏文本 |
 | `replayFrameCount` | `int` | 当前选择的回放序列帧数 |
 | `replayCurrentFrame` | `int` | 当前已显示的回放帧序号（1-based） |
@@ -64,6 +65,8 @@ UI 状态中心，连接后端事件总线与前端 UI。
 | `selectTarget(pos)` | 手动选择目标 | 已配置 Manual 策略并发布 `ManualTargetSelectEvent` |
 | `startSaving()` | 开始存储 | 已启动图像 raw 与轨迹文本 worker |
 | `stopSaving()` | 停止存储 | 已停止并 drain 图像/轨迹存储 worker |
+| `openDataExchange()` | 打开 GXTC/GDCL 数据交换 UDP | 已接入 `DataExchange`；GDCL 端口暂按旧版 GXTC+1 约定推导 |
+| `closeDataExchange()` | 关闭 GXTC/GDCL 数据交换 UDP | 已关闭两路 UDP 并更新打开状态 |
 | `toggleZoom(level)` | 切换缩放级别 | 事件已发出；滚轮缩放在 `ImageDisplay` 内实现 |
 
 **信号:**
@@ -78,6 +81,7 @@ UI 状态中心，连接后端事件总线与前端 UI。
 - `ProcessingCompleteEvent` → `onProcessingComplete()`
 - `TrackResultEvent` → `onTrackResult()`
 - `MasterControlEvent` → `onMasterControl()`
+- `NetworkTransmissionErrorEvent` → `onNetworkTransmissionError()`
 
 ### 2. AppEvent (`app_event.h`)
 
@@ -159,6 +163,7 @@ signals:
 |------|------|
 | 当前帧进度 | 已显示序列总帧数和当前帧号，单帧前进按钮已接入；进度条、后退、拖动定位和完整 legacy 浏览行为待补 |
 | 处理/跟踪策略选择 | 已接入 None/OpenCV 与 GEO/Manual/LEO/SC；Diff/CUDA、OpenCV 参数和 LEO/SC 算法体仍待迁移 |
+| 数据交换 UI 控件 | ViewModel 已提供 GXTC/GDCL 显式 open/close 和错误状态提示；主窗口按钮、端口/IP 参数编辑和日志面板展示待补 |
 | 距离曲线图 | `UI_DistCurve` 未迁移 |
 | 页面布局 | MainWindow 各页面为桩实现 |
 | 主题/样式 | 未实现自定义样式，依赖 ElaWidgetTools 或默认样式 |
@@ -168,6 +173,7 @@ signals:
 ```
 dss_ui_qt
 ├── dss_core
+├── dss_network_qt
 ├── dss_processing
 ├── dss_tracking
 ├── Qt6::Core

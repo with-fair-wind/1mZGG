@@ -27,11 +27,11 @@ auto makeResultPacket(const TargetInfo& target) -> std::optional<ResultPacket> {
     packet.frameFreq = frame->frameFreq;
     packet.blob = blob;
     packet.fovCenterAe = frame->fovCenterAe;
-    packet.fovCenterAeModified =
-        Vec2f{blob.fovCenterAziModify, blob.fovCenterEleModify};
+    packet.fovCenterAeModified = Vec2f{blob.fovCenterAziModify, blob.fovCenterEleModify};
     packet.opticCenter = frame->opticCenter;
     packet.targetPosFrame = blob.centroid;
     packet.targetDistAe = Vec2f{blob.distAzi, blob.distEle};
+    packet.targetSpdAe = target.predictedSpdAe;
     packet.targetPosZxdw = frame->posZxdw;
     packet.targetPosTwdw = frame->posTwdw;
     packet.targetMvGdcl = frame->magnitude;

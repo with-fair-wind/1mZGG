@@ -59,6 +59,13 @@ struct ImageSendEvent {
     uint64_t frameSeq = 0;  ///< 帧序号
 };
 
+/// 网络事件：报文发送失败
+struct NetworkTransmissionErrorEvent {
+    std::string channel;          ///< 网络通道名称
+    std::string message;          ///< 错误描述
+    uint64_t attemptedBytes = 0;  ///< 尝试发送的字节数
+};
+
 /// 串口事件：主控指令
 struct MasterControlEvent {
     float exposure = 0.0f;  ///< 曝光时间

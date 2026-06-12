@@ -7,8 +7,7 @@
 
 namespace {
 
-[[nodiscard]] auto makeFrame(std::uint64_t frameSeq, bool valid)
-    -> Dss::Core::TargetFrameInfo {
+[[nodiscard]] auto makeFrame(std::uint64_t frameSeq, bool valid) -> Dss::Core::TargetFrameInfo {
     Dss::Core::MeasuredBlob blob{};
     blob.id = "blob-fallback";
     blob.centroid = Dss::Core::Vec2f{123.5F, 456.25F};
@@ -40,6 +39,7 @@ namespace {
 TEST(ResultPacketUtils, BuildsPacketFromLatestTargetFrame) {
     Dss::Core::TargetInfo target{};
     target.targetId = "target-42";
+    target.predictedSpdAe = Dss::Core::Vec2f{0.125F, -0.25F};
     target.frameInfos.push_back(makeFrame(100U, true));
     target.frameInfos.push_back(makeFrame(101U, false));
 
@@ -56,6 +56,8 @@ TEST(ResultPacketUtils, BuildsPacketFromLatestTargetFrame) {
     EXPECT_FLOAT_EQ(packet->opticCenter.y, 3073.0F);
     EXPECT_FLOAT_EQ(packet->targetPosFrame.x, 123.5F);
     EXPECT_FLOAT_EQ(packet->targetDistAe.y, 0.5F);
+    EXPECT_FLOAT_EQ(packet->targetSpdAe.x, 0.125F);
+    EXPECT_FLOAT_EQ(packet->targetSpdAe.y, -0.25F);
     EXPECT_FLOAT_EQ(packet->targetPosZxdw.x, 3.0F);
     EXPECT_FLOAT_EQ(packet->targetPosTwdw.y, 6.0F);
     EXPECT_FLOAT_EQ(packet->targetMvGdcl, 11.25F);

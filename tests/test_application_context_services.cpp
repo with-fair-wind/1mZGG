@@ -9,6 +9,7 @@
 #include "dss/acquisition/i_frame_source.h"
 #include "dss/acquisition/image_sequence_frame_source.h"
 #include "dss/app/application_context.h"
+#include "dss/app/track_result_data_exchange_bridge.h"
 #include "dss/comm/i_serial_channel.h"
 #include "dss/network/atmos_receiver.h"
 #include "dss/network/data_exchange.h"
@@ -92,18 +93,25 @@ TEST(ApplicationContextServices, RegistersCommunicationServicesWithoutOpeningPor
     const auto dataExchange = context.registry().get<Dss::Network::DataExchange>("data_exchange");
     const auto atmosReceiver =
         context.registry().get<Dss::Network::AtmosReceiver>("atmos_receiver");
+    const auto trackResultDataExchangeBridge =
+        context.registry().get<Dss::App::TrackResultDataExchangeBridge>(
+            "track_result_data_exchange_bridge");
 
     ASSERT_NE(imageSender, nullptr);
     ASSERT_NE(heartbeat, nullptr);
     ASSERT_NE(errorDiagnostics, nullptr);
     ASSERT_NE(dataExchange, nullptr);
     ASSERT_NE(atmosReceiver, nullptr);
+    ASSERT_NE(trackResultDataExchangeBridge, nullptr);
 
     EXPECT_FALSE(imageSender->isOpen());
     EXPECT_FALSE(heartbeat->isOpen());
     EXPECT_FALSE(errorDiagnostics->isOpen());
     EXPECT_FALSE(dataExchange->isOpen());
     EXPECT_FALSE(atmosReceiver->isOpen());
+
+    context.bus().emit(trackEvent());
+    EXPECT_FALSE(dataExchange->isOpen());
 
     const auto camera = context.registry().get<Dss::Acquisition::ICameraController>("camera");
 
