@@ -30,6 +30,9 @@ namespace {
 /// UDP 端口最大值。
 constexpr int kMaxUdpPort = 65535;
 
+/// 串口波特率最大值，覆盖常见 USB/高速串口配置。
+constexpr int kMaxSerialBaudRate = 4'000'000;
+
 /// @brief CommNetConfig 中 UDP 端点成员指针类型。
 using EndpointMember = Dss::Core::UdpEndpointConfig Dss::Core::CommNetConfig::*;
 
@@ -266,6 +269,24 @@ constexpr std::array kSerialChannelDescriptors{
     return port > 0 && port <= kMaxUdpPort;
 }
 
+/// @brief 判断串口波特率是否处于可配置范围
+/// @return 波特率合法时返回 true
+[[nodiscard]] auto isSerialBaudRateInRange(int baudRate) -> bool {
+    return baudRate > 0 && baudRate <= kMaxSerialBaudRate;
+}
+
+/// @brief 判断串口数据位是否处于常用 Qt 串口范围
+/// @return 数据位合法时返回 true
+[[nodiscard]] auto isSerialDataBitsInRange(int dataBits) -> bool {
+    return dataBits >= 5 && dataBits <= 8;
+}
+
+/// @brief 判断串口停止位是否处于当前配置支持范围
+/// @return 停止位合法时返回 true
+[[nodiscard]] auto isSerialStopBitsInRange(int stopBits) -> bool {
+    return stopBits == 1 || stopBits == 2;
+}
+
 /// @brief 根据 UI 输入构造 UDP 端点配置
 /// @return 规范化后的 UDP 端点配置
 [[nodiscard]] auto makeEndpointConfig(const QString& localIp, int localPort,
@@ -277,6 +298,18 @@ constexpr std::array kSerialChannelDescriptors{
     endpoint.remoteIp = remoteIp.trimmed().toStdString();
     endpoint.remotePort = static_cast<std::uint16_t>(remotePort);
     return endpoint;
+}
+
+/// @brief 根据 UI 输入构造串口配置
+/// @return 规范化后的串口配置
+[[nodiscard]] auto makeSerialConfig(const QString& portName, int baudRate, int dataBits,
+                                    int stopBits) -> Dss::Core::SerialConfig {
+    return Dss::Core::SerialConfig{
+        .portName = portName.trimmed().toStdString(),
+        .baudRate = baudRate,
+        .dataBits = dataBits,
+        .stopBits = stopBits,
+    };
 }
 
 }  // namespace
@@ -726,6 +759,46 @@ void ViewModel::closeSerialChannel(const QString& key) {
     Q_EMIT serialChannelStateChanged(descriptorText(descriptor->key), false);
     Q_EMIT serialChannelsChanged();
     setStatus(QString("Serial channel closed: %1").arg(displayName));
+}
+
+/// 校验并应用单个串口通道配置
+bool ViewModel::applySerialChannelConfig(const QString& key, const QString& portName, int baudRate,
+                                         int dataBits, int stopBits) {
+    const auto* descriptor = findSerialChannelDescriptor(key);
+    if (descriptor == nullptr) {
+        setStatus(QString("Unknown serial channel: %1").arg(key));
+        return false;
+    }
+    if (portName.trimmed().isEmpty()) {
+        setStatus("Serial port name must not be empty");
+        return false;
+    }
+    if (!isSerialBaudRateInRange(baudRate)) {
+        setStatus(QString("Serial baud rate must be 1-%1").arg(kMaxSerialBaudRate));
+        return false;
+    }
+    if (!isSerialDataBitsInRange(dataBits)) {
+        setStatus("Serial data bits must be 5-8");
+        return false;
+    }
+    if (!isSerialStopBitsInRange(stopBits)) {
+        setStatus("Serial stop bits must be 1 or 2");
+        return false;
+    }
+
+    auto& commNet = Dss::Core::Config::instance().mutableCommNet();
+    commNet.*(descriptor->member) = makeSerialConfig(portName, baudRate, dataBits, stopBits);
+
+    auto service = registeredSerialChannel(m_registry, descriptor->serviceName);
+    if (service && service->isOpen()) {
+        service->close();
+        Q_EMIT serialChannelStateChanged(descriptorText(descriptor->key), false);
+    }
+
+    Q_EMIT serialChannelsChanged();
+    setStatus(
+        QString("Serial channel config applied: %1").arg(descriptorText(descriptor->displayName)));
+    return true;
 }
 
 /// 校验并应用 GXTC/GDCL 数据交换端点配置

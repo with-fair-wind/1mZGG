@@ -429,6 +429,91 @@ TEST(ViewModelNetwork, RejectsUnknownOrUnregisteredSerialChannelOpen) {
     EXPECT_FALSE(viewModel.isSerialChannelOpen("display"));
 }
 
+TEST(ViewModelNetwork, AppliesSerialChannelConfigWithoutOpeningHardware) {
+    ensureQCoreApplication();
+
+    auto& config = Dss::Core::Config::instance().mutableCommNet();
+    config.displayPort = {"COM31", 115200, 8, 1};
+
+    Dss::Ui::ViewModel::MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    auto display = std::make_shared<RecordingSerialChannel>(20, 9);
+    registerSerialChannel(registry, "display", display);
+
+    Dss::Ui::ViewModel viewModel(bus, registry);
+    int configChanges = 0;
+    QObject::connect(&viewModel, &Dss::Ui::ViewModel::serialChannelsChanged,
+                     [&configChanges] { ++configChanges; });
+
+    ASSERT_TRUE(viewModel.applySerialChannelConfig("display", " COM32 ", 57600, 7, 2));
+
+    EXPECT_EQ(config.displayPort.portName, "COM32");
+    EXPECT_EQ(config.displayPort.baudRate, 57600);
+    EXPECT_EQ(config.displayPort.dataBits, 7);
+    EXPECT_EQ(config.displayPort.stopBits, 2);
+    EXPECT_FALSE(display->isOpen());
+    EXPECT_EQ(display->openCount, 0);
+    EXPECT_EQ(display->closeCount, 0);
+    EXPECT_EQ(configChanges, 1);
+    EXPECT_EQ(viewModel.statusText(), QString("Serial channel config applied: Display"));
+}
+
+TEST(ViewModelNetwork, ApplyingSerialChannelConfigClosesOpenedChannel) {
+    ensureQCoreApplication();
+
+    auto& config = Dss::Core::Config::instance().mutableCommNet();
+    config.displayPort = {"COM41", 115200, 8, 1};
+
+    Dss::Ui::ViewModel::MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    auto display = std::make_shared<RecordingSerialChannel>(20, 9);
+    registerSerialChannel(registry, "display", display);
+
+    Dss::Ui::ViewModel viewModel(bus, registry);
+    ASSERT_TRUE(viewModel.openSerialChannel("display"));
+    ASSERT_TRUE(display->isOpen());
+
+    ASSERT_TRUE(viewModel.applySerialChannelConfig("display", "COM42", 230400, 8, 1));
+
+    EXPECT_EQ(config.displayPort.portName, "COM42");
+    EXPECT_EQ(config.displayPort.baudRate, 230400);
+    EXPECT_FALSE(display->isOpen());
+    EXPECT_FALSE(viewModel.isSerialChannelOpen("display"));
+    EXPECT_EQ(display->openCount, 1);
+    EXPECT_EQ(display->closeCount, 1);
+    EXPECT_EQ(viewModel.statusText(), QString("Serial channel config applied: Display"));
+}
+
+TEST(ViewModelNetwork, RejectsInvalidOrUnknownSerialChannelConfig) {
+    ensureQCoreApplication();
+
+    auto& config = Dss::Core::Config::instance().mutableCommNet();
+    config.displayPort = {"COM51", 115200, 8, 1};
+
+    Dss::Ui::ViewModel::MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    Dss::Ui::ViewModel viewModel(bus, registry);
+
+    EXPECT_FALSE(viewModel.applySerialChannelConfig("display", "", 57600, 8, 1));
+    EXPECT_EQ(config.displayPort.portName, "COM51");
+    EXPECT_EQ(viewModel.statusText(), QString("Serial port name must not be empty"));
+
+    EXPECT_FALSE(viewModel.applySerialChannelConfig("display", "COM52", 0, 8, 1));
+    EXPECT_EQ(config.displayPort.baudRate, 115200);
+    EXPECT_EQ(viewModel.statusText(), QString("Serial baud rate must be 1-4000000"));
+
+    EXPECT_FALSE(viewModel.applySerialChannelConfig("display", "COM52", 57600, 9, 1));
+    EXPECT_EQ(config.displayPort.dataBits, 8);
+    EXPECT_EQ(viewModel.statusText(), QString("Serial data bits must be 5-8"));
+
+    EXPECT_FALSE(viewModel.applySerialChannelConfig("display", "COM52", 57600, 8, 3));
+    EXPECT_EQ(config.displayPort.stopBits, 1);
+    EXPECT_EQ(viewModel.statusText(), QString("Serial stop bits must be 1 or 2"));
+
+    EXPECT_FALSE(viewModel.applySerialChannelConfig("unknown", "COM52", 57600, 8, 1));
+    EXPECT_EQ(viewModel.statusText(), QString("Unknown serial channel: unknown"));
+}
+
 TEST(ViewModelNetwork, RejectsInvalidOrUnknownNetworkEndpoint) {
     ensureQCoreApplication();
 

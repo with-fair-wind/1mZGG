@@ -258,11 +258,13 @@ void MainWindow::setupCommStatusPage() {
     /// @brief 通信页中单个串口通道的控件集合。
     struct SerialEditor {
         QString key;               ///< 串口通道键名
-        QLabel* portName;          ///< 端口名称标签
-        QLabel* baudRate;          ///< 波特率标签
-        QLabel* format;            ///< 数据位/停止位标签
+        QLineEdit* portName;       ///< 端口名称输入框
+        QSpinBox* baudRate;        ///< 波特率输入框
+        QSpinBox* dataBits;        ///< 数据位输入框
+        QSpinBox* stopBits;        ///< 停止位输入框
         QLabel* frameSize;         ///< 收发帧长标签
         QLabel* serviceState;      ///< 服务打开状态标签
+        QPushButton* applyButton;  ///< 应用配置按钮
         QPushButton* openButton;   ///< 显式打开串口按钮
         QPushButton* closeButton;  ///< 显式关闭串口按钮
     };
@@ -281,7 +283,7 @@ void MainWindow::setupCommStatusPage() {
     auto serialEditors = std::make_shared<std::vector<SerialEditor>>();
     auto endpointEditors = std::make_shared<std::vector<EndpointEditor>>();
 
-    auto makeIpEdit = [](const QString& text) {
+    auto makeLineEdit = [](const QString& text) {
         auto* edit = new QLineEdit(text);
         edit->setClearButtonEnabled(true);
         return edit;
@@ -292,20 +294,29 @@ void MainWindow::setupCommStatusPage() {
         spin->setValue(value);
         return spin;
     };
+    auto makeSerialSpin = [](int minimum, int maximum, int value) {
+        auto* spin = new QSpinBox;
+        spin->setRange(minimum, maximum);
+        spin->setValue(value);
+        return spin;
+    };
 
-    auto makeSerialGroup = [this, serialEditors](const SerialChannelState& channel) {
+    auto makeSerialGroup = [this, serialEditors, makeLineEdit,
+                            makeSerialSpin](const SerialChannelState& channel) {
         auto* group = new QGroupBox(channel.displayName);
         auto* form = new QFormLayout(group);
-        auto* portName = new QLabel(channel.portName);
-        auto* baudRate = new QLabel(QString::number(channel.baudRate));
-        auto* format =
-            new QLabel(QString("%1 data / %2 stop").arg(channel.dataBits).arg(channel.stopBits));
+        auto* portName = makeLineEdit(channel.portName);
+        auto* baudRate = makeSerialSpin(1, 4'000'000, channel.baudRate);
+        auto* dataBits = makeSerialSpin(5, 8, channel.dataBits);
+        auto* stopBits = makeSerialSpin(1, 2, channel.stopBits);
         auto* frameSize = new QLabel;
         auto* serviceState = new QLabel;
 #ifdef DSS_HAS_ELA
+        auto* btnApplySerial = new ElaPushButton("Apply");
         auto* btnOpenSerial = new ElaPushButton("Open");
         auto* btnCloseSerial = new ElaPushButton("Close");
 #else
+        auto* btnApplySerial = new QPushButton("Apply");
         auto* btnOpenSerial = new QPushButton("Open");
         auto* btnCloseSerial = new QPushButton("Close");
 #endif
@@ -315,15 +326,28 @@ void MainWindow::setupCommStatusPage() {
         serviceRow->addWidget(serviceState);
         serviceRow->addStretch();
 
-        serialEditors->push_back(SerialEditor{channel.key, portName, baudRate, format, frameSize,
-                                              serviceState, btnOpenSerial, btnCloseSerial});
+        serialEditors->push_back(SerialEditor{channel.key, portName, baudRate, dataBits, stopBits,
+                                              frameSize, serviceState, btnApplySerial,
+                                              btnOpenSerial, btnCloseSerial});
 
         form->addRow("Port", portName);
         form->addRow("Baud", baudRate);
-        form->addRow("Format", format);
+        form->addRow("Data Bits", dataBits);
+        form->addRow("Stop Bits", stopBits);
         form->addRow("Frames", frameSize);
+        form->addRow(btnApplySerial);
         form->addRow("Service", serviceRow);
 
+        connect(btnApplySerial, &QPushButton::clicked, [this, serialEditors, key = channel.key] {
+            for (const auto& editor : *serialEditors) {
+                if (editor.key == key) {
+                    m_vm.applySerialChannelConfig(
+                        editor.key, editor.portName->text(), editor.baudRate->value(),
+                        editor.dataBits->value(), editor.stopBits->value());
+                    return;
+                }
+            }
+        });
         connect(btnOpenSerial, &QPushButton::clicked,
                 [this, key = channel.key] { m_vm.openSerialChannel(key); });
         connect(btnCloseSerial, &QPushButton::clicked,
@@ -331,13 +355,13 @@ void MainWindow::setupCommStatusPage() {
         return group;
     };
 
-    auto makeEndpointGroup = [this, endpointEditors, makeIpEdit,
+    auto makeEndpointGroup = [this, endpointEditors, makeLineEdit,
                               makePortSpin](const NetworkEndpointState& endpoint) {
         auto* group = new QGroupBox(endpoint.displayName);
         auto* form = new QFormLayout(group);
-        auto* localIp = makeIpEdit(endpoint.localIp);
+        auto* localIp = makeLineEdit(endpoint.localIp);
         auto* localPort = makePortSpin(0, endpoint.localPort);
-        auto* remoteIp = makeIpEdit(endpoint.remoteIp);
+        auto* remoteIp = makeLineEdit(endpoint.remoteIp);
         auto* remotePort = makePortSpin(0, endpoint.remotePort);
 
 #ifdef DSS_HAS_ELA
@@ -454,9 +478,9 @@ void MainWindow::setupCommStatusPage() {
             for (const auto& editor : *serialEditors) {
                 if (editor.key == channel.key) {
                     editor.portName->setText(channel.portName);
-                    editor.baudRate->setText(QString::number(channel.baudRate));
-                    editor.format->setText(
-                        QString("%1 data / %2 stop").arg(channel.dataBits).arg(channel.stopBits));
+                    editor.baudRate->setValue(channel.baudRate);
+                    editor.dataBits->setValue(channel.dataBits);
+                    editor.stopBits->setValue(channel.stopBits);
                     editor.frameSize->setText(QString("rx %1 / tx %2")
                                                   .arg(channel.recvFrameSize)
                                                   .arg(channel.sendFrameSize));
@@ -464,6 +488,7 @@ void MainWindow::setupCommStatusPage() {
                         channel.isRegistered
                             ? (channel.isOpen ? "Service: opened" : "Service: closed")
                             : "Service: not registered");
+                    editor.applyButton->setEnabled(true);
                     editor.openButton->setEnabled(channel.isRegistered && !channel.isOpen);
                     editor.closeButton->setEnabled(channel.isRegistered && channel.isOpen);
                 }

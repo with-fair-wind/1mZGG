@@ -195,6 +195,10 @@ public:
     Q_INVOKABLE bool openSerialChannel(const QString& key);
     /// @brief 显式关闭指定串口通道服务
     Q_INVOKABLE void closeSerialChannel(const QString& key);
+    /// @brief 应用单个串口通道配置
+    /// @return 参数合法并写入内存配置时返回 true
+    Q_INVOKABLE bool applySerialChannelConfig(const QString& key, const QString& portName,
+                                              int baudRate, int dataBits, int stopBits);
     /// @brief 应用 GXTC/GDCL 数据交换端点配置
     /// @return 参数合法并写入内存配置时返回 true
     Q_INVOKABLE bool applyDataExchangeEndpoints(const QString& gxtcLocalIp, int gxtcLocalPort,

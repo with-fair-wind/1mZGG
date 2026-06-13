@@ -73,6 +73,7 @@ UI 状态中心，连接后端事件总线与前端 UI。
 | `stopSaving()` | 停止存储 | 已停止并 drain 图像/轨迹存储 worker |
 | `applyNetworkEndpointConfig(...)` | 应用单个 UDP 端点配置 | 已覆盖图像发送、诊断、大气、心跳、GXTC/GDCL；不会自动打开 UDP |
 | `applyDataExchangeEndpoints(...)` | 应用 GXTC/GDCL 本地/远端 IP 与端口 | 已校验端口范围并更新内存配置；不会自动打开 UDP |
+| `applySerialChannelConfig(...)` | 应用单个串口通道配置 | 已覆盖显示、曝光、主控、伺服串口；参数合法时写入内存配置，已打开串口会先关闭，不会自动重开 |
 | `openNetworkEndpoint(key)` | 打开可控网络服务 UDP | 已通过 `INetworkChannel` 接入图像发送、诊断、大气接收、心跳；缺失服务会返回错误状态 |
 | `closeNetworkEndpoint(key)` | 关闭可控网络服务 UDP | 已通过 `INetworkChannel` 接入图像发送、诊断、大气接收、心跳，并刷新通信页状态 |
 | `openSerialChannel(key)` | 打开可控串口通道 | 已通过 `ISerialChannel` 接入显示、曝光、主控、伺服串口；缺失服务会返回错误状态 |
@@ -181,7 +182,7 @@ signals:
 | 当前帧进度 | 已显示序列总帧数和当前帧号，单帧前进按钮已接入；进度条、后退、拖动定位和完整 legacy 浏览行为待补 |
 | 处理/跟踪策略选择 | 已接入 None/OpenCV 与 GEO/Manual/LEO/SC；Diff/CUDA、OpenCV 参数和 LEO/SC 算法体仍待迁移 |
 | 网络端点 UI 控件 | 图像发送、诊断、大气、心跳、GXTC/GDCL 端点编辑已由统一表单生成；图像发送、诊断、大气、心跳显式 open/close 按钮已通过 `INetworkChannel` 接入 |
-| 串口通道 UI 控件 | 显示、曝光、主控、伺服串口已展示端口/波特率/帧长，并通过 `ISerialChannel` 接入显式 open/close；串口参数编辑和协议级联调命令待补 |
+| 串口通道 UI 控件 | 显示、曝光、主控、伺服串口已可编辑端口/波特率/数据位/停止位，并通过 `ISerialChannel` 接入显式 open/close；协议级联调命令待补 |
 | 数据交换 UI 控件 | GXTC/GDCL 显式 open/close 和错误状态提示已接入；日志面板分级展示待补 |
 | 距离曲线图 | `UI_DistCurve` 未迁移 |
 | 页面布局 | 控制页、显示页、通信页已有首版功能；分析/设置/日志仍是轻量桩实现 |
