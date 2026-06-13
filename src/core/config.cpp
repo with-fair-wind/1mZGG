@@ -170,6 +170,23 @@ using Json = nlohmann::json;
     return fallback;
 }
 
+/// 计算下一个 UDP 端口，到达上限时保持原值
+[[nodiscard]] auto nextUdpPort(uint16_t port) -> uint16_t {
+    if (port == std::numeric_limits<uint16_t>::max()) {
+        return port;
+    }
+    return static_cast<uint16_t>(port + 1U);
+}
+
+/// 根据旧版 GXTC 端点推导 GDCL 端点，兼容 GDCL=GXTC+1 的默认端口约定
+[[nodiscard]] auto makeLegacyGdclEndpoint(UdpEndpointConfig gxtcConfig) -> UdpEndpointConfig {
+    if (gxtcConfig.localPort != 0) {
+        gxtcConfig.localPort = nextUdpPort(gxtcConfig.localPort);
+    }
+    gxtcConfig.remotePort = nextUdpPort(gxtcConfig.remotePort);
+    return gxtcConfig;
+}
+
 [[nodiscard]] auto serialToJson(const SerialConfig& config) -> Json {
     return {
         {"portName", config.portName},
@@ -221,6 +238,9 @@ auto Config::load(const std::filesystem::path& configPath) -> std::expected<void
 
     m_commNet.imageSender = loadEndpoint(commNet, "imageSender", {"", 0, "192.168.1.2", 4000});
     m_commNet.exchange = loadEndpoint(commNet, "exchange", {"", 0, "192.168.1.3", 5000});
+    m_commNet.exchangeGxtc = loadEndpoint(commNet, "exchangeGxtc", m_commNet.exchange);
+    m_commNet.exchangeGdcl =
+        loadEndpoint(commNet, "exchangeGdcl", makeLegacyGdclEndpoint(m_commNet.exchangeGxtc));
     m_commNet.errorDiag = loadEndpoint(commNet, "errorDiag", {"", 0, "192.168.1.4", 5001});
     m_commNet.atmos = loadEndpoint(commNet, "atmos", {"", 0, "192.168.1.5", 5002});
     m_commNet.heartbeat = loadEndpoint(commNet, "heartbeat", {"", 15361, "0.0.0.0", 15362});
@@ -279,6 +299,8 @@ auto Config::save() -> std::expected<void, std::string> {
              {"cameraPort", m_commNet.cameraPort},
              {"imageSender", endpointToJson(m_commNet.imageSender)},
              {"exchange", endpointToJson(m_commNet.exchange)},
+             {"exchangeGxtc", endpointToJson(m_commNet.exchangeGxtc)},
+             {"exchangeGdcl", endpointToJson(m_commNet.exchangeGdcl)},
              {"errorDiag", endpointToJson(m_commNet.errorDiag)},
              {"atmos", endpointToJson(m_commNet.atmos)},
              {"heartbeat", endpointToJson(m_commNet.heartbeat)},

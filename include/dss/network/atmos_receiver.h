@@ -6,12 +6,13 @@
 #include <string>
 
 #include "dss/core/event_bus.h"
+#include "dss/network/i_network_channel.h"
 #include "dss/network/udp_channel.h"
 
 namespace Dss::Network {
 
 /// 气象数据 UDP 接收服务，解码报文并通过事件总线发布大气采样事件
-class AtmosReceiver {
+class AtmosReceiver : public INetworkChannel {
 public:
     using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;  ///< 事件总线类型别名
 
@@ -26,13 +27,16 @@ public:
      * @param config UDP 端点配置
      * @return 成功返回空值，失败返回错误描述
      */
-    auto open(const UdpEndpointConfig& config) -> std::expected<void, std::string>;
+    auto open(const UdpEndpointConfig& config) -> std::expected<void, std::string> override;
 
     /// 关闭 UDP 通道
-    void close();
+    void close() override;
 
     /// 查询通道是否已绑定
-    [[nodiscard]] bool isOpen() const;
+    [[nodiscard]] bool isOpen() const override;
+
+    /// 获取当前网络通道运行状态
+    [[nodiscard]] auto status() const -> Dss::Core::Status override;
 
 private:
     /**

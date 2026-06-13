@@ -1,15 +1,20 @@
 #include "dss/ui/view_model.h"
 
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <expected>
 #include <filesystem>
-#include <limits>
 #include <memory>
-#include <optional>
+#include <string_view>
 #include <vector>
 
 #include "dss/acquisition/i_frame_source.h"
 #include "dss/acquisition/image_sequence_frame_source.h"
+#include "dss/comm/i_serial_channel.h"
 #include "dss/core/config.h"
 #include "dss/network/data_exchange.h"
+#include "dss/network/i_network_channel.h"
 #include "dss/processing/image_processor.h"
 #ifdef DSS_HAS_OPENCV
 #include "dss/processing/opencv_processing_strategy.h"
@@ -20,35 +25,258 @@
 #include "dss/tracking/track_manager.h"
 
 namespace Dss::Ui {
-
 namespace {
 
-/// 计算下一个 UDP 端口；到达 uint16 上限时返回空值
-[[nodiscard]] auto nextUdpPort(uint16_t port) -> std::optional<uint16_t> {
-    if (port == std::numeric_limits<uint16_t>::max()) {
-        return std::nullopt;
+/// UDP 端口最大值。
+constexpr int kMaxUdpPort = 65535;
+
+/// @brief CommNetConfig 中 UDP 端点成员指针类型。
+using EndpointMember = Dss::Core::UdpEndpointConfig Dss::Core::CommNetConfig::*;
+
+/// @brief CommNetConfig 中串口配置成员指针类型。
+using SerialMember = Dss::Core::SerialConfig Dss::Core::CommNetConfig::*;
+
+/// @brief 可编辑网络端点描述。
+struct NetworkEndpointDescriptor {
+    std::string_view key;          ///< 端点键名
+    std::string_view displayName;  ///< 界面显示名称
+    EndpointMember member;         ///< 对应配置成员
+};
+
+/// @brief 可由 UI 显式打开/关闭的网络服务描述。
+struct NetworkServiceDescriptor {
+    std::string_view key;          ///< 端点键名
+    std::string_view serviceName;  ///< 服务注册名
+    std::string_view displayName;  ///< 界面显示名称
+    EndpointMember member;         ///< 对应配置成员
+};
+
+/// @brief 可由 UI 显式打开/关闭的串口通道描述。
+struct SerialChannelDescriptor {
+    std::string_view key;          ///< 串口通道键名
+    std::string_view serviceName;  ///< 服务注册名
+    std::string_view displayName;  ///< 界面显示名称
+    SerialMember member;           ///< 对应配置成员
+};
+
+/// 可由 UI 编辑的 UDP 端点描述表。
+constexpr std::array kNetworkEndpointDescriptors{
+    NetworkEndpointDescriptor{"image_sender", "Image Sender",
+                              &Dss::Core::CommNetConfig::imageSender},
+    NetworkEndpointDescriptor{"error_diag", "Error Diagnostics",
+                              &Dss::Core::CommNetConfig::errorDiag},
+    NetworkEndpointDescriptor{"atmos", "Atmos Receiver", &Dss::Core::CommNetConfig::atmos},
+    NetworkEndpointDescriptor{"heartbeat", "Heartbeat", &Dss::Core::CommNetConfig::heartbeat},
+    NetworkEndpointDescriptor{"exchange_gxtc", "GXTC Data Exchange",
+                              &Dss::Core::CommNetConfig::exchangeGxtc},
+    NetworkEndpointDescriptor{"exchange_gdcl", "GDCL Data Exchange",
+                              &Dss::Core::CommNetConfig::exchangeGdcl},
+};
+
+/// 可由 UI 显式打开/关闭的网络服务描述表。
+constexpr std::array kNetworkServiceDescriptors{
+    NetworkServiceDescriptor{"image_sender", "image_sender", "Image Sender",
+                             &Dss::Core::CommNetConfig::imageSender},
+    NetworkServiceDescriptor{"error_diag", "error_diagnostics", "Error Diagnostics",
+                             &Dss::Core::CommNetConfig::errorDiag},
+    NetworkServiceDescriptor{"atmos", "atmos_receiver", "Atmos Receiver",
+                             &Dss::Core::CommNetConfig::atmos},
+    NetworkServiceDescriptor{"heartbeat", "heartbeat", "Heartbeat",
+                             &Dss::Core::CommNetConfig::heartbeat},
+};
+
+/// 可由 UI 显式打开/关闭的串口通道描述表。
+constexpr std::array kSerialChannelDescriptors{
+    SerialChannelDescriptor{"display", "display", "Display",
+                            &Dss::Core::CommNetConfig::displayPort},
+    SerialChannelDescriptor{"exposure", "exposure", "Exposure",
+                            &Dss::Core::CommNetConfig::exposurePort},
+    SerialChannelDescriptor{"master_control", "master_control", "Master Control",
+                            &Dss::Core::CommNetConfig::masterControlPort},
+    SerialChannelDescriptor{"servo", "servo", "Servo", &Dss::Core::CommNetConfig::servoPort},
+};
+
+/// @brief 查找网络端点描述。
+[[nodiscard]] auto findNetworkEndpointDescriptor(const QString& key)
+    -> const NetworkEndpointDescriptor* {
+    const auto normalizedKey = key.trimmed().toStdString();
+    for (const auto& descriptor : kNetworkEndpointDescriptors) {
+        if (descriptor.key == normalizedKey) {
+            return &descriptor;
+        }
     }
-    return static_cast<uint16_t>(port + 1U);
+    return nullptr;
 }
 
-/// 基于 GXTC 端点推导 GDCL 端点，兼容旧版 GDCL=GXTC+1 的端口约定
-[[nodiscard]] auto makeGdclExchangeConfig(const Dss::Core::UdpEndpointConfig& gxtcConfig)
-    -> std::optional<Dss::Core::UdpEndpointConfig> {
-    auto gdclConfig = gxtcConfig;
-    if (gdclConfig.localPort != 0) {
-        auto localPort = nextUdpPort(gdclConfig.localPort);
-        if (!localPort.has_value()) {
-            return std::nullopt;
+/// @brief 查找可控网络服务描述。
+[[nodiscard]] auto findNetworkServiceDescriptor(const QString& key)
+    -> const NetworkServiceDescriptor* {
+    const auto normalizedKey = key.trimmed().toStdString();
+    for (const auto& descriptor : kNetworkServiceDescriptors) {
+        if (descriptor.key == normalizedKey) {
+            return &descriptor;
         }
-        gdclConfig.localPort = *localPort;
     }
+    return nullptr;
+}
 
-    auto remotePort = nextUdpPort(gdclConfig.remotePort);
-    if (!remotePort.has_value()) {
-        return std::nullopt;
+/// @brief 查找可控串口通道描述。
+[[nodiscard]] auto findSerialChannelDescriptor(const QString& key)
+    -> const SerialChannelDescriptor* {
+    const auto normalizedKey = key.trimmed().toStdString();
+    for (const auto& descriptor : kSerialChannelDescriptors) {
+        if (descriptor.key == normalizedKey) {
+            return &descriptor;
+        }
     }
-    gdclConfig.remotePort = *remotePort;
-    return gdclConfig;
+    return nullptr;
+}
+
+/// @brief 将描述表文本转为 Qt 字符串。
+[[nodiscard]] auto descriptorText(std::string_view text) -> QString {
+    return QString::fromUtf8(text.data(), static_cast<qsizetype>(text.size()));
+}
+
+/// @brief 获取已注册的统一网络通道服务。
+[[nodiscard]] auto registeredNetworkService(Dss::Core::ServiceRegistry& registry,
+                                            std::string_view name)
+    -> std::shared_ptr<Dss::Network::INetworkChannel> {
+    return registry.tryGet<Dss::Network::INetworkChannel>(name);
+}
+
+/// @brief 获取已注册的统一串口通道服务。
+[[nodiscard]] auto registeredSerialChannel(Dss::Core::ServiceRegistry& registry,
+                                           std::string_view name)
+    -> std::shared_ptr<Dss::Comm::ISerialChannel> {
+    return registry.tryGet<Dss::Comm::ISerialChannel>(name);
+}
+
+/// @brief 打开已注册的统一网络通道服务。
+[[nodiscard]] auto openRegisteredNetworkService(Dss::Core::ServiceRegistry& registry,
+                                                std::string_view name,
+                                                const Dss::Core::UdpEndpointConfig& config)
+    -> std::expected<void, std::string> {
+    auto service = registeredNetworkService(registry, name);
+    if (!service) {
+        return std::unexpected("service is not registered");
+    }
+    return service->open(config);
+}
+
+/// @brief 打开已注册的统一串口通道服务。
+[[nodiscard]] auto openRegisteredSerialChannel(Dss::Core::ServiceRegistry& registry,
+                                               std::string_view name,
+                                               const Dss::Core::SerialConfig& config)
+    -> std::expected<void, std::string> {
+    auto service = registeredSerialChannel(registry, name);
+    if (!service) {
+        return std::unexpected("service is not registered");
+    }
+    return service->open(config);
+}
+
+/// @brief 关闭已注册的统一网络通道服务。
+[[nodiscard]] auto closeRegisteredNetworkService(Dss::Core::ServiceRegistry& registry,
+                                                 std::string_view name) -> bool {
+    auto service = registeredNetworkService(registry, name);
+    if (!service) {
+        return false;
+    }
+    service->close();
+    return true;
+}
+
+/// @brief 关闭已注册的统一串口通道服务。
+[[nodiscard]] auto closeRegisteredSerialChannel(Dss::Core::ServiceRegistry& registry,
+                                                std::string_view name) -> bool {
+    auto service = registeredSerialChannel(registry, name);
+    if (!service) {
+        return false;
+    }
+    service->close();
+    return true;
+}
+
+/// @brief 读取端点本地 IP
+/// @return Qt 字符串
+[[nodiscard]] auto endpointLocalIp(const Dss::Core::UdpEndpointConfig& endpoint) -> QString {
+    return QString::fromStdString(endpoint.localIp);
+}
+
+/// @brief 读取端点远端 IP
+/// @return Qt 字符串
+[[nodiscard]] auto endpointRemoteIp(const Dss::Core::UdpEndpointConfig& endpoint) -> QString {
+    return QString::fromStdString(endpoint.remoteIp);
+}
+
+/// @brief 判断端点是否有对应的可控网络服务。
+[[nodiscard]] auto hasControllableService(std::string_view key) -> bool {
+    for (const auto& descriptor : kNetworkServiceDescriptors) {
+        if (descriptor.key == key) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/// @brief 将端点配置转换为 UI 状态。
+[[nodiscard]] auto makeNetworkEndpointState(const NetworkEndpointDescriptor& descriptor,
+                                            const Dss::Core::UdpEndpointConfig& endpoint,
+                                            bool isOpen) -> NetworkEndpointState {
+    return NetworkEndpointState{
+        .key = descriptorText(descriptor.key),
+        .displayName = descriptorText(descriptor.displayName),
+        .localIp = endpointLocalIp(endpoint),
+        .localPort = endpoint.localPort,
+        .remoteIp = endpointRemoteIp(endpoint),
+        .remotePort = endpoint.remotePort,
+        .canOpen = hasControllableService(descriptor.key),
+        .isOpen = isOpen,
+    };
+}
+
+/// @brief 将串口配置和服务状态转换为 UI 状态。
+[[nodiscard]] auto makeSerialChannelState(const SerialChannelDescriptor& descriptor,
+                                          const Dss::Core::SerialConfig& config,
+                                          const std::shared_ptr<Dss::Comm::ISerialChannel>& channel)
+    -> SerialChannelState {
+    return SerialChannelState{
+        .key = descriptorText(descriptor.key),
+        .displayName = descriptorText(descriptor.displayName),
+        .portName = QString::fromStdString(config.portName),
+        .baudRate = config.baudRate,
+        .dataBits = config.dataBits,
+        .stopBits = config.stopBits,
+        .recvFrameSize = channel ? channel->recvFrameSize() : 0U,
+        .sendFrameSize = channel ? channel->sendFrameSize() : 0U,
+        .isRegistered = channel != nullptr,
+        .isOpen = channel && channel->isOpen(),
+    };
+}
+
+/// @brief 判断本地端口是否处于可配置范围
+/// @return 端口合法时返回 true
+[[nodiscard]] auto isLocalPortInRange(int port) -> bool {
+    return port >= 0 && port <= kMaxUdpPort;
+}
+
+/// @brief 判断远端端口是否处于可配置范围
+/// @return 端口合法时返回 true
+[[nodiscard]] auto isRemotePortInRange(int port) -> bool {
+    return port > 0 && port <= kMaxUdpPort;
+}
+
+/// @brief 根据 UI 输入构造 UDP 端点配置
+/// @return 规范化后的 UDP 端点配置
+[[nodiscard]] auto makeEndpointConfig(const QString& localIp, int localPort,
+                                      const QString& remoteIp, int remotePort)
+    -> Dss::Core::UdpEndpointConfig {
+    Dss::Core::UdpEndpointConfig endpoint{};
+    endpoint.localIp = localIp.trimmed().toStdString();
+    endpoint.localPort = static_cast<std::uint16_t>(localPort);
+    endpoint.remoteIp = remoteIp.trimmed().toStdString();
+    endpoint.remotePort = static_cast<std::uint16_t>(remotePort);
+    return endpoint;
 }
 
 }  // namespace
@@ -59,6 +287,82 @@ ViewModel::ViewModel(MessageBus& bus, Dss::Core::ServiceRegistry& registry, QObj
 }
 
 ViewModel::~ViewModel() = default;
+
+auto ViewModel::networkEndpointConfigs() -> std::vector<NetworkEndpointState> {
+    const auto& commNet = Dss::Core::Config::instance().commNet();
+    std::vector<NetworkEndpointState> endpoints;
+    endpoints.reserve(kNetworkEndpointDescriptors.size());
+    for (const auto& descriptor : kNetworkEndpointDescriptors) {
+        endpoints.push_back(
+            makeNetworkEndpointState(descriptor, commNet.*(descriptor.member),
+                                     isNetworkEndpointOpen(descriptorText(descriptor.key))));
+    }
+    return endpoints;
+}
+
+bool ViewModel::isNetworkEndpointOpen(const QString& key) {
+    const auto* descriptor = findNetworkServiceDescriptor(key);
+    if (descriptor == nullptr) {
+        return false;
+    }
+
+    const auto service = registeredNetworkService(m_registry, descriptor->serviceName);
+    return service && service->isOpen();
+}
+
+auto ViewModel::serialChannelConfigs() -> std::vector<SerialChannelState> {
+    const auto& commNet = Dss::Core::Config::instance().commNet();
+    std::vector<SerialChannelState> channels;
+    channels.reserve(kSerialChannelDescriptors.size());
+    for (const auto& descriptor : kSerialChannelDescriptors) {
+        channels.push_back(
+            makeSerialChannelState(descriptor, commNet.*(descriptor.member),
+                                   registeredSerialChannel(m_registry, descriptor.serviceName)));
+    }
+    return channels;
+}
+
+bool ViewModel::isSerialChannelOpen(const QString& key) {
+    const auto* descriptor = findSerialChannelDescriptor(key);
+    if (descriptor == nullptr) {
+        return false;
+    }
+
+    const auto service = registeredSerialChannel(m_registry, descriptor->serviceName);
+    return service && service->isOpen();
+}
+
+auto ViewModel::dataExchangeGxtcLocalIp() const -> QString {
+    return endpointLocalIp(Dss::Core::Config::instance().commNet().exchangeGxtc);
+}
+
+int ViewModel::dataExchangeGxtcLocalPort() const {
+    return Dss::Core::Config::instance().commNet().exchangeGxtc.localPort;
+}
+
+auto ViewModel::dataExchangeGxtcRemoteIp() const -> QString {
+    return endpointRemoteIp(Dss::Core::Config::instance().commNet().exchangeGxtc);
+}
+
+int ViewModel::dataExchangeGxtcRemotePort() const {
+    return Dss::Core::Config::instance().commNet().exchangeGxtc.remotePort;
+}
+
+auto ViewModel::dataExchangeGdclLocalIp() const -> QString {
+    return endpointLocalIp(Dss::Core::Config::instance().commNet().exchangeGdcl);
+}
+
+int ViewModel::dataExchangeGdclLocalPort() const {
+    return Dss::Core::Config::instance().commNet().exchangeGdcl.localPort;
+}
+
+auto ViewModel::dataExchangeGdclRemoteIp() const -> QString {
+    return endpointRemoteIp(Dss::Core::Config::instance().commNet().exchangeGdcl);
+}
+
+int ViewModel::dataExchangeGdclRemotePort() const {
+    return Dss::Core::Config::instance().commNet().exchangeGdcl.remotePort;
+}
 
 /**
  * @brief 加载回放文件列表并初始化序列源
@@ -279,7 +583,185 @@ void ViewModel::stopSaving() {
     setStatus("Saving stopped");
 }
 
-/// 显式打开数据交换服务；GDCL 端口沿用旧版 GXTC+1 的兼容约定
+/// 校验并应用单个 UDP 网络端点配置
+bool ViewModel::applyNetworkEndpointConfig(const QString& key, const QString& localIp,
+                                           int localPort, const QString& remoteIp, int remotePort) {
+    const auto* descriptor = findNetworkEndpointDescriptor(key);
+    if (descriptor == nullptr) {
+        setStatus(QString("Unknown network endpoint: %1").arg(key));
+        return false;
+    }
+    if (!isLocalPortInRange(localPort)) {
+        setStatus("Network endpoint local port must be 0-65535");
+        return false;
+    }
+    if (!isRemotePortInRange(remotePort)) {
+        setStatus("Network endpoint remote port must be 1-65535");
+        return false;
+    }
+
+    auto& commNet = Dss::Core::Config::instance().mutableCommNet();
+    commNet.*(descriptor->member) = makeEndpointConfig(localIp, localPort, remoteIp, remotePort);
+    if (descriptor->member == &Dss::Core::CommNetConfig::exchangeGxtc) {
+        commNet.exchange = commNet.exchangeGxtc;
+    }
+
+    if (descriptor->member == &Dss::Core::CommNetConfig::exchangeGxtc ||
+        descriptor->member == &Dss::Core::CommNetConfig::exchangeGdcl) {
+        if (auto dataExchange = m_registry.tryGet<Dss::Network::DataExchange>("data_exchange");
+            dataExchange && dataExchange->isOpen()) {
+            dataExchange->close();
+            setDataExchangeOpen(false);
+        }
+        Q_EMIT dataExchangeEndpointsChanged();
+    }
+    if (findNetworkServiceDescriptor(key) != nullptr && isNetworkEndpointOpen(key)) {
+        closeNetworkEndpoint(key);
+    }
+
+    Q_EMIT networkEndpointsChanged();
+    setStatus(QString("Network endpoint applied: %1")
+                  .arg(QString::fromUtf8(descriptor->displayName.data(),
+                                         static_cast<qsizetype>(descriptor->displayName.size()))));
+    return true;
+}
+
+/// 显式打开指定端点对应的网络服务
+bool ViewModel::openNetworkEndpoint(const QString& key) {
+    const auto* descriptor = findNetworkServiceDescriptor(key);
+    if (descriptor == nullptr) {
+        setStatus(QString("Unknown network service: %1").arg(key));
+        return false;
+    }
+
+    const auto& commNet = Dss::Core::Config::instance().commNet();
+    const auto& endpoint = commNet.*(descriptor->member);
+    auto result = openRegisteredNetworkService(m_registry, descriptor->serviceName, endpoint);
+
+    const auto displayName = descriptorText(descriptor->displayName);
+    if (!result.has_value()) {
+        if (result.error() == "service is not registered") {
+            setStatus(QString("Network service is not registered: %1").arg(displayName));
+        } else {
+            setStatus(QString::fromStdString(result.error()));
+        }
+        Q_EMIT networkServiceStateChanged(descriptorText(descriptor->key), false);
+        Q_EMIT networkEndpointsChanged();
+        return false;
+    }
+
+    Q_EMIT networkServiceStateChanged(descriptorText(descriptor->key), true);
+    Q_EMIT networkEndpointsChanged();
+    setStatus(QString("Network service opened: %1").arg(displayName));
+    return true;
+}
+
+/// 显式关闭指定端点对应的网络服务
+void ViewModel::closeNetworkEndpoint(const QString& key) {
+    const auto* descriptor = findNetworkServiceDescriptor(key);
+    if (descriptor == nullptr) {
+        setStatus(QString("Unknown network service: %1").arg(key));
+        return;
+    }
+
+    const auto closed = closeRegisteredNetworkService(m_registry, descriptor->serviceName);
+
+    const auto displayName = descriptorText(descriptor->displayName);
+    if (!closed) {
+        setStatus(QString("Network service is not registered: %1").arg(displayName));
+        return;
+    }
+
+    Q_EMIT networkServiceStateChanged(descriptorText(descriptor->key), false);
+    Q_EMIT networkEndpointsChanged();
+    setStatus(QString("Network service closed: %1").arg(displayName));
+}
+
+/// 显式打开指定串口通道服务
+bool ViewModel::openSerialChannel(const QString& key) {
+    const auto* descriptor = findSerialChannelDescriptor(key);
+    if (descriptor == nullptr) {
+        setStatus(QString("Unknown serial channel: %1").arg(key));
+        return false;
+    }
+
+    const auto& commNet = Dss::Core::Config::instance().commNet();
+    const auto& serialConfig = commNet.*(descriptor->member);
+    auto result = openRegisteredSerialChannel(m_registry, descriptor->serviceName, serialConfig);
+
+    const auto displayName = descriptorText(descriptor->displayName);
+    if (!result.has_value()) {
+        if (result.error() == "service is not registered") {
+            setStatus(QString("Serial channel is not registered: %1").arg(displayName));
+        } else {
+            setStatus(QString::fromStdString(result.error()));
+        }
+        Q_EMIT serialChannelStateChanged(descriptorText(descriptor->key), false);
+        Q_EMIT serialChannelsChanged();
+        return false;
+    }
+
+    Q_EMIT serialChannelStateChanged(descriptorText(descriptor->key), true);
+    Q_EMIT serialChannelsChanged();
+    setStatus(QString("Serial channel opened: %1").arg(displayName));
+    return true;
+}
+
+/// 显式关闭指定串口通道服务
+void ViewModel::closeSerialChannel(const QString& key) {
+    const auto* descriptor = findSerialChannelDescriptor(key);
+    if (descriptor == nullptr) {
+        setStatus(QString("Unknown serial channel: %1").arg(key));
+        return;
+    }
+
+    const auto closed = closeRegisteredSerialChannel(m_registry, descriptor->serviceName);
+
+    const auto displayName = descriptorText(descriptor->displayName);
+    if (!closed) {
+        setStatus(QString("Serial channel is not registered: %1").arg(displayName));
+        return;
+    }
+
+    Q_EMIT serialChannelStateChanged(descriptorText(descriptor->key), false);
+    Q_EMIT serialChannelsChanged();
+    setStatus(QString("Serial channel closed: %1").arg(displayName));
+}
+
+/// 校验并应用 GXTC/GDCL 数据交换端点配置
+bool ViewModel::applyDataExchangeEndpoints(const QString& gxtcLocalIp, int gxtcLocalPort,
+                                           const QString& gxtcRemoteIp, int gxtcRemotePort,
+                                           const QString& gdclLocalIp, int gdclLocalPort,
+                                           const QString& gdclRemoteIp, int gdclRemotePort) {
+    if (!isLocalPortInRange(gxtcLocalPort) || !isLocalPortInRange(gdclLocalPort)) {
+        setStatus("Data exchange local ports must be 0-65535");
+        return false;
+    }
+    if (!isRemotePortInRange(gxtcRemotePort) || !isRemotePortInRange(gdclRemotePort)) {
+        setStatus("Data exchange remote ports must be 1-65535");
+        return false;
+    }
+
+    auto& commNet = Dss::Core::Config::instance().mutableCommNet();
+    commNet.exchangeGxtc =
+        makeEndpointConfig(gxtcLocalIp, gxtcLocalPort, gxtcRemoteIp, gxtcRemotePort);
+    commNet.exchangeGdcl =
+        makeEndpointConfig(gdclLocalIp, gdclLocalPort, gdclRemoteIp, gdclRemotePort);
+    commNet.exchange = commNet.exchangeGxtc;
+
+    if (auto dataExchange = m_registry.tryGet<Dss::Network::DataExchange>("data_exchange");
+        dataExchange && dataExchange->isOpen()) {
+        dataExchange->close();
+        setDataExchangeOpen(false);
+    }
+
+    Q_EMIT dataExchangeEndpointsChanged();
+    Q_EMIT networkEndpointsChanged();
+    setStatus("Data exchange endpoints applied");
+    return true;
+}
+
+/// 显式打开数据交换服务
 bool ViewModel::openDataExchange() {
     auto dataExchange = m_registry.tryGet<Dss::Network::DataExchange>("data_exchange");
     if (!dataExchange) {
@@ -288,15 +770,9 @@ bool ViewModel::openDataExchange() {
         return false;
     }
 
-    const auto& exchangeConfig = Dss::Core::Config::instance().commNet().exchange;
-    auto gdclConfig = makeGdclExchangeConfig(exchangeConfig);
-    if (!gdclConfig.has_value()) {
-        setDataExchangeOpen(false);
-        setStatus("Data exchange GDCL port cannot be derived");
-        return false;
-    }
+    const auto& commNet = Dss::Core::Config::instance().commNet();
 
-    auto result = dataExchange->open(exchangeConfig, *gdclConfig);
+    auto result = dataExchange->open(commNet.exchangeGxtc, commNet.exchangeGdcl);
     if (!result.has_value()) {
         dataExchange->close();
         setDataExchangeOpen(false);

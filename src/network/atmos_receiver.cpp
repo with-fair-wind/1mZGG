@@ -27,6 +27,10 @@ bool AtmosReceiver::isOpen() const {
     return m_channel.isBound();
 }
 
+auto AtmosReceiver::status() const -> Dss::Core::Status {
+    return isOpen() ? Dss::Core::Status::Ok : Dss::Core::Status::Init;
+}
+
 void AtmosReceiver::onData(std::span<const uint8_t> data, const std::string& /*sender*/,
                            uint16_t /*port*/) {
     const auto sample = decodeAtmosPacket(data);

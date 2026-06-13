@@ -42,6 +42,18 @@
             "remoteIp": "192.168.1.3",
             "remotePort": 5000
         },
+        "exchangeGxtc": {
+            "localIp": "",
+            "localPort": 0,
+            "remoteIp": "192.168.1.3",
+            "remotePort": 10002
+        },
+        "exchangeGdcl": {
+            "localIp": "",
+            "localPort": 0,
+            "remoteIp": "192.168.1.3",
+            "remotePort": 10003
+        },
         "errorDiag": {
             "localIp": "",
             "localPort": 0,

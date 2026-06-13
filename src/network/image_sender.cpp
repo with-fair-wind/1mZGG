@@ -86,6 +86,10 @@ bool ImageSender::isOpen() const {
     return m_channel.isBound();
 }
 
+auto ImageSender::status() const -> Dss::Core::Status {
+    return isOpen() ? Dss::Core::Status::Ok : Dss::Core::Status::Init;
+}
+
 void ImageSender::sendImage(std::span<const uint8_t> imageData, uint32_t width, uint32_t height) {
     {
         std::lock_guard lock(m_bufferMutex);

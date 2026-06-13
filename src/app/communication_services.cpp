@@ -18,6 +18,7 @@
 #include "dss/network/data_exchange.h"
 #include "dss/network/error_diagnostics.h"
 #include "dss/network/heartbeat.h"
+#include "dss/network/i_network_channel.h"
 #include "dss/network/image_sender.h"
 #include "dss/processing/image_processor.h"
 #include "dss/storage/local_image_storage_backend.h"
@@ -39,12 +40,19 @@ void ApplicationContext::registerCommunicationServices() {
                                                           std::move(masterControl));
     m_registry.registerService<Dss::Comm::ISerialChannel>("servo", std::move(servo));
 
-    m_registry.registerService<Dss::Network::ImageSender>(
-        "image_sender", std::make_shared<Dss::Network::ImageSender>(m_bus));
-    m_registry.registerService<Dss::Network::Heartbeat>(
-        "heartbeat", std::make_shared<Dss::Network::Heartbeat>(m_bus));
-    m_registry.registerService<Dss::Network::ErrorDiagnostics>(
-        "error_diagnostics", std::make_shared<Dss::Network::ErrorDiagnostics>(m_bus));
+    auto imageSender = std::make_shared<Dss::Network::ImageSender>(m_bus);
+    auto heartbeat = std::make_shared<Dss::Network::Heartbeat>(m_bus);
+    auto errorDiagnostics = std::make_shared<Dss::Network::ErrorDiagnostics>(m_bus);
+    auto atmosReceiver = std::make_shared<Dss::Network::AtmosReceiver>(m_bus);
+
+    m_registry.registerService<Dss::Network::ImageSender>("image_sender", imageSender);
+    m_registry.registerService<Dss::Network::INetworkChannel>("image_sender", imageSender);
+    m_registry.registerService<Dss::Network::Heartbeat>("heartbeat", heartbeat);
+    m_registry.registerService<Dss::Network::INetworkChannel>("heartbeat", heartbeat);
+    m_registry.registerService<Dss::Network::ErrorDiagnostics>("error_diagnostics",
+                                                               errorDiagnostics);
+    m_registry.registerService<Dss::Network::INetworkChannel>("error_diagnostics",
+                                                              errorDiagnostics);
     auto dataExchange = std::make_shared<Dss::Network::DataExchange>(m_bus);
     m_registry.registerService<Dss::Network::DataExchange>("data_exchange", dataExchange);
     auto trackResultDataExchangeBridge = std::make_shared<Dss::App::TrackResultDataExchangeBridge>(
@@ -62,8 +70,8 @@ void ApplicationContext::registerCommunicationServices() {
         });
     m_registry.registerService<Dss::App::TrackResultDataExchangeBridge>(
         "track_result_data_exchange_bridge", std::move(trackResultDataExchangeBridge));
-    m_registry.registerService<Dss::Network::AtmosReceiver>(
-        "atmos_receiver", std::make_shared<Dss::Network::AtmosReceiver>(m_bus));
+    m_registry.registerService<Dss::Network::AtmosReceiver>("atmos_receiver", atmosReceiver);
+    m_registry.registerService<Dss::Network::INetworkChannel>("atmos_receiver", atmosReceiver);
     m_registry.registerService<Dss::Acquisition::ICameraController>(
         "camera", std::make_shared<Dss::Acquisition::CommandOnlyCameraController>(
                       Dss::Core::Config::instance().commNet().cameraPort));

@@ -15,6 +15,7 @@
 #include "dss/network/data_exchange.h"
 #include "dss/network/error_diagnostics.h"
 #include "dss/network/heartbeat.h"
+#include "dss/network/i_network_channel.h"
 #include "dss/network/image_sender.h"
 #include "dss/processing/image_processor.h"
 #include "dss/storage/i_storage_backend.h"
@@ -93,6 +94,14 @@ TEST(ApplicationContextServices, RegistersCommunicationServicesWithoutOpeningPor
     const auto dataExchange = context.registry().get<Dss::Network::DataExchange>("data_exchange");
     const auto atmosReceiver =
         context.registry().get<Dss::Network::AtmosReceiver>("atmos_receiver");
+    const auto imageSenderChannel =
+        context.registry().get<Dss::Network::INetworkChannel>("image_sender");
+    const auto heartbeatChannel =
+        context.registry().get<Dss::Network::INetworkChannel>("heartbeat");
+    const auto errorDiagnosticsChannel =
+        context.registry().get<Dss::Network::INetworkChannel>("error_diagnostics");
+    const auto atmosReceiverChannel =
+        context.registry().get<Dss::Network::INetworkChannel>("atmos_receiver");
     const auto trackResultDataExchangeBridge =
         context.registry().get<Dss::App::TrackResultDataExchangeBridge>(
             "track_result_data_exchange_bridge");
@@ -102,6 +111,10 @@ TEST(ApplicationContextServices, RegistersCommunicationServicesWithoutOpeningPor
     ASSERT_NE(errorDiagnostics, nullptr);
     ASSERT_NE(dataExchange, nullptr);
     ASSERT_NE(atmosReceiver, nullptr);
+    ASSERT_NE(imageSenderChannel, nullptr);
+    ASSERT_NE(heartbeatChannel, nullptr);
+    ASSERT_NE(errorDiagnosticsChannel, nullptr);
+    ASSERT_NE(atmosReceiverChannel, nullptr);
     ASSERT_NE(trackResultDataExchangeBridge, nullptr);
 
     EXPECT_FALSE(imageSender->isOpen());
@@ -109,6 +122,14 @@ TEST(ApplicationContextServices, RegistersCommunicationServicesWithoutOpeningPor
     EXPECT_FALSE(errorDiagnostics->isOpen());
     EXPECT_FALSE(dataExchange->isOpen());
     EXPECT_FALSE(atmosReceiver->isOpen());
+    EXPECT_FALSE(imageSenderChannel->isOpen());
+    EXPECT_FALSE(heartbeatChannel->isOpen());
+    EXPECT_FALSE(errorDiagnosticsChannel->isOpen());
+    EXPECT_FALSE(atmosReceiverChannel->isOpen());
+    EXPECT_EQ(imageSenderChannel->status(), Dss::Core::Status::Init);
+    EXPECT_EQ(heartbeatChannel->status(), Dss::Core::Status::Init);
+    EXPECT_EQ(errorDiagnosticsChannel->status(), Dss::Core::Status::Init);
+    EXPECT_EQ(atmosReceiverChannel->status(), Dss::Core::Status::Init);
 
     context.bus().emit(trackEvent());
     EXPECT_FALSE(dataExchange->isOpen());

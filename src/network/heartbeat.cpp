@@ -35,6 +35,10 @@ bool Heartbeat::isOpen() const {
     return m_channel.isBound();
 }
 
+auto Heartbeat::status() const -> Dss::Core::Status {
+    return isOpen() ? Dss::Core::Status::Ok : Dss::Core::Status::Init;
+}
+
 auto Heartbeat::buildFrame() -> std::array<uint8_t, 10> {
     std::array<uint8_t, 10> frame{};
     frame[0] = Dss::Core::FrameHeader;

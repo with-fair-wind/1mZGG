@@ -26,11 +26,13 @@ struct CommNetConfig {
     SerialConfig servoPort;          ///< 伺服串口
     std::string cameraPort;          ///< 相机端口
 
-    UdpEndpointConfig imageSender;  ///< 图像发送端点
-    UdpEndpointConfig exchange;     ///< 数据交换端点
-    UdpEndpointConfig errorDiag;    ///< 误差诊断端点
-    UdpEndpointConfig atmos;        ///< 大气数据端点
-    UdpEndpointConfig heartbeat;    ///< 心跳端点
+    UdpEndpointConfig imageSender;   ///< 图像发送端点
+    UdpEndpointConfig exchange;      ///< 旧版兼容数据交换端点
+    UdpEndpointConfig exchangeGxtc;  ///< GXTC 数据交换端点
+    UdpEndpointConfig exchangeGdcl;  ///< GDCL 数据交换端点
+    UdpEndpointConfig errorDiag;     ///< 误差诊断端点
+    UdpEndpointConfig atmos;         ///< 大气数据端点
+    UdpEndpointConfig heartbeat;     ///< 心跳端点
 };
 
 /// 台站地理坐标配置

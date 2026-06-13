@@ -27,7 +27,7 @@
 - 旧数学基础能力已迁入 `Dss::Math`: `mpolyfit`、`getperiod` 和 `mFFT::FFT_process` 的可观察行为已通过纯 C++ helper 与单元测试覆盖。
 - 图像序列回放首版已落地: `ImageSequenceFrameSource` 可选择 BMP/PNG/JPEG/TIFF/raw 序列，按 `IFrameSource` 回调输出 `FramePacket`，并通过 `ImageProcessor` 进入 `DisplayRefreshEvent` 和 UI 显示。
 - 本地存储首批 worker 已落地: UI 保存开关显式启动 `LocalImageStorageBackend` 和 `TrackDataStorageBackend`，回放帧进入处理器前可异步落 raw，tracking event 会先通过 `ResultPacket` 归一化再异步写入 `track_data.txt`，停止时 drain 队列。
-- 数据交换结果链路继续推进: `ResultPacket` 已带出预测角速度，`data_exchange_protocol.h` 可从通用结果包生成 GXTC metadata/target 和 GDCL measurement，并覆盖旧协议目标编号解析、JMS1970 百分之一秒、湿度百分比、角度/角速度角秒换算、DN/星等缩放；`TrackResultDataExchangeBridge` 已订阅 `TrackResultEvent`/`MasterControlEvent`，按主控目标过滤 GDCL，并在 `DataExchange` 显式 bind 后触发发送；`ViewModel` 已提供 GXTC/GDCL 显式打开/关闭入口，`DataExchange` 发送失败会返回错误并发布 `NetworkTransmissionErrorEvent`，UI 状态栏可展示该错误。
+- 数据交换结果链路继续推进: `ResultPacket` 已带出预测角速度，`data_exchange_protocol.h` 可从通用结果包生成 GXTC metadata/target 和 GDCL measurement，并覆盖旧协议目标编号解析、JMS1970 百分之一秒、湿度百分比、角度/角速度角秒换算、DN/星等缩放；`TrackResultDataExchangeBridge` 已订阅 `TrackResultEvent`/`MasterControlEvent`，按主控目标过滤 GDCL，并在 `DataExchange` 显式 bind 后触发发送；`Config` 已支持 `exchangeGxtc`/`exchangeGdcl` 两路端点，旧 `exchange` 会兼容推导；`ViewModel` 和通信页已提供图像发送、诊断、大气、心跳、GXTC/GDCL 端点统一编辑，图像发送、诊断、大气、心跳已通过 `INetworkChannel` 统一显式打开/关闭，GXTC/GDCL 具备专用显式打开/关闭入口和端口范围校验；显示、曝光、主控、伺服串口已通过 `ISerialChannel` 显式打开/关闭，应用参数不会自动打开串口或 UDP；`DataExchange` 发送失败会返回错误并发布 `NetworkTransmissionErrorEvent`，UI 状态栏可展示该错误。
 - Manual 跟踪最小闭环已落地: UI 点击图像像素后会配置 `ManualTracker`，无处理 backend 的回放帧也能进入 tracking，发布 `TrackResultEvent`，更新 UI 跟踪信息，并在保存开启时写入轨迹文本。
 - GEO 跟踪函数级切片继续推进: 星速估计、四帧初始关联、目标发现标记、基础跟踪维持、通过公共测量占用规则抑制同帧测量复用、预测越界结束、连续无效窗口结束目标、连续有效测量落在同一赤道坐标点时结束目标、FullLEO 像素跟踪自适应搜索半径和速度误差门控、非 FullLEO RA/Dec `Assoc4` 初始关联、非 FullLEO RA/Dec TrackTarget 首片、可选 AE 位置阈值 gate 首片、目标全部失活后重新进入四帧关联/重发现状态切换、已有目标存活时追加新四帧候选并按当前测量空间过滤最近四帧重叠轨迹（FullLEO 质心/非 FullLEO RA/Dec）、会话内 GEO 目标唯一 ID 分配，以及 legacy 外部校验 blob 输入到 invalid frame fallback 并按目标 ID 匹配的首批接线，已有纯函数/策略实现与单元测试；外部校验 fallback 消费端已公共化，外部校验 blob 生成、TWDW/GDCL 仍待继续迁移。
 - Tracking 公共候选/预测/匹配与生命周期 helper 已抽取: `candidate_utils` 提供测量坐标/运动读取、单帧测量占用判断、按初始帧测量复用的候选去重 policy，以及按最近帧窗口判断 living target 重叠的 `RecentMeasurementOverlapRule`；`prediction_utils` 提供 `TargetFrameInfo` 构造、invalid fallback、外部校验 fallback、Frame/AE 运动量、最近 blob 匹配、匹配/invalid 帧追加和最近四帧 median 预测更新；`result_packet_utils` 提供 `TargetInfo` 最新帧到 `ResultPacket` 的公共归一化入口；`lifecycle_utils` 提供最近 invalid 计数、连续 invalid 判断/释放策略、latest valid、validity window、有效率更新和 `TrackLivingRule`/`TrackMissPolicy` 策略入口；GEO/LEO/SC 复用这些纯函数，策略类继续只保留各自的候选生成、门限和 legacy living policy 选择。
@@ -56,11 +56,11 @@
 | `CommMasterControl.h/.cpp` | `dss/comm/master_control_channel.*` + `serial_protocol_codec.h` | 协议编解码完整 |
 | `CommServo.h/.cpp` | `dss/comm/servo_channel.*` + `serial_protocol_codec.h` | 协议编解码完整 |
 | `CommCamera.h/.cpp` (命令编码) | `dss/acquisition/camera_control_protocol.h` | 3 字节寄存器命令完整 |
-| `NetImageSender.h/.cpp` | `dss/network/image_sender.h` | 分片发送 + 工作线程 |
-| `NetAtmos.h/.cpp` | `dss/network/atmos_receiver.h` + `atmos_protocol.h` | 接收解码完整 |
-| `NetExchange.h/.cpp` | `dss/network/data_exchange.h` + `data_exchange_protocol.h` + `TrackResultDataExchangeBridge` | GXTC/GDCL 编码完整，`ResultPacket` 到协议 DTO 的纯映射、跟踪结果触发桥接、显式 UDP 打开/关闭和发送失败事件已补齐 |
-| `NetErrorDiagnose.h/.cpp` | `dss/network/error_diagnostics.h` + `diagnostic_protocol.h` | JSON 诊断完整 |
-| `NetApp.h/.cpp` (心跳部分) | `dss/network/heartbeat.h` | 心跳 + 关闭保护帧 |
+| `NetImageSender.h/.cpp` | `dss/network/image_sender.h` | 分片发送 + 工作线程 + `INetworkChannel` + UI 显式 open/close |
+| `NetAtmos.h/.cpp` | `dss/network/atmos_receiver.h` + `atmos_protocol.h` | 接收解码完整，`INetworkChannel` 与 UI 显式 open/close 已接 |
+| `NetExchange.h/.cpp` | `dss/network/data_exchange.h` + `data_exchange_protocol.h` + `TrackResultDataExchangeBridge` | GXTC/GDCL 编码完整，`ResultPacket` 到协议 DTO 的纯映射、独立端点配置、UI 参数编辑、跟踪结果触发桥接、显式 UDP 打开/关闭和发送失败事件已补齐 |
+| `NetErrorDiagnose.h/.cpp` | `dss/network/error_diagnostics.h` + `diagnostic_protocol.h` | JSON 诊断完整，`INetworkChannel` 与 UI 显式 open/close 已接 |
+| `NetApp.h/.cpp` (心跳部分) | `dss/network/heartbeat.h` | 心跳 + 关闭保护帧 + `INetworkChannel` + UI 显式 open/close |
 | `Labeler.h/.cpp` | `dss/processing/labeler.h` + `src/processing/labeler.cpp` | CPU 连通域检测 |
 | `ImageCode.h/.cpp` (格式定义) | `dss/storage/image_storage_format.h` / `bmp_image_format.h` | RAW/BMP 格式头 |
 | `TrackDataStorage.h/.cpp` (格式) | `dss/storage/track_data_storage_format.h` | 文本行格式 |
@@ -85,7 +85,7 @@
 | `ImageStorage.h/.cpp` (I/O) | `LocalImageStorageBackend` | 格式定义、raw 异步写入 worker | BMP/IFM/会话索引、错误上报 |
 | `TrackDataStorage.h/.cpp` (I/O) | `TrackDataStorageBackend` | 格式定义、路径持有、`ResultPacket` 归一化、`track_data.txt` 异步写入、`TrackResultEvent` 接线 | GAE/会话级轨迹文件、错误上报、高帧率背压 |
 | `ImageReplayer.h/.cpp` | `ImageSequenceFrameSource` | 选择序列、QImage/raw 解码、后台回放、保留下一帧索引、单帧前进、接入处理/显示 | 后退、进度定位、更多 legacy 浏览行为 |
-| `UI_CtrlPad.h/.cpp/.ui` | `dss/ui/main_window.*` + `view_model.*` | 选择序列、开始/暂停回放、当前帧进度、单帧前进、保存、None/OpenCV 处理开关、Manual 选点跟踪 UI 首版、GEO/LEO/SC 策略入口、GXTC/GDCL 数据交换显式 open/close | 进度条/后退、Diff/CUDA/参数化处理策略、串口/图像发送/心跳等硬件命令入口、LEO/SC 算法体 |
+| `UI_CtrlPad.h/.cpp/.ui` | `dss/ui/main_window.*` + `view_model.*` | 选择序列、开始/暂停回放、当前帧进度、单帧前进、保存、None/OpenCV 处理开关、Manual 选点跟踪 UI 首版、GEO/LEO/SC 策略入口、网络端点统一编辑、图像发送/诊断/大气/心跳/GXTC/GDCL 显式 open/close、显示/曝光/主控/伺服串口显式 open/close | 进度条/后退、Diff/CUDA/参数化处理策略、串口参数编辑和协议级联调命令、LEO/SC 算法体 |
 
 ### 未开始 (Not Started)
 
@@ -125,7 +125,7 @@
 | **Phase 3** | 处理管线: FramePacket、Pipeline、Labeler、OpenCV 后端 | **已完成** |
 | **Phase 4** | 跟踪算法: TrackManager 骨架、数学工具、Tracker 接口 | **数学工具完成，Manual 最小闭环完成，GEO 第一批函数级切片完成，LEO Assoc3/VerifyTarget/TrackTarget 首片完成，SC Assoc3/VerifyTarget/TrackTarget 首片完成** |
 | **Phase 5** | GPU 后端: CUDA 设备管理、核函数移植 | **核函数完成，管线集成待做** |
-| **Phase 6** | UI 集成: MainWindow、ViewModel、端到端接线 | **回放/保存/Manual 选点跟踪首版已接线，数据交换显式开关已接入 ViewModel，硬件/策略命令待做** |
+| **Phase 6** | UI 集成: MainWindow、ViewModel、端到端接线 | **回放/保存/Manual 选点跟踪首版已接线，网络端点统一编辑与图像发送/诊断/大气/心跳/GXTC/GDCL 显式开关已接入通信页，显示/曝光/主控/伺服串口显式开关已接入通信页；Sapera/串口参数编辑/协议联调动作/其他策略命令待做** |
 
 ### 后续迁移计划
 
@@ -134,9 +134,9 @@
 | 1 | 回放模式帧源 | 迁移 `ImageReplayer` 思路，支持选择图像序列并作为 `IFrameSource` 推送帧 | **首版完成**：`test_image_sequence_frame_source` 覆盖固定序列 |
 | 2 | 回放端到端处理链路 | 将回放帧接入 `ImageProcessor`/`ProcessingPipeline`/显示事件 | **首版完成**：无相机可驱动 UI 显示，6144 大图显示/滚轮缩放已在 `ImageDisplay` 支持 |
 | 3 | 存储 I/O 工作线程 | 将存储后端从格式 helper 推进到实际异步写入 | **部分完成**：raw worker、轨迹文本 worker、ResultPacket 归一化和 drain 测试完成；BMP/IFM/IMI/GAE/错误上报/背压待补 |
-| 4 | UI 回放/存储/处理命令 | 搭起选择序列、开始/暂停回放、保存、处理、跟踪等显式命令 | **部分完成**：选择序列、开始/暂停、当前帧进度、单帧前进、保存、None/OpenCV 处理开关、跟踪模式、GXTC/GDCL 数据交换显式开关已接；进度条/后退、Diff/CUDA/参数化处理、网络参数编辑待补 |
+| 4 | UI 回放/存储/处理命令 | 搭起选择序列、开始/暂停回放、保存、处理、跟踪等显式命令 | **部分完成**：选择序列、开始/暂停、当前帧进度、单帧前进、保存、None/OpenCV 处理开关、跟踪模式、网络端点统一编辑、图像发送/心跳/诊断/大气接收通过 `INetworkChannel` 显式开关、GXTC/GDCL 数据交换显式开关、显示/曝光/主控/伺服串口通过 `ISerialChannel` 显式开关已接；进度条/后退、Diff/CUDA/参数化处理、串口参数编辑、协议级联调发送/接收动作和日志面板待补 |
 | 5 | Manual 跟踪最小策略 | 先迁移最简单的手动目标保持逻辑，打通 tracking event 和轨迹文本写入 | **首版完成**：`test_manual_tracker`、`test_image_processor`、`test_view_model_tracking`、`test_track_data_storage_backend` 覆盖无 backend 回放闭环和保存开关 |
-| 6 | GEO 跟踪策略 | 逐步迁移 `calcStarSpeed`、`assoc4`、`findTargets`、`trackTargets` | **继续推进**：星速估计、四帧关联、基础维持、测量复用抑制、越界/连续无效结束、连续有效测量重复赤道坐标点结束、FullLEO 像素跟踪自适应半径和速度误差门控、非 FullLEO RA/Dec `Assoc4` 初始关联和 TrackTarget 首片、可选 AE 位置阈值 gate、跟踪 gate 动态参数集中化、外部校验 blob 输入到 invalid frame fallback 并按目标 ID 匹配、外部校验 fallback 消费端公共化、公共测量坐标/运动、单帧测量占用、ResultPacket helper、GXTC/GDCL DTO adapter、跟踪结果桥接发送、显式数据交换开关和发送失败事件已由 `test_geo_tracker`/`test_tracking_candidate_utils`/`test_tracking_prediction_utils`/`test_result_packet_utils`/`test_data_exchange_protocol`/`test_data_exchange`/`test_track_result_data_exchange_bridge`/`test_view_model_network` 覆盖；下一步补外部校验 blob 生成和 TWDW/GDCL 数据源细节 |
+| 6 | GEO 跟踪策略 | 逐步迁移 `calcStarSpeed`、`assoc4`、`findTargets`、`trackTargets` | **继续推进**：星速估计、四帧关联、基础维持、测量复用抑制、越界/连续无效结束、连续有效测量重复赤道坐标点结束、FullLEO 像素跟踪自适应半径和速度误差门控、非 FullLEO RA/Dec `Assoc4` 初始关联和 TrackTarget 首片、可选 AE 位置阈值 gate、跟踪 gate 动态参数集中化、外部校验 blob 输入到 invalid frame fallback 并按目标 ID 匹配、外部校验 fallback 消费端公共化、公共测量坐标/运动、单帧测量占用、ResultPacket helper、GXTC/GDCL DTO adapter、跟踪结果桥接发送、显式数据交换开关、独立端点配置和发送失败事件已由 `test_geo_tracker`/`test_tracking_candidate_utils`/`test_tracking_prediction_utils`/`test_result_packet_utils`/`test_config`/`test_data_exchange_protocol`/`test_data_exchange`/`test_track_result_data_exchange_bridge`/`test_view_model_network` 覆盖；下一步补外部校验 blob 生成和 TWDW/GDCL 数据源细节 |
 | 7 | Sapera 采集器 | 回放链路稳定后接真实 Sapera `Grabber` 为另一个 `IFrameSource` | 无 Sapera 时仍可启动；有硬件时显式打开 |
 | 8 | LEO/SC 跟踪策略 | 在 Manual/GEO 稳定后迁移剩余跟踪模式 | **LEO/SC 继续推进**：LEO 三帧初始关联、低速拒绝、第四帧验证、第五帧持续跟踪、单帧跟踪 miss、连续 5 帧 miss 释放目标和验证失败后重发现已由 `test_leo_tracker` 覆盖；SC 三帧初始关联、重复候选压缩、第四帧验证、第五帧持续跟踪、living policy 选择和 miss 后重发现已由 `test_sc_tracker`/`test_tracking_candidate_utils`/`test_tracking_lifecycle_utils` 覆盖；两者已复用 `prediction_utils` 的帧信息构造、invalid fallback、Frame/AE 匹配、匹配/invalid 帧追加和 median 预测更新，并复用 `candidate_utils` 的候选去重与 `lifecycle_utils` 的生命周期判断/policy 入口；后续补 TWDW/GDCL |
 | 9 | CUDA 管线封装 | 把 CUDA kernel 包装为 `IProcessingStrategy` 并接入 `ProcessingPipeline` | CPU/OpenCV 对照、CUDA 可选启用 |
@@ -151,7 +151,7 @@
 
 2. **处理策略补齐** — 回放源已能驱动 `ImageProcessor` 原样显示，UI 已可切 None/OpenCV；下一步需要继续把 legacy 帧差法、参数化阈值、光度/星图能力接入 `ProcessingPipeline`，为 Manual/GEO 提供更完整测量输入。
 
-3. **硬件入口接线** — 当前通信/网络/存储/相机命令服务已注册，但启动策略仍是默认不打开硬件。数据交换已有 ViewModel 显式 open/close；后续需要继续给串口、图像发送、心跳、诊断、大气接收和 Sapera 采集补 UI 或联调入口，并把 Sapera 作为第二个 `IFrameSource` 接入。
+3. **硬件入口接线** — 当前通信/网络/存储/相机命令服务已注册，但启动策略仍是默认不打开硬件。通信页已统一编辑网络端点，图像发送、心跳、诊断、大气接收已通过 `INetworkChannel` 接入 ViewModel 显式 open/close，数据交换已有专用显式 open/close；显示、曝光、主控、伺服串口已通过 `ISerialChannel` 接入显式 open/close。后续需要继续补串口参数编辑、协议级联调动作和 Sapera 采集显式 start，并把 Sapera 作为第二个 `IFrameSource` 接入。
 
 ### 中风险项
 

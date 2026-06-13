@@ -25,9 +25,8 @@ public:
     /// 应用内消息总线类型。
     using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;
     /// GXTC 发送回调类型。
-    using GxtcSender =
-        std::function<void(const Dss::Network::GxtcMetadata&,
-                           std::span<const Dss::Network::GxtcTarget>)>;
+    using GxtcSender = std::function<void(const Dss::Network::GxtcMetadata&,
+                                          std::span<const Dss::Network::GxtcTarget>)>;
     /// GDCL 发送回调类型。
     using GdclSender = std::function<void(const Dss::Network::GdclMeasurement&)>;
 
@@ -44,8 +43,7 @@ public:
     ~TrackResultDataExchangeBridge() = default;
 
     TrackResultDataExchangeBridge(const TrackResultDataExchangeBridge&) = delete;
-    auto operator=(const TrackResultDataExchangeBridge&)
-        -> TrackResultDataExchangeBridge& = delete;
+    auto operator=(const TrackResultDataExchangeBridge&) -> TrackResultDataExchangeBridge& = delete;
     TrackResultDataExchangeBridge(TrackResultDataExchangeBridge&&) = delete;
     auto operator=(TrackResultDataExchangeBridge&&) -> TrackResultDataExchangeBridge& = delete;
 
@@ -64,9 +62,9 @@ public:
 private:
     /// 主控状态缓存。
     struct MasterControlState {
-        bool received = false;     ///< 是否收到过主控事件
-        bool track = false;        ///< 主控是否处于搜索/跟踪状态
-        uint32_t targetId = 0;     ///< 主控目标编号
+        bool received = false;  ///< 是否收到过主控事件
+        bool track = false;     ///< 主控是否处于搜索/跟踪状态
+        uint32_t targetId = 0;  ///< 主控目标编号
     };
 
     /**
@@ -98,9 +96,9 @@ private:
         const Dss::Core::ResultPacket& packet, MasterControlState masterControl,
         const Dss::Network::DataExchangeMappingOptions& options) -> bool;
 
-    TrackResultDataExchangeBridgeOptions m_options{};  ///< 桥接配置
-    GxtcSender m_sendGxtc;                             ///< GXTC 发送回调
-    GdclSender m_sendGdcl;                             ///< GDCL 发送回调
+    TrackResultDataExchangeBridgeOptions m_options{};       ///< 桥接配置
+    GxtcSender m_sendGxtc;                                  ///< GXTC 发送回调
+    GdclSender m_sendGdcl;                                  ///< GDCL 发送回调
     std::vector<Dss::Evt::ScopedConnection> m_connections;  ///< 事件订阅连接
     mutable std::mutex m_mutex;                             ///< 主控状态互斥锁
     MasterControlState m_masterControl{};                   ///< 最近一次主控状态

@@ -33,6 +33,10 @@ bool ErrorDiagnostics::isOpen() const {
     return m_channel.isBound();
 }
 
+auto ErrorDiagnostics::status() const -> Dss::Core::Status {
+    return isOpen() ? Dss::Core::Status::Ok : Dss::Core::Status::Init;
+}
+
 void ErrorDiagnostics::setStatus(const DiagnosticStatus& status) {
     std::scoped_lock lock(m_statusMutex);
     m_status = status;

@@ -19,8 +19,7 @@ TrackResultDataExchangeBridge::TrackResultDataExchangeBridge(
         [this](const Dss::Core::TrackResultEvent& event) { onTrackResult(event); }));
 }
 
-void TrackResultDataExchangeBridge::onMasterControl(
-    const Dss::Core::MasterControlEvent& event) {
+void TrackResultDataExchangeBridge::onMasterControl(const Dss::Core::MasterControlEvent& event) {
     std::lock_guard lock(m_mutex);
     m_masterControl = MasterControlState{
         .received = true,
@@ -41,10 +40,8 @@ void TrackResultDataExchangeBridge::onTrackResult(const Dss::Core::TrackResultEv
     if (m_options.sendGxtc && m_sendGxtc) {
         auto targets = Dss::Network::makeGxtcTargets(packets, options);
         auto metadata = Dss::Network::makeGxtcMetadata(packets.front(), options);
-        const auto hasValidTarget =
-            std::ranges::any_of(packets, [](const Dss::Core::ResultPacket& packet) {
-                return packet.valid;
-            });
+        const auto hasValidTarget = std::ranges::any_of(
+            packets, [](const Dss::Core::ResultPacket& packet) { return packet.valid; });
         metadata.targetStatus =
             hasValidTarget ? options.validTargetStatus : options.invalidTargetStatus;
         m_sendGxtc(metadata, targets);
@@ -69,8 +66,7 @@ auto TrackResultDataExchangeBridge::masterControlState() const -> MasterControlS
 
 auto TrackResultDataExchangeBridge::mappingOptionsForPacket(
     const Dss::Core::ResultPacket& packet, MasterControlState masterControl,
-    Dss::Network::DataExchangeMappingOptions options)
-    -> Dss::Network::DataExchangeMappingOptions {
+    Dss::Network::DataExchangeMappingOptions options) -> Dss::Network::DataExchangeMappingOptions {
     options.jms1970Centiseconds = Dss::Network::makeJms1970Centiseconds(packet.timestamp);
     if (masterControl.received) {
         options.measureStatus = masterControl.track ? 1U : 2U;

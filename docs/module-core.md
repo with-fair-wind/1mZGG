@@ -124,6 +124,7 @@ Core 模块是整个系统的基础层，提供所有其他模块共享的类型
 **配置 DTO:**
 - `SerialConfig` — 串口配置 (端口名、波特率)
 - `UdpEndpointConfig` — UDP 端点配置 (地址、端口)
+- `CommNetConfig::exchangeGxtc/exchangeGdcl` — GXTC/GDCL 独立数据交换端点；旧 `exchange` 配置仍会兼容推导
 
 ### 6. 服务基础设施
 

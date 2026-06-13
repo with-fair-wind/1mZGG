@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QPointF>
 #include <QStringList>
+#include <cstddef>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -15,6 +16,32 @@
 #include "dss/core/types.h"
 
 namespace Dss::Ui {
+
+/// @brief UI 层可编辑的 UDP 网络端点状态。
+struct NetworkEndpointState {
+    QString key;           ///< 端点键名，用于回写配置
+    QString displayName;   ///< 界面显示名称
+    QString localIp;       ///< 本地 IP
+    int localPort = 0;     ///< 本地端口，0 表示自动分配
+    QString remoteIp;      ///< 远端 IP
+    int remotePort = 0;    ///< 远端端口
+    bool canOpen = false;  ///< 是否支持 UI 显式打开/关闭
+    bool isOpen = false;   ///< 对应服务当前是否已打开
+};
+
+/// @brief UI 层展示和控制串口通道所需的状态快照。
+struct SerialChannelState {
+    QString key;                    ///< 串口通道键名，用于打开/关闭服务
+    QString displayName;            ///< 界面显示名称
+    QString portName;               ///< 串口端口名称
+    int baudRate = 0;               ///< 波特率
+    int dataBits = 0;               ///< 数据位
+    int stopBits = 0;               ///< 停止位
+    std::size_t recvFrameSize = 0;  ///< 接收帧固定字节长度
+    std::size_t sendFrameSize = 0;  ///< 发送帧固定字节长度
+    bool isRegistered = false;      ///< 服务注册表中是否存在该串口服务
+    bool isOpen = false;            ///< 串口服务当前是否已打开
+};
 
 /// 应用 ViewModel，桥接 UI 与后端服务（事件总线、服务注册表）
 class ViewModel : public QObject {
@@ -28,6 +55,22 @@ class ViewModel : public QObject {
     Q_PROPERTY(double exposure READ exposure WRITE setExposure NOTIFY exposureChanged)
     Q_PROPERTY(bool isSaving READ isSaving NOTIFY savingChanged)
     Q_PROPERTY(bool isDataExchangeOpen READ isDataExchangeOpen NOTIFY dataExchangeOpenChanged)
+    Q_PROPERTY(QString dataExchangeGxtcLocalIp READ dataExchangeGxtcLocalIp NOTIFY
+                   dataExchangeEndpointsChanged)
+    Q_PROPERTY(int dataExchangeGxtcLocalPort READ dataExchangeGxtcLocalPort NOTIFY
+                   dataExchangeEndpointsChanged)
+    Q_PROPERTY(QString dataExchangeGxtcRemoteIp READ dataExchangeGxtcRemoteIp NOTIFY
+                   dataExchangeEndpointsChanged)
+    Q_PROPERTY(int dataExchangeGxtcRemotePort READ dataExchangeGxtcRemotePort NOTIFY
+                   dataExchangeEndpointsChanged)
+    Q_PROPERTY(QString dataExchangeGdclLocalIp READ dataExchangeGdclLocalIp NOTIFY
+                   dataExchangeEndpointsChanged)
+    Q_PROPERTY(int dataExchangeGdclLocalPort READ dataExchangeGdclLocalPort NOTIFY
+                   dataExchangeEndpointsChanged)
+    Q_PROPERTY(QString dataExchangeGdclRemoteIp READ dataExchangeGdclRemoteIp NOTIFY
+                   dataExchangeEndpointsChanged)
+    Q_PROPERTY(int dataExchangeGdclRemotePort READ dataExchangeGdclRemotePort NOTIFY
+                   dataExchangeEndpointsChanged)
     Q_PROPERTY(QString statusText READ statusText NOTIFY statusTextChanged)
     Q_PROPERTY(int replayFrameCount READ replayFrameCount NOTIFY replayFrameCountChanged)
     Q_PROPERTY(int replayCurrentFrame READ replayCurrentFrame NOTIFY replayCurrentFrameChanged)
@@ -73,6 +116,30 @@ public:
     [[nodiscard]] bool isDataExchangeOpen() const {
         return m_dataExchangeOpen;
     }
+    /// @brief 获取当前所有可编辑 UDP 网络端点。
+    [[nodiscard]] auto networkEndpointConfigs() -> std::vector<NetworkEndpointState>;
+    /// @brief 查询指定网络端点对应服务是否已打开。
+    [[nodiscard]] bool isNetworkEndpointOpen(const QString& key);
+    /// @brief 获取当前所有串口通道配置与运行状态。
+    [[nodiscard]] auto serialChannelConfigs() -> std::vector<SerialChannelState>;
+    /// @brief 查询指定串口通道服务是否已打开。
+    [[nodiscard]] bool isSerialChannelOpen(const QString& key);
+    /// GXTC 数据交换本地 IP
+    [[nodiscard]] QString dataExchangeGxtcLocalIp() const;
+    /// GXTC 数据交换本地端口
+    [[nodiscard]] int dataExchangeGxtcLocalPort() const;
+    /// GXTC 数据交换远端 IP
+    [[nodiscard]] QString dataExchangeGxtcRemoteIp() const;
+    /// GXTC 数据交换远端端口
+    [[nodiscard]] int dataExchangeGxtcRemotePort() const;
+    /// GDCL 数据交换本地 IP
+    [[nodiscard]] QString dataExchangeGdclLocalIp() const;
+    /// GDCL 数据交换本地端口
+    [[nodiscard]] int dataExchangeGdclLocalPort() const;
+    /// GDCL 数据交换远端 IP
+    [[nodiscard]] QString dataExchangeGdclRemoteIp() const;
+    /// GDCL 数据交换远端端口
+    [[nodiscard]] int dataExchangeGdclRemotePort() const;
     /// 状态栏文本
     [[nodiscard]] QString statusText() const {
         return m_statusText;
@@ -113,6 +180,27 @@ public:
     Q_INVOKABLE void startSaving();
     /// 停止保存
     Q_INVOKABLE void stopSaving();
+    /// @brief 应用单个 UDP 网络端点配置
+    /// @return 参数合法并写入内存配置时返回 true
+    Q_INVOKABLE bool applyNetworkEndpointConfig(const QString& key, const QString& localIp,
+                                                int localPort, const QString& remoteIp,
+                                                int remotePort);
+    /// @brief 显式打开指定网络端点对应的服务
+    /// @return 成功打开或服务已打开时返回 true
+    Q_INVOKABLE bool openNetworkEndpoint(const QString& key);
+    /// @brief 显式关闭指定网络端点对应的服务
+    Q_INVOKABLE void closeNetworkEndpoint(const QString& key);
+    /// @brief 显式打开指定串口通道服务
+    /// @return 成功打开或服务已打开时返回 true
+    Q_INVOKABLE bool openSerialChannel(const QString& key);
+    /// @brief 显式关闭指定串口通道服务
+    Q_INVOKABLE void closeSerialChannel(const QString& key);
+    /// @brief 应用 GXTC/GDCL 数据交换端点配置
+    /// @return 参数合法并写入内存配置时返回 true
+    Q_INVOKABLE bool applyDataExchangeEndpoints(const QString& gxtcLocalIp, int gxtcLocalPort,
+                                                const QString& gxtcRemoteIp, int gxtcRemotePort,
+                                                const QString& gdclLocalIp, int gdclLocalPort,
+                                                const QString& gdclRemoteIp, int gdclRemotePort);
     /// 显式打开 GXTC/GDCL 数据交换 UDP 通道
     /// 成功返回 true，失败返回 false
     Q_INVOKABLE bool openDataExchange();
@@ -136,6 +224,16 @@ signals:
     void savingChanged(bool value);
     /// 数据交换 UDP 打开状态变化
     void dataExchangeOpenChanged(bool value);
+    /// 所有网络端点配置变化
+    void networkEndpointsChanged();
+    /// 网络服务打开状态变化
+    void networkServiceStateChanged(const QString& key, bool isOpen);
+    /// 所有串口通道状态变化
+    void serialChannelsChanged();
+    /// 单个串口通道打开状态变化
+    void serialChannelStateChanged(const QString& key, bool isOpen);
+    /// 数据交换端点配置变化
+    void dataExchangeEndpointsChanged();
     /// 状态文本变化
     void statusTextChanged(const QString& text);
     /// 回放总帧数变化

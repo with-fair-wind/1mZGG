@@ -23,7 +23,9 @@ TEST(ConfigTest, LoadsJsonWithoutQt) {
     "servoPort": { "portName": "COM4" },
     "cameraPort": "COM5",
     "imageSender": { "remoteIp": "127.0.0.1", "remotePort": 4123 },
-    "exchange": { "remoteIp": "127.0.0.2", "remotePort": 5123 }
+    "exchange": { "remoteIp": "127.0.0.2", "remotePort": 5123 },
+    "exchangeGxtc": { "remoteIp": "127.0.0.6", "remotePort": 6123 },
+    "exchangeGdcl": { "remoteIp": "127.0.0.7", "remotePort": 6124 }
   },
   "optics": {
     "imageWidth": 32,
@@ -59,6 +61,10 @@ TEST(ConfigTest, LoadsJsonWithoutQt) {
     EXPECT_EQ(config.commNet().imageSender.remotePort, 4123);
     EXPECT_EQ(config.commNet().exchange.remoteIp, "127.0.0.2");
     EXPECT_EQ(config.commNet().exchange.remotePort, 5123);
+    EXPECT_EQ(config.commNet().exchangeGxtc.remoteIp, "127.0.0.6");
+    EXPECT_EQ(config.commNet().exchangeGxtc.remotePort, 6123);
+    EXPECT_EQ(config.commNet().exchangeGdcl.remoteIp, "127.0.0.7");
+    EXPECT_EQ(config.commNet().exchangeGdcl.remotePort, 6124);
     EXPECT_EQ(config.commNet().heartbeat.localPort, 15361);
     EXPECT_EQ(config.commNet().heartbeat.remoteIp, "0.0.0.0");
     EXPECT_EQ(config.commNet().heartbeat.remotePort, 15362);
@@ -84,6 +90,8 @@ TEST(ConfigTest, LoadsJsonWithoutQt) {
         const auto savedJson = nlohmann::json::parse(savedInput);
         EXPECT_EQ(savedJson.at("paths").at("dataRoot").get<std::string>(), "./data");
         EXPECT_EQ(savedJson.at("commNet").at("displayPort").at("baudRate").get<int>(), 115200);
+        EXPECT_EQ(savedJson.at("commNet").at("exchangeGxtc").at("remotePort").get<int>(), 6123);
+        EXPECT_EQ(savedJson.at("commNet").at("exchangeGdcl").at("remotePort").get<int>(), 6124);
         EXPECT_FALSE(savedJson.at("tracking").at("autoDecide").get<bool>());
         EXPECT_FALSE(savedJson.at("tracking").at("geoFullLeo").get<bool>());
         EXPECT_DOUBLE_EQ(savedJson.at("tracking").at("geoRaThresholdArcsec").get<double>(), 5.4);
@@ -93,6 +101,38 @@ TEST(ConfigTest, LoadsJsonWithoutQt) {
         EXPECT_DOUBLE_EQ(savedJson.at("tracking").at("geoDecSpeedThresholdArcsec").get<double>(),
                          6.0);
     }
+
+    std::filesystem::remove(path);
+}
+
+TEST(ConfigTest, DerivesDataExchangeEndpointsFromLegacyExchange) {
+    const auto path = std::filesystem::current_path() / "dss_config_legacy_exchange_test.json";
+    {
+        std::ofstream output(path);
+        output << R"({
+  "commNet": {
+    "exchange": {
+      "localIp": "127.0.0.1",
+      "localPort": 10002,
+      "remoteIp": "127.0.0.2",
+      "remotePort": 10002
+    }
+  }
+})";
+    }
+
+    auto& config = Dss::Core::Config::instance();
+    const auto loaded = config.load(path);
+
+    ASSERT_TRUE(loaded.has_value()) << loaded.error();
+    EXPECT_EQ(config.commNet().exchangeGxtc.localIp, "127.0.0.1");
+    EXPECT_EQ(config.commNet().exchangeGxtc.localPort, 10002);
+    EXPECT_EQ(config.commNet().exchangeGxtc.remoteIp, "127.0.0.2");
+    EXPECT_EQ(config.commNet().exchangeGxtc.remotePort, 10002);
+    EXPECT_EQ(config.commNet().exchangeGdcl.localIp, "127.0.0.1");
+    EXPECT_EQ(config.commNet().exchangeGdcl.localPort, 10003);
+    EXPECT_EQ(config.commNet().exchangeGdcl.remoteIp, "127.0.0.2");
+    EXPECT_EQ(config.commNet().exchangeGdcl.remotePort, 10003);
 
     std::filesystem::remove(path);
 }

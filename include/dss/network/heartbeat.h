@@ -7,12 +7,13 @@
 #include <thread>
 
 #include "dss/core/event_bus.h"
+#include "dss/network/i_network_channel.h"
 #include "dss/network/udp_channel.h"
 
 namespace Dss::Network {
 
 /// 心跳服务，周期性通过 UDP 发送固定格式心跳帧以维持链路存活
-class Heartbeat {
+class Heartbeat : public INetworkChannel {
 public:
     using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;  ///< 事件总线类型别名
 
@@ -23,20 +24,23 @@ public:
     explicit Heartbeat(MessageBus& bus);
 
     /// 析构时自动关闭通道并停止工作线程
-    ~Heartbeat();
+    ~Heartbeat() override;
 
     /**
      * @brief 绑定 UDP 端点并启动周期性心跳线程
      * @param config UDP 端点配置
      * @return 成功返回空值，失败返回错误描述
      */
-    auto open(const UdpEndpointConfig& config) -> std::expected<void, std::string>;
+    auto open(const UdpEndpointConfig& config) -> std::expected<void, std::string> override;
 
     /// 停止工作线程并关闭 UDP 通道
-    void close();
+    void close() override;
 
     /// 查询通道是否已绑定
-    [[nodiscard]] bool isOpen() const;
+    [[nodiscard]] bool isOpen() const override;
+
+    /// 获取当前网络通道运行状态
+    [[nodiscard]] auto status() const -> Dss::Core::Status override;
 
     /// 立即发送一帧关闭守护心跳（用于进程退出前通知对端）
     void sendCloseGuard();
