@@ -7,12 +7,14 @@
 #include <QFileDialog>
 #include <QFont>
 #include <QFormLayout>
+#include <QFrame>
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSlider>
 #include <QSpinBox>
 #include <QSplitter>
@@ -67,6 +69,23 @@ void renderColoredLogEntries(QTextEdit& logText, const QStringList& entries) {
     logText.moveCursor(QTextCursor::End);
 }
 
+/**
+ * @brief 为内容较高的页面创建可滚动容器，避免页面最小高度撑大主窗口。
+ * @param content
+ * 需要放入滚动区域的页面内容。
+ * @return 可直接注册到主导航的滚动区域。
+
+ */
+auto makeScrollablePage(QWidget* content) -> QScrollArea* {
+    auto* scrollArea = new QScrollArea;
+    scrollArea->setFrameShape(QFrame::NoFrame);
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    scrollArea->setWidget(content);
+    return scrollArea;
+}
+
 }  // namespace
 
 #ifdef DSS_HAS_ELA
@@ -100,7 +119,7 @@ void MainWindow::setupNavigation() {
     addPageNode("Control", m_controlPage, ElaIconType::Gamepad);
     addPageNode("Display", m_displayPage, ElaIconType::Display);
     addPageNode("Analysis", m_analysisPage, ElaIconType::ChartLine);
-    addPageNode("Communication", m_commPage, ElaIconType::Satellite);
+    addPageNode("Communication", makeScrollablePage(m_commPage), ElaIconType::Satellite);
     addPageNode("Settings", m_settingsPage, ElaIconType::Gear);
     addPageNode("Logs", m_logPage, ElaIconType::FileLines);
 #else
@@ -108,7 +127,7 @@ void MainWindow::setupNavigation() {
     tabs->addTab(m_controlPage, "Control");
     tabs->addTab(m_displayPage, "Display");
     tabs->addTab(m_analysisPage, "Analysis");
-    tabs->addTab(m_commPage, "Communication");
+    tabs->addTab(makeScrollablePage(m_commPage), "Communication");
     tabs->addTab(m_settingsPage, "Settings");
     tabs->addTab(m_logPage, "Logs");
     setCentralWidget(tabs);

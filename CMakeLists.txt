@@ -33,7 +33,12 @@ option(DSS_ENABLE_CUDA     "Build CUDA GPU backend and kernels"     OFF)
 option(DSS_ENABLE_OPENCV   "Build OpenCV processing backend"        ON)
 option(DSS_ENABLE_SAPERA   "Build with Sapera SDK support"          OFF)
 option(DSS_ENABLE_STARLIBS "Build with StarMap/Photometry support"  OFF)
+option(DSS_ENABLE_COLOR_DIAGNOSTICS "Enable colored compiler diagnostics where supported" ON)
 option(DSS_CLANG_TIDY_WARNINGS_AS_ERRORS "Treat clang-tidy diagnostics as errors in tidy-check" OFF)
+
+if(DSS_ENABLE_COLOR_DIAGNOSTICS)
+    set(CMAKE_COLOR_DIAGNOSTICS ON CACHE BOOL "Enable colored compiler diagnostics" FORCE)
+endif()
 
 if(WIN32)
     option(DSS_ENABLE_QT_DEPLOY "Run windeployqt after building the Qt application" ON)

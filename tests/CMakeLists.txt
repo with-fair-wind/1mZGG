@@ -89,6 +89,10 @@ if(TARGET dss_ui_qt)
         test_log_palette.cpp
         dss_ui_qt
     )
+    dss_add_qt_test(test_main_window_layout
+        test_main_window_layout.cpp
+        dss_ui_qt
+    )
     dss_add_qt_test(test_view_model_tracking
         test_view_model_tracking.cpp
         dss_ui_qt
