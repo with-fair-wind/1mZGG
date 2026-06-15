@@ -106,8 +106,8 @@ GXTC/GDCL 协议数据交换（从旧版 `NetExchange` 迁移）。
 | 缺口 | 说明 |
 |------|------|
 | 网络联调命令仍需细化 | 网络服务已注册到 `ServiceRegistry`，但默认 `isOpen() == false`；图像发送、心跳、诊断和大气接收已通过统一 `INetworkChannel` 由 ViewModel 打开/关闭，数据交换仍因双端点协议保持专用入口 |
-| 更多网络服务联调入口待完善 | 图像发送、心跳、诊断、大气接收和 GXTC/GDCL 端点已支持统一 UI 编辑；图像发送/心跳/诊断/大气接收已有显式 open/close，仍需补发送样例、接收状态和日志联调动作 |
-| 网络错误日志呈现待完善 | `DataExchange` 已发布 `NetworkTransmissionErrorEvent` 并由 ViewModel 显示状态文本，日志面板订阅和分级展示待补 |
+| 更多网络服务联调入口待完善 | 图像发送、心跳、诊断、大气接收和 GXTC/GDCL 端点已支持统一 UI 编辑；图像发送/心跳/诊断/大气接收已有显式 open/close，网络错误已进入日志页分级过滤，仍需补发送样例和接收状态 |
+| 网络错误日志持久化待完善 | `DataExchange` 已发布 `NetworkTransmissionErrorEvent`，ViewModel 已同步状态文本并进入日志页 Error 级别缓存；日志落盘、搜索和导出待补 |
 | `NetApp` 接收侧逻辑 | 旧版 `NetApp` 的接收处理未完全复制 |
 | `ENetServer` | 旧版的可靠 UDP (ENet) 未迁移 |
 

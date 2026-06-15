@@ -11,9 +11,19 @@ auto ExposureChannel::latestData() const -> Dss::Core::ExposureDisplayData {
     return m_latestData;
 }
 
+void ExposureChannel::sendExposureCommand(const ExposureCommand& command) {
+    {
+        std::lock_guard lock(m_commandMutex);
+        m_pendingCommand = command;
+    }
+    requestSend();
+}
+
 void ExposureChannel::decodeFrame(std::span<const uint8_t> data) {
-    auto decoded = decodeExposureFrame(data);
+    auto decoded = decodeExposureFrameDetailed(data);
     if (!decoded) {
+        const auto& error = decoded.error();
+        publishDecodeError(error.field, error.message, error.byteOffset, error.rawValue);
         return;
     }
 
@@ -26,7 +36,8 @@ void ExposureChannel::decodeFrame(std::span<const uint8_t> data) {
 }
 
 void ExposureChannel::encodeFrame(std::span<uint8_t> buffer) {
-    (void)encodeExposureCommand(ExposureCommand{}, buffer);
+    std::lock_guard lock(m_commandMutex);
+    (void)encodeExposureCommand(m_pendingCommand, buffer);
 }
 
 }  // namespace Dss::Comm

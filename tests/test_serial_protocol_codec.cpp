@@ -102,6 +102,20 @@ TEST(SerialProtocolCodec, DecodesExposureFrameLikeDisplayPointing) {
     EXPECT_NEAR(decoded->pointingAe.y, 45.0F, 1.0e-4F);
 }
 
+TEST(SerialProtocolCodec, ReportsPointingFrameFieldDecodeError) {
+    auto frame = makeDisplayLikeFrame(20U);
+    frame[2] = 0x1A;
+
+    const auto decoded =
+        Dss::Comm::decodeDisplayFrameDetailed(std::span<const uint8_t>(frame.data(), 20U));
+
+    ASSERT_FALSE(decoded.has_value());
+    EXPECT_EQ(decoded.error().field, "timestamp.month");
+    EXPECT_EQ(decoded.error().byteOffset, 2U);
+    EXPECT_EQ(decoded.error().rawValue, 0x1AU);
+    EXPECT_EQ(decoded.error().message, "timestamp.month has invalid BCD value 0x1A");
+}
+
 TEST(SerialProtocolCodec, EncodesExposureCommand) {
     std::array<uint8_t, 8> frame{};
     const Dss::Comm::ExposureCommand command{
@@ -160,6 +174,22 @@ TEST(SerialProtocolCodec, DecodesMasterControlCommand) {
     EXPECT_EQ(decoded->end.hour, 4);
     EXPECT_EQ(decoded->end.minute, 5);
     EXPECT_EQ(decoded->end.second, 6);
+}
+
+TEST(SerialProtocolCodec, ReportsMasterControlTimeFieldDecodeError) {
+    std::array<uint8_t, 30> frame{};
+    frame[0] = Dss::Comm::FrameCodec::HEADER;
+    frame[29] = Dss::Comm::FrameCodec::TAIL;
+    frame[17] = 1;
+    frame[18] = 60;
+
+    const auto decoded = Dss::Comm::decodeMasterControlFrameDetailed(frame);
+
+    ASSERT_FALSE(decoded.has_value());
+    EXPECT_EQ(decoded.error().field, "start.minute");
+    EXPECT_EQ(decoded.error().byteOffset, 18U);
+    EXPECT_EQ(decoded.error().rawValue, 60U);
+    EXPECT_EQ(decoded.error().message, "start.minute is out of range: 60");
 }
 
 TEST(SerialProtocolCodec, EncodesServoCorrection) {

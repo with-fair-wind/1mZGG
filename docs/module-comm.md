@@ -35,6 +35,8 @@ Comm 模块封装四路串口通信通道，负责与天文设备的低层协议
 | 方法 | 说明 |
 |------|------|
 | `validate(frame, expectedSize)` | 验证帧头/尾和长度 |
+| `validateDetailed(frame, expectedSize)` | 返回帧长、头尾字节和失败原因，供日志/诊断使用 |
+| `failureMessage(reason)` | 将失败原因转换为稳定诊断文本 |
 | `wrap(frame)` | 写入帧头帧尾 |
 
 ### 2. SerialProtocolCodec (`serial_protocol_codec.h`)
@@ -45,6 +47,7 @@ Comm 模块封装四路串口通信通道，负责与天文设备的低层协议
 - `decodeDisplayFrame(frame)` → `ExposureDisplayData`
 - `decodeExposureFrame(frame)` → `ExposureDisplayData`
 - `decodeMasterControlFrame(frame)` → `MasterControlCommand`
+- `decode*FrameDetailed(frame)` → 保留 `SerialDecodeError` 的字段名、偏移和原始值，用于接收诊断
 
 **编码函数:**
 - `encodeExposureCommand(command, frame)` → 曝光指令帧
@@ -62,15 +65,28 @@ Comm 模块封装四路串口通信通道，负责与天文设备的低层协议
 串口通道抽象接口：
 
 ```cpp
-class ISerialChannel : public IService {
+class ISerialChannel {
     virtual void open(config) = 0;
     virtual void close() = 0;
+    virtual bool isOpen() const = 0;
     virtual auto recvFrameSize() const -> size_t = 0;
     virtual auto sendFrameSize() const -> size_t = 0;
 };
 ```
 
-### 4. SerialWorkerBase (`serial_worker_base.h`)
+### 4. 串口命令接口 (`serial_command_interfaces.h`)
+
+命令发送入口按职责拆成窄接口，避免 UI 或 ViewModel 依赖具体通道类：
+
+| 接口 | 注册名 | DTO | 用途 |
+|------|--------|-----|------|
+| `IExposureCommandPort` | `exposure` | `ExposureCommand` | 曝光触发模式、帧频编码、曝光延迟 |
+| `IServoCorrectionPort` | `servo` | `ServoCorrection` | 伺服距离/速度修正 |
+| `IMasterControlStatusPort` | `master_control` | `MasterControlStatus` | 主控状态回包 |
+
+这些接口只缓存 DTO 并请求发送，真实串口仍必须经 `ISerialChannel::open()` 显式打开。
+
+### 5. SerialWorkerBase (`serial_worker_base.h`)
 
 Qt `QSerialPort` 工作线程基类（pimpl 隐藏 Qt 依赖）：
 
@@ -78,15 +94,17 @@ Qt `QSerialPort` 工作线程基类（pimpl 隐藏 Qt 依赖）：
 - `open()` — 配置并打开串口
 - 收到完整帧后调用虚函数 `decodeFrame()`
 - 发送时调用虚函数 `encodeFrame()`
+- 接收帧头尾/长度校验失败时发布 `SerialFrameErrorEvent`，由 UI 日志页展示
+- 接收帧通过固定帧校验但字段解码失败时发布 `SerialDecodeErrorEvent`
 
-### 5. 四路通道实现
+### 6. 四路通道实现
 
 | 类 | 旧版 | 接收处理 | 发送处理 |
 |---|------|---------|---------|
 | `DisplayChannel` | `CommDisplay` | 解码 → 发布 `Sync25HzEvent` | — |
-| `ExposureChannel` | `CommExposure` | 解码 → 缓存 `latestData()` + 发布 `ExposureSyncEvent` | 曝光指令 |
-| `MasterControlChannel` | `CommMasterControl` | 解码 → 发布 `MasterControlEvent` | 主控状态回复 |
-| `ServoChannel` | `CommServo` | — | `setTrackResult()` → 编码修正帧 |
+| `ExposureChannel` | `CommExposure` | 解码 → 缓存 `latestData()` + 发布 `ExposureSyncEvent` | `IExposureCommandPort` → 曝光指令 |
+| `MasterControlChannel` | `CommMasterControl` | 解码 → 发布 `MasterControlEvent` | `IMasterControlStatusPort` → 主控状态回复 |
+| `ServoChannel` | `CommServo` | — | `setTrackResult()`/`IServoCorrectionPort` → 编码修正帧 |
 
 ## 帧数据布局 (接收)
 
@@ -128,7 +146,7 @@ Qt `QSerialPort` 工作线程基类（pimpl 隐藏 Qt 依赖）：
 
 | 缺口 | 说明 |
 |------|------|
-| 串口打开命令未接线 | 四路串口服务已注册到 `ServiceRegistry`，但默认 `isOpen() == false`；需要 UI/联调入口显式调用 `open()` |
+| 接收侧运行诊断仍需细化 | 帧长/头尾校验失败已发布 `SerialFrameErrorEvent`；显示/曝光 BCD 时间和主控时间窗口字段解码失败已发布 `SerialDecodeErrorEvent`，并进入 UI 日志页 Warning 级别缓存；后续补统计聚合和更多协议字段约束 |
 | 错误处理 | 串口断连/重连机制待完善 |
 
 ## 依赖关系

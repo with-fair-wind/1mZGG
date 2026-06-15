@@ -144,6 +144,12 @@ public:
     [[nodiscard]] QString statusText() const {
         return m_statusText;
     }
+    /// 日志页最小显示级别
+    [[nodiscard]] int logMinimumLevel() const {
+        return static_cast<int>(m_logMinimumLevel);
+    }
+    /// 获取当前过滤后的日志文本快照
+    [[nodiscard]] QStringList visibleLogEntries() const;
     /// 回放序列总帧数
     [[nodiscard]] int replayFrameCount() const {
         return m_replayFrameCount;
@@ -199,6 +205,24 @@ public:
     /// @return 参数合法并写入内存配置时返回 true
     Q_INVOKABLE bool applySerialChannelConfig(const QString& key, const QString& portName,
                                               int baudRate, int dataBits, int stopBits);
+    /// @brief 发送曝光通道联调命令
+    /// @return 参数合法、命令服务存在且串口已打开时返回 true
+    Q_INVOKABLE bool sendExposureCommand(bool freeRun, int frameFrequencyCode,
+                                         int exposureDelayTicks);
+    /// @brief 发送伺服距离/速度修正联调命令
+    /// @return 参数合法、命令服务存在且串口已打开时返回 true
+    Q_INVOKABLE bool sendServoCorrection(bool distanceValid, bool speedValid,
+                                         double distanceXArcsec, double distanceYArcsec,
+                                         double speedXArcsecPerSec, double speedYArcsecPerSec,
+                                         int mode);
+    /// @brief 发送主控状态回包联调命令
+    /// @return 参数合法、命令服务存在且串口已打开时返回 true
+    Q_INVOKABLE bool sendMasterControlStatus(int year, int month, int day, int hour, int minute,
+                                             int second, int millisecond, double azimuthDegrees,
+                                             double elevationDegrees, bool distanceValid,
+                                             bool speedValid, double distanceXArcsec,
+                                             double distanceYArcsec, double speedXArcsecPerSec,
+                                             double speedYArcsecPerSec, int servoMode);
     /// @brief 应用 GXTC/GDCL 数据交换端点配置
     /// @return 参数合法并写入内存配置时返回 true
     Q_INVOKABLE bool applyDataExchangeEndpoints(const QString& gxtcLocalIp, int gxtcLocalPort,
@@ -210,6 +234,8 @@ public:
     Q_INVOKABLE bool openDataExchange();
     /// 显式关闭 GXTC/GDCL 数据交换 UDP 通道
     Q_INVOKABLE void closeDataExchange();
+    /// 设置日志页最小显示级别
+    Q_INVOKABLE void setLogMinimumLevel(int level);
     /// 切换缩放级别
     Q_INVOKABLE void toggleZoom(int level);
 
@@ -240,6 +266,15 @@ signals:
     void dataExchangeEndpointsChanged();
     /// 状态文本变化
     void statusTextChanged(const QString& text);
+    /// @brief 新日志文本追加到 UI 日志页。
+    /// @param text 单条日志文本
+    void logEntryAppended(const QString& text);
+    /// @brief 日志页可见文本快照变化。
+    /// @param entries 当前过滤条件下的日志文本列表
+    void logEntriesChanged(const QStringList& entries);
+    /// @brief 日志页最小显示级别变化。
+    /// @param level 最小显示级别，含义与 Dss::Core::LogLevel 数值一致
+    void logMinimumLevelChanged(int level);
     /// 回放总帧数变化
     void replayFrameCountChanged(int count);
     /// 回放当前帧变化
@@ -257,6 +292,15 @@ signals:
     void imageStatsUpdated(double minVal, double maxVal, double avg, double stdDev);
 
 private:
+    /// UI 日志缓存项，保留日志级别和最终展示文本。
+    struct UiLogEntry {
+        Dss::Core::LogLevel level = Dss::Core::LogLevel::Info;  ///< 日志级别
+        QString text;                                           ///< 展示文本
+    };
+
+    /// UI 日志缓存最大条数
+    static constexpr std::size_t kMaxLogEntries = 500;
+
     /// 订阅后端事件
     void setupSubscriptions();
 
@@ -270,6 +314,12 @@ private:
     void onMasterControl(const Dss::Core::MasterControlEvent& event);
     /// 处理网络发送失败事件
     void onNetworkTransmissionError(const Dss::Core::NetworkTransmissionErrorEvent& event);
+    /// 处理串口接收帧校验失败事件
+    void onSerialFrameError(const Dss::Core::SerialFrameErrorEvent& event);
+    /// 处理串口协议字段解码失败事件
+    void onSerialDecodeError(const Dss::Core::SerialDecodeErrorEvent& event);
+    /// 处理核心日志事件
+    void onLogMessage(const Dss::Core::LogMessageEvent& event);
     /// 根据当前模式配置处理策略
     void configureProcessingStrategy();
     /// 根据当前模式配置跟踪策略
@@ -282,6 +332,10 @@ private:
     void setDataExchangeOpen(bool value);
     /// 更新状态文本并发出信号
     void setStatus(QString text);
+    /// 追加一条 UI 日志并维护缓存容量
+    void appendLogEntry(Dss::Core::LogLevel level, QString text);
+    /// 判断日志级别是否满足当前 UI 过滤条件
+    [[nodiscard]] bool isLogLevelVisible(Dss::Core::LogLevel level) const;
 
     MessageBus& m_bus;                       ///< 事件总线引用
     Dss::Core::ServiceRegistry& m_registry;  ///< 服务注册表引用
@@ -292,11 +346,13 @@ private:
     int m_trackMode = static_cast<int>(Dss::Core::TrackMode::Init);            ///< 跟踪模式
     double m_exposure = 0.0;                                                   ///< 曝光时间（毫秒）
     bool m_saving = false;                                                     ///< 是否正在保存
-    bool m_dataExchangeOpen = false;                        ///< 数据交换 UDP 是否已显式打开
-    QString m_statusText = "Ready";                         ///< 状态栏文本
-    int m_replayFrameCount = 0;                             ///< 回放序列总帧数
-    int m_replayCurrentFrame = 0;                           ///< 回放当前帧索引
-    std::optional<Dss::Core::MeasuredBlob> m_manualTarget;  ///< 手动选定的跟踪目标
+    bool m_dataExchangeOpen = false;  ///< 数据交换 UDP 是否已显式打开
+    QString m_statusText = "Ready";   ///< 状态栏文本
+    Dss::Core::LogLevel m_logMinimumLevel = Dss::Core::LogLevel::Info;  ///< 日志页最小显示级别
+    int m_replayFrameCount = 0;                                         ///< 回放序列总帧数
+    int m_replayCurrentFrame = 0;                                       ///< 回放当前帧索引
+    std::optional<Dss::Core::MeasuredBlob> m_manualTarget;              ///< 手动选定的跟踪目标
+    std::vector<UiLogEntry> m_logEntries;  ///< UI 日志缓存，最多保留最近 500 条
 
     std::vector<Dss::Evt::ScopedConnection> m_connections;  ///< 事件订阅连接列表
 };

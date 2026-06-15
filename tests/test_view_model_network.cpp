@@ -1,14 +1,19 @@
 #include <QCoreApplication>
 #include <QString>
+#include <QStringList>
 #include <cstddef>
 #include <expected>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <gtest/gtest.h>
 
 #include "dss/comm/i_serial_channel.h"
+#include "dss/comm/serial_command_interfaces.h"
 #include "dss/core/config.h"
+#include "dss/core/constants.h"
+#include "dss/core/events.h"
 #include "dss/network/atmos_receiver.h"
 #include "dss/network/data_exchange.h"
 #include "dss/network/error_diagnostics.h"
@@ -37,7 +42,7 @@ void registerNetworkChannel(Dss::Core::ServiceRegistry& registry, std::string_vi
 }
 
 /// @brief 用于 ViewModel 测试的串口通道桩，避免触碰真实串口硬件。
-class RecordingSerialChannel final : public Dss::Comm::ISerialChannel {
+class RecordingSerialChannel : public Dss::Comm::ISerialChannel {
 public:
     /// @brief 构造可记录帧长的测试串口通道。
     RecordingSerialChannel(std::size_t recvFrameSize, std::size_t sendFrameSize)
@@ -88,6 +93,54 @@ private:
     std::size_t sendFrameSize_ = 0;                       ///< 固定发送帧长
     bool isOpen_ = false;                                 ///< 当前打开状态
     Dss::Core::Status status_ = Dss::Core::Status::Init;  ///< 当前运行状态
+};
+
+/// @brief 可记录曝光命令的串口通道桩。
+class RecordingExposureCommandChannel final : public RecordingSerialChannel,
+                                              public Dss::Comm::IExposureCommandPort {
+public:
+    using RecordingSerialChannel::RecordingSerialChannel;
+
+    /// @brief 记录最近一次曝光命令。
+    void sendExposureCommand(const Dss::Comm::ExposureCommand& command) override {
+        lastExposureCommand = command;
+        exposureCommandCount += 1;
+    }
+
+    Dss::Comm::ExposureCommand lastExposureCommand{};  ///< 最近一次曝光命令
+    int exposureCommandCount = 0;                      ///< 曝光命令调用次数
+};
+
+/// @brief 可记录伺服修正命令的串口通道桩。
+class RecordingServoCommandChannel final : public RecordingSerialChannel,
+                                           public Dss::Comm::IServoCorrectionPort {
+public:
+    using RecordingSerialChannel::RecordingSerialChannel;
+
+    /// @brief 记录最近一次伺服修正命令。
+    void sendServoCorrection(const Dss::Comm::ServoCorrection& correction) override {
+        lastServoCorrection = correction;
+        servoCorrectionCount += 1;
+    }
+
+    Dss::Comm::ServoCorrection lastServoCorrection{};  ///< 最近一次伺服修正命令
+    int servoCorrectionCount = 0;                      ///< 伺服修正命令调用次数
+};
+
+/// @brief 可记录主控状态回包的串口通道桩。
+class RecordingMasterControlStatusChannel final : public RecordingSerialChannel,
+                                                  public Dss::Comm::IMasterControlStatusPort {
+public:
+    using RecordingSerialChannel::RecordingSerialChannel;
+
+    /// @brief 记录最近一次主控状态回包。
+    void sendMasterControlStatus(const Dss::Comm::MasterControlStatus& status) override {
+        lastMasterControlStatus = status;
+        masterControlStatusCount += 1;
+    }
+
+    Dss::Comm::MasterControlStatus lastMasterControlStatus{};  ///< 最近一次主控状态
+    int masterControlStatusCount = 0;                          ///< 主控状态调用次数
 };
 
 /// @brief 按统一串口通道接口注册测试服务。
@@ -514,6 +567,121 @@ TEST(ViewModelNetwork, RejectsInvalidOrUnknownSerialChannelConfig) {
     EXPECT_EQ(viewModel.statusText(), QString("Unknown serial channel: unknown"));
 }
 
+TEST(ViewModelNetwork, SendsExposureCommandThroughOpenCommandService) {
+    ensureQCoreApplication();
+
+    auto& config = Dss::Core::Config::instance().mutableCommNet();
+    config.exposurePort = {"COM61", 115200, 8, 1};
+
+    Dss::Ui::ViewModel::MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    auto exposure = std::make_shared<RecordingExposureCommandChannel>(23, 8);
+    registerSerialChannel(registry, "exposure", exposure);
+    registry.registerService<Dss::Comm::IExposureCommandPort>("exposure", exposure);
+
+    Dss::Ui::ViewModel viewModel(bus, registry);
+    ASSERT_TRUE(viewModel.openSerialChannel("exposure"));
+
+    ASSERT_TRUE(viewModel.sendExposureCommand(true, 7, 0x123456));
+
+    EXPECT_EQ(exposure->exposureCommandCount, 1);
+    EXPECT_EQ(exposure->lastExposureCommand.triggerMode, Dss::Comm::ExposureTriggerMode::FreeRun);
+    EXPECT_EQ(exposure->lastExposureCommand.frameFrequencyCode, 7);
+    EXPECT_EQ(exposure->lastExposureCommand.exposureDelayTicks, 0x123456U);
+    EXPECT_EQ(viewModel.statusText(), QString("Exposure command sent"));
+}
+
+TEST(ViewModelNetwork, SendsServoCorrectionThroughOpenCommandService) {
+    ensureQCoreApplication();
+
+    auto& config = Dss::Core::Config::instance().mutableCommNet();
+    config.servoPort = {"COM62", 115200, 8, 1};
+
+    Dss::Ui::ViewModel::MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    auto servo = std::make_shared<RecordingServoCommandChannel>(20, 14);
+    registerSerialChannel(registry, "servo", servo);
+    registry.registerService<Dss::Comm::IServoCorrectionPort>("servo", servo);
+
+    Dss::Ui::ViewModel viewModel(bus, registry);
+    ASSERT_TRUE(viewModel.openSerialChannel("servo"));
+
+    ASSERT_TRUE(viewModel.sendServoCorrection(true, false, 1.5, -2.5, 3.25, -4.5, 0x22));
+
+    EXPECT_EQ(servo->servoCorrectionCount, 1);
+    EXPECT_TRUE(servo->lastServoCorrection.distanceValid);
+    EXPECT_FALSE(servo->lastServoCorrection.speedValid);
+    EXPECT_FLOAT_EQ(servo->lastServoCorrection.distanceArcsec.x, 1.5F);
+    EXPECT_FLOAT_EQ(servo->lastServoCorrection.distanceArcsec.y, -2.5F);
+    EXPECT_FLOAT_EQ(servo->lastServoCorrection.speedArcsecPerSec.x, 3.25F);
+    EXPECT_FLOAT_EQ(servo->lastServoCorrection.speedArcsecPerSec.y, -4.5F);
+    EXPECT_EQ(servo->lastServoCorrection.mode, 0x22);
+    EXPECT_EQ(viewModel.statusText(), QString("Servo correction sent"));
+}
+
+TEST(ViewModelNetwork, SendsMasterControlStatusThroughOpenCommandService) {
+    ensureQCoreApplication();
+
+    auto& config = Dss::Core::Config::instance().mutableCommNet();
+    config.masterControlPort = {"COM63", 115200, 8, 1};
+
+    Dss::Ui::ViewModel::MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    auto master = std::make_shared<RecordingMasterControlStatusChannel>(30, 28);
+    registerSerialChannel(registry, "master_control", master);
+    registry.registerService<Dss::Comm::IMasterControlStatusPort>("master_control", master);
+
+    Dss::Ui::ViewModel viewModel(bus, registry);
+    ASSERT_TRUE(viewModel.openSerialChannel("master_control"));
+
+    ASSERT_TRUE(viewModel.sendMasterControlStatus(2026, 6, 13, 9, 10, 11, 120, 12.5, 45.5, true,
+                                                  true, 1.0, -1.5, 2.0, -2.5, 0x19));
+
+    EXPECT_EQ(master->masterControlStatusCount, 1);
+    EXPECT_EQ(master->lastMasterControlStatus.timestamp.year, 2026);
+    EXPECT_EQ(master->lastMasterControlStatus.timestamp.month, 6);
+    EXPECT_EQ(master->lastMasterControlStatus.timestamp.day, 13);
+    EXPECT_EQ(master->lastMasterControlStatus.timestamp.hour, 9);
+    EXPECT_EQ(master->lastMasterControlStatus.timestamp.minute, 10);
+    EXPECT_EQ(master->lastMasterControlStatus.timestamp.second, 11);
+    EXPECT_EQ(master->lastMasterControlStatus.timestamp.millisecond, 120);
+    EXPECT_FLOAT_EQ(master->lastMasterControlStatus.pointingAe.x, 12.5F);
+    EXPECT_FLOAT_EQ(master->lastMasterControlStatus.pointingAe.y, 45.5F);
+    EXPECT_TRUE(master->lastMasterControlStatus.correction.distanceValid);
+    EXPECT_TRUE(master->lastMasterControlStatus.correction.speedValid);
+    EXPECT_FLOAT_EQ(master->lastMasterControlStatus.correction.distanceArcsec.x, 1.0F);
+    EXPECT_FLOAT_EQ(master->lastMasterControlStatus.correction.speedArcsecPerSec.y, -2.5F);
+    EXPECT_EQ(viewModel.statusText(), QString("Master control status sent"));
+}
+
+TEST(ViewModelNetwork, RejectsSerialCommandWhenChannelIsClosedOrInvalid) {
+    ensureQCoreApplication();
+
+    auto& config = Dss::Core::Config::instance().mutableCommNet();
+    config.exposurePort = {"COM64", 115200, 8, 1};
+
+    Dss::Ui::ViewModel::MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    auto exposure = std::make_shared<RecordingExposureCommandChannel>(23, 8);
+    registerSerialChannel(registry, "exposure", exposure);
+    registry.registerService<Dss::Comm::IExposureCommandPort>("exposure", exposure);
+
+    Dss::Ui::ViewModel viewModel(bus, registry);
+
+    EXPECT_FALSE(viewModel.sendExposureCommand(false, 1, 0));
+    EXPECT_EQ(exposure->exposureCommandCount, 0);
+    EXPECT_EQ(viewModel.statusText(), QString("Serial channel is not open: Exposure"));
+
+    ASSERT_TRUE(viewModel.openSerialChannel("exposure"));
+    EXPECT_FALSE(viewModel.sendExposureCommand(false, 256, 0));
+    EXPECT_EQ(exposure->exposureCommandCount, 0);
+    EXPECT_EQ(viewModel.statusText(), QString("Exposure frame frequency code must be 0-255"));
+
+    EXPECT_FALSE(viewModel.sendExposureCommand(false, 1, 0x1000000));
+    EXPECT_EQ(exposure->exposureCommandCount, 0);
+    EXPECT_EQ(viewModel.statusText(), QString("Exposure delay ticks must be 0-16777215"));
+}
+
 TEST(ViewModelNetwork, RejectsInvalidOrUnknownNetworkEndpoint) {
     ensureQCoreApplication();
 
@@ -565,6 +733,9 @@ TEST(ViewModelNetwork, ShowsNetworkTransmissionErrorsInStatusText) {
     Dss::Ui::ViewModel::MessageBus bus;
     Dss::Core::ServiceRegistry registry;
     Dss::Ui::ViewModel viewModel(bus, registry);
+    std::vector<QString> logEntries;
+    QObject::connect(&viewModel, &Dss::Ui::ViewModel::logEntryAppended,
+                     [&logEntries](const QString& text) { logEntries.push_back(text); });
 
     bus.emit(Dss::Core::NetworkTransmissionErrorEvent{
         .channel = "GXTC",
@@ -574,4 +745,139 @@ TEST(ViewModelNetwork, ShowsNetworkTransmissionErrorsInStatusText) {
 
     EXPECT_EQ(viewModel.statusText(),
               QString("Network send failed (GXTC): GXTC UDP channel is not open or send failed"));
+    ASSERT_EQ(logEntries.size(), 1U);
+    EXPECT_EQ(logEntries.front(),
+              QString("[ERROR] Network send failed (GXTC): GXTC UDP channel is not open or send "
+                      "failed | attempted bytes: 32"));
+}
+
+TEST(ViewModelNetwork, ForwardsCoreLogMessagesToUiLogSignal) {
+    ensureQCoreApplication();
+
+    Dss::Ui::ViewModel::MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    Dss::Ui::ViewModel viewModel(bus, registry);
+    std::vector<QString> logEntries;
+    QObject::connect(&viewModel, &Dss::Ui::ViewModel::logEntryAppended,
+                     [&logEntries](const QString& text) { logEntries.push_back(text); });
+
+    bus.emit(Dss::Core::LogMessageEvent{
+        .level = Dss::Core::LogLevel::Info,
+        .message = "[INFO] replay source initialized",
+    });
+
+    ASSERT_EQ(logEntries.size(), 1U);
+    EXPECT_EQ(logEntries.front(), QString("[INFO] replay source initialized"));
+    EXPECT_EQ(viewModel.visibleLogEntries(), QStringList{"[INFO] replay source initialized"});
+}
+
+TEST(ViewModelNetwork, FiltersUiLogEntriesByMinimumLevel) {
+    ensureQCoreApplication();
+
+    Dss::Ui::ViewModel::MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    Dss::Ui::ViewModel viewModel(bus, registry);
+    std::vector<QString> appended;
+    QObject::connect(&viewModel, &Dss::Ui::ViewModel::logEntryAppended,
+                     [&appended](const QString& text) { appended.push_back(text); });
+
+    viewModel.setLogMinimumLevel(static_cast<int>(Dss::Core::LogLevel::Warning));
+
+    bus.emit(Dss::Core::LogMessageEvent{
+        .level = Dss::Core::LogLevel::Info,
+        .message = "[INFO] hidden",
+    });
+    bus.emit(Dss::Core::LogMessageEvent{
+        .level = Dss::Core::LogLevel::Warning,
+        .message = "[WARN] visible",
+    });
+    bus.emit(Dss::Core::LogMessageEvent{
+        .level = Dss::Core::LogLevel::Error,
+        .message = "[ERROR] visible",
+    });
+
+    ASSERT_EQ(appended.size(), 2U);
+    EXPECT_EQ(appended.front(), QString("[WARN] visible"));
+    EXPECT_EQ(appended.back(), QString("[ERROR] visible"));
+    EXPECT_EQ(viewModel.visibleLogEntries(), (QStringList{"[WARN] visible", "[ERROR] visible"}));
+
+    viewModel.setLogMinimumLevel(static_cast<int>(Dss::Core::LogLevel::Error));
+    EXPECT_EQ(viewModel.logMinimumLevel(), static_cast<int>(Dss::Core::LogLevel::Error));
+    EXPECT_EQ(viewModel.visibleLogEntries(), QStringList{"[ERROR] visible"});
+
+    viewModel.setLogMinimumLevel(-1);
+    EXPECT_EQ(viewModel.logMinimumLevel(), static_cast<int>(Dss::Core::LogLevel::Info));
+    EXPECT_EQ(viewModel.visibleLogEntries(),
+              (QStringList{"[INFO] hidden", "[WARN] visible", "[ERROR] visible"}));
+}
+
+TEST(ViewModelNetwork, KeepsOnlyRecentUiLogEntries) {
+    ensureQCoreApplication();
+
+    Dss::Ui::ViewModel::MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    Dss::Ui::ViewModel viewModel(bus, registry);
+
+    for (int index = 0; index < 501; ++index) {
+        bus.emit(Dss::Core::LogMessageEvent{
+            .level = Dss::Core::LogLevel::Info,
+            .message = std::string("entry ") + std::to_string(index),
+        });
+    }
+
+    const auto entries = viewModel.visibleLogEntries();
+    ASSERT_EQ(entries.size(), 500);
+    EXPECT_EQ(entries.front(), QString("entry 1"));
+    EXPECT_EQ(entries.back(), QString("entry 500"));
+}
+
+TEST(ViewModelNetwork, ForwardsSerialFrameErrorsToUiLogSignal) {
+    ensureQCoreApplication();
+
+    Dss::Ui::ViewModel::MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    Dss::Ui::ViewModel viewModel(bus, registry);
+    std::vector<QString> logEntries;
+    QObject::connect(&viewModel, &Dss::Ui::ViewModel::logEntryAppended,
+                     [&logEntries](const QString& text) { logEntries.push_back(text); });
+
+    bus.emit(Dss::Core::SerialFrameErrorEvent{
+        .channel = "display",
+        .message = "serial frame header mismatch",
+        .expectedBytes = 20,
+        .actualBytes = 20,
+        .observedHeader = 0,
+        .observedTail = Dss::Core::FrameTail,
+    });
+
+    ASSERT_EQ(logEntries.size(), 1U);
+    EXPECT_EQ(logEntries.front(),
+              QString("[WARN] Serial frame dropped (display): serial frame header mismatch | "
+                      "expected bytes: 20 actual bytes: 20 header: 0 tail: 231"));
+    EXPECT_EQ(viewModel.statusText(), QString("Ready"));
+}
+
+TEST(ViewModelNetwork, ForwardsSerialDecodeErrorsToUiLogSignal) {
+    ensureQCoreApplication();
+
+    Dss::Ui::ViewModel::MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    Dss::Ui::ViewModel viewModel(bus, registry);
+    std::vector<QString> logEntries;
+    QObject::connect(&viewModel, &Dss::Ui::ViewModel::logEntryAppended,
+                     [&logEntries](const QString& text) { logEntries.push_back(text); });
+
+    bus.emit(Dss::Core::SerialDecodeErrorEvent{
+        .channel = "display",
+        .message = "timestamp.month has invalid BCD value 0x1A",
+        .field = "timestamp.month",
+        .byteOffset = 2,
+        .rawValue = 0x1A,
+    });
+
+    ASSERT_EQ(logEntries.size(), 1U);
+    EXPECT_EQ(logEntries.front(),
+              QString("[WARN] Serial decode failed (display): timestamp.month has invalid BCD "
+                      "value 0x1A | field: timestamp.month offset: 2 raw: 26"));
+    EXPECT_EQ(viewModel.statusText(), QString("Ready"));
 }

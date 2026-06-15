@@ -54,6 +54,10 @@ UI 状态中心，连接后端事件总线与前端 UI。
 | `dataExchangeGxtc*` | `QString/int` | GXTC 数据交换本地/远端 IP 与端口 |
 | `dataExchangeGdcl*` | `QString/int` | GDCL 数据交换本地/远端 IP 与端口 |
 | `statusText` | `QString` | 状态栏文本 |
+| `logEntryAppended(text)` | signal | 日志页追加单条日志文本 |
+| `visibleLogEntries()` | `QStringList` | 当前分级过滤条件下的日志快照 |
+| `setLogMinimumLevel(level)` | invokable | 设置日志页最小显示级别 |
+| `logEntriesChanged(entries)` | signal | 日志快照或过滤条件变化 |
 | `replayFrameCount` | `int` | 当前选择的回放序列帧数 |
 | `replayCurrentFrame` | `int` | 当前已显示的回放帧序号（1-based） |
 
@@ -67,13 +71,16 @@ UI 状态中心，连接后端事件总线与前端 UI。
 | `stepReplayForward()` | 单帧前进 | 已接入 `ImageSequenceFrameSource::stepForward()`，可暂停后逐帧浏览 |
 | `setProcessingMode(mode)` | 切换处理模式 | 已支持 None/OpenCV，Diff/CUDA 待接入 |
 | `setTrackMode(mode)` | 切换跟踪模式 | 已通过策略工厂配置 GEO/Manual/LEO/SC，LEO/SC 算法体仍待迁移 |
-| `setExposure(ms)` | 设置曝光时间 | UI 状态已接线，硬件命令待接 |
+| `setExposure(ms)` | 设置曝光时间 | UI 状态已接线；实际曝光串口发送通过 `sendExposureCommand(...)` 联调入口触发 |
 | `selectTarget(pos)` | 手动选择目标 | 已配置 Manual 策略并发布 `ManualTargetSelectEvent` |
 | `startSaving()` | 开始存储 | 已启动图像 raw 与轨迹文本 worker |
 | `stopSaving()` | 停止存储 | 已停止并 drain 图像/轨迹存储 worker |
 | `applyNetworkEndpointConfig(...)` | 应用单个 UDP 端点配置 | 已覆盖图像发送、诊断、大气、心跳、GXTC/GDCL；不会自动打开 UDP |
 | `applyDataExchangeEndpoints(...)` | 应用 GXTC/GDCL 本地/远端 IP 与端口 | 已校验端口范围并更新内存配置；不会自动打开 UDP |
 | `applySerialChannelConfig(...)` | 应用单个串口通道配置 | 已覆盖显示、曝光、主控、伺服串口；参数合法时写入内存配置，已打开串口会先关闭，不会自动重开 |
+| `sendExposureCommand(...)` | 发送曝光通道联调命令 | 通过 `IExposureCommandPort` 写入 `ExposureCommand`，要求曝光串口已显式打开，不会自动打开硬件 |
+| `sendServoCorrection(...)` | 发送伺服修正联调命令 | 通过 `IServoCorrectionPort` 写入 `ServoCorrection`，要求伺服串口已显式打开，不会自动打开硬件 |
+| `sendMasterControlStatus(...)` | 发送主控状态回包联调命令 | 通过 `IMasterControlStatusPort` 写入 `MasterControlStatus`，要求主控串口已显式打开，不会自动打开硬件 |
 | `openNetworkEndpoint(key)` | 打开可控网络服务 UDP | 已通过 `INetworkChannel` 接入图像发送、诊断、大气接收、心跳；缺失服务会返回错误状态 |
 | `closeNetworkEndpoint(key)` | 关闭可控网络服务 UDP | 已通过 `INetworkChannel` 接入图像发送、诊断、大气接收、心跳，并刷新通信页状态 |
 | `openSerialChannel(key)` | 打开可控串口通道 | 已通过 `ISerialChannel` 接入显示、曝光、主控、伺服串口；缺失服务会返回错误状态 |
@@ -100,6 +107,9 @@ UI 状态中心，连接后端事件总线与前端 UI。
 - `TrackResultEvent` → `onTrackResult()`
 - `MasterControlEvent` → `onMasterControl()`
 - `NetworkTransmissionErrorEvent` → `onNetworkTransmissionError()`
+- `SerialFrameErrorEvent` → `onSerialFrameError()`
+- `SerialDecodeErrorEvent` → `onSerialDecodeError()`
+- `LogMessageEvent` → `onLogMessage()`
 
 ### 2. AppEvent (`app_event.h`)
 
@@ -125,9 +135,9 @@ signals:
 | 控制页 | `UI_CtrlPad` | 采集/跟踪/存储控制 (部分) |
 | 显示页 | `UI_DispPad` | 全图显示 |
 | 分析页 | — | 图像分析工具 |
-| 通信页 | — | 串口/网络状态，串口显式 open/close，网络端点统一编辑，图像发送/诊断/大气/心跳/GXTC/GDCL UDP 联调入口 |
+| 通信页 | — | 串口/网络状态，串口显式 open/close，串口曝光/伺服/主控状态联调命令，网络端点统一编辑，图像发送/诊断/大气/心跳/GXTC/GDCL UDP 联调入口 |
 | 设置页 | — | 参数配置 |
-| 日志页 | — | 日志查看 |
+| 日志页 | — | 分级过滤并彩色显示核心日志、网络发送失败、串口帧校验失败和串口字段解码失败，最多缓存最近 500 条 |
 
 支持两种窗口后端:
 - **ElaWidgetTools** — 现代风格 (`DSS_HAS_ELA=1`)
@@ -182,10 +192,10 @@ signals:
 | 当前帧进度 | 已显示序列总帧数和当前帧号，单帧前进按钮已接入；进度条、后退、拖动定位和完整 legacy 浏览行为待补 |
 | 处理/跟踪策略选择 | 已接入 None/OpenCV 与 GEO/Manual/LEO/SC；Diff/CUDA、OpenCV 参数和 LEO/SC 算法体仍待迁移 |
 | 网络端点 UI 控件 | 图像发送、诊断、大气、心跳、GXTC/GDCL 端点编辑已由统一表单生成；图像发送、诊断、大气、心跳显式 open/close 按钮已通过 `INetworkChannel` 接入 |
-| 串口通道 UI 控件 | 显示、曝光、主控、伺服串口已可编辑端口/波特率/数据位/停止位，并通过 `ISerialChannel` 接入显式 open/close；协议级联调命令待补 |
-| 数据交换 UI 控件 | GXTC/GDCL 显式 open/close 和错误状态提示已接入；日志面板分级展示待补 |
+| 串口通道 UI 控件 | 显示、曝光、主控、伺服串口已可编辑端口/波特率/数据位/停止位，并通过 `ISerialChannel` 接入显式 open/close；曝光命令、伺服修正、主控状态回包已提供首版联调按钮；帧校验失败和首批字段解码失败会进入日志页 |
+| 数据交换 UI 控件 | GXTC/GDCL 显式 open/close、错误状态提示和日志页分级过滤已接入；发送样例和接收状态待补 |
 | 距离曲线图 | `UI_DistCurve` 未迁移 |
-| 页面布局 | 控制页、显示页、通信页已有首版功能；分析/设置/日志仍是轻量桩实现 |
+| 页面布局 | 控制页、显示页、通信页和日志页已有首版功能；日志页已支持 Info/Warning/Error 彩色显示，持久化/搜索和分析/设置仍待补 |
 | 主题/样式 | 未实现自定义样式，依赖 ElaWidgetTools 或默认样式 |
 
 ## 依赖关系

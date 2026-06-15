@@ -1,6 +1,7 @@
 #include "dss/ui/view_model.h"
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
@@ -12,6 +13,7 @@
 #include "dss/acquisition/i_frame_source.h"
 #include "dss/acquisition/image_sequence_frame_source.h"
 #include "dss/comm/i_serial_channel.h"
+#include "dss/comm/serial_command_interfaces.h"
 #include "dss/core/config.h"
 #include "dss/network/data_exchange.h"
 #include "dss/network/i_network_channel.h"
@@ -32,6 +34,12 @@ constexpr int kMaxUdpPort = 65535;
 
 /// 串口波特率最大值，覆盖常见 USB/高速串口配置。
 constexpr int kMaxSerialBaudRate = 4'000'000;
+
+/// 串口协议单字节字段最大值。
+constexpr int kMaxSerialByte = 0xFF;
+
+/// 曝光延迟字段最大值（24 bit）。
+constexpr int kMaxExposureDelayTicks = 0xFF'FFFF;
 
 /// @brief CommNetConfig 中 UDP 端点成员指针类型。
 using EndpointMember = Dss::Core::UdpEndpointConfig Dss::Core::CommNetConfig::*;
@@ -138,6 +146,58 @@ constexpr std::array kSerialChannelDescriptors{
 /// @brief 将描述表文本转为 Qt 字符串。
 [[nodiscard]] auto descriptorText(std::string_view text) -> QString {
     return QString::fromUtf8(text.data(), static_cast<qsizetype>(text.size()));
+}
+
+/// @brief 构造网络发送失败的状态栏文本。
+[[nodiscard]] auto makeNetworkTransmissionErrorStatus(
+    const Dss::Core::NetworkTransmissionErrorEvent& event) -> QString {
+    return QString("Network send failed (%1): %2")
+        .arg(QString::fromStdString(event.channel))
+        .arg(QString::fromStdString(event.message));
+}
+
+/// @brief 构造网络发送失败的日志文本。
+[[nodiscard]] auto makeNetworkTransmissionErrorLog(
+    const Dss::Core::NetworkTransmissionErrorEvent& event) -> QString {
+    return QString("[ERROR] %1 | attempted bytes: %2")
+        .arg(makeNetworkTransmissionErrorStatus(event))
+        .arg(event.attemptedBytes);
+}
+
+/// @brief 构造串口帧校验失败的日志文本。
+[[nodiscard]] auto makeSerialFrameErrorLog(const Dss::Core::SerialFrameErrorEvent& event)
+    -> QString {
+    return QString(
+               "[WARN] Serial frame dropped (%1): %2 | expected bytes: %3 actual bytes: %4 "
+               "header: %5 tail: %6")
+        .arg(QString::fromStdString(event.channel))
+        .arg(QString::fromStdString(event.message))
+        .arg(event.expectedBytes)
+        .arg(event.actualBytes)
+        .arg(static_cast<unsigned int>(event.observedHeader))
+        .arg(static_cast<unsigned int>(event.observedTail));
+}
+
+/// @brief 构造串口字段级解码失败的日志文本。
+[[nodiscard]] auto makeSerialDecodeErrorLog(const Dss::Core::SerialDecodeErrorEvent& event)
+    -> QString {
+    return QString("[WARN] Serial decode failed (%1): %2 | field: %3 offset: %4 raw: %5")
+        .arg(QString::fromStdString(event.channel))
+        .arg(QString::fromStdString(event.message))
+        .arg(QString::fromStdString(event.field))
+        .arg(event.byteOffset)
+        .arg(event.rawValue);
+}
+
+/// @brief 将 UI 整数值转换为日志级别。
+[[nodiscard]] auto logLevelFromInt(int level) -> Dss::Core::LogLevel {
+    if (level <= static_cast<int>(Dss::Core::LogLevel::Info)) {
+        return Dss::Core::LogLevel::Info;
+    }
+    if (level >= static_cast<int>(Dss::Core::LogLevel::Error)) {
+        return Dss::Core::LogLevel::Error;
+    }
+    return Dss::Core::LogLevel::Warning;
 }
 
 /// @brief 获取已注册的统一网络通道服务。
@@ -287,6 +347,46 @@ constexpr std::array kSerialChannelDescriptors{
     return stopBits == 1 || stopBits == 2;
 }
 
+/// @brief 判断串口协议单字节字段是否处于 0-255 范围
+/// @return 字段值合法时返回 true
+[[nodiscard]] auto isSerialByteInRange(int value) -> bool {
+    return value >= 0 && value <= kMaxSerialByte;
+}
+
+/// @brief 判断曝光延迟字段是否处于 24 bit 范围
+/// @return 字段值合法时返回 true
+[[nodiscard]] auto isExposureDelayTicksInRange(int ticks) -> bool {
+    return ticks >= 0 && ticks <= kMaxExposureDelayTicks;
+}
+
+/// @brief 判断时间戳日期字段是否处于主控状态回包支持范围
+/// @return 日期字段合法时返回 true
+[[nodiscard]] auto isTimestampDateInRange(int year, int month, int day) -> bool {
+    return year >= 2000 && year <= 2099 && month >= 1 && month <= 12 && day >= 1 && day <= 31;
+}
+
+/// @brief 判断时间戳时间字段是否处于主控状态回包支持范围
+/// @return 时间字段合法时返回 true
+[[nodiscard]] auto isTimestampTimeInRange(int hour, int minute, int second, int millisecond)
+    -> bool {
+    return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59 && second >= 0 && second <= 59 &&
+           millisecond >= 0 && millisecond <= 999;
+}
+
+/// @brief 判断角度是否处于 AE 编码支持范围
+/// @return 角度合法时返回 true
+[[nodiscard]] auto isAngleDegreesInRange(double degrees) -> bool {
+    return std::isfinite(degrees) && degrees >= 0.0 && degrees <= 360.0;
+}
+
+/// @brief 判断浮点修正参数是否均为有限值
+/// @return 所有字段为有限值时返回 true
+[[nodiscard]] auto areFiniteCorrections(double first, double second, double third, double fourth)
+    -> bool {
+    return std::isfinite(first) && std::isfinite(second) && std::isfinite(third) &&
+           std::isfinite(fourth);
+}
+
 /// @brief 根据 UI 输入构造 UDP 端点配置
 /// @return 规范化后的 UDP 端点配置
 [[nodiscard]] auto makeEndpointConfig(const QString& localIp, int localPort,
@@ -312,6 +412,39 @@ constexpr std::array kSerialChannelDescriptors{
     };
 }
 
+/// @brief 检查串口命令服务是否具备发送条件
+/// @return 可以发送时返回空字符串，否则返回用于状态栏的错误文本
+[[nodiscard]] auto serialCommandUnavailableMessage(Dss::Core::ServiceRegistry& registry,
+                                                   std::string_view serviceName,
+                                                   std::string_view displayName) -> QString {
+    const auto service = registeredSerialChannel(registry, serviceName);
+    const auto display = descriptorText(displayName);
+    if (!service) {
+        return QString("Serial channel is not registered: %1").arg(display);
+    }
+    if (!service->isOpen()) {
+        return QString("Serial channel is not open: %1").arg(display);
+    }
+    return {};
+}
+
+/// @brief 根据 UI 参数构造伺服修正 DTO
+/// @return 可直接传入 codec 的伺服修正参数
+[[nodiscard]] auto makeServoCorrection(bool distanceValid, bool speedValid, double distanceXArcsec,
+                                       double distanceYArcsec, double speedXArcsecPerSec,
+                                       double speedYArcsecPerSec, int mode)
+    -> Dss::Comm::ServoCorrection {
+    return Dss::Comm::ServoCorrection{
+        .distanceValid = distanceValid,
+        .speedValid = speedValid,
+        .distanceArcsec = Dss::Core::Vec2f{static_cast<float>(distanceXArcsec),
+                                           static_cast<float>(distanceYArcsec)},
+        .speedArcsecPerSec = Dss::Core::Vec2f{static_cast<float>(speedXArcsecPerSec),
+                                              static_cast<float>(speedYArcsecPerSec)},
+        .mode = static_cast<std::uint8_t>(mode),
+    };
+}
+
 }  // namespace
 
 ViewModel::ViewModel(MessageBus& bus, Dss::Core::ServiceRegistry& registry, QObject* parent)
@@ -320,6 +453,17 @@ ViewModel::ViewModel(MessageBus& bus, Dss::Core::ServiceRegistry& registry, QObj
 }
 
 ViewModel::~ViewModel() = default;
+
+QStringList ViewModel::visibleLogEntries() const {
+    QStringList entries;
+    entries.reserve(static_cast<qsizetype>(m_logEntries.size()));
+    for (const auto& entry : m_logEntries) {
+        if (isLogLevelVisible(entry.level)) {
+            entries.push_back(entry.text);
+        }
+    }
+    return entries;
+}
 
 auto ViewModel::networkEndpointConfigs() -> std::vector<NetworkEndpointState> {
     const auto& commNet = Dss::Core::Config::instance().commNet();
@@ -801,6 +945,123 @@ bool ViewModel::applySerialChannelConfig(const QString& key, const QString& port
     return true;
 }
 
+/// 发送曝光通道联调命令
+bool ViewModel::sendExposureCommand(bool freeRun, int frameFrequencyCode, int exposureDelayTicks) {
+    const auto unavailable = serialCommandUnavailableMessage(m_registry, "exposure", "Exposure");
+    if (!unavailable.isEmpty()) {
+        setStatus(unavailable);
+        return false;
+    }
+    if (!isSerialByteInRange(frameFrequencyCode)) {
+        setStatus("Exposure frame frequency code must be 0-255");
+        return false;
+    }
+    if (!isExposureDelayTicksInRange(exposureDelayTicks)) {
+        setStatus("Exposure delay ticks must be 0-16777215");
+        return false;
+    }
+
+    auto commandPort = m_registry.tryGet<Dss::Comm::IExposureCommandPort>("exposure");
+    if (!commandPort) {
+        setStatus("Exposure command service is not registered");
+        return false;
+    }
+
+    commandPort->sendExposureCommand(Dss::Comm::ExposureCommand{
+        .triggerMode = freeRun ? Dss::Comm::ExposureTriggerMode::FreeRun
+                               : Dss::Comm::ExposureTriggerMode::External,
+        .frameFrequencyCode = static_cast<std::uint8_t>(frameFrequencyCode),
+        .exposureDelayTicks = static_cast<std::uint32_t>(exposureDelayTicks),
+    });
+    setStatus("Exposure command sent");
+    return true;
+}
+
+/// 发送伺服距离/速度修正联调命令
+bool ViewModel::sendServoCorrection(bool distanceValid, bool speedValid, double distanceXArcsec,
+                                    double distanceYArcsec, double speedXArcsecPerSec,
+                                    double speedYArcsecPerSec, int mode) {
+    const auto unavailable = serialCommandUnavailableMessage(m_registry, "servo", "Servo");
+    if (!unavailable.isEmpty()) {
+        setStatus(unavailable);
+        return false;
+    }
+    if (!isSerialByteInRange(mode)) {
+        setStatus("Servo mode must be 0-255");
+        return false;
+    }
+    if (!areFiniteCorrections(distanceXArcsec, distanceYArcsec, speedXArcsecPerSec,
+                              speedYArcsecPerSec)) {
+        setStatus("Servo correction values must be finite");
+        return false;
+    }
+
+    auto correctionPort = m_registry.tryGet<Dss::Comm::IServoCorrectionPort>("servo");
+    if (!correctionPort) {
+        setStatus("Servo correction service is not registered");
+        return false;
+    }
+
+    correctionPort->sendServoCorrection(
+        makeServoCorrection(distanceValid, speedValid, distanceXArcsec, distanceYArcsec,
+                            speedXArcsecPerSec, speedYArcsecPerSec, mode));
+    setStatus("Servo correction sent");
+    return true;
+}
+
+/// 发送主控状态回包联调命令
+bool ViewModel::sendMasterControlStatus(int year, int month, int day, int hour, int minute,
+                                        int second, int millisecond, double azimuthDegrees,
+                                        double elevationDegrees, bool distanceValid,
+                                        bool speedValid, double distanceXArcsec,
+                                        double distanceYArcsec, double speedXArcsecPerSec,
+                                        double speedYArcsecPerSec, int servoMode) {
+    const auto unavailable =
+        serialCommandUnavailableMessage(m_registry, "master_control", "Master Control");
+    if (!unavailable.isEmpty()) {
+        setStatus(unavailable);
+        return false;
+    }
+    if (!isTimestampDateInRange(year, month, day)) {
+        setStatus("Master control timestamp date is out of range");
+        return false;
+    }
+    if (!isTimestampTimeInRange(hour, minute, second, millisecond)) {
+        setStatus("Master control timestamp time is out of range");
+        return false;
+    }
+    if (!isAngleDegreesInRange(azimuthDegrees) || !isAngleDegreesInRange(elevationDegrees)) {
+        setStatus("Master control pointing angles must be 0-360");
+        return false;
+    }
+    if (!isSerialByteInRange(servoMode)) {
+        setStatus("Master control servo mode must be 0-255");
+        return false;
+    }
+    if (!areFiniteCorrections(distanceXArcsec, distanceYArcsec, speedXArcsecPerSec,
+                              speedYArcsecPerSec)) {
+        setStatus("Master control correction values must be finite");
+        return false;
+    }
+
+    auto statusPort = m_registry.tryGet<Dss::Comm::IMasterControlStatusPort>("master_control");
+    if (!statusPort) {
+        setStatus("Master control status service is not registered");
+        return false;
+    }
+
+    statusPort->sendMasterControlStatus(Dss::Comm::MasterControlStatus{
+        .correction =
+            makeServoCorrection(distanceValid, speedValid, distanceXArcsec, distanceYArcsec,
+                                speedXArcsecPerSec, speedYArcsecPerSec, servoMode),
+        .timestamp = Dss::Core::Timestamp{year, month, day, hour, minute, second, millisecond},
+        .pointingAe = Dss::Core::Vec2f{static_cast<float>(azimuthDegrees),
+                                       static_cast<float>(elevationDegrees)},
+    });
+    setStatus("Master control status sent");
+    return true;
+}
+
 /// 校验并应用 GXTC/GDCL 数据交换端点配置
 bool ViewModel::applyDataExchangeEndpoints(const QString& gxtcLocalIp, int gxtcLocalPort,
                                            const QString& gxtcRemoteIp, int gxtcRemotePort,
@@ -874,11 +1135,22 @@ void ViewModel::closeDataExchange() {
     setStatus("Data exchange UDP closed");
 }
 
+void ViewModel::setLogMinimumLevel(int level) {
+    const auto normalizedLevel = logLevelFromInt(level);
+    if (m_logMinimumLevel == normalizedLevel) {
+        return;
+    }
+
+    m_logMinimumLevel = normalizedLevel;
+    Q_EMIT logMinimumLevelChanged(logMinimumLevel());
+    Q_EMIT logEntriesChanged(visibleLogEntries());
+}
+
 void ViewModel::toggleZoom(int level) {
     m_bus.emit(Dss::Core::ZoomChangeEvent{level});
 }
 
-/// 订阅显示刷新、处理完成、跟踪结果、主控和网络错误事件
+/// 订阅显示刷新、处理完成、跟踪结果、主控、通信诊断和日志事件
 void ViewModel::setupSubscriptions() {
     m_connections.push_back(m_bus.subscribe<Dss::Core::DisplayRefreshEvent>(
         [this](const Dss::Core::DisplayRefreshEvent& e) { onDisplayRefresh(e); }));
@@ -896,6 +1168,15 @@ void ViewModel::setupSubscriptions() {
         [this](const Dss::Core::NetworkTransmissionErrorEvent& e) {
             onNetworkTransmissionError(e);
         }));
+
+    m_connections.push_back(m_bus.subscribe<Dss::Core::SerialFrameErrorEvent>(
+        [this](const Dss::Core::SerialFrameErrorEvent& e) { onSerialFrameError(e); }));
+
+    m_connections.push_back(m_bus.subscribe<Dss::Core::SerialDecodeErrorEvent>(
+        [this](const Dss::Core::SerialDecodeErrorEvent& e) { onSerialDecodeError(e); }));
+
+    m_connections.push_back(m_bus.subscribe<Dss::Core::LogMessageEvent>(
+        [this](const Dss::Core::LogMessageEvent& e) { onLogMessage(e); }));
 }
 
 /**
@@ -960,11 +1241,25 @@ void ViewModel::onMasterControl(const Dss::Core::MasterControlEvent& event) {
     }
 }
 
-/// 将网络发送失败事件同步到状态栏
+/// 将网络发送失败事件同步到状态栏和日志页
 void ViewModel::onNetworkTransmissionError(const Dss::Core::NetworkTransmissionErrorEvent& event) {
-    setStatus(QString("Network send failed (%1): %2")
-                  .arg(QString::fromStdString(event.channel))
-                  .arg(QString::fromStdString(event.message)));
+    setStatus(makeNetworkTransmissionErrorStatus(event));
+    appendLogEntry(Dss::Core::LogLevel::Error, makeNetworkTransmissionErrorLog(event));
+}
+
+/// 将串口帧校验失败事件转发到 UI 日志页
+void ViewModel::onSerialFrameError(const Dss::Core::SerialFrameErrorEvent& event) {
+    appendLogEntry(Dss::Core::LogLevel::Warning, makeSerialFrameErrorLog(event));
+}
+
+/// 将串口协议字段解码失败事件转发到 UI 日志页
+void ViewModel::onSerialDecodeError(const Dss::Core::SerialDecodeErrorEvent& event) {
+    appendLogEntry(Dss::Core::LogLevel::Warning, makeSerialDecodeErrorLog(event));
+}
+
+/// 将核心日志事件转发到 UI 日志页
+void ViewModel::onLogMessage(const Dss::Core::LogMessageEvent& event) {
+    appendLogEntry(event.level, QString::fromStdString(event.message));
 }
 
 /// 按 ProcessingMode 为 ImageProcessor 绑定或清除处理策略
@@ -1065,6 +1360,23 @@ void ViewModel::setStatus(QString text) {
     }
     m_statusText = std::move(text);
     Q_EMIT statusTextChanged(m_statusText);
+}
+
+void ViewModel::appendLogEntry(Dss::Core::LogLevel level, QString text) {
+    if (m_logEntries.size() == kMaxLogEntries) {
+        m_logEntries.erase(m_logEntries.begin());
+    }
+
+    m_logEntries.push_back(UiLogEntry{.level = level, .text = std::move(text)});
+    const auto& entry = m_logEntries.back();
+    if (isLogLevelVisible(entry.level)) {
+        Q_EMIT logEntryAppended(entry.text);
+    }
+    Q_EMIT logEntriesChanged(visibleLogEntries());
+}
+
+bool ViewModel::isLogLevelVisible(Dss::Core::LogLevel level) const {
+    return static_cast<int>(level) >= static_cast<int>(m_logMinimumLevel);
 }
 
 }  // namespace Dss::Ui

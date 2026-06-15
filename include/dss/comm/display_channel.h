@@ -27,6 +27,11 @@ protected:
         return layoutFor(Protocol).sendSize;
     }
 
+    /// 返回显示通道诊断名称
+    [[nodiscard]] auto channelName() const -> std::string_view override {
+        return layoutFor(Protocol).name;
+    }
+
     /// 解码显示帧，成功时发布 25Hz 同步事件
     void decodeFrame(std::span<const uint8_t> data) override;
 

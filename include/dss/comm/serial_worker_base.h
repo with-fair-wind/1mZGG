@@ -8,6 +8,7 @@
 #include <span>
 #include <stop_token>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -75,6 +76,11 @@ protected:
     /// 将待发送数据编码到缓冲区
     virtual void encodeFrame(std::span<uint8_t> buffer) = 0;
 
+    /// 返回用于日志和诊断事件的通道名称
+    [[nodiscard]] virtual auto channelName() const -> std::string_view {
+        return "serial";
+    }
+
     /// 请求工作线程发送一帧
     void requestSend();
 
@@ -82,6 +88,10 @@ protected:
     MessageBus& bus() {
         return m_bus;
     }
+
+    /// 发布协议字段级解码失败事件
+    void publishDecodeError(std::string_view field, std::string_view message,
+                            std::size_t byteOffset, uint64_t rawValue);
 
 private:
     /**

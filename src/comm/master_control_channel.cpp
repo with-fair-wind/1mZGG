@@ -6,9 +6,19 @@ namespace Dss::Comm {
 
 MasterControlChannel::MasterControlChannel(MessageBus& bus) : SerialWorkerBase(bus) {}
 
+void MasterControlChannel::sendMasterControlStatus(const MasterControlStatus& status) {
+    {
+        std::lock_guard lock(m_statusMutex);
+        m_pendingStatus = status;
+    }
+    requestSend();
+}
+
 void MasterControlChannel::decodeFrame(std::span<const uint8_t> data) {
-    auto command = decodeMasterControlFrame(data);
+    auto command = decodeMasterControlFrameDetailed(data);
     if (!command) {
+        const auto& error = command.error();
+        publishDecodeError(error.field, error.message, error.byteOffset, error.rawValue);
         return;
     }
 
@@ -16,7 +26,8 @@ void MasterControlChannel::decodeFrame(std::span<const uint8_t> data) {
 }
 
 void MasterControlChannel::encodeFrame(std::span<uint8_t> buffer) {
-    (void)encodeMasterControlStatus(MasterControlStatus{}, buffer);
+    std::lock_guard lock(m_statusMutex);
+    (void)encodeMasterControlStatus(m_pendingStatus, buffer);
 }
 
 }  // namespace Dss::Comm

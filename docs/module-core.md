@@ -79,13 +79,15 @@ Core 模块是整个系统的基础层，提供所有其他模块共享的类型
 | `TrackResultEvent` | TrackManager | ViewModel, ServoChannel |
 | `ImageSendEvent` | ImageSender | — |
 | `NetworkTransmissionErrorEvent` | DataExchange | ViewModel/Logger |
+| `SerialFrameErrorEvent` | SerialWorkerBase | ViewModel/Log Panel |
+| `SerialDecodeErrorEvent` | SerialWorkerBase/SerialChannel | ViewModel/Log Panel |
 | `MasterControlEvent` | MasterControlChannel | ViewModel |
 | `ExposureSyncEvent` | ExposureChannel | ImageProcessor |
 | `Sync25HzEvent` | DisplayChannel | ImageProcessor |
 | `ManualTargetSelectEvent` | UI | ManualTracker |
 | `ZoomChangeEvent` | UI | ImageDisplay |
 | `CloseEvent` | UI | ApplicationContext |
-| `LogMessageEvent` | Logger | UI Log Panel |
+| `LogMessageEvent` | Logger | UI Log Panel，带 `LogLevel` 供分级过滤 |
 | `AtmosphereDataEvent` | AtmosReceiver | — |
 
 ### 4. 事件总线 (`event_bus.h`)
@@ -145,17 +147,19 @@ Core 模块是整个系统的基础层，提供所有其他模块共享的类型
 
 ### 7. 日志 (`logger.h`)
 
-基于事件总线的日志系统，替代旧版 `MyLog`。
+基于 spdlog 和事件总线的日志系统，替代旧版 `MyLog`。
 
-- `Logger::info()`, `warn()`, `error()` — 写日志
-- 内部发布 `LogMessageEvent` 到消息总线
+- `Logger::info()`, `warn()`, `error()` — 写日志并写入 `LogLevel`，支持 `std::format` 风格参数
+- 内部使用 spdlog logger，并通过自定义 sink 发布 `LogMessageEvent` 到消息总线
+- UI 可按 Info/Warning/Error 过滤和着色显示日志
 - 由 `ApplicationContext::wireLogger()` 初始化连接
 
 ## 依赖关系
 
 ```
 dss_core
-└── nlohmann_json::nlohmann_json
+├── nlohmann_json::nlohmann_json
+└── spdlog::spdlog
 ```
 
 Core 模块是所有其他模块的基础依赖，不依赖 Qt 或任何其他项目模块。

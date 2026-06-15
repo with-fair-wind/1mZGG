@@ -6,6 +6,8 @@
 #include <QString>
 #include <chrono>
 
+#include "dss/core/events.h"
+
 namespace Dss::Comm {
 
 SerialWorkerBase::SerialWorkerBase(MessageBus& bus) : m_bus(bus) {}
@@ -64,6 +66,17 @@ void SerialWorkerBase::requestSend() {
     m_sendRequested = true;
 }
 
+void SerialWorkerBase::publishDecodeError(std::string_view field, std::string_view message,
+                                          std::size_t byteOffset, uint64_t rawValue) {
+    m_bus.emit(Dss::Core::SerialDecodeErrorEvent{
+        .channel = std::string(channelName()),
+        .message = std::string(message),
+        .field = std::string(field),
+        .byteOffset = static_cast<uint64_t>(byteOffset),
+        .rawValue = rawValue,
+    });
+}
+
 void SerialWorkerBase::workerLoop(std::stop_token token) {
     using namespace std::chrono;
     auto lastFpsTime = steady_clock::now();
@@ -92,16 +105,29 @@ void SerialWorkerBase::workerLoop(std::stop_token token) {
 
 void SerialWorkerBase::onDataReceived() {
     const auto expected = recvFrameSize();
+    if (expected == 0U) {
+        return;
+    }
     while (m_serialPort->bytesAvailable() >= static_cast<qint64>(expected)) {
         QByteArray raw = m_serialPort->read(static_cast<qint64>(expected));
-        if (raw.size() == static_cast<qsizetype>(expected)) {
-            auto data = std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(raw.constData()),
-                                                 expected);
-            if (FrameCodec::validate(data, expected)) {
-                decodeFrame(data);
-                m_recvCount.fetch_add(1);
-            }
+        const auto actual = static_cast<std::size_t>(raw.size());
+        auto data =
+            std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(raw.constData()), actual);
+        const auto validation = FrameCodec::validateDetailed(data, expected);
+        if (validation.valid) {
+            decodeFrame(data);
+            m_recvCount.fetch_add(1);
+            continue;
         }
+
+        m_bus.emit(Dss::Core::SerialFrameErrorEvent{
+            .channel = std::string(channelName()),
+            .message = std::string(FrameCodec::failureMessage(validation.failure)),
+            .expectedBytes = static_cast<uint64_t>(validation.expectedSize),
+            .actualBytes = static_cast<uint64_t>(validation.actualSize),
+            .observedHeader = validation.observedHeader,
+            .observedTail = validation.observedTail,
+        });
     }
 }
 

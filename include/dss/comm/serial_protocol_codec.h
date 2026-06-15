@@ -9,6 +9,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include "dss/comm/frame_codec.h"
 #include "dss/core/events.h"
@@ -123,6 +124,14 @@ struct MasterControlStatus {
     Dss::Core::Vec2f pointingAe{};     ///< 指向角（方位/俯仰，度）
 };
 
+/// 串口协议字段级解码错误
+struct SerialDecodeError {
+    std::string message;         ///< 可展示的错误描述
+    std::string field;           ///< 发生错误的协议字段名称
+    std::size_t byteOffset = 0;  ///< 字段起始字节偏移
+    uint64_t rawValue = 0;       ///< 字段原始值或解码后的异常值
+};
+
 /// 编解码内部辅助函数与常量
 namespace detail {
 
@@ -138,12 +147,34 @@ inline constexpr double AngleCodeDenominator =
     return std::string("invalid ") + std::string(layoutFor(protocol).name) + " frame";
 }
 
-/**
- * @brief 从缓冲区读取小端 16 位无符号整数
- * @param data 源数据
- * @param offset 起始偏移（字节）
- * @return 解码后的值
- */
+/// @brief 构造通用字段级解码错误。
+/// @param field 字段名称。
+/// @param message 错误描述。
+/// @param byteOffset 字节偏移。
+/// @param rawValue 原始值或异常值。
+/// @return 字段级解码错误。
+[[nodiscard]] inline auto makeDecodeError(std::string field, std::string message,
+                                          std::size_t byteOffset, uint64_t rawValue)
+    -> SerialDecodeError {
+    return SerialDecodeError{
+        .message = std::move(message),
+        .field = std::move(field),
+        .byteOffset = byteOffset,
+        .rawValue = rawValue,
+    };
+}
+
+/// @brief 构造固定帧校验失败对应的字段级解码错误。
+/// @param protocol 协议类型。
+/// @return 字段级解码错误。
+[[nodiscard]] inline auto invalidFrameDecodeError(SerialProtocol protocol) -> SerialDecodeError {
+    return makeDecodeError("frame", invalidFrameError(protocol), 0U, 0U);
+}
+
+/// @brief 从缓冲区读取小端 16 位无符号整数。
+/// @param data 源数据。
+/// @param offset 起始偏移（字节）。
+/// @return 解码后的值。
 [[nodiscard]] constexpr auto readU16Le(std::span<const uint8_t> data, std::size_t offset)
     -> uint16_t {
     return static_cast<uint16_t>(data[offset]) |
@@ -220,11 +251,71 @@ constexpr void writeU32Le(std::span<uint8_t> data, std::size_t offset, uint32_t 
     return static_cast<int>(((value >> 4U) & 0x0FU) * 10U + (value & 0x0FU));
 }
 
-/**
- * @brief 将十进制整数编码为 BCD 字节
- * @param value 待编码的十进制值（自动钳制到 0–99）
- * @return BCD 编码字节
- */
+/// @brief 判断字节是否符合 BCD 编码。
+/// @param value 待检查字节。
+/// @return 高低半字节均为 0-9 时返回 true。
+[[nodiscard]] constexpr auto isBcdByte(uint8_t value) -> bool {
+    return ((value >> 4U) & 0x0FU) <= 9U && (value & 0x0FU) <= 9U;
+}
+
+/// @brief 将单字节格式化为 0xNN 文本。
+/// @param value 待格式化字节。
+/// @return 十六进制字符串。
+[[nodiscard]] inline auto hexByte(uint8_t value) -> std::string {
+    constexpr std::array digits{'0', '1', '2', '3', '4', '5', '6', '7',
+                                '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+    std::string text = "0x00";
+    text[2] = digits[(value >> 4U) & 0x0FU];
+    text[3] = digits[value & 0x0FU];
+    return text;
+}
+
+/// @brief 解码并校验 BCD 时间字段。
+/// @param field 字段名称。
+/// @param value BCD 原始值。
+/// @param byteOffset 字节偏移。
+/// @param minimum 允许的最小十进制值。
+/// @param maximum 允许的最大十进制值。
+/// @return 解码后的十进制值，失败时返回字段级错误。
+[[nodiscard]] inline auto decodeBcdField(std::string field, uint8_t value, std::size_t byteOffset,
+                                         int minimum, int maximum)
+    -> std::expected<int, SerialDecodeError> {
+    if (!isBcdByte(value)) {
+        const auto message = field + " has invalid BCD value " + hexByte(value);
+        return std::unexpected(makeDecodeError(std::move(field), message, byteOffset, value));
+    }
+
+    const auto decoded = decodeBcd(value);
+    if (decoded < minimum || decoded > maximum) {
+        const auto message = field + " is out of range: " + std::to_string(decoded);
+        return std::unexpected(
+            makeDecodeError(std::move(field), message, byteOffset, static_cast<uint64_t>(decoded)));
+    }
+    return decoded;
+}
+
+/// @brief 校验普通单字节时间字段范围。
+/// @param field 字段名称。
+/// @param value 原始值。
+/// @param byteOffset 字节偏移。
+/// @param minimum 允许的最小值。
+/// @param maximum 允许的最大值。
+/// @return 校验通过后的值，失败时返回字段级错误。
+[[nodiscard]] inline auto decodeRangeField(std::string field, uint8_t value, std::size_t byteOffset,
+                                           int minimum, int maximum)
+    -> std::expected<int, SerialDecodeError> {
+    const auto decoded = static_cast<int>(value);
+    if (decoded < minimum || decoded > maximum) {
+        const auto message = field + " is out of range: " + std::to_string(decoded);
+        return std::unexpected(
+            makeDecodeError(std::move(field), message, byteOffset, static_cast<uint64_t>(decoded)));
+    }
+    return decoded;
+}
+
+/// @brief 将十进制整数编码为 BCD 字节。
+/// @param value 待编码的十进制值（自动钳制到 0-99）。
+/// @return BCD 编码字节。
 [[nodiscard]] constexpr auto encodeBcd(int value) -> uint8_t {
     const auto clamped = std::clamp(value, 0, 99);
     return static_cast<uint8_t>(((clamped / 10) << 4U) | (clamped % 10));
@@ -257,18 +348,43 @@ constexpr void writeU32Le(std::span<uint8_t> data, std::size_t offset, uint32_t 
  */
 [[nodiscard]] inline auto decodePointingFrame(std::span<const uint8_t> frame,
                                               SerialProtocol protocol)
-    -> std::expected<Dss::Core::ExposureDisplayData, std::string> {
+    -> std::expected<Dss::Core::ExposureDisplayData, SerialDecodeError> {
     if (!validateReceiveFrame(protocol, frame)) {
-        return std::unexpected(invalidFrameError(protocol));
+        return std::unexpected(invalidFrameDecodeError(protocol));
+    }
+
+    auto year = decodeBcdField("timestamp.year", frame[1], 1U, 0, 99);
+    if (!year) {
+        return std::unexpected(std::move(year.error()));
+    }
+    auto month = decodeBcdField("timestamp.month", frame[2], 2U, 1, 12);
+    if (!month) {
+        return std::unexpected(std::move(month.error()));
+    }
+    auto day = decodeBcdField("timestamp.day", frame[3], 3U, 1, 31);
+    if (!day) {
+        return std::unexpected(std::move(day.error()));
+    }
+    auto hour = decodeBcdField("timestamp.hour", frame[4], 4U, 0, 23);
+    if (!hour) {
+        return std::unexpected(std::move(hour.error()));
+    }
+    auto minute = decodeBcdField("timestamp.minute", frame[5], 5U, 0, 59);
+    if (!minute) {
+        return std::unexpected(std::move(minute.error()));
+    }
+    auto second = decodeBcdField("timestamp.second", frame[6], 6U, 0, 59);
+    if (!second) {
+        return std::unexpected(std::move(second.error()));
     }
 
     Dss::Core::ExposureDisplayData decoded{};
-    decoded.timestamp.year = 2000 + decodeBcd(frame[1]);
-    decoded.timestamp.month = decodeBcd(frame[2]);
-    decoded.timestamp.day = decodeBcd(frame[3]);
-    decoded.timestamp.hour = decodeBcd(frame[4]);
-    decoded.timestamp.minute = decodeBcd(frame[5]);
-    decoded.timestamp.second = decodeBcd(frame[6]);
+    decoded.timestamp.year = 2000 + *year;
+    decoded.timestamp.month = *month;
+    decoded.timestamp.day = *day;
+    decoded.timestamp.hour = *hour;
+    decoded.timestamp.minute = *minute;
+    decoded.timestamp.second = *second;
     decoded.timestamp.millisecond = static_cast<int>(readU16Le(frame, 7U) / 10U);
     decoded.pointingAe.x = decodeAngle(readU32Le(frame, 9U));
     decoded.pointingAe.y = decodeAngle(readU32Le(frame, 13U));
@@ -312,24 +428,44 @@ inline void encodeSignedMagnitude24(std::span<uint8_t> frame, std::size_t offset
 
 }  // namespace detail
 
-/**
- * @brief 解码显示通道接收帧
- * @param frame 原始帧数据
- * @return 解码后的曝光显示数据，失败时返回错误描述
- */
-[[nodiscard]] inline auto decodeDisplayFrame(std::span<const uint8_t> frame)
-    -> std::expected<Dss::Core::ExposureDisplayData, std::string> {
+/// @brief 解码显示通道接收帧并保留字段级错误。
+/// @param frame 原始帧数据。
+/// @return 解码后的曝光显示数据，失败时返回字段级错误。
+[[nodiscard]] inline auto decodeDisplayFrameDetailed(std::span<const uint8_t> frame)
+    -> std::expected<Dss::Core::ExposureDisplayData, SerialDecodeError> {
     return detail::decodePointingFrame(frame, SerialProtocol::Display);
 }
 
-/**
- * @brief 解码曝光通道接收帧
- * @param frame 原始帧数据
- * @return 解码后的曝光显示数据，失败时返回错误描述
- */
+/// @brief 解码显示通道接收帧。
+/// @param frame 原始帧数据。
+/// @return 解码后的曝光显示数据，失败时返回错误描述。
+[[nodiscard]] inline auto decodeDisplayFrame(std::span<const uint8_t> frame)
+    -> std::expected<Dss::Core::ExposureDisplayData, std::string> {
+    auto decoded = decodeDisplayFrameDetailed(frame);
+    if (!decoded) {
+        return std::unexpected(decoded.error().message);
+    }
+    return *decoded;
+}
+
+/// @brief 解码曝光通道接收帧并保留字段级错误。
+/// @param frame 原始帧数据。
+/// @return 解码后的曝光显示数据，失败时返回字段级错误。
+[[nodiscard]] inline auto decodeExposureFrameDetailed(std::span<const uint8_t> frame)
+    -> std::expected<Dss::Core::ExposureDisplayData, SerialDecodeError> {
+    return detail::decodePointingFrame(frame, SerialProtocol::Exposure);
+}
+
+/// @brief 解码曝光通道接收帧。
+/// @param frame 原始帧数据。
+/// @return 解码后的曝光显示数据，失败时返回错误描述。
 [[nodiscard]] inline auto decodeExposureFrame(std::span<const uint8_t> frame)
     -> std::expected<Dss::Core::ExposureDisplayData, std::string> {
-    return detail::decodePointingFrame(frame, SerialProtocol::Exposure);
+    auto decoded = decodeExposureFrameDetailed(frame);
+    if (!decoded) {
+        return std::unexpected(decoded.error().message);
+    }
+    return *decoded;
 }
 
 /**
@@ -373,15 +509,38 @@ inline bool encodeExposureCommand(const ExposureCommand& command, std::span<uint
     }
 }
 
-/**
- * @brief 解码主控通道接收帧
- * @param frame 原始帧数据
- * @return 解码后的主控指令，失败时返回错误描述
- */
-[[nodiscard]] inline auto decodeMasterControlFrame(std::span<const uint8_t> frame)
-    -> std::expected<MasterControlCommand, std::string> {
+/// @brief 解码主控通道接收帧并保留字段级错误。
+/// @param frame 原始帧数据。
+/// @return 解码后的主控指令，失败时返回字段级错误。
+[[nodiscard]] inline auto decodeMasterControlFrameDetailed(std::span<const uint8_t> frame)
+    -> std::expected<MasterControlCommand, SerialDecodeError> {
     if (!validateReceiveFrame(SerialProtocol::MasterControl, frame)) {
-        return std::unexpected(detail::invalidFrameError(SerialProtocol::MasterControl));
+        return std::unexpected(detail::invalidFrameDecodeError(SerialProtocol::MasterControl));
+    }
+
+    auto startHour = detail::decodeRangeField("start.hour", frame[17], 17U, 0, 23);
+    if (!startHour) {
+        return std::unexpected(std::move(startHour.error()));
+    }
+    auto startMinute = detail::decodeRangeField("start.minute", frame[18], 18U, 0, 59);
+    if (!startMinute) {
+        return std::unexpected(std::move(startMinute.error()));
+    }
+    auto startSecond = detail::decodeRangeField("start.second", frame[19], 19U, 0, 59);
+    if (!startSecond) {
+        return std::unexpected(std::move(startSecond.error()));
+    }
+    auto endHour = detail::decodeRangeField("end.hour", frame[20], 20U, 0, 23);
+    if (!endHour) {
+        return std::unexpected(std::move(endHour.error()));
+    }
+    auto endMinute = detail::decodeRangeField("end.minute", frame[21], 21U, 0, 59);
+    if (!endMinute) {
+        return std::unexpected(std::move(endMinute.error()));
+    }
+    auto endSecond = detail::decodeRangeField("end.second", frame[22], 22U, 0, 59);
+    if (!endSecond) {
+        return std::unexpected(std::move(endSecond.error()));
     }
 
     MasterControlCommand command{};
@@ -394,16 +553,26 @@ inline bool encodeExposureCommand(const ExposureCommand& command, std::span<uint
     command.save = frame[10] == 0xFFU;
     command.targetId = detail::readU24Le(frame, 11U);
     command.taskId = detail::readU24Le(frame, 14U);
-    command.start = Dss::Core::TimeOfDay{frame[17], frame[18], frame[19]};
-    command.end = Dss::Core::TimeOfDay{frame[20], frame[21], frame[22]};
+    command.start = Dss::Core::TimeOfDay{*startHour, *startMinute, *startSecond};
+    command.end = Dss::Core::TimeOfDay{*endHour, *endMinute, *endSecond};
     return command;
 }
 
-/**
- * @brief 将主控指令转换为系统事件
- * @param command 主控指令
- * @return 对应的主控事件对象
- */
+/// @brief 解码主控通道接收帧。
+/// @param frame 原始帧数据。
+/// @return 解码后的主控指令，失败时返回错误描述。
+[[nodiscard]] inline auto decodeMasterControlFrame(std::span<const uint8_t> frame)
+    -> std::expected<MasterControlCommand, std::string> {
+    auto decoded = decodeMasterControlFrameDetailed(frame);
+    if (!decoded) {
+        return std::unexpected(decoded.error().message);
+    }
+    return *decoded;
+}
+
+/// @brief 将主控指令转换为系统事件。
+/// @param command 主控指令。
+/// @return 对应的主控事件对象。
 [[nodiscard]] inline auto toMasterControlEvent(const MasterControlCommand& command)
     -> Dss::Core::MasterControlEvent {
     return Dss::Core::MasterControlEvent{

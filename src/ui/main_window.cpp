@@ -2,7 +2,10 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QDateTime>
+#include <QDoubleSpinBox>
 #include <QFileDialog>
+#include <QFont>
 #include <QFormLayout>
 #include <QGridLayout>
 #include <QGroupBox>
@@ -15,6 +18,8 @@
 #include <QSplitter>
 #include <QStatusBar>
 #include <QTabWidget>
+#include <QTextCharFormat>
+#include <QTextCursor>
 #include <QTextEdit>
 #include <QVBoxLayout>
 #include <memory>
@@ -22,11 +27,11 @@
 
 #include "dss/ui/app_event.h"
 #include "dss/ui/image_display.h"
+#include "dss/ui/log_palette.h"
 
 #ifdef DSS_HAS_ELA
 #include <ElaCheckBox.h>
 #include <ElaComboBox.h>
-#include <ElaLog.h>
 #include <ElaMessageBar.h>
 #include <ElaPushButton.h>
 #include <ElaSlider.h>
@@ -36,6 +41,33 @@
 #endif
 
 namespace Dss::Ui {
+
+namespace {
+
+/// @brief 将日志快照按级别颜色渲染到文本控件。
+void renderColoredLogEntries(QTextEdit& logText, const QStringList& entries) {
+    logText.clear();
+
+    QTextCursor cursor(logText.document());
+    for (qsizetype index = 0; index < entries.size(); ++index) {
+        const auto& entry = entries[index];
+        const auto level = inferLogLevelFromText(entry);
+
+        QTextCharFormat format;
+        format.setForeground(logTextColor(level));
+        if (level == Dss::Core::LogLevel::Error) {
+            format.setFontWeight(QFont::DemiBold);
+        }
+
+        cursor.insertText(entry, format);
+        if (index + 1 < entries.size()) {
+            cursor.insertBlock();
+        }
+    }
+    logText.moveCursor(QTextCursor::End);
+}
+
+}  // namespace
 
 #ifdef DSS_HAS_ELA
 MainWindow::MainWindow(ViewModel& vm, QWidget* parent) : ElaWindow(parent), m_vm(vm) {
@@ -300,6 +332,13 @@ void MainWindow::setupCommStatusPage() {
         spin->setValue(value);
         return spin;
     };
+    auto makeDoubleSpin = [](double minimum, double maximum, double value) {
+        auto* spin = new QDoubleSpinBox;
+        spin->setRange(minimum, maximum);
+        spin->setDecimals(3);
+        spin->setValue(value);
+        return spin;
+    };
 
     auto makeSerialGroup = [this, serialEditors, makeLineEdit,
                             makeSerialSpin](const SerialChannelState& channel) {
@@ -417,6 +456,113 @@ void MainWindow::setupCommStatusPage() {
         return group;
     };
 
+    auto makeExposureCommandGroup = [this, makeSerialSpin] {
+        auto* group = new QGroupBox("Exposure Command");
+        auto* form = new QFormLayout(group);
+#ifdef DSS_HAS_ELA
+        auto* freeRun = new ElaCheckBox("Free Run");
+        auto* sendButton = new ElaPushButton("Send");
+#else
+        auto* freeRun = new QCheckBox("Free Run");
+        auto* sendButton = new QPushButton("Send");
+#endif
+        auto* frameFrequency = makeSerialSpin(0, 255, 1);
+        auto* delayTicks = makeSerialSpin(0, 0xFF'FFFF, 0);
+
+        form->addRow("Trigger", freeRun);
+        form->addRow("Frame Code", frameFrequency);
+        form->addRow("Delay Ticks", delayTicks);
+        form->addRow(sendButton);
+
+        connect(sendButton, &QPushButton::clicked, [this, freeRun, frameFrequency, delayTicks] {
+            m_vm.sendExposureCommand(freeRun->isChecked(), frameFrequency->value(),
+                                     delayTicks->value());
+        });
+        return group;
+    };
+
+    auto makeServoCommandGroup = [this, makeSerialSpin, makeDoubleSpin] {
+        auto* group = new QGroupBox("Servo Correction");
+        auto* form = new QFormLayout(group);
+#ifdef DSS_HAS_ELA
+        auto* distanceValid = new ElaCheckBox("Distance");
+        auto* speedValid = new ElaCheckBox("Speed");
+        auto* sendButton = new ElaPushButton("Send");
+#else
+        auto* distanceValid = new QCheckBox("Distance");
+        auto* speedValid = new QCheckBox("Speed");
+        auto* sendButton = new QPushButton("Send");
+#endif
+        auto* distanceX = makeDoubleSpin(-1'000'000.0, 1'000'000.0, 0.0);
+        auto* distanceY = makeDoubleSpin(-1'000'000.0, 1'000'000.0, 0.0);
+        auto* speedX = makeDoubleSpin(-1'000'000.0, 1'000'000.0, 0.0);
+        auto* speedY = makeDoubleSpin(-1'000'000.0, 1'000'000.0, 0.0);
+        auto* mode = makeSerialSpin(0, 255, 0x19);
+
+        form->addRow("Distance Valid", distanceValid);
+        form->addRow("Distance X", distanceX);
+        form->addRow("Distance Y", distanceY);
+        form->addRow("Speed Valid", speedValid);
+        form->addRow("Speed X", speedX);
+        form->addRow("Speed Y", speedY);
+        form->addRow("Mode", mode);
+        form->addRow(sendButton);
+
+        connect(sendButton, &QPushButton::clicked,
+                [this, distanceValid, speedValid, distanceX, distanceY, speedX, speedY, mode] {
+                    m_vm.sendServoCorrection(distanceValid->isChecked(), speedValid->isChecked(),
+                                             distanceX->value(), distanceY->value(),
+                                             speedX->value(), speedY->value(), mode->value());
+                });
+        return group;
+    };
+
+    auto makeMasterControlCommandGroup = [this, makeSerialSpin, makeDoubleSpin] {
+        auto* group = new QGroupBox("Master Control Status");
+        auto* form = new QFormLayout(group);
+#ifdef DSS_HAS_ELA
+        auto* distanceValid = new ElaCheckBox("Distance");
+        auto* speedValid = new ElaCheckBox("Speed");
+        auto* sendButton = new ElaPushButton("Send");
+#else
+        auto* distanceValid = new QCheckBox("Distance");
+        auto* speedValid = new QCheckBox("Speed");
+        auto* sendButton = new QPushButton("Send");
+#endif
+        auto* azimuth = makeDoubleSpin(0.0, 360.0, 0.0);
+        auto* elevation = makeDoubleSpin(0.0, 360.0, 0.0);
+        auto* distanceX = makeDoubleSpin(-1'000'000.0, 1'000'000.0, 0.0);
+        auto* distanceY = makeDoubleSpin(-1'000'000.0, 1'000'000.0, 0.0);
+        auto* speedX = makeDoubleSpin(-1'000'000.0, 1'000'000.0, 0.0);
+        auto* speedY = makeDoubleSpin(-1'000'000.0, 1'000'000.0, 0.0);
+        auto* mode = makeSerialSpin(0, 255, 0x19);
+
+        form->addRow("Azimuth", azimuth);
+        form->addRow("Elevation", elevation);
+        form->addRow("Distance Valid", distanceValid);
+        form->addRow("Distance X", distanceX);
+        form->addRow("Distance Y", distanceY);
+        form->addRow("Speed Valid", speedValid);
+        form->addRow("Speed X", speedX);
+        form->addRow("Speed Y", speedY);
+        form->addRow("Mode", mode);
+        form->addRow(sendButton);
+
+        connect(sendButton, &QPushButton::clicked,
+                [this, azimuth, elevation, distanceValid, speedValid, distanceX, distanceY, speedX,
+                 speedY, mode] {
+                    const auto now = QDateTime::currentDateTime();
+                    const auto date = now.date();
+                    const auto time = now.time();
+                    m_vm.sendMasterControlStatus(
+                        date.year(), date.month(), date.day(), time.hour(), time.minute(),
+                        time.second(), time.msec(), azimuth->value(), elevation->value(),
+                        distanceValid->isChecked(), speedValid->isChecked(), distanceX->value(),
+                        distanceY->value(), speedX->value(), speedY->value(), mode->value());
+                });
+        return group;
+    };
+
     layout->addWidget(new QLabel("Serial Channels"));
     auto* serialGrid = new QGridLayout;
     const auto serialChannels = m_vm.serialChannelConfigs();
@@ -425,6 +571,13 @@ void MainWindow::setupCommStatusPage() {
                               index / 2, index % 2);
     }
     layout->addLayout(serialGrid);
+
+    layout->addWidget(new QLabel("Serial Commands"));
+    auto* serialCommandGrid = new QGridLayout;
+    serialCommandGrid->addWidget(makeExposureCommandGroup(), 0, 0);
+    serialCommandGrid->addWidget(makeServoCommandGroup(), 0, 1);
+    serialCommandGrid->addWidget(makeMasterControlCommandGroup(), 1, 0, 1, 2);
+    layout->addLayout(serialCommandGrid);
 
     layout->addWidget(new QLabel("UDP Endpoints"));
     auto* endpointGrid = new QGridLayout;
@@ -524,17 +677,35 @@ void MainWindow::setupSettingsPage() {
     layout->addStretch();
 }
 
+/// @brief 创建日志页并连接 ViewModel 日志事件。
 void MainWindow::setupLogPage() {
     m_logPage = new QWidget;
     auto* layout = new QVBoxLayout(m_logPage);
+
+    auto* filterRow = new QHBoxLayout;
+    filterRow->addWidget(new QLabel("Level:"));
 #ifdef DSS_HAS_ELA
-    auto* logWidget = new ElaLog;
-    layout->addWidget(logWidget);
+    auto* levelCombo = new ElaComboBox;
 #else
+    auto* levelCombo = new QComboBox;
+#endif
+    levelCombo->addItems({"Info", "Warning", "Error"});
+    levelCombo->setCurrentIndex(m_vm.logMinimumLevel());
+    filterRow->addWidget(levelCombo);
+    filterRow->addStretch();
+    layout->addLayout(filterRow);
+
     auto* logText = new QTextEdit;
     logText->setReadOnly(true);
+    logText->setLineWrapMode(QTextEdit::NoWrap);
+    auto refreshLogText = [logText](const QStringList& entries) {
+        renderColoredLogEntries(*logText, entries);
+    };
+    connect(&m_vm, &ViewModel::logEntriesChanged, logText, refreshLogText);
+    connect(levelCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), &m_vm,
+            &ViewModel::setLogMinimumLevel);
+    refreshLogText(m_vm.visibleLogEntries());
     layout->addWidget(logText);
-#endif
 }
 
 /// 连接 AppEvent 与 ViewModel，并在状态栏/MessageBar 显示反馈

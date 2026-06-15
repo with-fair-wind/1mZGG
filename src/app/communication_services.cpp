@@ -13,6 +13,7 @@
 #include "dss/comm/exposure_channel.h"
 #include "dss/comm/i_serial_channel.h"
 #include "dss/comm/master_control_channel.h"
+#include "dss/comm/serial_command_interfaces.h"
 #include "dss/comm/servo_channel.h"
 #include "dss/network/atmos_receiver.h"
 #include "dss/network/data_exchange.h"
@@ -34,11 +35,14 @@ void ApplicationContext::registerCommunicationServices() {
     auto masterControl = std::make_shared<Dss::Comm::MasterControlChannel>(m_bus);
     auto servo = std::make_shared<Dss::Comm::ServoChannel>(m_bus);
 
-    m_registry.registerService<Dss::Comm::ISerialChannel>("display", std::move(display));
-    m_registry.registerService<Dss::Comm::ISerialChannel>("exposure", std::move(exposure));
-    m_registry.registerService<Dss::Comm::ISerialChannel>("master_control",
-                                                          std::move(masterControl));
-    m_registry.registerService<Dss::Comm::ISerialChannel>("servo", std::move(servo));
+    m_registry.registerService<Dss::Comm::ISerialChannel>("display", display);
+    m_registry.registerService<Dss::Comm::ISerialChannel>("exposure", exposure);
+    m_registry.registerService<Dss::Comm::IExposureCommandPort>("exposure", exposure);
+    m_registry.registerService<Dss::Comm::ISerialChannel>("master_control", masterControl);
+    m_registry.registerService<Dss::Comm::IMasterControlStatusPort>("master_control",
+                                                                    masterControl);
+    m_registry.registerService<Dss::Comm::ISerialChannel>("servo", servo);
+    m_registry.registerService<Dss::Comm::IServoCorrectionPort>("servo", servo);
 
     auto imageSender = std::make_shared<Dss::Network::ImageSender>(m_bus);
     auto heartbeat = std::make_shared<Dss::Network::Heartbeat>(m_bus);

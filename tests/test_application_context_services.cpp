@@ -2,6 +2,7 @@
 #include <fstream>
 #include <iterator>
 #include <string>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -11,6 +12,8 @@
 #include "dss/app/application_context.h"
 #include "dss/app/track_result_data_exchange_bridge.h"
 #include "dss/comm/i_serial_channel.h"
+#include "dss/comm/serial_command_interfaces.h"
+#include "dss/comm/serial_worker_base.h"
 #include "dss/network/atmos_receiver.h"
 #include "dss/network/data_exchange.h"
 #include "dss/network/error_diagnostics.h"
@@ -23,6 +26,34 @@
 #include "dss/storage/track_data_storage_backend.h"
 
 namespace {
+
+/// @brief 暴露串口字段级诊断发布能力的测试工作线程。
+class DecodeErrorPublishingSerialWorker final : public Dss::Comm::SerialWorkerBase {
+public:
+    using SerialWorkerBase::SerialWorkerBase;
+
+    /// @brief 触发一次字段级解码错误事件。
+    void publishForTest(std::string_view field, std::string_view message, std::size_t byteOffset,
+                        uint64_t rawValue) {
+        publishDecodeError(field, message, byteOffset, rawValue);
+    }
+
+protected:
+    [[nodiscard]] auto recvFrameSize() const -> size_t override {
+        return 20U;
+    }
+
+    [[nodiscard]] auto sendFrameSize() const -> size_t override {
+        return 0U;
+    }
+
+    [[nodiscard]] auto channelName() const -> std::string_view override {
+        return "display";
+    }
+
+    void decodeFrame(std::span<const uint8_t> /*data*/) override {}
+    void encodeFrame(std::span<uint8_t> /*buffer*/) override {}
+};
 
 [[nodiscard]] auto tempContextTrackStorageDir() -> std::filesystem::path {
     auto dir =
@@ -72,11 +103,19 @@ TEST(ApplicationContextServices, RegistersCommunicationServicesWithoutOpeningPor
     const auto exposure = context.registry().get<Dss::Comm::ISerialChannel>("exposure");
     const auto master = context.registry().get<Dss::Comm::ISerialChannel>("master_control");
     const auto servo = context.registry().get<Dss::Comm::ISerialChannel>("servo");
+    const auto exposureCommand =
+        context.registry().get<Dss::Comm::IExposureCommandPort>("exposure");
+    const auto masterStatus =
+        context.registry().get<Dss::Comm::IMasterControlStatusPort>("master_control");
+    const auto servoCorrection = context.registry().get<Dss::Comm::IServoCorrectionPort>("servo");
 
     ASSERT_NE(display, nullptr);
     ASSERT_NE(exposure, nullptr);
     ASSERT_NE(master, nullptr);
     ASSERT_NE(servo, nullptr);
+    ASSERT_NE(exposureCommand, nullptr);
+    ASSERT_NE(masterStatus, nullptr);
+    ASSERT_NE(servoCorrection, nullptr);
 
     EXPECT_FALSE(display->isOpen());
     EXPECT_FALSE(exposure->isOpen());
@@ -174,6 +213,24 @@ TEST(ApplicationContextServices, RegistersCommunicationServicesWithoutOpeningPor
     ASSERT_NE(concreteTrackDataStorage, nullptr);
     EXPECT_FALSE(trackDataStorage->isReady());
     EXPECT_FALSE(concreteTrackDataStorage->isRunning());
+}
+
+TEST(ApplicationContextServices, SerialChannelPublishesDecodeErrorForInvalidField) {
+    Dss::App::ApplicationContext::MessageBus bus;
+    std::vector<Dss::Core::SerialDecodeErrorEvent> errors;
+    auto connection = bus.subscribe<Dss::Core::SerialDecodeErrorEvent>(
+        [&errors](const Dss::Core::SerialDecodeErrorEvent& event) { errors.push_back(event); });
+
+    DecodeErrorPublishingSerialWorker worker(bus);
+    worker.publishForTest("timestamp.month", "timestamp.month has invalid BCD value 0x1A", 2U,
+                          0x1AU);
+
+    ASSERT_EQ(errors.size(), 1U);
+    EXPECT_EQ(errors.front().channel, "display");
+    EXPECT_EQ(errors.front().field, "timestamp.month");
+    EXPECT_EQ(errors.front().byteOffset, 2U);
+    EXPECT_EQ(errors.front().rawValue, 0x1AU);
+    EXPECT_EQ(errors.front().message, "timestamp.month has invalid BCD value 0x1A");
 }
 
 TEST(ApplicationContextServices, RoutesTrackResultsToTrackDataStorage) {

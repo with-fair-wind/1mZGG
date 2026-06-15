@@ -37,6 +37,7 @@ dss_add_test(test_track_data_storage_backend test_track_data_storage_backend.cpp
 dss_add_test(test_data_exchange_protocol test_data_exchange_protocol.cpp dss_core)
 dss_add_test(test_network_protocols test_network_protocols.cpp dss_core)
 dss_add_test(test_config test_config.cpp dss_core)
+dss_add_test(test_logger test_logger.cpp dss_core)
 dss_add_test(test_service_host test_service_host.cpp dss_core)
 dss_add_test(test_service_registry test_service_registry.cpp dss_core)
 dss_add_test(test_track_result_data_exchange_bridge test_track_result_data_exchange_bridge.cpp dss_app)
@@ -82,6 +83,10 @@ endif()
 if(TARGET dss_ui_qt)
     dss_add_qt_test(test_image_display
         test_image_display.cpp
+        dss_ui_qt
+    )
+    dss_add_qt_test(test_log_palette
+        test_log_palette.cpp
         dss_ui_qt
     )
     dss_add_qt_test(test_view_model_tracking

@@ -1,36 +1,34 @@
 #pragma once
 
 #include <format>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include "dss/core/event_bus.h"
 #include "dss/core/events.h"
 
+namespace spdlog {
+class logger;
+}  // namespace spdlog
+
 namespace Dss::Core {
 
-/// 全局日志单例，通过事件总线发布 LogMessageEvent
+/// 全局日志门面，通过 spdlog 写入后端并向事件总线发布 LogMessageEvent
 class Logger {
 public:
     using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;  ///< 消息总线类型
 
     /// 获取全局唯一实例
-    static auto instance() -> Logger& {
-        static Logger logger;
-        return logger;
-    }
+    static auto instance() -> Logger&;
 
     /// 绑定消息总线（用于发布日志事件）
-    void setBus(MessageBus* bus) {
-        std::lock_guard lock(m_mutex);
-        m_bus = bus;
-    }
+    void setBus(MessageBus* bus);
 
     /// 输出 INFO 级别日志
-    void info(std::string_view msg) {
-        emitLog(std::string(msg));
-    }
+    void info(std::string_view msg);
 
     /**
      * @brief 输出格式化的 INFO 级别日志
@@ -40,37 +38,52 @@ public:
      */
     template <typename... Args>
     void info(std::format_string<Args...> fmt, Args&&... args) {
-        emitLog(std::format(fmt, std::forward<Args>(args)...));
+        info(std::format(fmt, std::forward<Args>(args)...));
     }
 
     /// 输出 WARN 级别日志
-    void warn(std::string_view msg) {
-        emitLog(std::format("[WARN] {}", msg));
+    void warn(std::string_view msg);
+
+    /**
+     * @brief 输出格式化的 WARN 级别日志
+     * @tparam Args 格式化参数类型
+     * @param fmt 格式字符串
+     * @param args 格式化参数
+     */
+    template <typename... Args>
+    void warn(std::format_string<Args...> fmt, Args&&... args) {
+        warn(std::format(fmt, std::forward<Args>(args)...));
     }
 
     /// 输出 ERROR 级别日志
-    void error(std::string_view msg) {
-        emitLog(std::format("[ERROR] {}", msg));
+    void error(std::string_view msg);
+
+    /**
+     * @brief 输出格式化的 ERROR 级别日志
+     * @tparam Args 格式化参数类型
+     * @param fmt 格式字符串
+     * @param args 格式化参数
+     */
+    template <typename... Args>
+    void error(std::format_string<Args...> fmt, Args&&... args) {
+        error(std::format(fmt, std::forward<Args>(args)...));
     }
+
+    /// 刷新 spdlog 后端缓冲区
+    void flush();
 
 private:
-    Logger() = default;
+    Logger();
+    ~Logger();
+    Logger(const Logger&) = delete;
+    auto operator=(const Logger&) -> Logger& = delete;
 
     /// 通过消息总线发布日志事件
-    void emitLog(std::string message) {
-        MessageBus* bus = nullptr;
-        {
-            std::lock_guard lock(m_mutex);
-            bus = m_bus;
-        }
+    void emitLog(LogLevel level, std::string message);
 
-        if (bus) {
-            bus->emit(LogMessageEvent{std::move(message)});
-        }
-    }
-
-    MessageBus* m_bus = nullptr;  ///< 绑定的消息总线（非拥有）
-    std::mutex m_mutex;           ///< 保护 m_bus 的互斥锁
+    std::shared_ptr<spdlog::logger> m_logger;  ///< spdlog 后端日志器
+    MessageBus* m_bus = nullptr;               ///< 绑定的消息总线（非拥有）
+    std::mutex m_mutex;                        ///< 保护 m_bus 的互斥锁
 };
 
 }  // namespace Dss::Core

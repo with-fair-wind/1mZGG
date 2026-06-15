@@ -52,6 +52,10 @@ add_compile_definitions(QT_NO_EMIT)
 find_package(spdlog QUIET)
 find_package(nlohmann_json QUIET)
 
+if(NOT TARGET spdlog::spdlog)
+    message(FATAL_ERROR "spdlog not found. Run conan install before configuring this project.")
+endif()
+
 if(NOT TARGET nlohmann_json::nlohmann_json)
     message(FATAL_ERROR "nlohmann_json not found. Run conan install before configuring this project.")
 endif()
@@ -152,7 +156,12 @@ list(FILTER DSS_PROCESSING_SOURCES EXCLUDE REGEX ".*/opencv_processing_strategy\
 add_library(dss_core STATIC ${DSS_CORE_SOURCES})
 dss_target_defaults(dss_core)
 dss_std_pch(dss_core)
-target_link_libraries(dss_core PUBLIC nlohmann_json::nlohmann_json)
+target_link_libraries(dss_core
+    PUBLIC
+        nlohmann_json::nlohmann_json
+    PRIVATE
+        spdlog::spdlog
+)
 
 add_library(dss_app STATIC ${DSS_APP_SOURCES})
 dss_target_defaults(dss_app)

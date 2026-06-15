@@ -66,6 +66,25 @@ struct NetworkTransmissionErrorEvent {
     uint64_t attemptedBytes = 0;  ///< 尝试发送的字节数
 };
 
+/// 串口事件：接收帧校验失败
+struct SerialFrameErrorEvent {
+    std::string channel;         ///< 串口通道名称
+    std::string message;         ///< 错误描述
+    uint64_t expectedBytes = 0;  ///< 期望帧字节数
+    uint64_t actualBytes = 0;    ///< 实际帧字节数
+    uint8_t observedHeader = 0;  ///< 实际帧头字节
+    uint8_t observedTail = 0;    ///< 实际帧尾字节
+};
+
+/// 串口事件：协议字段解码失败
+struct SerialDecodeErrorEvent {
+    std::string channel;      ///< 串口通道名称
+    std::string message;      ///< 错误描述
+    std::string field;        ///< 发生错误的协议字段名称
+    uint64_t byteOffset = 0;  ///< 字段起始字节偏移
+    uint64_t rawValue = 0;    ///< 字段原始值或解码后的异常值
+};
+
 /// 串口事件：主控指令
 struct MasterControlEvent {
     float exposure = 0.0f;  ///< 曝光时间
@@ -103,9 +122,17 @@ struct ZoomChangeEvent {
 /// UI 事件：关闭应用
 struct CloseEvent {};
 
+/// 系统日志级别
+enum class LogLevel {
+    Info = 0,     ///< 普通信息
+    Warning = 1,  ///< 警告信息
+    Error = 2,    ///< 错误信息
+};
+
 /// 系统事件：日志消息
 struct LogMessageEvent {
-    std::string message;  ///< 日志文本
+    LogLevel level = LogLevel::Info;  ///< 日志级别
+    std::string message;              ///< 日志文本
 };
 
 /// 系统事件：大气环境数据
