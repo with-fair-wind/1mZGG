@@ -146,6 +146,7 @@ if(DSS_BUILD_APP)
 endif()
 
 file(GLOB_RECURSE DSS_CORE_SOURCES CONFIGURE_DEPENDS src/core/*.cpp)
+file(GLOB_RECURSE DSS_STORAGE_SOURCES CONFIGURE_DEPENDS src/storage/*.cpp)
 file(GLOB_RECURSE DSS_APP_SOURCES CONFIGURE_DEPENDS src/app/*.cpp)
 file(GLOB_RECURSE DSS_ACQUISITION_QT_SOURCES CONFIGURE_DEPENDS src/acquisition/*.cpp)
 file(GLOB_RECURSE DSS_ACQUISITION_QT_HEADERS CONFIGURE_DEPENDS include/dss/acquisition/*.h)
@@ -158,7 +159,7 @@ file(GLOB_RECURSE DSS_UI_QT_HEADERS CONFIGURE_DEPENDS include/dss/ui/*.h)
 
 list(FILTER DSS_PROCESSING_SOURCES EXCLUDE REGEX ".*/opencv_processing_strategy\\.cpp$")
 
-add_library(dss_core STATIC ${DSS_CORE_SOURCES})
+add_library(dss_core STATIC ${DSS_CORE_SOURCES} ${DSS_STORAGE_SOURCES})
 dss_target_defaults(dss_core)
 dss_std_pch(dss_core)
 target_link_libraries(dss_core

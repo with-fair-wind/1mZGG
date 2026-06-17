@@ -5,8 +5,8 @@
 #include "dss/core/config.h"
 #include "dss/core/events.h"
 #include "dss/ui/init_dialog.h"
+#include "dss/ui/main_view_model.h"
 #include "dss/ui/main_window.h"
-#include "dss/ui/view_model.h"
 
 #ifdef DSS_HAS_ELA
 #include <ElaApplication.h>
@@ -56,9 +56,9 @@ int main(int argc, char* argv[]) {
     initDialog.setStatus("EventBus", true);
     initDialog.setProgress(100);
 
-    // 创建 ViewModel 与主窗口，关闭初始化对话框后进入主界面
-    Dss::Ui::ViewModel viewModel(context.bus(), context.registry());
-    Dss::Ui::MainWindow mainWindow(viewModel);
+    // 创建 UI 层主 ViewModel 与主窗口，关闭初始化对话框后进入主界面
+    Dss::Ui::MainViewModel mainViewModel(context.bus(), context.registry());
+    Dss::Ui::MainWindow mainWindow(mainViewModel);
     mainWindow.show();
 
     initDialog.close();

@@ -4,35 +4,63 @@
 #include <QString>
 #include <cwctype>
 #include <fstream>
-#include <iterator>
+#include <limits>
 #include <span>
 #include <utility>
 
+#include "dss/storage/bmp_image_format.h"
 #include "dss/storage/image_storage_format.h"
 
 namespace Dss::Acquisition {
 namespace {
 
-/**
- * @brief 将 16 位 RAW 像素转换为 8 位显示像素
- * @param raw 16 位 RAW 像素数据
- * @return 取高 8 位后的显示像素向量
- */
-[[nodiscard]] auto rawToDisplay(std::span<const std::uint16_t> raw) -> std::vector<std::uint8_t> {
-    std::vector<std::uint8_t> display;
-    display.reserve(raw.size());
-    for (const auto pixel : raw) {
-        display.push_back(static_cast<std::uint8_t>(pixel >> 8U));
-    }
-    return display;
-}
-
-[[nodiscard]] auto isRawFile(const std::filesystem::path& path) -> bool {
+[[nodiscard]] auto lowerExtension(const std::filesystem::path& path) -> std::wstring {
     auto ext = path.extension().wstring();
     for (auto& ch : ext) {
         ch = static_cast<wchar_t>(::towlower(ch));
     }
-    return ext == L".raw";
+    return ext;
+}
+
+[[nodiscard]] auto isRawFile(const std::filesystem::path& path) -> bool {
+    return lowerExtension(path) == L".raw";
+}
+
+[[nodiscard]] auto isBmpFile(const std::filesystem::path& path) -> bool {
+    return lowerExtension(path) == L".bmp";
+}
+
+/// @brief 读取完整二进制文件
+/// @param path 文件路径
+/// @return 文件字节流；打开失败时返回错误
+[[nodiscard]] auto readFileBytes(const std::filesystem::path& path)
+    -> std::expected<std::vector<std::uint8_t>, std::string> {
+    std::ifstream input(path, std::ios::binary | std::ios::ate);
+    if (!input) {
+        return std::unexpected("failed to open image file: " + path.string());
+    }
+
+    const auto endPosition = input.tellg();
+    if (endPosition < std::streampos{0}) {
+        return std::unexpected("failed to query image file size: " + path.string());
+    }
+
+    const auto byteCount = static_cast<std::uintmax_t>(endPosition);
+    if (byteCount > static_cast<std::uintmax_t>(std::numeric_limits<std::size_t>::max()) ||
+        byteCount > static_cast<std::uintmax_t>(std::numeric_limits<std::streamsize>::max())) {
+        return std::unexpected("image file is too large: " + path.string());
+    }
+
+    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(byteCount));
+    input.seekg(0, std::ios::beg);
+    if (!bytes.empty()) {
+        input.read(reinterpret_cast<char*>(bytes.data()),
+                   static_cast<std::streamsize>(bytes.size()));
+        if (!input) {
+            return std::unexpected("failed to read image file: " + path.string());
+        }
+    }
+    return bytes;
 }
 
 /**
@@ -43,14 +71,12 @@ namespace {
  */
 [[nodiscard]] auto loadRawFrame(const std::filesystem::path& path, std::uint64_t frameSeq)
     -> std::expected<Dss::Processing::FramePacket, std::string> {
-    std::ifstream input(path, std::ios::binary);
-    if (!input) {
-        return std::unexpected("failed to open raw image file: " + path.string());
+    auto bytes = readFileBytes(path);
+    if (!bytes.has_value()) {
+        return std::unexpected(bytes.error());
     }
 
-    std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(input)),
-                                    std::istreambuf_iterator<char>());
-    auto decoded = Dss::Storage::decodeRawImageFile(std::span<const std::uint8_t>(bytes));
+    auto decoded = Dss::Storage::decodeRawImageFile(std::span<const std::uint8_t>(*bytes));
     if (!decoded.has_value()) {
         return std::unexpected("failed to decode raw image file: " + path.string());
     }
@@ -64,7 +90,38 @@ namespace {
         static_cast<float>(decoded->metadata.exposureTimeMilliseconds / 1000.0);
     packet.metadata.frameFrequency = static_cast<float>(decoded->metadata.frameFrequency);
     packet.rawImage = std::move(decoded->pixels);
-    packet.displayImage = rawToDisplay(packet.rawImage);
+    return packet;
+}
+
+/// @brief 从 oldsrc/ImageCode 兼容的遗留 BMP 文件加载一帧
+/// @param path BMP 图像文件路径
+/// @param frameSeq 帧序号
+/// @return 解码后的帧数据包；非遗留 BMP 或解码失败时返回错误
+[[nodiscard]] auto loadLegacyBmpFrame(const std::filesystem::path& path, std::uint64_t frameSeq)
+    -> std::expected<Dss::Processing::FramePacket, std::string> {
+    auto bytes = readFileBytes(path);
+    if (!bytes.has_value()) {
+        return std::unexpected(bytes.error());
+    }
+
+    auto decoded = Dss::Storage::decodeLegacyBmpFile(std::span<const std::uint8_t>(*bytes));
+    if (!decoded.has_value()) {
+        return std::unexpected("failed to decode legacy bmp image file: " + path.string());
+    }
+
+    Dss::Processing::FramePacket packet{};
+    packet.frameSeq = frameSeq;
+    packet.width = decoded->metadata.width;
+    packet.height = decoded->metadata.height;
+    packet.metadata.timestamp = decoded->metadata.timestamp;
+    packet.metadata.pointingAe = {.x = static_cast<float>(decoded->metadata.azimuthDegrees),
+                                  .y = static_cast<float>(decoded->metadata.elevationDegrees)};
+    packet.metadata.exposureTime = static_cast<float>(decoded->metadata.exposure / 1000.0);
+    packet.metadata.frameFrequency = static_cast<float>(decoded->metadata.frameRate);
+    packet.metadata.temperature = decoded->metadata.temperature;
+    packet.metadata.atmosPressure = decoded->metadata.atmosPressure;
+    packet.metadata.humidity = decoded->metadata.humidity;
+    packet.rawImage = std::move(decoded->pixels);
     return packet;
 }
 
@@ -113,6 +170,11 @@ namespace {
     -> std::expected<Dss::Processing::FramePacket, std::string> {
     if (isRawFile(path)) {
         return loadRawFrame(path, frameSeq);
+    }
+    if (isBmpFile(path)) {
+        if (auto legacyBmp = loadLegacyBmpFrame(path, frameSeq); legacyBmp.has_value()) {
+            return legacyBmp;
+        }
     }
     return loadImageFrame(path, frameSeq);
 }

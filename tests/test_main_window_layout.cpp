@@ -1,5 +1,8 @@
 #include <QApplication>
+#include <QCheckBox>
 #include <QScrollArea>
+#include <QSlider>
+#include <QSpinBox>
 #include <QTabWidget>
 #include <memory>
 
@@ -39,10 +42,10 @@ TEST(MainWindowLayout, CommunicationPageUsesScrollableContainer) {
     auto& app = ensureApplication();
     (void)app;
 
-    Dss::Ui::ViewModel::MessageBus bus;
+    Dss::Ui::MainViewModel::MessageBus bus;
     Dss::Core::ServiceRegistry registry;
-    Dss::Ui::ViewModel vm(bus, registry);
-    Dss::Ui::MainWindow window(vm);
+    Dss::Ui::MainViewModel mainViewModel(bus, registry);
+    Dss::Ui::MainWindow window(mainViewModel);
 
     auto* tabs = window.findChild<QTabWidget*>();
     if (tabs == nullptr) {
@@ -56,4 +59,34 @@ TEST(MainWindowLayout, CommunicationPageUsesScrollableContainer) {
     ASSERT_NE(scrollArea, nullptr);
     EXPECT_TRUE(scrollArea->widgetResizable());
     EXPECT_NE(scrollArea->widget(), nullptr);
+}
+
+TEST(MainWindowLayout, DisplayPageExposesLegacyStretchControls) {
+    auto& app = ensureApplication();
+    (void)app;
+
+    Dss::Ui::MainViewModel::MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    Dss::Ui::MainViewModel mainViewModel(bus, registry);
+    Dss::Ui::MainWindow window(mainViewModel);
+
+    auto* tabs = window.findChild<QTabWidget*>();
+    if (tabs == nullptr) {
+        GTEST_SKIP() << "Ela navigation does not expose the fallback QTabWidget.";
+    }
+
+    auto* displayPage = findTabByText(*tabs, "Display");
+    ASSERT_NE(displayPage, nullptr);
+
+    EXPECT_NE(displayPage->findChild<QCheckBox*>("display_stretch_auto"), nullptr);
+    auto* lowSlider = displayPage->findChild<QSlider*>("display_stretch_low_slider");
+    auto* highSlider = displayPage->findChild<QSlider*>("display_stretch_high_slider");
+    ASSERT_NE(lowSlider, nullptr);
+    ASSERT_NE(highSlider, nullptr);
+    EXPECT_EQ(lowSlider->minimum(), 0);
+    EXPECT_EQ(lowSlider->maximum(), 16383);
+    EXPECT_EQ(highSlider->minimum(), 1);
+    EXPECT_EQ(highSlider->maximum(), 16384);
+    EXPECT_NE(displayPage->findChild<QSpinBox*>("display_stretch_low_spin"), nullptr);
+    EXPECT_NE(displayPage->findChild<QSpinBox*>("display_stretch_high_spin"), nullptr);
 }

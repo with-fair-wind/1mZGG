@@ -2,22 +2,23 @@
 
 ## 目标
 
-当前 `Dss::Ui::ViewModel` 同时承担回放、显示、处理、跟踪、存储、串口、网络、数据交换、日志与事件订阅职责，已经成为 UI 层的集中调度器。本次重构目标是在不破坏现有回放模式和硬件默认不启动策略的前提下，将 UI 状态与命令按业务域拆成多个小型 `QObject` 模块，使每个模块可以独立测试、独立演进，并让 `MainWindow` 逐步改为直接依赖对应子 ViewModel 或 Controller。
+旧 `Dss::Ui::ViewModel` 曾同时承担回放、显示、处理、跟踪、存储、串口、网络、数据交换、日志与事件订阅职责，已经成为 UI 层的集中调度器。本次重构目标是在不破坏现有回放模式和硬件默认不启动策略的前提下，将 UI 状态与命令按业务域拆成多个小型 `QObject` 模块，使每个模块可以独立测试、独立演进，并让 `MainWindow` 直接依赖 `MainViewModel` 主 ViewModel 和对应子 ViewModel。
 
 ## 设计原则
 
 - 保持渐进迁移：每次迁移一个页面或一组控件，迁移完成后补测试并运行相关 CTest。
 - 保持硬件安全：串口和 UDP 服务仍由用户显式打开，配置编辑不得自动触碰真实硬件。
-- 保持 UI 可用：`MainWindow` 可以在过渡期同时使用旧 `ViewModel` 和新子模块。
+- 保持 UI 可用：`MainWindow` 通过 `MainViewModel` 获取子模块，旧 facade 不再参与新代码路径。
 - 避免重复逻辑：服务查询、配置校验、状态文本生成等公共能力沉到轻量 helper 或基类中。
 - 保持 Doxygen 中文注释：新增类、接口、成员和公开函数均添加中文 Doxygen 注释。
 
 ## 目标架构
 
-`ViewModel` 将从“全功能业务类”收缩为过渡期的组合根和兼容 Facade。新增模块按职责拆分，并共享 `MessageBus`、`ServiceRegistry` 和配置对象引用。
+`MainViewModel` 是 UI 层主 ViewModel 与轻量组合根，负责创建子模块、汇总状态文本、连接少量跨模块关系，并订阅需要 UI 级协调的主控事件。新增模块按职责拆分，并共享 `MessageBus`、`ServiceRegistry` 和配置对象引用。
 
 ```text
 MainWindow
+  ├─ MainViewModel（主 ViewModel / 组合根）
   ├─ ReplayViewModel
   ├─ DisplayViewModel
   ├─ ProcessingViewModel
@@ -28,10 +29,10 @@ MainWindow
   ├─ DataExchangeViewModel
   └─ LogViewModel
 
-ViewModel（过渡期）
+MainViewModel
   ├─ 创建并持有上述子模块
-  ├─ 暴露子模块访问器，供 MainWindow 逐步切换
-  └─ 保留尚未迁移的旧接口，降低一次性改动风险
+  ├─ 汇总子模块状态文本，转发给 MainWindow 状态栏
+  └─ 协调 MasterControlEvent 对曝光、跟踪、保存和回放的影响
 ```
 
 ## 模块边界
@@ -98,26 +99,26 @@ ViewModel（过渡期）
 7. 迁移 `SerialPortViewModel`，串口配置、打开关闭和命令发送从旧 `ViewModel` 中移除。
 8. 迁移 `NetworkViewModel`，普通 UDP 端点配置和打开关闭从旧 `ViewModel` 中移除。
 9. 迁移 `DataExchangeViewModel`，GXTC/GDCL 独立成模块。
-10. 清理旧 `ViewModel` 的兼容接口，最终保留组合根或删除旧 Facade。
+10. 清理旧 `ViewModel` 的兼容接口，完成后删除旧 Facade，由 `MainViewModel` 作为 UI 层主 ViewModel 与唯一组合根。
 
 ## MainWindow 迁移策略
 
-`MainWindow` 构造期仍接收旧 `ViewModel`，但优先通过访问器取得子模块：
+`MainWindow` 构造期接收 `MainViewModel`，并通过访问器取得子模块：
 
 ```cpp
-auto& replay = m_vm.replay();
-auto& display = m_vm.display();
-auto& serial = m_vm.serialPorts();
-auto& network = m_vm.network();
+auto& replay = m_mainViewModel.replay();
+auto& display = m_mainViewModel.display();
+auto& serial = m_mainViewModel.serialPorts();
+auto& network = m_mainViewModel.network();
 ```
 
-每迁移一个页面，就把该页面的信号槽连接从旧 `ViewModel` 改到对应子模块。迁移过程中允许一页使用新模块，另一页仍使用旧接口；完成全部迁移后再收缩或删除旧接口。
+每个页面的信号槽连接都应落到对应子模块。跨模块协调只放在 `MainViewModel` 或事件总线中，避免子模块互相持有导致新的单体化。
 
 ## 测试策略
 
 - 每个子模块新增独立测试文件，例如 `test_replay_view_model.cpp`、`test_display_view_model.cpp`、`test_serial_port_view_model.cpp`。
 - 旧测试按迁移节奏拆分，确保每个测试只覆盖一个业务域。
-- 保留端到端 UI 行为测试，例如 `test_main_window_layout` 和关键 `ViewModel` 兼容测试，直到 `MainWindow` 完成迁移。
+- 保留端到端 UI 行为测试，例如 `test_main_window_layout`；新增 `test_main_view_model` 覆盖主 ViewModel 状态汇总和主控协调。
 - 串口和网络测试继续使用 fake/stub 服务，验证默认不开硬件、配置变更不自动打开、打开失败能反馈状态。
 - 每阶段至少运行对应模块测试和相关 `MainWindow`/回放/网络测试。
 
@@ -126,12 +127,12 @@ auto& network = m_vm.network();
 - 风险：一次迁移过多信号槽导致 UI 行为回归。控制：按页面和业务域拆分，每阶段小步提交。
 - 风险：子模块之间直接互调造成新的耦合。控制：跨模块状态优先通过事件总线或组合根协调，避免模块互相持有。
 - 风险：串口和网络配置逻辑重复。控制：公共校验和 state mapper 作为纯 helper 复用。
-- 风险：旧 `ViewModel` 与新模块并存期间状态不同步。控制：迁移某个业务域时，该业务域状态只保留一份，旧接口直接转发到新模块。
+- 风险：主 ViewModel 重新膨胀成新的单体。控制：`MainViewModel` 只做子模块创建、状态汇总和跨模块事件协调，业务命令继续归属具体子 ViewModel。
 
 ## 完成标准
 
-- `ViewModel` 不再直接实现回放、显示、处理、跟踪、存储、串口、网络、数据交换和日志业务逻辑。
-- `MainWindow` 的主要页面直接依赖对应子模块。
+- 旧 `ViewModel` facade 已从代码和构建中移除。
+- `MainWindow` 通过 `MainViewModel` 直接依赖对应子模块。
 - 串口与网络模块独立，DataExchange 作为网络协议特化模块独立存在。
 - 新增和迁移后的公开接口均具备中文 Doxygen 注释。
 - 相关单元测试和现有 UI/服务测试通过。

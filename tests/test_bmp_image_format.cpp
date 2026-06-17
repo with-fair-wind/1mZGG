@@ -199,6 +199,26 @@ TEST(BmpImageFormat, BuildsCompleteLegacyBmpFileInMemory) {
     EXPECT_EQ((*file)[125], 0x44);
 }
 
+TEST(BmpImageFormat, DecodesCompleteLegacyBmpFilePixels) {
+    const auto metadata = smallBmpMetadata(16);
+    const std::vector<std::uint8_t> pixels{0x34, 0x12, 0x78, 0x56, 0xBC, 0x9A,
+                                           0xF0, 0xDE, 0x11, 0x22, 0x33, 0x44};
+    const auto file = Dss::Storage::buildLegacyBmpFile(metadata, pixels);
+    ASSERT_TRUE(file.has_value());
+
+    const auto decoded = Dss::Storage::decodeLegacyBmpFile(*file);
+
+    ASSERT_TRUE(decoded.has_value());
+    EXPECT_EQ(decoded->metadata.width, 2U);
+    EXPECT_EQ(decoded->metadata.height, 3U);
+    EXPECT_EQ(decoded->metadata.pixelBit, 16U);
+    EXPECT_EQ(decoded->metadata.pixelColor, 1U);
+    EXPECT_EQ(decoded->fileHeader.offBits, 114U);
+    EXPECT_EQ(decoded->infoHeader.sizeImage, 12U);
+    const std::vector<std::uint16_t> expectedPixels{0x1234, 0x5678, 0x9ABC, 0xDEF0, 0x2211, 0x4433};
+    EXPECT_EQ(decoded->pixels, expectedPixels);
+}
+
 TEST(BmpImageFormat, RejectsPixelPayloadWithUnexpectedSize) {
     const auto metadata = smallBmpMetadata(16);
     const std::vector<std::uint8_t> shortPixels{0x34, 0x12};

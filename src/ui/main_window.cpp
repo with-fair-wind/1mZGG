@@ -15,6 +15,7 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSignalBlocker>
 #include <QSlider>
 #include <QSpinBox>
 #include <QSplitter>
@@ -24,6 +25,7 @@
 #include <QTextCursor>
 #include <QTextEdit>
 #include <QVBoxLayout>
+#include <algorithm>
 #include <memory>
 #include <vector>
 
@@ -69,13 +71,9 @@ void renderColoredLogEntries(QTextEdit& logText, const QStringList& entries) {
     logText.moveCursor(QTextCursor::End);
 }
 
-/**
- * @brief 为内容较高的页面创建可滚动容器，避免页面最小高度撑大主窗口。
- * @param content
- * 需要放入滚动区域的页面内容。
- * @return 可直接注册到主导航的滚动区域。
-
- */
+/// @brief 为内容较高的页面创建可滚动容器，避免页面最小高度撑大主窗口。
+/// @param content 页面内容。
+/// @return 可直接注册到主导航的滚动区域。
 auto makeScrollablePage(QWidget* content) -> QScrollArea* {
     auto* scrollArea = new QScrollArea;
     scrollArea->setFrameShape(QFrame::NoFrame);
@@ -89,14 +87,16 @@ auto makeScrollablePage(QWidget* content) -> QScrollArea* {
 }  // namespace
 
 #ifdef DSS_HAS_ELA
-MainWindow::MainWindow(ViewModel& vm, QWidget* parent) : ElaWindow(parent), m_vm(vm) {
+MainWindow::MainWindow(MainViewModel& mainViewModel, QWidget* parent)
+    : ElaWindow(parent), m_mainViewModel(mainViewModel) {
     setWindowTitle("DSS_QT v2.0 - Astronomical Image Processing");
     resize(1600, 1000);
     setupNavigation();
     connectSignals();
 }
 #else
-MainWindow::MainWindow(ViewModel& vm, QWidget* parent) : QMainWindow(parent), m_vm(vm) {
+MainWindow::MainWindow(MainViewModel& mainViewModel, QWidget* parent)
+    : QMainWindow(parent), m_mainViewModel(mainViewModel) {
     setWindowTitle("DSS_QT v2.0 - Astronomical Image Processing");
     resize(1600, 1000);
     setupNavigation();
@@ -138,6 +138,11 @@ void MainWindow::setupNavigation() {
 void MainWindow::setupControlPage() {
     m_controlPage = new QWidget;
     auto* layout = new QVBoxLayout(m_controlPage);
+    auto* replay = &m_mainViewModel.replay();
+    auto* display = &m_mainViewModel.display();
+    auto* processing = &m_mainViewModel.processing();
+    auto* tracking = &m_mainViewModel.tracking();
+    auto* storage = &m_mainViewModel.storage();
 
     auto* sequenceRow = new QHBoxLayout;
 #ifdef DSS_HAS_ELA
@@ -151,25 +156,27 @@ void MainWindow::setupControlPage() {
     sequenceRow->addWidget(sequenceLabel);
     sequenceRow->addWidget(currentFrameLabel);
 
-    connect(btnSelectSequence, &QPushButton::clicked, [this] {
+    connect(btnSelectSequence, &QPushButton::clicked, [this, replay] {
         const auto files = QFileDialog::getOpenFileNames(
             this, "Select Image Sequence", QString(),
             "Image Sequence (*.bmp *.png *.jpg *.jpeg *.tif *.tiff *.raw);;All Files (*)");
         if (!files.isEmpty()) {
-            m_vm.selectReplayFiles(files);
+            replay->selectReplayFiles(files);
         }
     });
-    connect(&m_vm, &ViewModel::replayFrameCountChanged, [sequenceLabel](int count) {
+    connect(replay, &ReplayViewModel::replayFrameCountChanged, [sequenceLabel](int count) {
         sequenceLabel->setText(QString("Frames: %1").arg(count));
     });
-    connect(&m_vm, &ViewModel::replayFrameCountChanged, [this, currentFrameLabel](int count) {
-        currentFrameLabel->setText(
-            QString("Current: %1/%2").arg(m_vm.replayCurrentFrame()).arg(count));
-    });
-    connect(&m_vm, &ViewModel::replayCurrentFrameChanged, [this, currentFrameLabel](int frame) {
-        currentFrameLabel->setText(
-            QString("Current: %1/%2").arg(frame).arg(m_vm.replayFrameCount()));
-    });
+    connect(replay, &ReplayViewModel::replayFrameCountChanged,
+            [replay, currentFrameLabel](int count) {
+                currentFrameLabel->setText(
+                    QString("Current: %1/%2").arg(replay->replayCurrentFrame()).arg(count));
+            });
+    connect(replay, &ReplayViewModel::replayCurrentFrameChanged,
+            [replay, currentFrameLabel](int frame) {
+                currentFrameLabel->setText(
+                    QString("Current: %1/%2").arg(frame).arg(replay->replayFrameCount()));
+            });
 
     auto* grabRow = new QHBoxLayout;
 #ifdef DSS_HAS_ELA
@@ -185,9 +192,9 @@ void MainWindow::setupControlPage() {
     grabRow->addWidget(btnStop);
     grabRow->addWidget(btnStepForward);
 
-    connect(btnStart, &QPushButton::clicked, &m_vm, &ViewModel::startGrab);
-    connect(btnStop, &QPushButton::clicked, &m_vm, &ViewModel::stopGrab);
-    connect(btnStepForward, &QPushButton::clicked, &m_vm, &ViewModel::stepReplayForward);
+    connect(btnStart, &QPushButton::clicked, replay, &ReplayViewModel::startGrab);
+    connect(btnStop, &QPushButton::clicked, replay, &ReplayViewModel::stopGrab);
+    connect(btnStepForward, &QPushButton::clicked, replay, &ReplayViewModel::stepReplayForward);
 
     auto* processingRow = new QHBoxLayout;
     processingRow->addWidget(new QLabel("Processing:"));
@@ -200,10 +207,10 @@ void MainWindow::setupControlPage() {
     processingRow->addWidget(processingCombo);
 
     connect(processingCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            [this](int index) {
+            [processing](int index) {
                 static constexpr int modeMap[] = {0, 3};
                 if (index >= 0 && index < 2) {
-                    m_vm.setProcessingMode(modeMap[index]);
+                    processing->setProcessingMode(modeMap[index]);
                 }
             });
 
@@ -217,10 +224,10 @@ void MainWindow::setupControlPage() {
     modeCombo->addItems({"Init", "GEO", "SC", "LEO", "Manual"});
     modeRow->addWidget(modeCombo);
 
-    connect(modeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [this](int index) {
+    connect(modeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [tracking](int index) {
         static constexpr int modeMap[] = {-1, 0, 3, 4, 5};
         if (index >= 0 && index < 5) {
-            m_vm.setTrackMode(modeMap[index]);
+            tracking->setTrackMode(modeMap[index]);
         }
     });
 
@@ -239,7 +246,7 @@ void MainWindow::setupControlPage() {
 
     connect(expSlider, &QSlider::valueChanged, [this, expLabel](int val) {
         expLabel->setText(QString::number(val));
-        m_vm.setExposure(val);
+        m_mainViewModel.setExposure(val);
     });
 
     auto* saveRow = new QHBoxLayout;
@@ -249,11 +256,11 @@ void MainWindow::setupControlPage() {
     auto* chkSave = new QCheckBox("Save Data");
 #endif
     saveRow->addWidget(chkSave);
-    connect(chkSave, &QCheckBox::toggled, [this](bool checked) {
+    connect(chkSave, &QCheckBox::toggled, [storage](bool checked) {
         if (checked) {
-            m_vm.startSaving();
+            storage->startSaving();
         } else {
-            m_vm.stopSaving();
+            storage->stopSaving();
         }
     });
 
@@ -268,7 +275,7 @@ void MainWindow::setupControlPage() {
     statsLabel->setObjectName("stats_label");
     layout->addWidget(statsLabel);
 
-    connect(&m_vm, &ViewModel::imageStatsUpdated,
+    connect(display, &DisplayViewModel::imageStatsUpdated,
             [statsLabel](double minVal, double maxVal, double avg, double stdDev) {
                 statsLabel->setText(QString("Min: %1 | Max: %2 | Avg: %3 | Std: %4")
                                         .arg(minVal, 0, 'f', 1)
@@ -280,15 +287,126 @@ void MainWindow::setupControlPage() {
     layout->addStretch();
 }
 
-/// 放置主图像显示控件，并绑定 ViewModel 与 AppEvent
+/// 放置主图像显示控件，并绑定显示子 ViewModel 与 AppEvent
 void MainWindow::setupDisplayPage() {
     m_displayPage = new QWidget;
     auto* layout = new QHBoxLayout(m_displayPage);
+    auto* display = &m_mainViewModel.display();
 
     m_imageDisplay = new ImageDisplay(m_displayPage);
-    layout->addWidget(m_imageDisplay, 3);
+    layout->addWidget(m_imageDisplay, 4);
 
-    connect(&m_vm, &ViewModel::displayImageReady, m_imageDisplay, &ImageDisplay::setImage);
+    auto* stretchGroup = new QGroupBox("Display Stretch", m_displayPage);
+    stretchGroup->setObjectName("display_stretch_group");
+    auto* stretchForm = new QFormLayout(stretchGroup);
+#ifdef DSS_HAS_ELA
+    auto* autoStretch = new ElaCheckBox("Auto");
+    auto* lowSlider = new ElaSlider(Qt::Horizontal);
+    auto* highSlider = new ElaSlider(Qt::Horizontal);
+#else
+    auto* autoStretch = new QCheckBox("Auto");
+    auto* lowSlider = new QSlider(Qt::Horizontal);
+    auto* highSlider = new QSlider(Qt::Horizontal);
+#endif
+    auto* lowSpin = new QSpinBox;
+    auto* highSpin = new QSpinBox;
+    autoStretch->setObjectName("display_stretch_auto");
+    lowSlider->setObjectName("display_stretch_low_slider");
+    highSlider->setObjectName("display_stretch_high_slider");
+    lowSpin->setObjectName("display_stretch_low_spin");
+    highSpin->setObjectName("display_stretch_high_spin");
+
+    lowSlider->setRange(0, 16383);
+    highSlider->setRange(1, 16384);
+    lowSpin->setRange(0, 16383);
+    highSpin->setRange(1, 16384);
+    lowSlider->setValue(display->displayStretchLow());
+    highSlider->setValue(display->displayStretchHigh());
+    lowSpin->setValue(display->displayStretchLow());
+    highSpin->setValue(display->displayStretchHigh());
+    autoStretch->setChecked(display->displayAutoStretch());
+
+    auto* lowRow = new QHBoxLayout;
+    lowRow->addWidget(lowSlider);
+    lowRow->addWidget(lowSpin);
+    auto* highRow = new QHBoxLayout;
+    highRow->addWidget(highSlider);
+    highRow->addWidget(highSpin);
+
+    stretchForm->addRow("Auto", autoStretch);
+    stretchForm->addRow("Low", lowRow);
+    stretchForm->addRow("High", highRow);
+    layout->addWidget(stretchGroup, 1);
+
+    auto refreshStretchEnabled = [autoStretch, lowSlider, lowSpin, highSlider, highSpin] {
+        const auto manualEnabled = !autoStretch->isChecked();
+        lowSlider->setEnabled(manualEnabled);
+        lowSpin->setEnabled(manualEnabled);
+        highSlider->setEnabled(manualEnabled);
+        highSpin->setEnabled(manualEnabled);
+    };
+    auto syncStretchControls = [lowSlider, lowSpin, highSlider, highSpin](int low, int high) {
+        const QSignalBlocker lowSliderBlocker(lowSlider);
+        const QSignalBlocker lowSpinBlocker(lowSpin);
+        const QSignalBlocker highSliderBlocker(highSlider);
+        const QSignalBlocker highSpinBlocker(highSpin);
+        lowSlider->setValue(low);
+        lowSpin->setValue(low);
+        highSlider->setValue(high);
+        highSpin->setValue(high);
+    };
+    auto applyStretch = [this, display, autoStretch, lowSpin, highSlider, highSpin,
+                         syncStretchControls] {
+        auto low = lowSpin->value();
+        auto high = highSpin->value();
+        if (low >= high) {
+            if (this->sender() == highSlider || this->sender() == highSpin) {
+                high = std::min(16384, low + 1);
+            } else {
+                low = std::max(0, high - 1);
+            }
+        }
+        syncStretchControls(low, high);
+        (void)display->applyDisplayStretch(autoStretch->isChecked(), low, high);
+    };
+
+    connect(autoStretch, &QCheckBox::toggled, [refreshStretchEnabled, applyStretch](bool) {
+        refreshStretchEnabled();
+        applyStretch();
+    });
+    connect(lowSlider, &QSlider::valueChanged, [lowSpin, applyStretch](int value) {
+        const QSignalBlocker blocker(lowSpin);
+        lowSpin->setValue(value);
+        applyStretch();
+    });
+    connect(lowSpin, QOverload<int>::of(&QSpinBox::valueChanged),
+            [lowSlider, applyStretch](int value) {
+                const QSignalBlocker blocker(lowSlider);
+                lowSlider->setValue(value);
+                applyStretch();
+            });
+    connect(highSlider, &QSlider::valueChanged, [highSpin, applyStretch](int value) {
+        const QSignalBlocker blocker(highSpin);
+        highSpin->setValue(value);
+        applyStretch();
+    });
+    connect(highSpin, QOverload<int>::of(&QSpinBox::valueChanged),
+            [highSlider, applyStretch](int value) {
+                const QSignalBlocker blocker(highSlider);
+                highSlider->setValue(value);
+                applyStretch();
+            });
+    connect(display, &DisplayViewModel::displayStretchChanged,
+            [autoStretch, syncStretchControls, refreshStretchEnabled](bool autoScale, int low,
+                                                                      int high) {
+                const QSignalBlocker autoBlocker(autoStretch);
+                autoStretch->setChecked(autoScale);
+                syncStretchControls(low, high);
+                refreshStretchEnabled();
+            });
+    refreshStretchEnabled();
+
+    connect(display, &DisplayViewModel::displayImageReady, m_imageDisplay, &ImageDisplay::setImage);
     connect(m_imageDisplay, &ImageDisplay::positionClicked, &AppEvent::instance(),
             &AppEvent::publishTargetPositionSelected);
 }
@@ -304,6 +422,9 @@ void MainWindow::setupAnalysisPage() {
 void MainWindow::setupCommStatusPage() {
     m_commPage = new QWidget;
     auto* layout = new QVBoxLayout(m_commPage);
+    auto* serial = &m_mainViewModel.serialPorts();
+    auto* network = &m_mainViewModel.network();
+    auto* dataExchange = &m_mainViewModel.dataExchange();
     layout->addWidget(new QLabel("Communication Status Monitor"));
 
     /// @brief 通信页中单个串口通道的控件集合。
@@ -359,7 +480,7 @@ void MainWindow::setupCommStatusPage() {
         return spin;
     };
 
-    auto makeSerialGroup = [this, serialEditors, makeLineEdit,
+    auto makeSerialGroup = [serial, serialEditors, makeLineEdit,
                             makeSerialSpin](const SerialChannelState& channel) {
         auto* group = new QGroupBox(channel.displayName);
         auto* form = new QFormLayout(group);
@@ -396,10 +517,10 @@ void MainWindow::setupCommStatusPage() {
         form->addRow(btnApplySerial);
         form->addRow("Service", serviceRow);
 
-        connect(btnApplySerial, &QPushButton::clicked, [this, serialEditors, key = channel.key] {
+        connect(btnApplySerial, &QPushButton::clicked, [serial, serialEditors, key = channel.key] {
             for (const auto& editor : *serialEditors) {
                 if (editor.key == key) {
-                    m_vm.applySerialChannelConfig(
+                    serial->applySerialChannelConfig(
                         editor.key, editor.portName->text(), editor.baudRate->value(),
                         editor.dataBits->value(), editor.stopBits->value());
                     return;
@@ -407,13 +528,13 @@ void MainWindow::setupCommStatusPage() {
             }
         });
         connect(btnOpenSerial, &QPushButton::clicked,
-                [this, key = channel.key] { m_vm.openSerialChannel(key); });
+                [serial, key = channel.key] { serial->openSerialChannel(key); });
         connect(btnCloseSerial, &QPushButton::clicked,
-                [this, key = channel.key] { m_vm.closeSerialChannel(key); });
+                [serial, key = channel.key] { serial->closeSerialChannel(key); });
         return group;
     };
 
-    auto makeEndpointGroup = [this, endpointEditors, makeLineEdit,
+    auto makeEndpointGroup = [network, endpointEditors, makeLineEdit,
                               makePortSpin](const NetworkEndpointState& endpoint) {
         auto* group = new QGroupBox(endpoint.displayName);
         auto* form = new QFormLayout(group);
@@ -456,10 +577,10 @@ void MainWindow::setupCommStatusPage() {
         form->addRow("Service", serviceRow);
 
         connect(btnApplyEndpoint, &QPushButton::clicked,
-                [this, endpointEditors, key = endpoint.key] {
+                [network, endpointEditors, key = endpoint.key] {
                     for (const auto& editor : *endpointEditors) {
                         if (editor.key == key) {
-                            m_vm.applyNetworkEndpointConfig(
+                            network->applyNetworkEndpointConfig(
                                 editor.key, editor.localIp->text(), editor.localPort->value(),
                                 editor.remoteIp->text(), editor.remotePort->value());
                             return;
@@ -468,14 +589,14 @@ void MainWindow::setupCommStatusPage() {
                 });
         if (endpoint.canOpen) {
             connect(btnOpenEndpoint, &QPushButton::clicked,
-                    [this, key = endpoint.key] { m_vm.openNetworkEndpoint(key); });
+                    [network, key = endpoint.key] { network->openNetworkEndpoint(key); });
             connect(btnCloseEndpoint, &QPushButton::clicked,
-                    [this, key = endpoint.key] { m_vm.closeNetworkEndpoint(key); });
+                    [network, key = endpoint.key] { network->closeNetworkEndpoint(key); });
         }
         return group;
     };
 
-    auto makeExposureCommandGroup = [this, makeSerialSpin] {
+    auto makeExposureCommandGroup = [serial, makeSerialSpin] {
         auto* group = new QGroupBox("Exposure Command");
         auto* form = new QFormLayout(group);
 #ifdef DSS_HAS_ELA
@@ -493,14 +614,14 @@ void MainWindow::setupCommStatusPage() {
         form->addRow("Delay Ticks", delayTicks);
         form->addRow(sendButton);
 
-        connect(sendButton, &QPushButton::clicked, [this, freeRun, frameFrequency, delayTicks] {
-            m_vm.sendExposureCommand(freeRun->isChecked(), frameFrequency->value(),
-                                     delayTicks->value());
+        connect(sendButton, &QPushButton::clicked, [serial, freeRun, frameFrequency, delayTicks] {
+            serial->sendExposureCommand(freeRun->isChecked(), frameFrequency->value(),
+                                        delayTicks->value());
         });
         return group;
     };
 
-    auto makeServoCommandGroup = [this, makeSerialSpin, makeDoubleSpin] {
+    auto makeServoCommandGroup = [serial, makeSerialSpin, makeDoubleSpin] {
         auto* group = new QGroupBox("Servo Correction");
         auto* form = new QFormLayout(group);
 #ifdef DSS_HAS_ELA
@@ -528,15 +649,15 @@ void MainWindow::setupCommStatusPage() {
         form->addRow(sendButton);
 
         connect(sendButton, &QPushButton::clicked,
-                [this, distanceValid, speedValid, distanceX, distanceY, speedX, speedY, mode] {
-                    m_vm.sendServoCorrection(distanceValid->isChecked(), speedValid->isChecked(),
-                                             distanceX->value(), distanceY->value(),
-                                             speedX->value(), speedY->value(), mode->value());
+                [serial, distanceValid, speedValid, distanceX, distanceY, speedX, speedY, mode] {
+                    serial->sendServoCorrection(distanceValid->isChecked(), speedValid->isChecked(),
+                                                distanceX->value(), distanceY->value(),
+                                                speedX->value(), speedY->value(), mode->value());
                 });
         return group;
     };
 
-    auto makeMasterControlCommandGroup = [this, makeSerialSpin, makeDoubleSpin] {
+    auto makeMasterControlCommandGroup = [serial, makeSerialSpin, makeDoubleSpin] {
         auto* group = new QGroupBox("Master Control Status");
         auto* form = new QFormLayout(group);
 #ifdef DSS_HAS_ELA
@@ -568,12 +689,12 @@ void MainWindow::setupCommStatusPage() {
         form->addRow(sendButton);
 
         connect(sendButton, &QPushButton::clicked,
-                [this, azimuth, elevation, distanceValid, speedValid, distanceX, distanceY, speedX,
-                 speedY, mode] {
+                [serial, azimuth, elevation, distanceValid, speedValid, distanceX, distanceY,
+                 speedX, speedY, mode] {
                     const auto now = QDateTime::currentDateTime();
                     const auto date = now.date();
                     const auto time = now.time();
-                    m_vm.sendMasterControlStatus(
+                    serial->sendMasterControlStatus(
                         date.year(), date.month(), date.day(), time.hour(), time.minute(),
                         time.second(), time.msec(), azimuth->value(), elevation->value(),
                         distanceValid->isChecked(), speedValid->isChecked(), distanceX->value(),
@@ -584,7 +705,7 @@ void MainWindow::setupCommStatusPage() {
 
     layout->addWidget(new QLabel("Serial Channels"));
     auto* serialGrid = new QGridLayout;
-    const auto serialChannels = m_vm.serialChannelConfigs();
+    const auto serialChannels = serial->serialChannelConfigs();
     for (int index = 0; index < static_cast<int>(serialChannels.size()); ++index) {
         serialGrid->addWidget(makeSerialGroup(serialChannels[static_cast<std::size_t>(index)]),
                               index / 2, index % 2);
@@ -600,7 +721,7 @@ void MainWindow::setupCommStatusPage() {
 
     layout->addWidget(new QLabel("UDP Endpoints"));
     auto* endpointGrid = new QGridLayout;
-    const auto endpoints = m_vm.networkEndpointConfigs();
+    const auto endpoints = network->networkEndpointConfigs();
     for (int index = 0; index < static_cast<int>(endpoints.size()); ++index) {
         endpointGrid->addWidget(makeEndpointGroup(endpoints[static_cast<std::size_t>(index)]),
                                 index / 2, index % 2);
@@ -622,8 +743,8 @@ void MainWindow::setupCommStatusPage() {
     actionRow->addStretch();
     layout->addLayout(actionRow);
 
-    auto refreshEndpoints = [this, endpointEditors] {
-        const auto currentEndpoints = m_vm.networkEndpointConfigs();
+    auto refreshEndpoints = [network, endpointEditors] {
+        const auto currentEndpoints = network->networkEndpointConfigs();
         for (const auto& endpoint : currentEndpoints) {
             for (const auto& editor : *endpointEditors) {
                 if (editor.key == endpoint.key) {
@@ -644,8 +765,8 @@ void MainWindow::setupCommStatusPage() {
             }
         }
     };
-    auto refreshSerialChannels = [this, serialEditors] {
-        const auto currentChannels = m_vm.serialChannelConfigs();
+    auto refreshSerialChannels = [serial, serialEditors] {
+        const auto currentChannels = serial->serialChannelConfigs();
         for (const auto& channel : currentChannels) {
             for (const auto& editor : *serialEditors) {
                 if (editor.key == channel.key) {
@@ -667,20 +788,25 @@ void MainWindow::setupCommStatusPage() {
             }
         }
     };
-    auto refreshOpenState = [this, btnOpenDataExchange, btnCloseDataExchange, dataExchangeState] {
-        const auto isOpen = m_vm.isDataExchangeOpen();
+    auto refreshOpenState = [dataExchange, btnOpenDataExchange, btnCloseDataExchange,
+                             dataExchangeState] {
+        const auto isOpen = dataExchange->isDataExchangeOpen();
         btnOpenDataExchange->setEnabled(!isOpen);
         btnCloseDataExchange->setEnabled(isOpen);
         dataExchangeState->setText(isOpen ? "Data exchange: opened" : "Data exchange: closed");
     };
 
-    connect(btnOpenDataExchange, &QPushButton::clicked, &m_vm, &ViewModel::openDataExchange);
-    connect(btnCloseDataExchange, &QPushButton::clicked, &m_vm, &ViewModel::closeDataExchange);
-    connect(&m_vm, &ViewModel::serialChannelsChanged, refreshSerialChannels);
-    connect(&m_vm, &ViewModel::serialChannelStateChanged,
+    connect(btnOpenDataExchange, &QPushButton::clicked, dataExchange,
+            &DataExchangeViewModel::openDataExchange);
+    connect(btnCloseDataExchange, &QPushButton::clicked, dataExchange,
+            &DataExchangeViewModel::closeDataExchange);
+    connect(serial, &SerialPortViewModel::serialChannelsChanged, refreshSerialChannels);
+    connect(serial, &SerialPortViewModel::serialChannelStateChanged,
             [refreshSerialChannels](const QString&, bool) { refreshSerialChannels(); });
-    connect(&m_vm, &ViewModel::networkEndpointsChanged, refreshEndpoints);
-    connect(&m_vm, &ViewModel::dataExchangeOpenChanged, refreshOpenState);
+    connect(network, &NetworkViewModel::networkEndpointsChanged, refreshEndpoints);
+    connect(network, &NetworkViewModel::dataExchangeEndpointsChanged, refreshEndpoints);
+    connect(dataExchange, &DataExchangeViewModel::dataExchangeEndpointsChanged, refreshEndpoints);
+    connect(dataExchange, &DataExchangeViewModel::dataExchangeOpenChanged, refreshOpenState);
 
     refreshSerialChannels();
     refreshEndpoints();
@@ -696,10 +822,11 @@ void MainWindow::setupSettingsPage() {
     layout->addStretch();
 }
 
-/// @brief 创建日志页并连接 ViewModel 日志事件。
+/// @brief 创建日志页并连接日志子 ViewModel 事件。
 void MainWindow::setupLogPage() {
     m_logPage = new QWidget;
     auto* layout = new QVBoxLayout(m_logPage);
+    auto& logs = m_mainViewModel.logs();
 
     auto* filterRow = new QHBoxLayout;
     filterRow->addWidget(new QLabel("Level:"));
@@ -709,7 +836,7 @@ void MainWindow::setupLogPage() {
     auto* levelCombo = new QComboBox;
 #endif
     levelCombo->addItems({"Info", "Warning", "Error"});
-    levelCombo->setCurrentIndex(m_vm.logMinimumLevel());
+    levelCombo->setCurrentIndex(logs.logMinimumLevel());
     filterRow->addWidget(levelCombo);
     filterRow->addStretch();
     layout->addLayout(filterRow);
@@ -720,20 +847,24 @@ void MainWindow::setupLogPage() {
     auto refreshLogText = [logText](const QStringList& entries) {
         renderColoredLogEntries(*logText, entries);
     };
-    connect(&m_vm, &ViewModel::logEntriesChanged, logText, refreshLogText);
-    connect(levelCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), &m_vm,
-            &ViewModel::setLogMinimumLevel);
-    refreshLogText(m_vm.visibleLogEntries());
+    connect(&logs, &LogViewModel::logEntriesChanged, logText, refreshLogText);
+    connect(levelCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), &logs,
+            &LogViewModel::setLogMinimumLevel);
+    refreshLogText(logs.visibleLogEntries());
     layout->addWidget(logText);
 }
 
-/// 连接 AppEvent 与 ViewModel，并在状态栏/MessageBar 显示反馈
+/// 连接 AppEvent 与 UI 层主 ViewModel、子 ViewModel，并在状态栏/MessageBar 显示反馈
 void MainWindow::connectSignals() {
-    connect(&AppEvent::instance(), &AppEvent::targetPositionSelected, &m_vm,
-            &ViewModel::selectTarget);
-    connect(&AppEvent::instance(), &AppEvent::zoomLevelChanged, &m_vm, &ViewModel::toggleZoom);
+    auto* display = &m_mainViewModel.display();
+    auto* tracking = &m_mainViewModel.tracking();
 
-    connect(&m_vm, &ViewModel::statusTextChanged, [this](const QString& text) {
+    connect(&AppEvent::instance(), &AppEvent::targetPositionSelected, tracking,
+            &TrackingViewModel::selectTarget);
+    connect(&AppEvent::instance(), &AppEvent::zoomLevelChanged, display,
+            &DisplayViewModel::toggleZoom);
+
+    connect(&m_mainViewModel, &MainViewModel::statusTextChanged, [this](const QString& text) {
 #ifdef DSS_HAS_ELA
         ElaMessageBar::success(ElaMessageBarType::TopRight, "Status", text, 2000, this);
 #else
@@ -741,7 +872,7 @@ void MainWindow::connectSignals() {
 #endif
     });
 
-    connect(&m_vm, &ViewModel::trackInfoUpdated, [this](const QString& info) {
+    connect(tracking, &TrackingViewModel::trackInfoUpdated, [this](const QString& info) {
 #ifdef DSS_HAS_ELA
         ElaMessageBar::information(ElaMessageBarType::BottomRight, "Track", info, 3000, this);
 #else

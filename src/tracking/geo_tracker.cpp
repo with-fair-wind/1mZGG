@@ -160,7 +160,7 @@ using Dss::Tracking::updateValidityWithLatestFrame;
  *
  * 在视场中心区域内匹配恒星对，统计出现频率最高的像素位移作为背景像面速度，
 
- * * 并结合视场中心方位/俯仰变化换算 AE 速度。
+ * 并结合视场中心方位/俯仰变化换算 AE 速度。
  */
 [[nodiscard]] auto estimateGeoStarSpeedFromPair(const Dss::Core::FrameMeasurements& previous,
                                                 const Dss::Core::FrameMeasurements& current,

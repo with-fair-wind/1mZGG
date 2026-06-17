@@ -35,6 +35,7 @@ struct DisplayRefreshEvent {
     uint32_t height = 0;                                       ///< 图像高度（像素）
     uint32_t stride = 0;                                       ///< 行跨度（字节）
     std::shared_ptr<const std::vector<uint8_t>> displayImage;  ///< 显示用图像数据
+    std::shared_ptr<const std::vector<uint16_t>> rawImage;  ///< 可用于实时重拉伸的 16 位原始图像
 };
 
 /// 处理事件：单帧处理完成

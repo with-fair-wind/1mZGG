@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dss/ui/view_model.h"
+#include "dss/ui/main_view_model.h"
 
 #ifdef DSS_HAS_ELA
 #include <ElaWindow.h>
@@ -27,10 +27,10 @@ class MainWindow : public QMainWindow
 public:
     /**
      * @brief 构造主窗口
-     * @param vm ViewModel 引用
+     * @param mainViewModel UI 层主 ViewModel 引用
      * @param parent Qt 父窗口
      */
-    explicit MainWindow(ViewModel& vm, QWidget* parent = nullptr);
+    explicit MainWindow(MainViewModel& mainViewModel, QWidget* parent = nullptr);
     ~MainWindow() override;
 
 private:
@@ -49,10 +49,10 @@ private:
     /// 构建日志页
     void setupLogPage();
 
-    /// 连接 ViewModel 与 AppEvent 信号槽
+    /// 连接 UI 层主 ViewModel、子 ViewModel 与 AppEvent 信号槽
     void connectSignals();
 
-    ViewModel& m_vm;  ///< ViewModel 引用
+    MainViewModel& m_mainViewModel;  ///< UI 层主 ViewModel 引用
 
     QWidget* m_controlPage = nullptr;   ///< 控制页容器
     QWidget* m_displayPage = nullptr;   ///< 显示页容器

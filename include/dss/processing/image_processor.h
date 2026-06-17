@@ -7,6 +7,7 @@
 
 #include "dss/core/event_bus.h"
 #include "dss/processing/bounded_channel.h"
+#include "dss/processing/display_stretch.h"
 #include "dss/processing/frame_packet.h"
 #include "dss/processing/i_processing_strategy.h"
 #include "dss/processing/processing_pipeline.h"
@@ -64,12 +65,26 @@ public:
     /// 当前跟踪策略的模式；无策略时返回 TrackMode::Init
     [[nodiscard]] auto currentTrackMode() const -> Dss::Core::TrackMode;
 
+    /**
+     * @brief 设置 16 位 RAW 到 8 位显示图的拉伸参数
+     * @param settings
+     * 显示拉伸设置
+
+     */
+    void setDisplayStretchSettings(DisplayStretchSettings settings);
+
+    /// 当前显示拉伸设置快照
+    [[nodiscard]] auto displayStretchSettings() const -> DisplayStretchSettings;
+
 private:
     /**
      * @brief 后台工作循环，从通道取帧并执行处理与跟踪
      * @param token 停止令牌，用于优雅退出
      */
     void workerLoop(std::stop_token token);
+
+    /// 获取当前显示拉伸设置快照
+    [[nodiscard]] auto currentDisplayStretchSettings() const -> DisplayStretchSettings;
 
     MessageBus& m_bus;                              ///< 事件消息总线
     BoundedChannel<FramePacket, 4> m_frameChannel;  ///< 帧输入有界通道
@@ -80,6 +95,8 @@ private:
     mutable std::mutex m_strategyMutex;                                 ///< 保护策略对象的互斥锁
     ProcessingPipeline m_pipeline;                                      ///< 图像处理管线
     std::unique_ptr<Dss::Tracking::ITrackingStrategy> m_trackStrategy;  ///< 跟踪策略
+    mutable std::mutex m_displayStretchMutex;                           ///< 保护显示拉伸设置
+    DisplayStretchSettings m_displayStretchSettings{};                  ///< 当前显示拉伸设置
 };
 
 }  // namespace Dss::Processing

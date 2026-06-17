@@ -86,6 +86,40 @@ TEST(ImageProcessor, PublishesDisplayFramePayload) {
     EXPECT_EQ(*event.displayImage, (std::vector<uint8_t>{1, 2, 3, 4}));
 }
 
+TEST(ImageProcessor, AppliesManualDisplayStretchToRawFrames) {
+    Dss::Processing::ImageProcessor::MessageBus bus;
+    Dss::Processing::ImageProcessor processor(bus);
+    Dss::Processing::DisplayStretchSettings settings{};
+    settings.mode = Dss::Processing::DisplayStretchMode::Manual;
+    settings.low = 1000;
+    settings.high = 5000;
+    processor.setDisplayStretchSettings(settings);
+
+    std::promise<Dss::Core::DisplayRefreshEvent> displayPromise;
+    auto displayFuture = displayPromise.get_future();
+    auto connection = bus.subscribe<Dss::Core::DisplayRefreshEvent>(
+        [&displayPromise](const Dss::Core::DisplayRefreshEvent& event) {
+            displayPromise.set_value(event);
+        });
+
+    Dss::Processing::FramePacket packet;
+    packet.frameSeq = 7;
+    packet.width = 2;
+    packet.height = 2;
+    packet.rawImage = {500, 1000, 3000, 5000};
+    packet.displayImage = {9, 9, 9, 9};
+
+    processor.start();
+    ASSERT_TRUE(processor.submitFrame(std::move(packet)));
+
+    ASSERT_EQ(displayFuture.wait_for(2s), std::future_status::ready);
+    processor.stop();
+
+    const auto event = displayFuture.get();
+    ASSERT_TRUE(event.displayImage);
+    EXPECT_EQ(*event.displayImage, (std::vector<uint8_t>{0, 0, 127, 255}));
+}
+
 TEST(ImageProcessor, PublishesManualTrackResultsWithoutProcessingBackend) {
     Dss::Processing::ImageProcessor::MessageBus bus;
     Dss::Processing::ImageProcessor processor(bus);

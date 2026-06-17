@@ -1,7 +1,6 @@
 #include <QCoreApplication>
 #include <QPointF>
 #include <chrono>
-#include <filesystem>
 #include <future>
 #include <memory>
 
@@ -9,9 +8,8 @@
 
 #include "dss/core/events.h"
 #include "dss/processing/image_processor.h"
-#include "dss/storage/local_image_storage_backend.h"
-#include "dss/storage/track_data_storage_backend.h"
-#include "dss/ui/view_model.h"
+#include "dss/ui/tracking_view_model.h"
+#include "dss/ui/view_model_context.h"
 
 using namespace std::chrono_literals;
 
@@ -19,7 +17,7 @@ namespace {
 
 auto ensureApplication() -> QCoreApplication& {
     static int argc = 1;
-    static char appName[] = "test_view_model_tracking";
+    static char appName[] = "test_tracking_view_model";
     static char* argv[] = {appName, nullptr};
     static std::unique_ptr<QCoreApplication> app;
 
@@ -29,16 +27,9 @@ auto ensureApplication() -> QCoreApplication& {
     return *QCoreApplication::instance();
 }
 
-[[nodiscard]] auto tempViewModelStorageDir() -> std::filesystem::path {
-    auto dir = std::filesystem::temp_directory_path() / "dss_view_model_tracking_test";
-    std::filesystem::remove_all(dir);
-    std::filesystem::create_directories(dir);
-    return dir;
-}
-
 }  // namespace
 
-TEST(ViewModelTracking, SelectTargetEnablesManualTrackingOnImageProcessor) {
+TEST(TrackingViewModel, SelectTargetEnablesManualTrackingOnImageProcessor) {
     auto& app = ensureApplication();
     (void)app;
 
@@ -46,7 +37,8 @@ TEST(ViewModelTracking, SelectTargetEnablesManualTrackingOnImageProcessor) {
     Dss::Core::ServiceRegistry registry;
     auto processor = std::make_shared<Dss::Processing::ImageProcessor>(bus);
     registry.registerService<Dss::Processing::ImageProcessor>("image_processor", processor);
-    Dss::Ui::ViewModel viewModel(bus, registry);
+    Dss::Ui::TrackingViewModel tracking(Dss::Ui::UiServiceContext{.bus = bus,
+                                                                  .registry = registry});
 
     std::promise<Dss::Core::TrackResultEvent> trackPromise;
     auto trackFuture = trackPromise.get_future();
@@ -55,9 +47,9 @@ TEST(ViewModelTracking, SelectTargetEnablesManualTrackingOnImageProcessor) {
             trackPromise.set_value(std::move(event));
         });
 
-    viewModel.selectTarget(QPointF{120.0, 80.0});
+    tracking.selectTarget(QPointF{120.0, 80.0});
 
-    EXPECT_EQ(viewModel.trackMode(), static_cast<int>(Dss::Core::TrackMode::Manual));
+    EXPECT_EQ(tracking.trackMode(), static_cast<int>(Dss::Core::TrackMode::Manual));
     EXPECT_EQ(processor->currentTrackMode(), Dss::Core::TrackMode::Manual);
 
     Dss::Processing::FramePacket packet{};
@@ -82,7 +74,7 @@ TEST(ViewModelTracking, SelectTargetEnablesManualTrackingOnImageProcessor) {
     EXPECT_FLOAT_EQ(event.targets.front().predictedPosFrame.y, 80.0F);
 }
 
-TEST(ViewModelTracking, SetTrackModeConfiguresNonManualTrackingStrategies) {
+TEST(TrackingViewModel, SetTrackModeConfiguresNonManualTrackingStrategies) {
     auto& app = ensureApplication();
     (void)app;
 
@@ -90,46 +82,18 @@ TEST(ViewModelTracking, SetTrackModeConfiguresNonManualTrackingStrategies) {
     Dss::Core::ServiceRegistry registry;
     auto processor = std::make_shared<Dss::Processing::ImageProcessor>(bus);
     registry.registerService<Dss::Processing::ImageProcessor>("image_processor", processor);
-    Dss::Ui::ViewModel viewModel(bus, registry);
+    Dss::Ui::TrackingViewModel tracking(Dss::Ui::UiServiceContext{.bus = bus,
+                                                                  .registry = registry});
 
-    viewModel.setTrackMode(static_cast<int>(Dss::Core::TrackMode::Geo));
+    tracking.setTrackMode(static_cast<int>(Dss::Core::TrackMode::Geo));
     EXPECT_EQ(processor->currentTrackMode(), Dss::Core::TrackMode::Geo);
 
-    viewModel.setTrackMode(static_cast<int>(Dss::Core::TrackMode::Leo));
+    tracking.setTrackMode(static_cast<int>(Dss::Core::TrackMode::Leo));
     EXPECT_EQ(processor->currentTrackMode(), Dss::Core::TrackMode::Leo);
 
-    viewModel.setTrackMode(static_cast<int>(Dss::Core::TrackMode::SpaceCatalog));
+    tracking.setTrackMode(static_cast<int>(Dss::Core::TrackMode::SpaceCatalog));
     EXPECT_EQ(processor->currentTrackMode(), Dss::Core::TrackMode::SpaceCatalog);
 
-    viewModel.setTrackMode(static_cast<int>(Dss::Core::TrackMode::Init));
+    tracking.setTrackMode(static_cast<int>(Dss::Core::TrackMode::Init));
     EXPECT_EQ(processor->currentTrackMode(), Dss::Core::TrackMode::Init);
-}
-
-TEST(ViewModelTracking, SavingToggleControlsImageAndTrackStorage) {
-    auto& app = ensureApplication();
-    (void)app;
-
-    Dss::Processing::ImageProcessor::MessageBus bus;
-    Dss::Core::ServiceRegistry registry;
-    const auto dir = tempViewModelStorageDir();
-    auto imageStorage = std::make_shared<Dss::Storage::LocalImageStorageBackend>(dir / "images");
-    auto trackStorage = std::make_shared<Dss::Storage::TrackDataStorageBackend>(dir / "tracks");
-
-    registry.registerService<Dss::Storage::LocalImageStorageBackend>("image_storage", imageStorage);
-    registry.registerService<Dss::Storage::TrackDataStorageBackend>("track_data_storage",
-                                                                    trackStorage);
-
-    Dss::Ui::ViewModel viewModel(bus, registry);
-
-    viewModel.startSaving();
-
-    EXPECT_TRUE(viewModel.isSaving());
-    EXPECT_TRUE(imageStorage->isRunning());
-    EXPECT_TRUE(trackStorage->isRunning());
-
-    viewModel.stopSaving();
-
-    EXPECT_FALSE(viewModel.isSaving());
-    EXPECT_FALSE(imageStorage->isRunning());
-    EXPECT_FALSE(trackStorage->isRunning());
 }

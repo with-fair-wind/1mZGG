@@ -64,6 +64,20 @@ auto ImageProcessor::currentTrackMode() const -> Dss::Core::TrackMode {
     return m_trackStrategy ? m_trackStrategy->mode() : Dss::Core::TrackMode::Init;
 }
 
+void ImageProcessor::setDisplayStretchSettings(DisplayStretchSettings settings) {
+    std::lock_guard lock(m_displayStretchMutex);
+    m_displayStretchSettings = settings;
+}
+
+auto ImageProcessor::displayStretchSettings() const -> DisplayStretchSettings {
+    return currentDisplayStretchSettings();
+}
+
+auto ImageProcessor::currentDisplayStretchSettings() const -> DisplayStretchSettings {
+    std::lock_guard lock(m_displayStretchMutex);
+    return m_displayStretchSettings;
+}
+
 void ImageProcessor::workerLoop(std::stop_token token) {
     while (!token.stop_requested()) {
         auto packetOpt = m_frameChannel.pop(token);
@@ -102,12 +116,31 @@ void ImageProcessor::workerLoop(std::stop_token token) {
             }
         }
 
-        auto displayImage = std::make_shared<const std::vector<uint8_t>>(
-            procResult.displayImage.empty() ? packet.displayImage
-                                            : std::move(procResult.displayImage));
+        auto displayStats = procResult.success ? procResult.stats : packet.stats;
+        std::vector<std::uint8_t> displayBuffer;
+        const auto expectedPixelCount =
+            static_cast<std::size_t>(packet.width) * static_cast<std::size_t>(packet.height);
+        if (expectedPixelCount > 0U && packet.rawImage.size() == expectedPixelCount) {
+            auto display = buildDisplayImage(packet.rawImage, currentDisplayStretchSettings());
+            displayStats = display.stats;
+            displayBuffer = std::move(display.displayImage);
+        } else if (!procResult.displayImage.empty()) {
+            displayBuffer = std::move(procResult.displayImage);
+        } else {
+            displayBuffer = std::move(packet.displayImage);
+        }
+
+        auto displayImage =
+            std::make_shared<const std::vector<std::uint8_t>>(std::move(displayBuffer));
+        std::shared_ptr<const std::vector<std::uint16_t>> rawImage;
+        if (expectedPixelCount > 0U && packet.rawImage.size() == expectedPixelCount) {
+            rawImage =
+                std::make_shared<const std::vector<std::uint16_t>>(std::move(packet.rawImage));
+        }
         m_bus.emit(Dss::Core::DisplayRefreshEvent{packet.frameSeq, packet.width, packet.height,
-                                                  packet.width, std::move(displayImage)});
-        m_bus.emit(Dss::Core::ProcessingCompleteEvent{packet.frameSeq, procResult.stats});
+                                                  packet.width, std::move(displayImage),
+                                                  std::move(rawImage)});
+        m_bus.emit(Dss::Core::ProcessingCompleteEvent{packet.frameSeq, displayStats});
 
         if (!trackResults.empty()) {
             m_bus.emit(Dss::Core::TrackResultEvent{packet.frameSeq, std::move(trackResults)});

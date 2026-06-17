@@ -51,6 +51,7 @@ dss_add_test(test_leo_tracker test_leo_tracker.cpp dss_tracking)
 dss_add_test(test_geo_tracker test_geo_tracker.cpp dss_tracking)
 dss_add_test(test_sc_tracker test_sc_tracker.cpp dss_tracking)
 dss_add_test(test_bounded_channel test_bounded_channel.cpp dss_processing)
+dss_add_test(test_display_stretch test_display_stretch.cpp dss_processing)
 dss_add_test(test_image_processor test_image_processor.cpp dss_processing)
 dss_add_test(test_frame_view test_frame_view.cpp dss_processing)
 dss_add_test(test_processing_pipeline test_processing_pipeline.cpp dss_processing)
@@ -89,24 +90,48 @@ if(TARGET dss_ui_qt)
         test_log_palette.cpp
         dss_ui_qt
     )
+    dss_add_qt_test(test_log_view_model
+        test_log_view_model.cpp
+        dss_ui_qt
+    )
+    dss_add_qt_test(test_display_view_model
+        test_display_view_model.cpp
+        dss_ui_qt
+    )
+    dss_add_qt_test(test_replay_view_model
+        test_replay_view_model.cpp
+        dss_ui_qt
+    )
+    dss_add_qt_test(test_processing_view_model
+        test_processing_view_model.cpp
+        dss_ui_qt
+    )
+    dss_add_qt_test(test_tracking_view_model
+        test_tracking_view_model.cpp
+        dss_ui_qt
+    )
+    dss_add_qt_test(test_storage_view_model
+        test_storage_view_model.cpp
+        dss_ui_qt
+    )
+    dss_add_qt_test(test_serial_port_view_model
+        test_serial_port_view_model.cpp
+        dss_ui_qt
+    )
+    dss_add_qt_test(test_network_view_model
+        test_network_view_model.cpp
+        dss_ui_qt
+    )
+    dss_add_qt_test(test_data_exchange_view_model
+        test_data_exchange_view_model.cpp
+        dss_ui_qt
+    )
     dss_add_qt_test(test_main_window_layout
         test_main_window_layout.cpp
         dss_ui_qt
     )
-    dss_add_qt_test(test_view_model_tracking
-        test_view_model_tracking.cpp
-        dss_ui_qt
-    )
-    dss_add_qt_test(test_view_model_processing
-        test_view_model_processing.cpp
-        dss_ui_qt
-    )
-    dss_add_qt_test(test_view_model_replay
-        test_view_model_replay.cpp
-        dss_ui_qt
-    )
-    dss_add_qt_test(test_view_model_network
-        test_view_model_network.cpp
+    dss_add_qt_test(test_main_view_model
+        test_main_view_model.cpp
         dss_ui_qt
     )
 endif()
