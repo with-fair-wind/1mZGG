@@ -261,6 +261,9 @@ if(DSS_BUILD_APP)
 
     add_executable(DSS_QT src/main.cpp)
     dss_target_defaults(DSS_QT)
+    if(COMMAND dss_depend_on_compile_commands)
+        dss_depend_on_compile_commands(DSS_QT)
+    endif()
     dss_qt_pch(DSS_QT)
     target_compile_definitions(DSS_QT PRIVATE
         QT_DEPRECATED_WARNINGS

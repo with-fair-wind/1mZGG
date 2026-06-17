@@ -14,6 +14,12 @@ if(NOT DSS_IS_MULTI_CONFIG)
     add_custom_target(dss_sync_compile_commands ALL
         DEPENDS "${CMAKE_SOURCE_DIR}/compile_commands.json"
     )
+
+    function(dss_depend_on_compile_commands target)
+        if(TARGET dss_sync_compile_commands)
+            add_dependencies(${target} dss_sync_compile_commands)
+        endif()
+    endfunction()
 endif()
 
 find_program(DSS_CLANG_FORMAT_EXECUTABLE
