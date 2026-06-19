@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <cstddef>
 #include <cstdint>
 #include <deque>
 #include <expected>
@@ -26,8 +27,8 @@ public:
      * @brief 构造本地图像存储后端
      * @param baseDir 默认存储根目录
      */
-    explicit LocalImageStorageBackend(std::filesystem::path baseDir)
-        : m_baseDir(std::move(baseDir)) {}
+    explicit LocalImageStorageBackend(std::filesystem::path baseDir, std::size_t maxPendingRequests = 1024)
+        : m_baseDir(std::move(baseDir)), m_maxPendingRequests(maxPendingRequests) {}
 
     ~LocalImageStorageBackend() override {
         stop();
@@ -92,6 +93,10 @@ public:
         return m_running;
     }
 
+    [[nodiscard]] auto droppedRequests() const -> std::uint64_t {
+        return m_droppedRequests.load();
+    }
+
     /**
      * @brief 将 RAW 帧加入异步写入队列
      * @param relativePath 相对或绝对文件路径
@@ -115,6 +120,10 @@ public:
         request.pixels.assign(pixels.begin(), pixels.end());
         {
             std::lock_guard lock(m_queueMutex);
+            if (m_queue.size() >= m_maxPendingRequests) {
+                m_droppedRequests.fetch_add(1, std::memory_order_relaxed);
+                return std::unexpected("storage queue is full");
+            }
             m_queue.push_back(std::move(request));
         }
         m_queueCv.notify_one();
@@ -175,7 +184,9 @@ private:
 
     std::filesystem::path m_baseDir;          ///< 存储根目录
     std::atomic<bool> m_ready{false};         ///< 是否已完成初始化
-    std::atomic<bool> m_running{false};       ///< 后台线程是否正在运行
+    std::atomic<bool> m_running{false};
+    std::size_t m_maxPendingRequests = 1024;
+    std::atomic<std::uint64_t> m_droppedRequests{0};  ///< 被背压拒绝的请求数量
     std::jthread m_worker;                    ///< 后台写入工作线程
     std::mutex m_queueMutex;                  ///< 保护写入队列的互斥锁
     std::condition_variable_any m_queueCv;    ///< 写入队列条件变量

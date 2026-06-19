@@ -1,5 +1,6 @@
 #include "dss/core/logger.h"
 
+#include <filesystem>
 #include <functional>
 #include <string>
 #include <string_view>
@@ -8,6 +9,7 @@
 #include <spdlog/details/log_msg.h>
 #include <spdlog/logger.h>
 #include <spdlog/sinks/base_sink.h>
+#include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
 namespace {
@@ -107,6 +109,29 @@ void Logger::setBus(MessageBus* bus) {
     m_bus = bus;
 }
 
+
+auto Logger::enableFileLogging(const std::filesystem::path& path)
+    -> std::expected<void, std::string> {
+    std::error_code error;
+    const auto parent = path.parent_path();
+    if (!parent.empty()) {
+        std::filesystem::create_directories(parent, error);
+        if (error) {
+            return std::unexpected("failed to create log directory: " + error.message());
+        }
+    }
+
+    try {
+        auto fileSink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(path.string(), true);
+        fileSink->set_level(spdlog::level::trace);
+        fileSink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] %v");
+        m_logger->sinks().push_back(std::move(fileSink));
+    } catch (const spdlog::spdlog_ex& ex) {
+        return std::unexpected(std::string{"failed to enable file logging: "} + ex.what());
+    }
+
+    return {};
+}
 void Logger::info(std::string_view msg) {
     m_logger->info("{}", msg);
 }

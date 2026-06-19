@@ -51,6 +51,19 @@ TEST(LocalImageStorageBackend, RejectsEnqueueBeforeWorkerStarts) {
     EXPECT_FALSE(backend.enqueueRawFrame("frame.raw", metadata(), pixels).has_value());
 }
 
+TEST(LocalImageStorageBackend, RejectsEnqueueWhenQueueIsFullAndCountsDrop) {
+    auto dir = tempStorageDir();
+    Dss::Storage::LocalImageStorageBackend backend(dir, 0);
+    ASSERT_TRUE(backend.init(dir).has_value());
+    ASSERT_TRUE(backend.start().has_value());
+
+    const std::vector<std::uint16_t> pixels{0x1234, 0xABCD};
+
+    EXPECT_FALSE(backend.enqueueRawFrame("frame.raw", metadata(), pixels).has_value());
+    EXPECT_EQ(backend.droppedRequests(), 1U);
+
+    backend.stop();
+}
 TEST(LocalImageStorageBackend, DrainsRawFrameWritesWhenStopped) {
     auto dir = tempStorageDir();
     Dss::Storage::LocalImageStorageBackend backend(dir);

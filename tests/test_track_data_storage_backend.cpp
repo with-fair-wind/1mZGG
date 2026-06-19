@@ -61,6 +61,17 @@ TEST(TrackDataStorageBackend, RejectsEnqueueBeforeWorkerStarts) {
     EXPECT_FALSE(backend.enqueueTrackResult(trackEvent()).has_value());
 }
 
+TEST(TrackDataStorageBackend, RejectsEnqueueWhenQueueIsFullAndCountsDrop) {
+    auto dir = tempTrackStorageDir();
+    Dss::Storage::TrackDataStorageBackend backend(dir, 0);
+    ASSERT_TRUE(backend.init(dir).has_value());
+    ASSERT_TRUE(backend.start().has_value());
+
+    EXPECT_FALSE(backend.enqueueTrackResult(trackEvent()).has_value());
+    EXPECT_EQ(backend.droppedRequests(), 1U);
+
+    backend.stop();
+}
 TEST(TrackDataStorageBackend, DrainsTrackDataWritesWhenStopped) {
     auto dir = tempTrackStorageDir();
     Dss::Storage::TrackDataStorageBackend backend(dir);

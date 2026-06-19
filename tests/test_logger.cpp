@@ -1,3 +1,6 @@
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -25,6 +28,17 @@ public:
     auto operator=(const ScopedLoggerBus&) -> ScopedLoggerBus& = delete;
 };
 
+[[nodiscard]] auto tempLogDir() -> std::filesystem::path {
+    auto dir = std::filesystem::temp_directory_path() / "dss_logger_test";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir);
+    return dir;
+}
+
+[[nodiscard]] auto readAllText(const std::filesystem::path& path) -> std::string {
+    std::ifstream input(path);
+    return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+}
 }  // namespace
 
 TEST(LoggerTest, PublishesFormattedMessagesToEventBus) {
@@ -47,4 +61,24 @@ TEST(LoggerTest, PublishesFormattedMessagesToEventBus) {
     EXPECT_EQ(messages[1].message, "[WARN] serial display timeout");
     EXPECT_EQ(messages[2].level, Dss::Core::LogLevel::Error);
     EXPECT_EQ(messages[2].message, "[ERROR] udp port 7000 send failed");
+}
+
+TEST(LoggerTest, WritesMessagesToConfiguredFile) {
+    const auto dir = tempLogDir();
+    const auto logPath = dir / "dss.log";
+
+    auto& logger = Dss::Core::Logger::instance();
+    const auto enabled = logger.enableFileLogging(logPath);
+    ASSERT_TRUE(enabled.has_value()) << enabled.error();
+
+    logger.info("file logger ready");
+    logger.warn("file logger warning");
+    logger.error("file logger error");
+    logger.flush();
+
+    ASSERT_TRUE(std::filesystem::exists(logPath));
+    const auto text = readAllText(logPath);
+    EXPECT_NE(text.find("file logger ready"), std::string::npos);
+    EXPECT_NE(text.find("file logger warning"), std::string::npos);
+    EXPECT_NE(text.find("file logger error"), std::string::npos);
 }

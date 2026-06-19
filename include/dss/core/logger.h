@@ -1,5 +1,7 @@
 #pragma once
 
+#include <expected>
+#include <filesystem>
 #include <format>
 #include <memory>
 #include <mutex>
@@ -26,6 +28,8 @@ public:
 
     /// 绑定消息总线（用于发布日志事件）
     void setBus(MessageBus* bus);
+
+    auto enableFileLogging(const std::filesystem::path& path) -> std::expected<void, std::string>;
 
     /// 输出 INFO 级别日志
     void info(std::string_view msg);
