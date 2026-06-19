@@ -14,6 +14,7 @@
 #include "dss/ui/processing_view_model.h"
 #include "dss/ui/replay_view_model.h"
 #include "dss/ui/serial_port_view_model.h"
+#include "dss/ui/settings_view_model.h"
 #include "dss/ui/storage_view_model.h"
 #include "dss/ui/tracking_view_model.h"
 
@@ -82,6 +83,10 @@ public:
     [[nodiscard]] StorageViewModel& storage();
     /// 获取只读存储子 ViewModel。
     [[nodiscard]] const StorageViewModel& storage() const;
+    /// 获取系统设置子 ViewModel。
+    [[nodiscard]] SettingsViewModel& settings();
+    /// 获取只读系统设置子 ViewModel。
+    [[nodiscard]] const SettingsViewModel& settings() const;
     /// 获取串口子 ViewModel。
     [[nodiscard]] SerialPortViewModel& serialPorts();
     /// 获取只读串口子 ViewModel。
@@ -145,12 +150,13 @@ private:
     DisplayViewModel m_display;              ///< 显示子 ViewModel。
     ProcessingViewModel m_processing;        ///< 处理子 ViewModel。
     TrackingViewModel m_tracking;            ///< 跟踪子 ViewModel。
-    StorageViewModel m_storage;              ///< 存储子 ViewModel。
-    SerialPortViewModel m_serialPorts;       ///< 串口子 ViewModel。
-    NetworkViewModel m_network;              ///< 网络端点子 ViewModel。
-    DataExchangeViewModel m_dataExchange;    ///< 数据交换子 ViewModel。
-    QString m_statusText = "Ready";          ///< 最近一次状态栏文本。
-    double m_exposure = 0.0;                 ///< 当前曝光时间，单位毫秒。
+    StorageViewModel m_storage;
+    SettingsViewModel m_settings;          ///< 存储子 ViewModel。
+    SerialPortViewModel m_serialPorts;     ///< 串口子 ViewModel。
+    NetworkViewModel m_network;            ///< 网络端点子 ViewModel。
+    DataExchangeViewModel m_dataExchange;  ///< 数据交换子 ViewModel。
+    QString m_statusText = "Ready";        ///< 最近一次状态栏文本。
+    double m_exposure = 0.0;               ///< 当前曝光时间，单位毫秒。
 
     std::vector<Dss::Evt::ScopedConnection> m_connections;  ///< 事件订阅连接列表。
 };

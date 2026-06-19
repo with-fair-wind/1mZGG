@@ -14,9 +14,11 @@
 #include <utility>
 #include <vector>
 
+#include "dss/core/event_bus.h"
 #include "dss/core/events.h"
 #include "dss/core/result_packet_utils.h"
 #include "dss/storage/i_storage_backend.h"
+#include "dss/storage/image_storage_format.h"
 #include "dss/storage/track_data_storage_format.h"
 
 namespace Dss::Storage {
@@ -24,11 +26,13 @@ namespace Dss::Storage {
 /// 跟踪数据异步存储后端，将跟踪结果追加写入遗留格式文本文件
 class TrackDataStorageBackend final : public IStorageBackend {
 public:
+    using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;
     /**
      * @brief 构造跟踪数据存储后端
      * @param baseDir 默认存储根目录
      */
-    explicit TrackDataStorageBackend(std::filesystem::path baseDir, std::size_t maxPendingRequests = 1024)
+    explicit TrackDataStorageBackend(std::filesystem::path baseDir,
+                                     std::size_t maxPendingRequests = 1024)
         : m_baseDir(std::move(baseDir)), m_maxPendingRequests(maxPendingRequests) {}
 
     ~TrackDataStorageBackend() override {
@@ -64,7 +68,7 @@ public:
 
     /// 获取跟踪数据输出文件的完整路径
     [[nodiscard]] auto outputPath() const -> std::filesystem::path {
-        return m_baseDir / "track_data.txt";
+        return m_sessionOutputPath.empty() ? m_baseDir / "track_data.txt" : m_sessionOutputPath;
     }
 
     /**
@@ -101,6 +105,35 @@ public:
 
     [[nodiscard]] auto droppedRequests() const -> std::uint64_t {
         return m_droppedRequests.load();
+    }
+    void setBus(MessageBus* bus) {
+        m_bus = bus;
+    }
+
+    [[nodiscard]] auto successfulWrites() const -> std::uint64_t {
+        return m_successfulWrites.load();
+    }
+
+    [[nodiscard]] auto failedWrites() const -> std::uint64_t {
+        return m_failedWrites.load();
+    }
+
+    auto configureSession(const ImageStorageNaming& naming) -> std::expected<void, std::string> {
+        if (m_running.load()) {
+            return std::unexpected(
+                "cannot configure session while track storage worker is running");
+        }
+        const auto target = naming.searchMode ? std::string{"NNNNNN"} : naming.targetId;
+        m_sessionOutputPath =
+            m_baseDir / "GAE" /
+            (naming.startTime + "_" + target + "_" + naming.observatoryId + ".GAE");
+        std::error_code error;
+        std::filesystem::create_directories(m_sessionOutputPath.parent_path(), error);
+        if (error) {
+            m_sessionOutputPath.clear();
+            return std::unexpected("failed to create GAE session directory: " + error.message());
+        }
+        return {};
     }
 
     /**
@@ -173,32 +206,52 @@ private:
                 records = std::move(m_queue.front());
                 m_queue.pop_front();
             }
-            writeRecords(records);
+            const auto result = writeRecords(records);
+            if (result) {
+                m_successfulWrites.fetch_add(1, std::memory_order_relaxed);
+            } else {
+                m_failedWrites.fetch_add(1, std::memory_order_relaxed);
+                if (m_bus != nullptr) {
+                    m_bus->emit(Dss::Core::StorageWriteErrorEvent{
+                        .backend = "track_data_storage",
+                        .path = outputPath().string(),
+                        .message = result.error(),
+                    });
+                }
+            }
         }
     }
 
-    /// 将多条跟踪数据记录追加写入输出文件
-    void writeRecords(const std::vector<TrackDataRecord>& records) const {
+    auto writeRecords(const std::vector<TrackDataRecord>& records) const
+        -> std::expected<void, std::string> {
         std::error_code error;
         std::filesystem::create_directories(outputPath().parent_path(), error);
         if (error) {
-            return;
+            return std::unexpected("failed to create track data directory: " + error.message());
         }
 
         std::ofstream output(outputPath(), std::ios::app);
         if (!output) {
-            return;
+            return std::unexpected("failed to open track data file");
         }
         for (const auto& record : records) {
             output << formatLegacyTrackDataLine(record) << '\n';
         }
+        if (!output) {
+            return std::unexpected("failed to write track data file");
+        }
+        return {};
     }
 
-    std::filesystem::path m_baseDir;                   ///< 存储根目录
-    std::atomic<bool> m_ready{false};                  ///< 是否已完成初始化
+    std::filesystem::path m_baseDir;   ///< 存储根目录
+    std::atomic<bool> m_ready{false};  ///< 是否已完成初始化
     std::atomic<bool> m_running{false};
     std::size_t m_maxPendingRequests = 1024;
     std::atomic<std::uint64_t> m_droppedRequests{0};  ///< 被背压拒绝的请求数量
+    std::atomic<std::uint64_t> m_successfulWrites{0};
+    std::atomic<std::uint64_t> m_failedWrites{0};
+    std::filesystem::path m_sessionOutputPath;
+    MessageBus* m_bus = nullptr;                       ///< 非拥有事件总线指针
     std::jthread m_worker;                             ///< 后台写入工作线程
     std::mutex m_queueMutex;                           ///< 保护写入队列的互斥锁
     std::condition_variable_any m_queueCv;             ///< 写入队列条件变量

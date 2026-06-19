@@ -97,3 +97,23 @@ TEST(TrackDataStorageBackend, DrainsTrackDataWritesWhenStopped) {
 
     EXPECT_EQ(text, Dss::Storage::formatLegacyTrackDataLine(record) + "\n");
 }
+TEST(TrackDataStorageBackend, WritesConfiguredGaeSessionFile) {
+    const auto dir = tempTrackStorageDir();
+    Dss::Storage::TrackDataStorageBackend backend(dir);
+    ASSERT_TRUE(backend.init(dir).has_value());
+
+    Dss::Storage::ImageStorageNaming naming{};
+    naming.startTime = "20260619080000";
+    naming.targetId = "42";
+    naming.observatoryId = "7";
+    ASSERT_TRUE(backend.configureSession(naming).has_value());
+    ASSERT_TRUE(backend.start().has_value());
+    ASSERT_TRUE(backend.enqueueTrackResult(trackEvent()).has_value());
+    backend.stop();
+
+    EXPECT_EQ(backend.outputPath(), dir / "GAE" / "20260619080000_42_7.GAE");
+    ASSERT_TRUE(std::filesystem::exists(backend.outputPath()));
+    EXPECT_FALSE(readAllText(backend.outputPath()).empty());
+    EXPECT_EQ(backend.successfulWrites(), 1U);
+    EXPECT_EQ(backend.failedWrites(), 0U);
+}

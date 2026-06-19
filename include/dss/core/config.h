@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <expected>
 #include <filesystem>
 #include <string>
@@ -16,6 +17,14 @@ struct PathConfig {
     std::filesystem::path dataRoot;    ///< 数据根目录
     std::filesystem::path ccfFile;     ///< CCF 文件路径
     std::filesystem::path kernelFile;  ///< 内核文件路径
+};
+
+/// 日志输出配置
+struct LoggingConfig {
+    bool enabled = true;
+    std::filesystem::path filePath{"./logs/dss.log"};
+    std::size_t maxFileSizeBytes = 10U * 1024U * 1024U;
+    std::size_t maxFiles = 5U;
 };
 
 /// 通信与网络配置
@@ -68,6 +77,10 @@ public:
     [[nodiscard]] auto paths() const -> const PathConfig& {
         return m_paths;
     }
+    /// 获取日志配置（只读）
+    [[nodiscard]] auto logging() const -> const LoggingConfig& {
+        return m_logging;
+    }
     /// 获取通信网络配置（只读）
     [[nodiscard]] auto commNet() const -> const CommNetConfig& {
         return m_commNet;
@@ -89,6 +102,10 @@ public:
     auto mutablePaths() -> PathConfig& {
         return m_paths;
     }
+    /// 获取日志配置（可写）
+    auto mutableLogging() -> LoggingConfig& {
+        return m_logging;
+    }
     /// 获取通信网络配置（可写）
     auto mutableCommNet() -> CommNetConfig& {
         return m_commNet;
@@ -106,6 +123,7 @@ private:
     Config() = default;
 
     PathConfig m_paths{};               ///< 路径配置
+    LoggingConfig m_logging{};          ///< 日志配置
     CommNetConfig m_commNet{};          ///< 通信网络配置
     OpticParams m_optics{};             ///< 光学参数
     ObservatoryConfig m_observatory{};  ///< 台站坐标

@@ -86,9 +86,12 @@ TEST(LogViewModel, ConvertsNetworkAndSerialErrorsToUiLogs) {
                                                .field = "speed",
                                                .byteOffset = 4,
                                                .rawValue = 1});
+    bus.emit(Dss::Core::StorageWriteErrorEvent{
+        .backend = "image_storage", .path = "frame.raw", .message = "disk full"});
 
-    ASSERT_EQ(appended.size(), 3U);
+    ASSERT_EQ(appended.size(), 4U);
     EXPECT_TRUE(appended[0].contains("Network send failed"));
     EXPECT_TRUE(appended[1].contains("Serial frame dropped"));
     EXPECT_TRUE(appended[2].contains("Serial decode failed"));
+    EXPECT_TRUE(appended[3].contains("Storage write failed"));
 }

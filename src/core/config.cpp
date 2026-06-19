@@ -219,6 +219,7 @@ auto Config::load(const std::filesystem::path& configPath) -> std::expected<void
 
     const auto& settings = *parsed;
     const auto* paths = objectAt(settings, "paths");
+    const auto* logging = objectAt(settings, "logging");
     const auto* commNet = objectAt(settings, "commNet");
     const auto* optics = objectAt(settings, "optics");
     const auto* observatory = objectAt(settings, "observatory");
@@ -228,6 +229,14 @@ auto Config::load(const std::filesystem::path& configPath) -> std::expected<void
     m_paths.dataRoot = getPath(paths, "dataRoot", {});
     m_paths.ccfFile = getPath(paths, "ccfFile", {});
     m_paths.kernelFile = getPath(paths, "kernelFile", {});
+
+    m_logging.enabled = getBool(logging, "enabled", true);
+    m_logging.filePath = getPath(logging, "filePath", "./logs/dss.log");
+    const auto maxFileSizeBytes = getInt(logging, "maxFileSizeBytes", 10 * 1024 * 1024);
+    const auto maxFiles = getInt(logging, "maxFiles", 5);
+    m_logging.maxFileSizeBytes =
+        maxFileSizeBytes > 0 ? static_cast<std::size_t>(maxFileSizeBytes) : 10U * 1024U * 1024U;
+    m_logging.maxFiles = maxFiles > 0 ? static_cast<std::size_t>(maxFiles) : 5U;
 
     m_commNet.displayPort = loadSerial(commNet, "displayPort", {"/dev/ttyUSB0S", 230400, 8, 1});
     m_commNet.exposurePort = loadSerial(commNet, "exposurePort", {"/dev/ttyUSB1S", 230400, 8, 1});
@@ -289,6 +298,13 @@ auto Config::save() -> std::expected<void, std::string> {
              {"dataRoot", m_paths.dataRoot.string()},
              {"ccfFile", m_paths.ccfFile.string()},
              {"kernelFile", m_paths.kernelFile.string()},
+         }},
+        {"logging",
+         {
+             {"enabled", m_logging.enabled},
+             {"filePath", m_logging.filePath.string()},
+             {"maxFileSizeBytes", m_logging.maxFileSizeBytes},
+             {"maxFiles", m_logging.maxFiles},
          }},
         {"commNet",
          {

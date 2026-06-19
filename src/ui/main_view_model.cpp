@@ -14,6 +14,7 @@ MainViewModel::MainViewModel(MessageBus& bus, Dss::Core::ServiceRegistry& regist
       m_processing(UiServiceContext{.bus = m_bus, .registry = m_registry}, this),
       m_tracking(UiServiceContext{.bus = m_bus, .registry = m_registry}, this),
       m_storage(UiServiceContext{.bus = m_bus, .registry = m_registry}, this),
+      m_settings(Dss::Core::Config::instance(), this),
       m_serialPorts(UiServiceContext{.bus = m_bus, .registry = m_registry}, this),
       m_network(UiServiceContext{.bus = m_bus, .registry = m_registry}, this),
       m_dataExchange(UiServiceContext{.bus = m_bus, .registry = m_registry}, this) {
@@ -78,6 +79,13 @@ auto MainViewModel::storage() -> StorageViewModel& {
 auto MainViewModel::storage() const -> const StorageViewModel& {
     return m_storage;
 }
+auto MainViewModel::settings() -> SettingsViewModel& {
+    return m_settings;
+}
+
+auto MainViewModel::settings() const -> const SettingsViewModel& {
+    return m_settings;
+}
 
 auto MainViewModel::serialPorts() -> SerialPortViewModel& {
     return m_serialPorts;
@@ -120,6 +128,7 @@ void MainViewModel::connectChildViewModels() {
     connect(&m_processing, &ProcessingViewModel::statusTextChanged, this, forwardStatus);
     connect(&m_tracking, &TrackingViewModel::statusTextChanged, this, forwardStatus);
     connect(&m_storage, &StorageViewModel::statusTextChanged, this, forwardStatus);
+    connect(&m_settings, &SettingsViewModel::statusTextChanged, this, forwardStatus);
     connect(&m_serialPorts, &SerialPortViewModel::statusTextChanged, this, forwardStatus);
     connect(&m_network, &NetworkViewModel::statusTextChanged, this, forwardStatus);
     connect(&m_dataExchange, &DataExchangeViewModel::statusTextChanged, this, forwardStatus);

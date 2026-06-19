@@ -16,6 +16,12 @@ TEST(ConfigTest, LoadsJsonWithoutQt) {
     "ccfFile": "./data/ccf.dat",
     "kernelFile": "./kernels"
   },
+  "logging": {
+    "enabled": true,
+    "filePath": "./logs/production.log",
+    "maxFileSizeBytes": 2048,
+    "maxFiles": 4
+  },
   "commNet": {
     "displayPort": { "portName": "COM1", "baudRate": 115200, "dataBits": 8, "stopBits": 1 },
     "exposurePort": { "portName": "COM2" },
@@ -54,6 +60,10 @@ TEST(ConfigTest, LoadsJsonWithoutQt) {
 
     ASSERT_TRUE(loaded.has_value()) << loaded.error();
     EXPECT_EQ(config.paths().dataRoot, std::filesystem::path("./data"));
+    EXPECT_TRUE(config.logging().enabled);
+    EXPECT_EQ(config.logging().filePath, std::filesystem::path("./logs/production.log"));
+    EXPECT_EQ(config.logging().maxFileSizeBytes, 2048U);
+    EXPECT_EQ(config.logging().maxFiles, 4U);
     EXPECT_EQ(config.commNet().displayPort.portName, "COM1");
     EXPECT_EQ(config.commNet().displayPort.baudRate, 115200);
     EXPECT_EQ(config.commNet().cameraPort, "COM5");
@@ -89,6 +99,11 @@ TEST(ConfigTest, LoadsJsonWithoutQt) {
         std::ifstream savedInput(path);
         const auto savedJson = nlohmann::json::parse(savedInput);
         EXPECT_EQ(savedJson.at("paths").at("dataRoot").get<std::string>(), "./data");
+        EXPECT_TRUE(savedJson.at("logging").at("enabled").get<bool>());
+        EXPECT_EQ(savedJson.at("logging").at("filePath").get<std::string>(),
+                  "./logs/production.log");
+        EXPECT_EQ(savedJson.at("logging").at("maxFileSizeBytes").get<std::size_t>(), 2048U);
+        EXPECT_EQ(savedJson.at("logging").at("maxFiles").get<std::size_t>(), 4U);
         EXPECT_EQ(savedJson.at("commNet").at("displayPort").at("baudRate").get<int>(), 115200);
         EXPECT_EQ(savedJson.at("commNet").at("exchangeGxtc").at("remotePort").get<int>(), 6123);
         EXPECT_EQ(savedJson.at("commNet").at("exchangeGdcl").at("remotePort").get<int>(), 6124);
@@ -133,6 +148,22 @@ TEST(ConfigTest, DerivesDataExchangeEndpointsFromLegacyExchange) {
     EXPECT_EQ(config.commNet().exchangeGdcl.localPort, 10003);
     EXPECT_EQ(config.commNet().exchangeGdcl.remoteIp, "127.0.0.2");
     EXPECT_EQ(config.commNet().exchangeGdcl.remotePort, 10003);
+
+    std::filesystem::remove(path);
+}
+TEST(ConfigTest, RejectsNegativeLogRotationValues) {
+    const auto path = std::filesystem::current_path() / "dss_config_invalid_logging_test.json";
+    {
+        std::ofstream output(path);
+        output << R"({"logging":{"maxFileSizeBytes":-1,"maxFiles":-2}})";
+    }
+
+    auto& config = Dss::Core::Config::instance();
+    const auto loaded = config.load(path);
+
+    ASSERT_TRUE(loaded.has_value()) << loaded.error();
+    EXPECT_EQ(config.logging().maxFileSizeBytes, 10U * 1024U * 1024U);
+    EXPECT_EQ(config.logging().maxFiles, 5U);
 
     std::filesystem::remove(path);
 }

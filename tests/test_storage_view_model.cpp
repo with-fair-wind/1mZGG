@@ -46,14 +46,16 @@ TEST(StorageViewModel, SavingToggleControlsImageAndTrackStorage) {
     registry.registerService<Dss::Storage::TrackDataStorageBackend>("track_data_storage",
                                                                     trackStorage);
 
-    Dss::Ui::StorageViewModel storage(Dss::Ui::UiServiceContext{.bus = bus,
-                                                                .registry = registry});
+    Dss::Ui::StorageViewModel storage(Dss::Ui::UiServiceContext{.bus = bus, .registry = registry});
 
     storage.startSaving();
 
     EXPECT_TRUE(storage.isSaving());
     EXPECT_TRUE(imageStorage->isRunning());
     EXPECT_TRUE(trackStorage->isRunning());
+    EXPECT_TRUE(imageStorage->hasSession());
+    EXPECT_TRUE(std::filesystem::exists(imageStorage->sessionPath()));
+    EXPECT_EQ(trackStorage->outputPath().extension(), ".GAE");
 
     storage.stopSaving();
 

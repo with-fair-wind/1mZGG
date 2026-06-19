@@ -83,8 +83,8 @@
 | `TrackAlgo.h/.cpp` (Manual) | `dss/tracking/manual_tracker.*` | 手动选点人工 blob、AE 解算、TargetInfo 输出、UI/ImageProcessor 闭环 | legacy 三帧关联/Verify/TrackTarget 细节、TWDW/GDCL |
 | `ImageProcessor.h/.cpp` | `dss/processing/image_processor.*` | 工作线程、帧队列、事件发布、ApplicationContext 注册、Direct/Manual 无 backend 跟踪 | GPU/光度/星图集成 |
 | `ImageProcAlgo.h/.cpp` | `OpenCvProcessingStrategy` + CUDA kernels | OpenCV 参考实现 | 帧差法、定标、光度、TWDW、指向误差 |
-| `ImageStorage.h/.cpp` (I/O) | `LocalImageStorageBackend` | 格式定义、raw 异步写入 worker | BMP/IFM/会话索引、错误上报 |
-| `TrackDataStorage.h/.cpp` (I/O) | `TrackDataStorageBackend` | 格式定义、路径持有、`ResultPacket` 归一化、`track_data.txt` 异步写入、`TrackResultEvent` 接线 | GAE/会话级轨迹文件、错误上报、高帧率背压 |
+| `ImageStorage.h/.cpp` (I/O) | `LocalImageStorageBackend` | RAW/BMP 异步写入、IMI 会话索引、背压统计、错误事件 | 业务任务到会话命名参数的自动映射 |
+| `TrackDataStorage.h/.cpp` (I/O) | `TrackDataStorageBackend` | `track_data.txt`/GAE 会话写入、`ResultPacket` 归一化、背压统计、错误事件 | 业务任务到会话命名参数的自动映射 |
 | `ImageReplayer.h/.cpp` | `ImageSequenceFrameSource` | 选择序列、QImage/raw 解码、后台回放、保留下一帧索引、单帧前进、接入处理/显示 | 后退、进度定位、更多 legacy 浏览行为 |
 | `UI_CtrlPad.h/.cpp/.ui` | `dss/ui/main_window.*` + `main_view_model.*` + 子 `*ViewModel` | 选择序列、开始/暂停回放、当前帧进度、单帧前进、保存、None/OpenCV 处理开关、Manual 选点跟踪 UI 首版、GEO/LEO/SC 策略入口、网络端点统一编辑、图像发送/诊断/大气/心跳/GXTC/GDCL 显式 open/close、显示/曝光/主控/伺服串口参数编辑和显式 open/close、曝光/伺服/主控状态联调命令 | 进度条/后退、Diff/CUDA/参数化处理策略、接收侧串口诊断、LEO/SC 算法体 |
 
@@ -134,7 +134,7 @@
 |------|--------|------|----------|
 | 1 | 回放模式帧源 | 迁移 `ImageReplayer` 思路，支持选择图像序列并作为 `IFrameSource` 推送帧 | **首版完成**：`test_image_sequence_frame_source` 覆盖固定序列 |
 | 2 | 回放端到端处理链路 | 将回放帧接入 `ImageProcessor`/`ProcessingPipeline`/显示事件 | **首版完成**：无相机可驱动 UI 显示，6144 大图显示/滚轮缩放已在 `ImageDisplay` 支持 |
-| 3 | 存储 I/O 工作线程 | 将存储后端从格式 helper 推进到实际异步写入 | **部分完成**：raw worker、轨迹文本 worker、ResultPacket 归一化和 drain 测试完成；BMP/IFM/IMI/GAE/错误上报/背压待补 |
+| 3 | 存储 I/O 工作线程 | 将存储后端从格式 helper 推进到实际异步写入 | **阶段完成**：RAW/BMP/IMI/GAE 会话写入、轨迹归一化、drain、背压和错误上报均有测试覆盖 |
 | 4 | UI 回放/存储/处理命令 | 搭起选择序列、开始/暂停回放、保存、处理、跟踪等显式命令 | **部分完成**：选择序列、开始/暂停、当前帧进度、单帧前进、保存、None/OpenCV 处理开关、跟踪模式、网络端点统一编辑、图像发送/心跳/诊断/大气接收通过 `INetworkChannel` 显式开关、GXTC/GDCL 数据交换显式开关、显示/曝光/主控/伺服串口参数编辑和 `ISerialChannel` 显式开关、曝光/伺服/主控状态联调发送动作已接，日志页已接入 spdlog `LogMessageEvent`、网络发送失败、串口帧校验失败和首批串口字段解码失败日志，并支持 Info/Warning/Error 分级过滤、彩色显示与最近 500 条缓存；进度条/后退、Diff/CUDA/参数化处理、诊断统计聚合和日志持久化/搜索待补 |
 | 5 | Manual 跟踪最小策略 | 先迁移最简单的手动目标保持逻辑，打通 tracking event 和轨迹文本写入 | **首版完成**：`test_manual_tracker`、`test_image_processor`、`test_tracking_view_model`、`test_storage_view_model`、`test_track_data_storage_backend` 覆盖无 backend 回放闭环和保存开关 |
 | 6 | GEO 跟踪策略 | 逐步迁移 `calcStarSpeed`、`assoc4`、`findTargets`、`trackTargets` | **继续推进**：星速估计、四帧关联、基础维持、测量复用抑制、越界/连续无效结束、连续有效测量重复赤道坐标点结束、FullLEO 像素跟踪自适应半径和速度误差门控、非 FullLEO RA/Dec `Assoc4` 初始关联和 TrackTarget 首片、可选 AE 位置阈值 gate、跟踪 gate 动态参数集中化、外部校验 blob 输入到 invalid frame fallback 并按目标 ID 匹配、外部校验 fallback 消费端公共化、公共测量坐标/运动、单帧测量占用、ResultPacket helper、GXTC/GDCL DTO adapter、跟踪结果桥接发送、显式数据交换开关、独立端点配置和发送失败事件已由 `test_geo_tracker`/`test_tracking_candidate_utils`/`test_tracking_prediction_utils`/`test_result_packet_utils`/`test_config`/`test_data_exchange_protocol`/`test_data_exchange`/`test_track_result_data_exchange_bridge`/`test_network_view_model`/`test_data_exchange_view_model`/`test_main_view_model` 覆盖；下一步补外部校验 blob 生成和 TWDW/GDCL 数据源细节 |
@@ -158,4 +158,4 @@
 
 4. **GPU 管线集成** — CUDA 核函数已就绪但无 `IProcessingStrategy` 封装，无法通过 `ProcessingPipeline` 调用。
 
-5. **完整存储会话** — raw worker 和轨迹文本 worker 已有，仍需补 BMP/IFM/IMI、GAE/会话索引、错误上报和高帧率背压策略。
+5. **存储会话业务接线** — 格式、worker、会话文件、错误上报和背压已完成；后续将主控任务字段自动映射为会话命名参数。

@@ -14,6 +14,7 @@
 #include "dss/comm/i_serial_channel.h"
 #include "dss/comm/serial_command_interfaces.h"
 #include "dss/comm/serial_worker_base.h"
+#include "dss/core/logger.h"
 #include "dss/network/atmos_receiver.h"
 #include "dss/network/data_exchange.h"
 #include "dss/network/error_diagnostics.h"
@@ -249,4 +250,25 @@ TEST(ApplicationContextServices, RoutesTrackResultsToTrackDataStorage) {
 
     ASSERT_TRUE(std::filesystem::exists(trackDataStorage->outputPath()));
     EXPECT_FALSE(readAllText(trackDataStorage->outputPath()).empty());
+}
+TEST(ApplicationContextServices, ConfiguresRotatingLoggerAfterLoadingConfig) {
+    const auto dir = std::filesystem::temp_directory_path() / "dss_context_logger_test";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir);
+    const auto configPath = dir / "config.json";
+    const auto logPath = dir / "logs" / "dss.log";
+    {
+        std::ofstream output(configPath);
+        output << "{\"logging\":{\"enabled\":true,\"filePath\":\"" << logPath.generic_string()
+               << "\",\"maxFileSizeBytes\":4096,\"maxFiles\":2}}";
+    }
+
+    Dss::App::ApplicationContext context;
+    context.wireLogger();
+    ASSERT_TRUE(context.loadConfig(configPath).has_value());
+    Dss::Core::Logger::instance().info("context rotating logger ready");
+    Dss::Core::Logger::instance().flush();
+
+    ASSERT_TRUE(std::filesystem::exists(logPath));
+    EXPECT_NE(readAllText(logPath).find("context rotating logger ready"), std::string::npos);
 }

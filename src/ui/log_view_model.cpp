@@ -103,6 +103,14 @@ void LogViewModel::setupSubscriptions() {
 
     m_connections.push_back(m_bus.subscribe<Dss::Core::SerialDecodeErrorEvent>(
         [this](const Dss::Core::SerialDecodeErrorEvent& e) { onSerialDecodeError(e); }));
+    m_connections.push_back(m_bus.subscribe<Dss::Core::StorageWriteErrorEvent>(
+        [this](const Dss::Core::StorageWriteErrorEvent& event) {
+            appendLogEntry(
+                Dss::Core::LogLevel::Error,
+                QString("Storage write failed [%1] %2: %3")
+                    .arg(QString::fromStdString(event.backend), QString::fromStdString(event.path),
+                         QString::fromStdString(event.message)));
+        }));
 
     m_connections.push_back(m_bus.subscribe<Dss::Core::LogMessageEvent>(
         [this](const Dss::Core::LogMessageEvent& e) { onLogMessage(e); }));

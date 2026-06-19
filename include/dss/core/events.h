@@ -35,7 +35,7 @@ struct DisplayRefreshEvent {
     uint32_t height = 0;                                       ///< 图像高度（像素）
     uint32_t stride = 0;                                       ///< 行跨度（字节）
     std::shared_ptr<const std::vector<uint8_t>> displayImage;  ///< 显示用图像数据
-    std::shared_ptr<const std::vector<uint16_t>> rawImage;  ///< 可用于实时重拉伸的 16 位原始图像
+    std::shared_ptr<const std::vector<uint16_t>> rawImage;     ///< 可用于实时重拉伸的 16 位原始图像
 };
 
 /// 处理事件：单帧处理完成
@@ -84,6 +84,12 @@ struct SerialDecodeErrorEvent {
     std::string field;        ///< 发生错误的协议字段名称
     uint64_t byteOffset = 0;  ///< 字段起始字节偏移
     uint64_t rawValue = 0;    ///< 字段原始值或解码后的异常值
+};
+/// 存储事件：后台写入失败
+struct StorageWriteErrorEvent {
+    std::string backend;  ///< 存储后端名称
+    std::string path;     ///< 失败的目标路径
+    std::string message;  ///< 文件系统或编码错误
 };
 
 /// 串口事件：主控指令

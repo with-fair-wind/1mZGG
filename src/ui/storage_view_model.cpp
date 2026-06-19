@@ -1,5 +1,7 @@
 #include "dss/ui/storage_view_model.h"
 
+#include <QDateTime>
+
 #include "dss/storage/local_image_storage_backend.h"
 #include "dss/storage/track_data_storage_backend.h"
 
@@ -27,23 +29,45 @@ void StorageViewModel::startSaving() {
             return;
         }
     }
+
+    auto trackStorage =
+        m_registry.tryGet<Dss::Storage::TrackDataStorageBackend>("track_data_storage");
+    if (trackStorage && !trackStorage->isReady()) {
+        auto initTrackResult = trackStorage->init(trackStorage->baseDir());
+        if (!initTrackResult.has_value()) {
+            Q_EMIT statusTextChanged(QString::fromStdString(initTrackResult.error()));
+            return;
+        }
+    }
+
+    const auto sessionTimestamp =
+        QDateTime::currentDateTimeUtc().toString("yyyyMMddhhmmss").toStdString();
+    Dss::Storage::ImageStorageNaming naming{
+        .startTime = sessionTimestamp,
+        .endTime = sessionTimestamp,
+        .observatoryId = "0",
+        .imageFormat = "raw",
+        .searchMode = true,
+    };
+    auto imageSessionResult = storage->configureSession(naming);
+    if (!imageSessionResult.has_value()) {
+        Q_EMIT statusTextChanged(QString::fromStdString(imageSessionResult.error()));
+        return;
+    }
+    if (trackStorage) {
+        auto trackSessionResult = trackStorage->configureSession(naming);
+        if (!trackSessionResult.has_value()) {
+            Q_EMIT statusTextChanged(QString::fromStdString(trackSessionResult.error()));
+            return;
+        }
+    }
+
     auto startResult = storage->start();
     if (!startResult.has_value()) {
         Q_EMIT statusTextChanged(QString::fromStdString(startResult.error()));
         return;
     }
-
-    auto trackStorage =
-        m_registry.tryGet<Dss::Storage::TrackDataStorageBackend>("track_data_storage");
     if (trackStorage) {
-        if (!trackStorage->isReady()) {
-            auto initTrackResult = trackStorage->init(trackStorage->baseDir());
-            if (!initTrackResult.has_value()) {
-                storage->stop();
-                Q_EMIT statusTextChanged(QString::fromStdString(initTrackResult.error()));
-                return;
-            }
-        }
         auto startTrackResult = trackStorage->start();
         if (!startTrackResult.has_value()) {
             storage->stop();

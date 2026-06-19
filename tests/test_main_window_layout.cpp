@@ -1,5 +1,7 @@
 #include <QApplication>
 #include <QCheckBox>
+#include <QLineEdit>
+#include <QPushButton>
 #include <QScrollArea>
 #include <QSlider>
 #include <QSpinBox>
@@ -59,6 +61,9 @@ TEST(MainWindowLayout, CommunicationPageUsesScrollableContainer) {
     ASSERT_NE(scrollArea, nullptr);
     EXPECT_TRUE(scrollArea->widgetResizable());
     EXPECT_NE(scrollArea->widget(), nullptr);
+    EXPECT_NE(scrollArea->findChild<QWidget*>("serial_channels_panel"), nullptr);
+    EXPECT_NE(scrollArea->findChild<QWidget*>("serial_commands_panel"), nullptr);
+    EXPECT_NE(scrollArea->findChild<QWidget*>("network_endpoints_panel"), nullptr);
 }
 
 TEST(MainWindowLayout, DisplayPageExposesLegacyStretchControls) {
@@ -89,4 +94,41 @@ TEST(MainWindowLayout, DisplayPageExposesLegacyStretchControls) {
     EXPECT_EQ(highSlider->maximum(), 16384);
     EXPECT_NE(displayPage->findChild<QSpinBox*>("display_stretch_low_spin"), nullptr);
     EXPECT_NE(displayPage->findChild<QSpinBox*>("display_stretch_high_spin"), nullptr);
+}
+TEST(MainWindowLayout, SettingsPageExposesPersistentProductionControls) {
+    auto& app = ensureApplication();
+    (void)app;
+
+    Dss::Ui::MainViewModel::MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    Dss::Ui::MainViewModel mainViewModel(bus, registry);
+    Dss::Ui::MainWindow window(mainViewModel);
+
+    auto* tabs = window.findChild<QTabWidget*>();
+    if (tabs == nullptr) {
+        GTEST_SKIP() << "Ela navigation does not expose the fallback QTabWidget.";
+    }
+    auto* settingsPage = findTabByText(*tabs, "Settings");
+    ASSERT_NE(settingsPage, nullptr);
+    EXPECT_NE(settingsPage->findChild<QLineEdit*>("settings_data_root"), nullptr);
+    EXPECT_NE(settingsPage->findChild<QLineEdit*>("settings_log_path"), nullptr);
+    EXPECT_NE(settingsPage->findChild<QPushButton*>("settings_save"), nullptr);
+}
+TEST(MainWindowLayout, LogPageExposesSearchAndExportControls) {
+    auto& app = ensureApplication();
+    (void)app;
+
+    Dss::Ui::MainViewModel::MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    Dss::Ui::MainViewModel mainViewModel(bus, registry);
+    Dss::Ui::MainWindow window(mainViewModel);
+
+    auto* tabs = window.findChild<QTabWidget*>();
+    if (tabs == nullptr) {
+        GTEST_SKIP() << "Ela navigation does not expose the fallback QTabWidget.";
+    }
+    auto* logPage = findTabByText(*tabs, "Logs");
+    ASSERT_NE(logPage, nullptr);
+    EXPECT_NE(logPage->findChild<QLineEdit*>("log_search"), nullptr);
+    EXPECT_NE(logPage->findChild<QPushButton*>("log_export"), nullptr);
 }

@@ -85,3 +85,52 @@ TEST(LocalImageStorageBackend, DrainsRawFrameWritesWhenStopped) {
     EXPECT_EQ(decoded->metadata.exposure.timestamp.year, 2026);
     EXPECT_EQ(decoded->pixels, pixels);
 }
+TEST(LocalImageStorageBackend, WritesLegacyBmpSessionAndIndex) {
+    const auto dir = tempStorageDir();
+    Dss::Storage::LocalImageStorageBackend backend(dir);
+    ASSERT_TRUE(backend.init(dir).has_value());
+
+    Dss::Storage::ImageStorageNaming naming{};
+    naming.startTime = "20260619080000";
+    naming.endTime = "20260619090000";
+    naming.taskId = "task-1";
+    naming.targetId = "42";
+    naming.observatoryId = "7";
+    naming.imageFormat = "bmp";
+    ASSERT_TRUE(backend.configureSession(naming).has_value());
+    ASSERT_TRUE(backend.start().has_value());
+
+    const std::vector<std::uint16_t> pixels{0x1234, 0xABCD};
+    ASSERT_TRUE(backend.enqueueSessionFrame(3U, metadata(), pixels).has_value());
+    backend.stop();
+
+    naming.rootPath = dir;
+    const auto imagePath = Dss::Storage::buildImageFilePath(naming, metadata(), 3U);
+    ASSERT_TRUE(std::filesystem::exists(imagePath));
+    EXPECT_TRUE(Dss::Storage::decodeLegacyBmpFile(readAllBytes(imagePath)).has_value());
+    EXPECT_TRUE(std::filesystem::exists(dir / Dss::Storage::buildIfmFileName(naming)));
+    EXPECT_EQ(backend.successfulWrites(), 1U);
+    EXPECT_EQ(backend.failedWrites(), 0U);
+}
+
+TEST(LocalImageStorageBackend, PublishesWriteErrors) {
+    const auto dir = tempStorageDir();
+    Dss::Storage::LocalImageStorageBackend::MessageBus bus;
+    std::vector<Dss::Core::StorageWriteErrorEvent> errors;
+    auto connection = bus.subscribe<Dss::Core::StorageWriteErrorEvent>(
+        [&errors](const auto& event) { errors.push_back(event); });
+
+    Dss::Storage::LocalImageStorageBackend backend(dir);
+    backend.setBus(&bus);
+    ASSERT_TRUE(backend.init(dir).has_value());
+    ASSERT_TRUE(backend.start().has_value());
+    std::ofstream(dir / "blocked") << "file";
+
+    const std::vector<std::uint16_t> pixels{0x1234, 0xABCD};
+    ASSERT_TRUE(backend.enqueueRawFrame("blocked/frame.raw", metadata(), pixels).has_value());
+    backend.stop();
+
+    ASSERT_EQ(errors.size(), 1U);
+    EXPECT_EQ(errors.front().backend, "image_storage");
+    EXPECT_EQ(backend.failedWrites(), 1U);
+}

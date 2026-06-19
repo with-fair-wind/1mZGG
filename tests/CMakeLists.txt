@@ -57,6 +57,7 @@ dss_add_test(test_frame_view test_frame_view.cpp dss_processing)
 dss_add_test(test_processing_pipeline test_processing_pipeline.cpp dss_processing)
 
 if(TARGET dss_network_qt)
+    dss_add_test(test_error_diagnostics test_error_diagnostics.cpp dss_network_qt)
     dss_add_test(test_data_exchange test_data_exchange.cpp dss_network_qt)
     dss_add_test(test_image_sender test_image_sender.cpp dss_network_qt)
     dss_add_test(test_heartbeat test_heartbeat.cpp dss_network_qt)
@@ -108,6 +109,10 @@ if(TARGET dss_ui_qt)
     )
     dss_add_qt_test(test_tracking_view_model
         test_tracking_view_model.cpp
+        dss_ui_qt
+    )
+    dss_add_qt_test(test_settings_view_model
+        test_settings_view_model.cpp
         dss_ui_qt
     )
     dss_add_qt_test(test_storage_view_model

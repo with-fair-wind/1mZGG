@@ -9,12 +9,16 @@
 #include <filesystem>
 #include <fstream>
 #include <mutex>
+#include <optional>
 #include <span>
 #include <string>
 #include <thread>
 #include <utility>
 #include <vector>
 
+#include "dss/core/event_bus.h"
+#include "dss/core/events.h"
+#include "dss/storage/bmp_image_format.h"
 #include "dss/storage/i_storage_backend.h"
 #include "dss/storage/image_storage_format.h"
 
@@ -23,11 +27,13 @@ namespace Dss::Storage {
 /// 本地 RAW 图像异步存储后端，通过后台线程写入磁盘
 class LocalImageStorageBackend final : public IStorageBackend {
 public:
+    using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;
     /**
      * @brief 构造本地图像存储后端
      * @param baseDir 默认存储根目录
      */
-    explicit LocalImageStorageBackend(std::filesystem::path baseDir, std::size_t maxPendingRequests = 1024)
+    explicit LocalImageStorageBackend(std::filesystem::path baseDir,
+                                      std::size_t maxPendingRequests = 1024)
         : m_baseDir(std::move(baseDir)), m_maxPendingRequests(maxPendingRequests) {}
 
     ~LocalImageStorageBackend() override {
@@ -96,6 +102,60 @@ public:
     [[nodiscard]] auto droppedRequests() const -> std::uint64_t {
         return m_droppedRequests.load();
     }
+    void setBus(MessageBus* bus) {
+        m_bus = bus;
+    }
+
+    [[nodiscard]] auto successfulWrites() const -> std::uint64_t {
+        return m_successfulWrites.load();
+    }
+
+    [[nodiscard]] auto failedWrites() const -> std::uint64_t {
+        return m_failedWrites.load();
+    }
+
+    [[nodiscard]] bool hasSession() const {
+        return m_sessionNaming.has_value();
+    }
+
+    [[nodiscard]] auto sessionPath() const -> std::filesystem::path {
+        if (!m_sessionNaming.has_value()) {
+            return {};
+        }
+        return buildSessionPath(*m_sessionNaming);
+    }
+    auto configureSession(ImageStorageNaming naming) -> std::expected<void, std::string> {
+        if (m_running.load()) {
+            return std::unexpected("cannot configure session while storage worker is running");
+        }
+        naming.rootPath = m_baseDir;
+        std::error_code error;
+        std::filesystem::create_directories(buildSessionPath(naming), error);
+        if (error) {
+            return std::unexpected("failed to create image session directory: " + error.message());
+        }
+        const auto indexPath = m_baseDir / buildIfmFileName(naming);
+        std::ofstream index(indexPath, std::ios::trunc);
+        if (!index) {
+            return std::unexpected("failed to open image session index: " + indexPath.string());
+        }
+        index << buildIfmContent(naming);
+        if (!index) {
+            return std::unexpected("failed to write image session index: " + indexPath.string());
+        }
+        m_sessionNaming = std::move(naming);
+        return {};
+    }
+
+    auto enqueueSessionFrame(std::uint64_t sequence, RawImageMetadata metadata,
+                             std::span<const std::uint16_t> pixels)
+        -> std::expected<void, std::string> {
+        if (!m_sessionNaming.has_value()) {
+            return std::unexpected("image storage session is not configured");
+        }
+        return enqueueRawFrame(buildImageFilePath(*m_sessionNaming, metadata, sequence),
+                               std::move(metadata), pixels);
+    }
 
     /**
      * @brief 将 RAW 帧加入异步写入队列
@@ -161,36 +221,79 @@ private:
                 request = std::move(m_queue.front());
                 m_queue.pop_front();
             }
-            writeRawFrame(request);
+            const auto result = writeFrame(request);
+            if (result) {
+                m_successfulWrites.fetch_add(1, std::memory_order_relaxed);
+            } else {
+                m_failedWrites.fetch_add(1, std::memory_order_relaxed);
+                if (m_bus != nullptr) {
+                    m_bus->emit(Dss::Core::StorageWriteErrorEvent{
+                        .backend = "image_storage",
+                        .path = request.path.string(),
+                        .message = result.error(),
+                    });
+                }
+            }
         }
     }
 
-    /// 将单帧 RAW 数据编码并写入指定路径
-    static void writeRawFrame(const SaveRawFrameRequest& request) {
+    auto writeFrame(const SaveRawFrameRequest& request) const -> std::expected<void, std::string> {
         std::error_code error;
         std::filesystem::create_directories(request.path.parent_path(), error);
         if (error) {
-            return;
+            return std::unexpected("failed to create storage directory: " + error.message());
         }
 
-        const auto bytes = buildRawImageFile(request.metadata, request.pixels);
-        std::ofstream output(request.path, std::ios::binary);
+        std::vector<std::uint8_t> bytes;
+        if (request.path.extension() == ".bmp") {
+            LegacyBmpMetadata bmpMetadata{};
+            bmpMetadata.width = request.metadata.width;
+            bmpMetadata.height = request.metadata.height;
+            bmpMetadata.timestamp = request.metadata.exposure.timestamp;
+            bmpMetadata.azimuthDegrees = request.metadata.exposure.pointingAe.x;
+            bmpMetadata.elevationDegrees = request.metadata.exposure.pointingAe.y;
+            bmpMetadata.frameRate = request.metadata.frameFrequency;
+            bmpMetadata.exposure = request.metadata.exposureTimeMilliseconds;
+            bmpMetadata.temperature = request.metadata.exposure.temperature;
+            bmpMetadata.humidity = request.metadata.exposure.humidity;
+            bmpMetadata.atmosPressure = request.metadata.exposure.atmosPressure;
+            const auto pixelBytes = std::span<const std::uint8_t>(
+                reinterpret_cast<const std::uint8_t*>(request.pixels.data()),
+                request.pixels.size() * sizeof(std::uint16_t));
+            auto encoded = buildLegacyBmpFile(bmpMetadata, pixelBytes);
+            if (!encoded.has_value()) {
+                return std::unexpected("failed to encode legacy bmp image");
+            }
+            bytes = std::move(*encoded);
+        } else {
+            bytes = buildRawImageFile(request.metadata, request.pixels);
+        }
+
+        std::ofstream output(request.path, std::ios::binary | std::ios::trunc);
         if (!output) {
-            return;
+            return std::unexpected("failed to open storage file");
         }
         output.write(reinterpret_cast<const char*>(bytes.data()),
                      static_cast<std::streamsize>(bytes.size()));
+        if (!output) {
+            return std::unexpected("failed to write storage file");
+        }
+        return {};
     }
 
-    std::filesystem::path m_baseDir;          ///< 存储根目录
-    std::atomic<bool> m_ready{false};         ///< 是否已完成初始化
+    std::filesystem::path m_baseDir;   ///< 存储根目录
+    std::atomic<bool> m_ready{false};  ///< 是否已完成初始化
     std::atomic<bool> m_running{false};
     std::size_t m_maxPendingRequests = 1024;
     std::atomic<std::uint64_t> m_droppedRequests{0};  ///< 被背压拒绝的请求数量
-    std::jthread m_worker;                    ///< 后台写入工作线程
-    std::mutex m_queueMutex;                  ///< 保护写入队列的互斥锁
-    std::condition_variable_any m_queueCv;    ///< 写入队列条件变量
-    std::deque<SaveRawFrameRequest> m_queue;  ///< 待写入帧队列
+    std::atomic<std::uint64_t> m_successfulWrites{0};
+    std::atomic<std::uint64_t> m_failedWrites{0};
+    std::optional<ImageStorageNaming> m_sessionNaming;  ///< 当前会话命名配置
+    MessageBus* m_bus = nullptr;                        ///< 非拥有事件总线指针
+    std::jthread m_worker;                              ///< 后台写入工作线程
+    std::mutex m_queueMutex;                            ///< 保护写入队列的互斥锁
+    std::condition_variable_any m_queueCv;              ///< 写入队列条件变量
+    std::deque<SaveRawFrameRequest> m_queue;            ///< 待写入帧队列
 };
 
 }  // namespace Dss::Storage

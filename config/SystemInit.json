@@ -4,6 +4,12 @@
         "ccfFile": "./data/ccf.dat",
         "kernelFile": "./kernels"
     },
+    "logging": {
+        "enabled": true,
+        "filePath": "./logs/dss.log",
+        "maxFileSizeBytes": 10485760,
+        "maxFiles": 5
+    },
     "commNet": {
         "displayPort": {
             "portName": "/dev/ttyUSB0S",

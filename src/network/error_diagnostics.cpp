@@ -5,7 +5,29 @@
 
 namespace Dss::Network {
 
-ErrorDiagnostics::ErrorDiagnostics(MessageBus& bus) : m_bus(bus) {}
+ErrorDiagnostics::ErrorDiagnostics(MessageBus& bus) : m_bus(bus) {
+    const auto markSerialFailure = [this](const std::string& channel) {
+        std::scoped_lock lock(m_statusMutex);
+        if (channel == "display") {
+            m_status.displayCommOk = false;
+        } else if (channel == "exposure") {
+            m_status.exposureCommOk = false;
+        }
+    };
+    m_connections.push_back(m_bus.subscribe<Dss::Core::SerialFrameErrorEvent>(
+        [markSerialFailure](const auto& event) { markSerialFailure(event.channel); }));
+    m_connections.push_back(m_bus.subscribe<Dss::Core::SerialDecodeErrorEvent>(
+        [markSerialFailure](const auto& event) { markSerialFailure(event.channel); }));
+    m_connections.push_back(m_bus.subscribe<Dss::Core::StorageWriteErrorEvent>([this](const auto&) {
+        std::scoped_lock lock(m_statusMutex);
+        m_status.storageOk = false;
+    }));
+    m_connections.push_back(
+        m_bus.subscribe<Dss::Core::NetworkTransmissionErrorEvent>([this](const auto&) {
+            std::scoped_lock lock(m_statusMutex);
+            m_status.reservedOk = false;
+        }));
+}
 
 ErrorDiagnostics::~ErrorDiagnostics() {
     close();

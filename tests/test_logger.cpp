@@ -82,3 +82,21 @@ TEST(LoggerTest, WritesMessagesToConfiguredFile) {
     EXPECT_NE(text.find("file logger warning"), std::string::npos);
     EXPECT_NE(text.find("file logger error"), std::string::npos);
 }
+TEST(LoggerTest, ReplacesPreviouslyConfiguredRotatingFileSink) {
+    const auto dir = tempLogDir();
+    const auto firstPath = dir / "first.log";
+    const auto secondPath = dir / "second.log";
+
+    auto& logger = Dss::Core::Logger::instance();
+    ASSERT_TRUE(logger.configureRotatingFileLogging(firstPath, 1024U, 2U).has_value());
+    logger.info("first destination");
+    logger.flush();
+
+    ASSERT_TRUE(logger.configureRotatingFileLogging(secondPath, 1024U, 2U).has_value());
+    logger.info("second destination");
+    logger.flush();
+
+    EXPECT_EQ(logger.fileLogPath(), secondPath);
+    EXPECT_EQ(readAllText(firstPath).find("second destination"), std::string::npos);
+    EXPECT_NE(readAllText(secondPath).find("second destination"), std::string::npos);
+}

@@ -29,7 +29,20 @@ void ApplicationContext::wireLogger() {
 
 auto ApplicationContext::loadConfig(const std::filesystem::path& configPath)
     -> std::expected<void, std::string> {
-    return Dss::Core::Config::instance().load(configPath);
+    auto& config = Dss::Core::Config::instance();
+    auto loaded = config.load(configPath);
+    if (!loaded) {
+        return loaded;
+    }
+    const auto& logging = config.logging();
+    if (logging.enabled) {
+        const auto configured = Dss::Core::Logger::instance().configureRotatingFileLogging(
+            logging.filePath, logging.maxFileSizeBytes, logging.maxFiles);
+        if (!configured) {
+            Dss::Core::Logger::instance().warn("File logging disabled: {}", configured.error());
+        }
+    }
+    return {};
 }
 
 auto ApplicationContext::startServices() -> std::expected<void, std::string> {

@@ -1,5 +1,6 @@
 #include "dss/core/logger.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <functional>
 #include <string>
@@ -9,7 +10,7 @@
 #include <spdlog/details/log_msg.h>
 #include <spdlog/logger.h>
 #include <spdlog/sinks/base_sink.h>
-#include <spdlog/sinks/basic_file_sink.h>
+#include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
 namespace {
@@ -109,9 +110,18 @@ void Logger::setBus(MessageBus* bus) {
     m_bus = bus;
 }
 
-
 auto Logger::enableFileLogging(const std::filesystem::path& path)
     -> std::expected<void, std::string> {
+    return configureRotatingFileLogging(path, 10U * 1024U * 1024U, 5U);
+}
+
+auto Logger::configureRotatingFileLogging(const std::filesystem::path& path,
+                                          std::size_t maxFileSizeBytes, std::size_t maxFiles)
+    -> std::expected<void, std::string> {
+    if (path.empty() || maxFileSizeBytes == 0U || maxFiles == 0U) {
+        return std::unexpected("invalid rotating log configuration");
+    }
+
     std::error_code error;
     const auto parent = path.parent_path();
     if (!parent.empty()) {
@@ -122,29 +132,48 @@ auto Logger::enableFileLogging(const std::filesystem::path& path)
     }
 
     try {
-        auto fileSink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(path.string(), true);
+        auto fileSink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
+            path.string(), maxFileSizeBytes, maxFiles, false);
         fileSink->set_level(spdlog::level::trace);
         fileSink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] %v");
-        m_logger->sinks().push_back(std::move(fileSink));
+
+        std::lock_guard lock(m_sinkMutex);
+        auto& sinks = m_logger->sinks();
+        if (m_fileSink) {
+            std::erase(sinks, m_fileSink);
+        }
+        sinks.push_back(fileSink);
+        m_fileSink = std::move(fileSink);
+        m_fileLogPath = path;
     } catch (const spdlog::spdlog_ex& ex) {
         return std::unexpected(std::string{"failed to enable file logging: "} + ex.what());
     }
 
     return {};
 }
+
+auto Logger::fileLogPath() const -> std::filesystem::path {
+    std::lock_guard lock(m_sinkMutex);
+    return m_fileLogPath;
+}
+
 void Logger::info(std::string_view msg) {
+    std::lock_guard lock(m_sinkMutex);
     m_logger->info("{}", msg);
 }
 
 void Logger::warn(std::string_view msg) {
+    std::lock_guard lock(m_sinkMutex);
     m_logger->warn("{}", msg);
 }
 
 void Logger::error(std::string_view msg) {
+    std::lock_guard lock(m_sinkMutex);
     m_logger->error("{}", msg);
 }
 
 void Logger::flush() {
+    std::lock_guard lock(m_sinkMutex);
     m_logger->flush();
 }
 

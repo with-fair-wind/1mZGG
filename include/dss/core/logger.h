@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <expected>
 #include <filesystem>
 #include <format>
@@ -14,6 +15,9 @@
 
 namespace spdlog {
 class logger;
+namespace sinks {
+class sink;
+}  // namespace sinks
 }  // namespace spdlog
 
 namespace Dss::Core {
@@ -30,6 +34,10 @@ public:
     void setBus(MessageBus* bus);
 
     auto enableFileLogging(const std::filesystem::path& path) -> std::expected<void, std::string>;
+    auto configureRotatingFileLogging(const std::filesystem::path& path,
+                                      std::size_t maxFileSizeBytes, std::size_t maxFiles)
+        -> std::expected<void, std::string>;
+    [[nodiscard]] auto fileLogPath() const -> std::filesystem::path;
 
     /// 输出 INFO 级别日志
     void info(std::string_view msg);
@@ -86,8 +94,11 @@ private:
     void emitLog(LogLevel level, std::string message);
 
     std::shared_ptr<spdlog::logger> m_logger;  ///< spdlog 后端日志器
-    MessageBus* m_bus = nullptr;               ///< 绑定的消息总线（非拥有）
-    std::mutex m_mutex;                        ///< 保护 m_bus 的互斥锁
+    std::shared_ptr<spdlog::sinks::sink> m_fileSink;
+    std::filesystem::path m_fileLogPath;
+    MessageBus* m_bus = nullptr;     ///< 绑定的消息总线（非拥有）
+    mutable std::mutex m_mutex;      ///< 保护 m_bus 的互斥锁
+    mutable std::mutex m_sinkMutex;  ///< 保护 sink 配置与日志写入
 };
 
 }  // namespace Dss::Core

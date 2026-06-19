@@ -1,8 +1,6 @@
 #include "dss/app/application_context.h"
 
 #ifdef DSS_BUILD_APP
-#include <filesystem>
-#include <format>
 #include <memory>
 
 #include "dss/acquisition/i_camera_controller.h"
@@ -83,24 +81,26 @@ void ApplicationContext::registerCommunicationServices() {
         Dss::Core::Config::instance().paths().dataRoot);
     auto trackDataStorage = std::make_shared<Dss::Storage::TrackDataStorageBackend>(
         Dss::Core::Config::instance().paths().dataRoot);
+    localImageStorage->setBus(&m_bus);
+    trackDataStorage->setBus(&m_bus);
+
     auto imageProcessor = std::make_shared<Dss::Processing::ImageProcessor>(m_bus);
     auto replaySource = std::make_shared<Dss::Acquisition::ImageSequenceFrameSource>();
-    replaySource->setFrameCallback([imageProcessor,
-                                    localImageStorage](Dss::Processing::FramePacket packet) {
-        if (localImageStorage->isRunning() && !packet.rawImage.empty()) {
-            Dss::Storage::RawImageMetadata metadata{};
-            metadata.width = packet.width;
-            metadata.height = packet.height;
-            metadata.exposure = packet.metadata;
-            metadata.exposureTimeMilliseconds =
-                static_cast<double>(packet.metadata.exposureTime) * 1000.0;
-            metadata.frameFrequency = packet.metadata.frameFrequency;
-            (void)localImageStorage->enqueueRawFrame(
-                std::filesystem::path("replay") / std::format("frame_{:06}.raw", packet.frameSeq),
-                metadata, packet.rawImage);
-        }
-        (void)imageProcessor->submitFrame(std::move(packet));
-    });
+    replaySource->setFrameCallback(
+        [imageProcessor, localImageStorage](Dss::Processing::FramePacket packet) {
+            if (localImageStorage->isRunning() && !packet.rawImage.empty()) {
+                Dss::Storage::RawImageMetadata metadata{};
+                metadata.width = packet.width;
+                metadata.height = packet.height;
+                metadata.exposure = packet.metadata;
+                metadata.exposureTimeMilliseconds =
+                    static_cast<double>(packet.metadata.exposureTime) * 1000.0;
+                metadata.frameFrequency = packet.metadata.frameFrequency;
+                (void)localImageStorage->enqueueSessionFrame(packet.frameSeq, metadata,
+                                                             packet.rawImage);
+            }
+            (void)imageProcessor->submitFrame(std::move(packet));
+        });
     m_connections.push_back(m_bus.subscribe<Dss::Core::TrackResultEvent>(
         [trackDataStorage](const Dss::Core::TrackResultEvent& event) {
             if (trackDataStorage->isRunning()) {

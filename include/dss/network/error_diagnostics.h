@@ -5,8 +5,10 @@
 #include <mutex>
 #include <stop_token>
 #include <thread>
+#include <vector>
 
 #include "dss/core/event_bus.h"
+#include "dss/core/events.h"
 #include "dss/network/diagnostic_protocol.h"
 #include "dss/network/i_network_channel.h"
 #include "dss/network/udp_channel.h"
@@ -49,6 +51,9 @@ public:
      */
     void setStatus(const DiagnosticStatus& status);
 
+    /// 获取线程安全的诊断状态快照
+    [[nodiscard]] auto statusSnapshot() const -> DiagnosticStatus;
+
 private:
     /**
      * @brief 工作线程主循环，每秒发送一次诊断 JSON
@@ -56,14 +61,12 @@ private:
      */
     void workerLoop(std::stop_token token);
 
-    /// 线程安全地拷贝当前诊断状态
-    [[nodiscard]] auto statusSnapshot() const -> DiagnosticStatus;
-
-    [[maybe_unused]] MessageBus& m_bus;  ///< 事件总线引用（预留扩展）
-    UdpChannel m_channel;                ///< 诊断报文 UDP 通道
-    std::jthread m_workerThread;         ///< 周期性发送工作线程
-    mutable std::mutex m_statusMutex;    ///< 保护诊断状态的互斥锁
-    DiagnosticStatus m_status{};         ///< 当前诊断状态快照
+    MessageBus& m_bus;                 ///< 事件总线引用
+    UdpChannel m_channel;              ///< 诊断报文 UDP 通道
+    std::jthread m_workerThread;       ///< 周期性发送工作线程
+    mutable std::mutex m_statusMutex;  ///< 保护诊断状态的互斥锁
+    DiagnosticStatus m_status{};
+    std::vector<Dss::Evt::ScopedConnection> m_connections;  ///< 事件订阅连接
 };
 
 }  // namespace Dss::Network
