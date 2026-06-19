@@ -1,73 +1,73 @@
-﻿# UI Split, Storage Backpressure, and File Logging Design
+﻿# UI 拆分、存储背压与文件日志设计
 
-## Goal
+## 目标
 
-Reduce `MainWindow` file size without changing UI behavior, then add the first production-grade storage and logging safeguards needed for high-frame-rate operation.
+在不改变 UI 行为的前提下减小 `MainWindow` 单文件体积，并为高帧率运行补上第一批生产化的存储与日志保护能力。
 
-## Scope
+## 范围
 
-This slice covers three tightly bounded changes:
+本切片包含三个边界明确的改动：
 
-1. Split `src/ui/main_window.cpp` page-building code into focused implementation files while keeping the `MainWindow` public interface and runtime behavior unchanged.
-2. Add bounded queue/backpressure reporting to local image and track-data storage workers.
-3. Add optional file logging to the existing logger while preserving event-bus log delivery for the UI log page.
+1. 将 `src/ui/main_window.cpp` 中的页面构建代码拆到更聚焦的实现文件中，同时保持 `MainWindow` 的公开接口和运行时行为不变。
+2. 为本地图像存储和轨迹数据存储 worker 增加有界队列与背压状态报告。
+3. 为现有 logger 增加可选文件日志，同时保留通过事件总线投递日志到 UI 日志页的能力。
 
-The slice does not add new UI pages, change visual layout, implement BMP/IFM/IMI/GAE session formats, add log search/export, or complete CUDA/Sapera integration.
+本切片不新增 UI 页面，不调整视觉布局，不实现 BMP/IFM/IMI/GAE 完整会话格式，不添加日志搜索/导出，也不完成 CUDA/Sapera 集成。
 
-## UI Architecture
+## UI 架构
 
-`MainWindow` remains the Qt widget owner and signal wiring point. Page construction is moved into separate `.cpp` files grouped by responsibility:
+`MainWindow` 仍然是 Qt widget 的拥有者和信号连接点。页面构建代码按职责移动到独立 `.cpp` 文件：
 
-- `main_window_control_page.cpp`: replay, processing, tracking, exposure, save controls.
-- `main_window_display_page.cpp`: image display and stretch controls.
-- `main_window_comm_page.cpp`: serial channels, network endpoints, and command panels.
-- `main_window_log_settings_pages.cpp`: existing analysis page, existing settings page, and log page.
+- `main_window_control_page.cpp`：回放、处理、跟踪、曝光和保存控件。
+- `main_window_display_page.cpp`：图像显示和显示拉伸控件。
+- `main_window_comm_page.cpp`：串口通道、网络端点和命令面板。
+- `main_window_log_settings_pages.cpp`：现有分析页、现有设置页和日志页。
 
-The declarations stay in `include/dss/ui/main_window.h`. Existing private helper methods keep their names so tests and call sites do not change. The split is mechanical: no behavior changes, no new widgets, and no altered signal semantics.
+声明仍保留在 `include/dss/ui/main_window.h`。现有 private helper 方法保持原名，测试和调用点不需要变化。这次拆分是机械拆分：不改变行为，不新增 widget，不改变信号语义。
 
-## Storage Architecture
+## 存储架构
 
-`LocalImageStorageBackend` and `TrackDataStorageBackend` already use background workers and queues. This slice makes those queues production safer by adding:
+`LocalImageStorageBackend` 和 `TrackDataStorageBackend` 已经使用后台 worker 与队列。本切片通过以下能力让队列更适合生产环境：
 
-- A configurable maximum pending queue size with conservative defaults.
-- A dropped request counter exposed through a const accessor.
-- A failure return from enqueue when the worker is stopped or the queue is full.
+- 增加可配置的最大待处理队列长度，并提供保守默认值。
+- 增加丢弃请求计数器，并通过 const accessor 暴露。
+- 当 worker 未启动或队列已满时，enqueue 返回失败。
 
-The storage workers still drain accepted requests on stop. When the queue is full, the new request is rejected instead of allowing unbounded memory growth.
+存储 worker 在停止时仍然 drain 已接受的请求。队列满时拒绝新的请求，避免高帧率场景下内存无界增长。
 
-## Logging Architecture
+## 日志架构
 
-The existing `Logger` keeps publishing `LogMessageEvent` for UI consumption. This slice adds optional file output:
+现有 `Logger` 继续发布 `LogMessageEvent`，供 UI 日志页消费。本切片增加可选文件输出：
 
-- File logging is explicitly enabled by path.
-- Parent directories are created when possible.
-- File sink failures are reported as `std::expected` errors.
-- Event-bus logging remains active whether file logging is enabled or not.
+- 文件日志需要通过路径显式启用。
+- 尽可能自动创建父目录。
+- 文件 sink 配置失败时通过 `std::expected` 返回错误。
+- 无论文件日志是否启用，事件总线日志都保持可用。
 
-The implementation should avoid making tests depend on global process logging state. Tests should configure, write, flush/shutdown where needed, and isolate output in temporary directories.
+实现上应避免让测试依赖进程全局日志状态。测试需要使用临时目录隔离输出，并在需要时显式配置、写入、flush 或 shutdown。
 
-## Error Handling
+## 错误处理
 
-UI split errors should be compile-time only; behavior must remain unchanged.
+UI 拆分只应产生编译期风险；运行时行为必须保持不变。
 
-Storage enqueue methods return `false` when work cannot be accepted. Dropped counters let ViewModels or future diagnostics surface backpressure without changing the current UI in this slice.
+存储 enqueue 方法在无法接受任务时返回 `false`。丢弃计数器让 ViewModel 或后续诊断功能可以暴露背压状态，本切片不改变当前 UI。
 
-Logger file setup returns `std::expected<void, std::string>` so callers can decide whether a file logging failure is fatal. Existing event-bus logging is not disabled by file setup failure.
+Logger 文件配置返回 `std::expected<void, std::string>`，调用者可以自行决定文件日志失败是否致命。文件配置失败不应关闭已有事件总线日志。
 
-## Testing
+## 测试
 
-The work will use TDD for behavioral changes:
+行为改动使用 TDD：
 
-- Add storage tests that fill each backend queue to capacity and verify the next enqueue is rejected and counted.
-- Add logger tests that enable file logging, emit messages, and verify the file contains the expected records.
-- Keep existing UI tests as regression coverage for the mechanical `MainWindow` split.
+- 增加存储测试：填满每个 backend 队列，验证下一次 enqueue 被拒绝且丢弃计数增加。
+- 增加 logger 测试：启用文件日志，写入消息，并验证文件包含预期记录。
+- 保留现有 UI 测试，作为 `MainWindow` 机械拆分的回归保护。
 
-Verification target: `ctest --test-dir build\\msvc-debug --output-on-failure` remains green.
+验证目标：`ctest --test-dir build\\msvc-debug --output-on-failure` 继续保持绿色。
 
-## Risks
+## 风险
 
-The UI split touches a large file, so the main risk is accidentally changing signal wiring or widget ownership. Keeping function names and declarations stable limits this risk.
+UI 拆分会触碰大文件，主要风险是误改信号连接或 widget ownership。保持函数名和声明稳定可以降低这个风险。
 
-Storage backpressure changes can affect callers that assume enqueue always succeeds. Current tests already cover stopped-worker rejection, and new tests will document full-queue rejection.
+存储背压变化可能影响假设 enqueue 总是成功的调用方。现有测试已经覆盖 worker 停止时的拒绝行为，新测试会记录队列满时的拒绝语义。
 
-Logger changes touch process-global logging. Tests must isolate file paths and avoid requiring a specific global sink order.
+Logger 改动涉及进程全局日志。测试必须隔离文件路径，并避免依赖特定的全局 sink 顺序。
