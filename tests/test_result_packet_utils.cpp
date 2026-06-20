@@ -12,6 +12,7 @@ namespace {
     blob.id = "blob-fallback";
     blob.centroid = Dss::Core::Vec2f{123.5F, 456.25F};
     blob.area = 12.0F;
+    blob.dn = 987.5F;
     blob.posAe = Dss::Core::Vec2f{1.5F, 2.5F};
     blob.distAzi = -0.25F;
     blob.distEle = 0.5F;
@@ -55,6 +56,7 @@ TEST(ResultPacketUtils, BuildsPacketFromLatestTargetFrame) {
     EXPECT_FLOAT_EQ(packet->fovCenterAeModified.x, 9.5F);
     EXPECT_FLOAT_EQ(packet->opticCenter.y, 3073.0F);
     EXPECT_FLOAT_EQ(packet->targetPosFrame.x, 123.5F);
+    EXPECT_FLOAT_EQ(packet->blob.dn, 987.5F);
     EXPECT_FLOAT_EQ(packet->targetDistAe.y, 0.5F);
     EXPECT_FLOAT_EQ(packet->targetSpdAe.x, 0.125F);
     EXPECT_FLOAT_EQ(packet->targetSpdAe.y, -0.25F);

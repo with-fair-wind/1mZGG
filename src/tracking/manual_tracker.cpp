@@ -85,8 +85,13 @@ inline constexpr double kMinCosElevation = 1.0e-6;
     info.exposureTime = measurements.exposureTime;
     info.frameFreq = measurements.frameFreq;
     info.measuredBlob = blob;
-    info.posZxdw = blob.posAe;
-    info.posTwdw = blob.posAe;
+    info.posZxdw = (blob.targetAzi != 0.0F || blob.targetEle != 0.0F)
+                       ? Dss::Core::Vec2f{blob.targetAzi, blob.targetEle}
+                       : blob.posAe;
+    info.posTwdw = (blob.ra != 0.0 || blob.dec != 0.0)
+                       ? Dss::Core::Vec2f{static_cast<float>(blob.ra), static_cast<float>(blob.dec)}
+                       : blob.posAe;
+    info.magnitude = blob.magnitude;
     info.valid = true;
     return info;
 }

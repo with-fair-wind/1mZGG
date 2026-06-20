@@ -72,8 +72,13 @@ auto makeTargetFrameInfo(const Core::FrameMeasurements& frame, const Core::Measu
     info.exposureTime = frame.exposureTime;
     info.frameFreq = frame.frameFreq;
     info.measuredBlob = blob;
-    info.posZxdw = blob.posAe;
-    info.posTwdw = blob.posAe;
+    info.posZxdw = (blob.targetAzi != 0.0F || blob.targetEle != 0.0F)
+                       ? Core::Vec2f{blob.targetAzi, blob.targetEle}
+                       : blob.posAe;
+    info.posTwdw = (blob.ra != 0.0 || blob.dec != 0.0)
+                       ? Core::Vec2f{static_cast<float>(blob.ra), static_cast<float>(blob.dec)}
+                       : blob.posAe;
+    info.magnitude = blob.magnitude;
     info.valid = true;
     return info;
 }

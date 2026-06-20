@@ -51,15 +51,16 @@ struct Vec2d {
 
 /// 单个光斑检测结果
 struct MeasuredBlob {
-    std::string id;     ///< 目标标识
-    Vec2f centroid{};   ///< 质心坐标（像素）
-    float maxX = 0.0f;  ///< 包围盒最大 X（像素）
-    float minX = 0.0f;  ///< 包围盒最小 X（像素）
-    float maxY = 0.0f;  ///< 包围盒最大 Y（像素）
-    float minY = 0.0f;  ///< 包围盒最小 Y（像素）
-    float dn = 0.0f;    ///< 灰度值总和
-    float area = 0.0f;  ///< 面积（像素²）
-    Vec2f posAe{};      ///< 方位角/俯仰角位置（度）
+    std::string id;          ///< 目标标识
+    Vec2f centroid{};        ///< 质心坐标（像素）
+    float maxX = 0.0f;       ///< 包围盒最大 X（像素）
+    float minX = 0.0f;       ///< 包围盒最小 X（像素）
+    float maxY = 0.0f;       ///< 包围盒最大 Y（像素）
+    float minY = 0.0f;       ///< 包围盒最小 Y（像素）
+    float dn = 0.0f;         ///< 灰度值总和
+    float magnitude = 0.0f;  ///< 上游光度标定得到的星等
+    float area = 0.0f;       ///< 面积（像素²）
+    Vec2f posAe{};           ///< 方位角/俯仰角位置（度）
 
     float fovCenterAziModify = 0.0f;  ///< 修正后的视场中心方位角（度）
     float fovCenterEleModify = 0.0f;  ///< 修正后的视场中心俯仰角（度）

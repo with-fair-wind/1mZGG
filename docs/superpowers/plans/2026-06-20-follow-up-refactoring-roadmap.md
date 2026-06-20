@@ -243,11 +243,11 @@ git commit -m "feat: add replay seeking and runtime diagnostics"
 - Test: `tests/test_geo_tracker.cpp`
 - Test: `tests/test_result_packet_utils.cpp`
 
-- [ ] **Step 1: 用黄金场景锁定外部校验 blob 的生成条件和 ID 规则**
-- [ ] **Step 2: 将校验 blob 生成提取为 Qt-free 纯函数**
-- [ ] **Step 3: 补齐 TWDW/GDCL 的位置、速度、DN、星等和距离来源**
-- [ ] **Step 4: 将 `geo_tracker.cpp` 的候选生成、验证和持续跟踪拆成三个私有策略单元，使主循环低于 250 行**
-- [ ] **Step 5: 运行 GEO、预测、结果包和数据交换测试并提交**
+- [x] **Step 1: 用黄金场景锁定外部校验 blob 的生成条件和 ID 规则**
+- [x] **Step 2: 将校验 blob 生成提取为 Qt-free 纯函数**
+- [x] **Step 3: 补齐 TWDW/GDCL 的位置、速度、DN、星等和距离来源**
+- [x] **Step 4: 将 `geo_tracker.cpp` 的候选生成、验证和持续跟踪拆成三个私有策略单元，使主循环低于 250 行**
+- [x] **Step 5: 运行 GEO、预测、结果包和数据交换测试并提交**
 
 ### Task 6: 补齐 LEO、SC 与 Manual legacy 分支
 

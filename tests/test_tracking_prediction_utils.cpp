@@ -85,6 +85,23 @@ TEST(TrackingPredictionUtils, BuildsValidAndInvalidFrameInfoFromMeasurements) {
     expectVecNear(invalidInfo.measuredBlob.posAe, Dss::Core::Vec2f{3.0F, 4.0F});
 }
 
+TEST(TrackingPredictionUtils, UsesExplicitZxdwTwdwAndPhotometrySources) {
+    const auto settings = makeSettings();
+    const auto frame = makeFrame(8U, 10.0F, {});
+    auto blob = makeBlob("science", 100.0F, 200.0F, 1.5F, 2.5F);
+    blob.targetAzi = 11.25F;
+    blob.targetEle = 22.5F;
+    blob.ra = 123.75;
+    blob.dec = -18.5;
+    blob.magnitude = 9.125F;
+
+    const auto info = Dss::Tracking::makeTargetFrameInfo(frame, blob, settings);
+
+    expectVecNear(info.posZxdw, Dss::Core::Vec2f{11.25F, 22.5F});
+    expectVecNear(info.posTwdw, Dss::Core::Vec2f{123.75F, -18.5F});
+    EXPECT_FLOAT_EQ(info.magnitude, 9.125F);
+    EXPECT_FLOAT_EQ(info.measuredBlob.dn, 100.0F);
+}
 TEST(TrackingPredictionUtils, FindsValidatedBlobForTargetById) {
     const std::vector<Dss::Core::MeasuredBlob> validatedBlobs{
         makeBlob("other", 10.0F, 20.0F, 1.0F, 2.0F),

@@ -54,6 +54,8 @@ using Json = nlohmann::json;
                                           : result.centroid.y + 1.0F;
     result.area = value.contains("area") ? finiteNumber(value.at("area"), "blob.area") : 4.0F;
     result.dn = value.contains("dn") ? finiteNumber(value.at("dn"), "blob.dn") : 100.0F;
+    result.magnitude =
+        value.contains("magnitude") ? finiteNumber(value.at("magnitude"), "blob.magnitude") : 0.0F;
     result.posAe = value.contains("pos_ae")
                        ? vec2(value.at("pos_ae"), std::string(path) + ".pos_ae")
                        : Dss::Core::Vec2f{};
