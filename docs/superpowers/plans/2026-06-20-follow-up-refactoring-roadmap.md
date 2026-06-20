@@ -304,6 +304,8 @@ git commit -m "feat: add replay seeking and runtime diagnostics"
 - [x] **Step 3: 将 SDK 错误转换为 `std::expected` 和统一采集错误事件**
 - [ ] **Step 4: 在无 SDK preset 下跑完整测试，在硬件环境跑显式 smoke test**
 
+无 SDK 全量测试已通过；硬件入口为 `dss_sapera_smoke`，执行方法见 `docs/hardware-validation.md`，待采集机回填结果。
+
 ---
 
 ## 第六阶段：CUDA、性能与迁移收口
@@ -322,7 +324,11 @@ git commit -m "feat: add replay seeking and runtime diagnostics"
 - [x] **Step 1: 定义 CUDA 不可用时策略创建失败而应用继续运行的契约**
 - [x] **Step 2: 用 `GpuBuffer` 和 `CudaDeviceManager` 封装 kernel 生命周期**
 - [ ] **Step 3: 对固定帧验证 CPU/OpenCV/CUDA blob 输出容差**
+
+固定帧对照测试已实现；待 CUDA 设备执行后勾选。
 - [ ] **Step 4: 对 6144 级图像记录吞吐、延迟、显存和丢帧指标**
+
+`dss_processing_benchmark` 已输出 OpenCV/CUDA 延迟、吞吐、设备缓冲字节与丢帧指标；待 CUDA 设备回填实测值。
 - [ ] **Step 5: 仅在基准证明收益后把 CUDA 暴露为 UI 选项**
 
 ### Task 10: 大文件继续拆分与 `oldsrc` 退出

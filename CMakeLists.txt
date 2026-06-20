@@ -235,6 +235,9 @@ if(DSS_HAS_CUDA)
     add_executable(dss_processing_benchmark benchmarks/processing_benchmark.cpp)
     dss_target_defaults(dss_processing_benchmark)
     target_link_libraries(dss_processing_benchmark PRIVATE dss_gpu_cuda)
+    if(TARGET dss_processing_opencv)
+        target_link_libraries(dss_processing_benchmark PRIVATE dss_processing_opencv)
+    endif()
 endif()
 
 if(DSS_BUILD_APP)
@@ -254,6 +257,10 @@ if(DSS_BUILD_APP)
             ${CORW32_LIB}
         )
     endif()
+
+    add_executable(dss_sapera_smoke tools/sapera_smoke.cpp)
+    dss_target_defaults(dss_sapera_smoke)
+    target_link_libraries(dss_sapera_smoke PRIVATE dss_acquisition_qt)
 
     add_library(dss_comm_qt STATIC ${DSS_COMM_QT_SOURCES})
     dss_target_defaults(dss_comm_qt)
