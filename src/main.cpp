@@ -50,9 +50,6 @@ int main(int argc, char* argv[]) {
     initDialog.setStatus("Communication", true);
     initDialog.setProgress(35);
 
-    // TODO: Phase 4 - Create ImageProcessor and register strategies
-    // TODO: Phase 5 - Initialize CudaDeviceManager
-
     initDialog.setStatus("EventBus", true);
     initDialog.setProgress(100);
 

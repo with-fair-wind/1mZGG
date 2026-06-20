@@ -77,10 +77,10 @@ option(DSS_ENABLE_CUDA "Build CUDA GPU backend and kernels" OFF)
 
 | 缺口 | 说明 |
 |------|------|
-| 未接入处理管线 | 核函数存在但无 `IProcessingStrategy` 的 CUDA 实现 |
-| `CudaDeviceManager` 未初始化 | `main.cpp` 中有 TODO 但未执行 |
+| 未接入处理管线 | 已有可选 `CudaProcessingStrategy`，复用 `GpuBuffer`、`CudaDeviceManager` 与公共 `Labeler` |
+| `CudaDeviceManager` 未初始化 | 由策略工厂按需初始化；不可用时返回 `std::expected` 错误，不影响应用启动 |
 | 默认关闭 | `DSS_ENABLE_CUDA=OFF`，需手动开启 |
-| 无 GPU 单元测试 | CUDA 核函数缺少测试 |
+| 无 GPU 单元测试 | 无 CUDA 契约测试已完成；固定帧 CPU/CUDA 对照测试已定义，需在 CUDA 环境执行 |
 
 ## 依赖关系
 

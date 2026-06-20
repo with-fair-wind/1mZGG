@@ -335,17 +335,17 @@ git commit -m "feat: add replay seeking and runtime diagnostics"
 - Modify: `docs/module-*.md`
 - Modify: `src/main.cpp`
 
-- [ ] **Step 1: 只拆分仍在频繁修改且超过 500 行的文件**
+- [x] **Step 1: 只拆分仍在频繁修改且超过 500 行的文件**
 
 `geo_tracker.cpp` 按关联/验证/持续跟踪拆分；`event_bus.h` 按连接、锁策略和总线模板拆分；串口 codec 按通道协议拆分。每次拆分必须是纯结构提交，不混入行为修改。
 
-- [ ] **Step 2: 删除本轮新增完成事项的过时 TODO 和文档描述**
+- [x] **Step 2: 删除本轮新增完成事项的过时 TODO 和文档描述**
 
 重点修正日志持久化/搜索、设置页、诊断聚合和存储会话已经完成但文档仍标记待补的条目。
 
-- [ ] **Step 3: 建立 `oldsrc` 能力到新模块/测试的最终映射表**
+- [x] **Step 3: 建立 `oldsrc` 能力到新模块/测试的最终映射表**
 
-- [ ] **Step 4: 全量验证后将 `oldsrc/` 转为只读归档或从主构建仓库移除**
+- [x] **Step 4: 全量验证后将 `oldsrc/` 转为只读归档或从主构建仓库移除**
 
 Run: `cmake --build --preset msvc-debug && ctest --test-dir build/msvc-debug --output-on-failure`
 

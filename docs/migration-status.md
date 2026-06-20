@@ -86,7 +86,7 @@
 | `ImageStorage.h/.cpp` (I/O) | `LocalImageStorageBackend` | RAW/BMP 异步写入、IMI 会话索引、背压统计、错误事件 | 业务任务到会话命名参数的自动映射 |
 | `TrackDataStorage.h/.cpp` (I/O) | `TrackDataStorageBackend` | `track_data.txt`/GAE 会话写入、`ResultPacket` 归一化、背压统计、错误事件 | 业务任务到会话命名参数的自动映射 |
 | `ImageReplayer.h/.cpp` | `ImageSequenceFrameSource` | 选择序列、QImage/raw 解码、后台回放、保留下一帧索引、单帧前进、接入处理/显示 | 后退、进度定位、更多 legacy 浏览行为 |
-| `UI_CtrlPad.h/.cpp/.ui` | `dss/ui/main_window.*` + `main_view_model.*` + 子 `*ViewModel` | 选择序列、开始/暂停回放、当前帧进度、单帧前进、保存、None/OpenCV 处理开关、Manual 选点跟踪 UI 首版、GEO/LEO/SC 策略入口、网络端点统一编辑、图像发送/诊断/大气/心跳/GXTC/GDCL 显式 open/close、显示/曝光/主控/伺服串口参数编辑和显式 open/close、曝光/伺服/主控状态联调命令 | 进度条/后退、Diff/CUDA/参数化处理策略、接收侧串口诊断、LEO/SC 算法体 |
+| `UI_CtrlPad.h/.cpp/.ui` | `dss/ui/main_window.*` + `main_view_model.*` + 子 `*ViewModel` | 选择序列、开始/暂停回放、当前帧进度、单帧前进、保存、None/OpenCV 处理开关、Manual 选点跟踪 UI 首版、GEO/LEO/SC 策略入口、网络端点统一编辑、图像发送/诊断/大气/心跳/GXTC/GDCL 显式 open/close、显示/曝光/主控/伺服串口参数编辑和显式 open/close、曝光/伺服/主控状态联调命令 | 进度条/后退、Diff/参数化处理已完成，CUDA 硬件验证、接收侧串口诊断、LEO/SC 算法体 |
 
 ### 未开始 (Not Started)
 
@@ -137,7 +137,7 @@
 | 1 | 回放模式帧源 | 迁移 `ImageReplayer` 思路，支持选择图像序列并作为 `IFrameSource` 推送帧 | **首版完成**：`test_image_sequence_frame_source` 覆盖固定序列 |
 | 2 | 回放端到端处理链路 | 将回放帧接入 `ImageProcessor`/`ProcessingPipeline`/显示事件 | **首版完成**：无相机可驱动 UI 显示，6144 大图显示/滚轮缩放已在 `ImageDisplay` 支持 |
 | 3 | 存储 I/O 工作线程 | 将存储后端从格式 helper 推进到实际异步写入 | **阶段完成**：RAW/BMP/IMI/GAE 会话写入、轨迹归一化、drain、背压和错误上报均有测试覆盖 |
-| 4 | UI 回放/存储/处理命令 | 搭起选择序列、开始/暂停回放、保存、处理、跟踪等显式命令 | **部分完成**：选择序列、开始/暂停、当前帧进度、单帧前进、保存、None/OpenCV 处理开关、跟踪模式、网络端点统一编辑、串口/网络显式开关和联调命令均已接入；日志页已支持分级过滤、彩色显示、滚动文件持久化、搜索和导出，设置页已支持路径、日志和光学参数持久化，诊断服务已聚合首批串口/网络/存储错误；进度条/后退、Diff/CUDA、参数化处理和运行统计快照待补 |
+| 4 | UI 回放/存储/处理命令 | 搭起选择序列、开始/暂停回放、保存、处理、跟踪等显式命令 | **部分完成**：选择序列、开始/暂停、当前帧进度、单帧前进、保存、None/OpenCV 处理开关、跟踪模式、网络端点统一编辑、串口/网络显式开关和联调命令均已接入；日志页已支持分级过滤、彩色显示、滚动文件持久化、搜索和导出，设置页已支持路径、日志和光学参数持久化，诊断服务已聚合首批串口/网络/存储错误；进度条/后退、Diff、参数化处理和运行统计快照已完成；CUDA 硬件收益验证待补 |
 | 5 | Manual 跟踪最小策略 | 先迁移最简单的手动目标保持逻辑，打通 tracking event 和轨迹文本写入 | **首版完成**：`test_manual_tracker`、`test_image_processor`、`test_tracking_view_model`、`test_storage_view_model`、`test_track_data_storage_backend` 覆盖无 backend 回放闭环和保存开关 |
 | 6 | GEO 跟踪策略 | 逐步迁移 `calcStarSpeed`、`assoc4`、`findTargets`、`trackTargets` | **继续推进**：星速估计、四帧关联、基础维持、测量复用抑制、越界/连续无效结束、连续有效测量重复赤道坐标点结束、FullLEO 像素跟踪自适应半径和速度误差门控、非 FullLEO RA/Dec `Assoc4` 初始关联和 TrackTarget 首片、可选 AE 位置阈值 gate、跟踪 gate 动态参数集中化、外部校验 blob 输入到 invalid frame fallback 并按目标 ID 匹配、外部校验 fallback 消费端公共化、公共测量坐标/运动、单帧测量占用、ResultPacket helper、GXTC/GDCL DTO adapter、跟踪结果桥接发送、显式数据交换开关、独立端点配置和发送失败事件已由 `test_geo_tracker`/`test_tracking_candidate_utils`/`test_tracking_prediction_utils`/`test_result_packet_utils`/`test_config`/`test_data_exchange_protocol`/`test_data_exchange`/`test_track_result_data_exchange_bridge`/`test_network_view_model`/`test_data_exchange_view_model`/`test_main_view_model` 覆盖；下一步补外部校验 blob 生成和 TWDW/GDCL 数据源细节 |
 | 7 | Sapera 采集器 | 回放链路稳定后接真实 Sapera `Grabber` 为另一个 `IFrameSource` | 无 Sapera 时仍可启动；有硬件时显式打开 |
@@ -154,10 +154,10 @@
 
 2. **处理策略补齐** — 回放源已能驱动 `ImageProcessor` 原样显示，UI 已可切 None/OpenCV；下一步需要继续把 legacy 帧差法、参数化阈值、光度/星图能力接入 `ProcessingPipeline`，为 Manual/GEO 提供更完整测量输入。
 
-3. **硬件入口接线** — 当前通信/网络/存储/相机命令服务已注册，但启动策略仍是默认不打开硬件。通信页已完成串口与网络参数编辑、显式开关和首批联调命令，通信/存储错误已进入诊断聚合和滚动日志。后续需要补运行统计快照、Sapera 采集显式 start，并把 Sapera 作为第二个 `IFrameSource` 接入。
+3. **硬件入口接线** — 当前通信/网络/存储/相机命令服务已注册，但启动策略仍是默认不打开硬件。通信页已完成串口与网络参数编辑、显式开关和首批联调命令，通信/存储错误已进入诊断聚合和滚动日志。运行统计快照、帧源协调器、串口相机和可选 Sapera 实时源已接入；Sapera 硬件 smoke test 待在采集机执行。
 
 ### 中风险项
 
-4. **GPU 管线集成** — CUDA 核函数已就绪但无 `IProcessingStrategy` 封装，无法通过 `ProcessingPipeline` 调用。
+4. **GPU 管线集成** — CUDA 已有可选 `IProcessingStrategy` 工厂、固定帧对照测试和 6144 级基准入口；硬件收益尚待验证。
 
 5. **存储会话业务接线** — 格式、worker、会话文件、错误上报和背压已完成；后续将主控任务字段自动映射为会话命名参数。
