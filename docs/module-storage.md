@@ -91,7 +91,7 @@ class IStorageBackend : public IService {
 |------|------|
 | GAE/会话级轨迹文件 | 已支持显式会话配置并写入 `GAE/<会话名>.GAE`，未配置时兼容 `track_data.txt` |
 | BMP/索引文件写入 | 已支持 legacy BMP、RAW 和 IMI 会话索引，写入失败通过事件总线上报 |
-| 错误上报和高帧率背压 | 当前 worker 失败时只静默跳过写入，队列也未设置容量上限 |
+| 业务会话自动映射 | worker 已具备容量上限、背压统计和 `StorageWriteErrorEvent`；下一步把主控任务字段自动映射到 BMP/IMI/GAE 会话命名 |
 | 回放进度控制 | UI 已显示当前帧号，`ImageSequenceFrameSource` 已保留下一帧索引并支持单帧前进；进度条、后退和拖动定位待补 |
 
 ## 依赖关系
