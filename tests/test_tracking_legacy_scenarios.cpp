@@ -1,6 +1,7 @@
 #include <array>
 #include <filesystem>
 #include <memory>
+#include <set>
 #include <string>
 
 #include <gtest/gtest.h>
@@ -102,6 +103,7 @@ TEST(TrackingLegacyScenarios, MatchesReviewableGoldenFixtures) {
         "manual_hit_miss_rediscovery.json",
     };
 
+    std::set<std::string> modeScopedIds;
     for (const auto* fixtureName : fixtureNames) {
         const auto fixturePath = std::filesystem::path{DSS_TRACKING_FIXTURE_DIR} / fixtureName;
         const auto fixture = Dss::Tests::loadTrackingFixture(fixturePath);
@@ -110,5 +112,17 @@ TEST(TrackingLegacyScenarios, MatchesReviewableGoldenFixtures) {
             continue;
         }
         verifyFixture(*fixture);
+        for (const auto& frame : fixture->frames) {
+            for (const auto& target : frame.expected.targets) {
+                modeScopedIds.insert(target.targetId);
+            }
+        }
     }
+
+    EXPECT_TRUE(modeScopedIds.contains("geo-1"));
+    EXPECT_TRUE(modeScopedIds.contains("geo-2"));
+    EXPECT_TRUE(modeScopedIds.contains("leo-1"));
+    EXPECT_TRUE(modeScopedIds.contains("sc-1"));
+    EXPECT_TRUE(modeScopedIds.contains("manual-1"));
+    EXPECT_TRUE(modeScopedIds.contains("manual-2"));
 }

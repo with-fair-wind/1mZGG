@@ -27,7 +27,8 @@
                                                               3072,
                                                               3072
                                                           ],
-                                             "dn":  10000
+                                             "dn":  10000,
+                                             "magnitude":  11.5
                                          },
                        "expected":  {
                                         "target_count":  1,
@@ -43,7 +44,7 @@
                                                                      ],
                                                             "gdcl":  {
                                                                          "dn":  10000,
-                                                                         "magnitude":  0
+                                                                         "magnitude":  11.5
                                                                      }
                                                         }
                                                     ]
@@ -70,7 +71,7 @@
                                                                      ],
                                                             "gdcl":  {
                                                                          "dn":  10000,
-                                                                         "magnitude":  0
+                                                                         "magnitude":  11.5
                                                                      }
                                                         }
                                                     ]
@@ -112,7 +113,8 @@
                                                               3072,
                                                               3072
                                                           ],
-                                             "dn":  10000
+                                             "dn":  10000,
+                                             "magnitude":  11.5
                                          },
                        "expected":  {
                                         "target_count":  1,
@@ -128,7 +130,7 @@
                                                                      ],
                                                             "gdcl":  {
                                                                          "dn":  10000,
-                                                                         "magnitude":  0
+                                                                         "magnitude":  11.5
                                                                      }
                                                         }
                                                     ]

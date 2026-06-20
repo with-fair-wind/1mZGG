@@ -262,10 +262,10 @@ git commit -m "feat: add replay seeking and runtime diagnostics"
 - Test: `tests/test_manual_tracker.cpp`
 - Test: `tests/test_tracking_legacy_scenarios.cpp`
 
-- [ ] **Step 1: 按黄金数据逐模式补 TWDW/GDCL 字段，不复制 GEO 分支逻辑**
-- [ ] **Step 2: 将公共匹配、预测和生命周期行为继续下沉到现有 helper**
-- [ ] **Step 3: 增加跨模式 ID 唯一性、目标释放和重发现回归**
-- [ ] **Step 4: 运行全部 tracking 与 network protocol 测试并提交**
+- [x] **Step 1: 按黄金数据逐模式补 TWDW/GDCL 字段，不复制 GEO 分支逻辑**
+- [x] **Step 2: 将公共匹配、预测和生命周期行为继续下沉到现有 helper**
+- [x] **Step 3: 增加跨模式 ID 唯一性、目标释放和重发现回归**
+- [x] **Step 4: 运行全部 tracking 与 network protocol 测试并提交**
 
 ---
 
