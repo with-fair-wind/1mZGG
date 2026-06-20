@@ -129,7 +129,7 @@ git commit -m "refactor: add observation session orchestration"
 - Test: `tests/test_config.cpp`
 - Modify: `tests/CMakeLists.txt`
 
-- [ ] **Step 1: 用两帧固定矩阵定义 Diff 策略行为**
+- [x] **Step 1: 用两帧固定矩阵定义 Diff 策略行为**
 
 测试覆盖首帧无差分、第二帧绝对差、阈值分割、尺寸变化重置历史帧和无效像素数量拒绝。
 
@@ -141,23 +141,23 @@ EXPECT_TRUE(first.targetBlobs.empty());
 EXPECT_EQ(second.displayImage, std::vector<std::uint8_t>({0, 255, 0, 255}));
 ```
 
-- [ ] **Step 2: 实现 CPU Diff 策略并复用 `labelAndExtract()`**
+- [x] **Step 2: 实现 CPU Diff 策略并复用 `labelAndExtract()`**
 
 策略内部只保留上一帧 16 位数据；阈值和最小目标面积由构造参数注入，不读取全局单例。
 
-- [ ] **Step 3: 将 OpenCV/Diff 参数加入 `Config` JSON 往返测试**
+- [x] **Step 3: 将 OpenCV/Diff 参数加入 `Config` JSON 往返测试**
 
 配置至少包含阈值、最小目标面积、最大目标面积和显示拉伸参数；无效值回落到安全默认值。
 
-- [ ] **Step 4: 扩展 `ProcessingViewModel` 的策略工厂**
+- [x] **Step 4: 扩展 `ProcessingViewModel` 的策略工厂**
 
 ViewModel 根据 `ProcessingMode::Direct`/`Diff` 创建策略，并把参数作为快照传入；切换策略时不让 UI 直接持有 backend。
 
-- [ ] **Step 5: 运行处理管线测试**
+- [x] **Step 5: 运行处理管线测试**
 
 Run: `ctest --test-dir build/msvc-debug -R "DiffProcessing|OpenCvProcessing|ProcessingPipeline|ProcessingViewModel|ConfigTest" --output-on-failure`
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add include/dss/core include/dss/processing include/dss/ui src tests config/SystemInit.json

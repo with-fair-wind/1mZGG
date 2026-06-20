@@ -44,6 +44,16 @@ struct CommNetConfig {
     UdpEndpointConfig heartbeat;     ///< 心跳端点
 };
 
+/// 图像处理策略配置
+struct ProcessingConfig {
+    double thresholdSigma = 3.0;
+    std::uint16_t diffThreshold = 20;
+    int minArea = 3;
+    int maxArea = 100000;
+    std::uint16_t displayLow = 0;
+    std::uint16_t displayHigh = 16384;
+};
+
 /// 台站地理坐标配置
 struct ObservatoryConfig {
     std::string id{"0"};     ///< 台站编号
@@ -90,6 +100,10 @@ public:
     [[nodiscard]] auto optics() const -> const OpticParams& {
         return m_optics;
     }
+    /// 获取图像处理参数（只读）
+    [[nodiscard]] auto processing() const -> const ProcessingConfig& {
+        return m_processing;
+    }
     /// 获取台站坐标（只读）
     [[nodiscard]] auto observatory() const -> const ObservatoryConfig& {
         return m_observatory;
@@ -127,6 +141,7 @@ private:
     LoggingConfig m_logging{};          ///< 日志配置
     CommNetConfig m_commNet{};          ///< 通信网络配置
     OpticParams m_optics{};             ///< 光学参数
+    ProcessingConfig m_processing{};    ///< 图像处理参数
     ObservatoryConfig m_observatory{};  ///< 台站坐标
     TrackingSettings m_tracking{};      ///< 跟踪参数
 };

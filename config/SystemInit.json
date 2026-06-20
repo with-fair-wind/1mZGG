@@ -86,6 +86,14 @@
         "fovCenterY": 3072.0,
         "pixelScale": 0.0003453
     },
+    "processing": {
+        "thresholdSigma": 3.0,
+        "diffThreshold": 20,
+        "minArea": 3,
+        "maxArea": 100000,
+        "displayLow": 0,
+        "displayHigh": 16384
+    },
     "observatory": {
         "id": "0",
         "longitude": 0.0,

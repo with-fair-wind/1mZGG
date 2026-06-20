@@ -222,6 +222,7 @@ auto Config::load(const std::filesystem::path& configPath) -> std::expected<void
     const auto* logging = objectAt(settings, "logging");
     const auto* commNet = objectAt(settings, "commNet");
     const auto* optics = objectAt(settings, "optics");
+    const auto* processing = objectAt(settings, "processing");
     const auto* observatory = objectAt(settings, "observatory");
     const auto* tracking = objectAt(settings, "tracking");
 
@@ -261,6 +262,27 @@ auto Config::load(const std::filesystem::path& configPath) -> std::expected<void
         getFloat(optics, "fovCenterX", static_cast<float>(m_optics.imageWidth) / 2.0f);
     m_optics.fovCenterY =
         getFloat(optics, "fovCenterY", static_cast<float>(m_optics.imageHeight) / 2.0f);
+
+    const auto thresholdSigma = getDouble(processing, "thresholdSigma", 3.0);
+    m_processing.thresholdSigma = thresholdSigma > 0.0 ? thresholdSigma : 3.0;
+    const auto diffThreshold = getInt(processing, "diffThreshold", 20);
+    m_processing.diffThreshold =
+        diffThreshold >= 0 && diffThreshold <= std::numeric_limits<std::uint16_t>::max()
+            ? static_cast<std::uint16_t>(diffThreshold)
+            : std::uint16_t{20};
+    const auto minArea = getInt(processing, "minArea", 3);
+    const auto maxArea = getInt(processing, "maxArea", 100000);
+    const auto validAreaRange = minArea > 0 && maxArea >= minArea;
+    m_processing.minArea = validAreaRange ? minArea : 3;
+    m_processing.maxArea = validAreaRange ? maxArea : 100000;
+    const auto displayLow = getInt(processing, "displayLow", 0);
+    const auto displayHigh = getInt(processing, "displayHigh", 16384);
+    const auto validDisplayWindow = displayLow >= 0 && displayHigh > displayLow &&
+                                    displayHigh <= std::numeric_limits<std::uint16_t>::max();
+    m_processing.displayLow =
+        validDisplayWindow ? static_cast<std::uint16_t>(displayLow) : std::uint16_t{0};
+    m_processing.displayHigh =
+        validDisplayWindow ? static_cast<std::uint16_t>(displayHigh) : std::uint16_t{16384};
 
     m_observatory.id = getString(observatory, "id", "0");
     m_observatory.longitude = getDouble(observatory, "longitude", 0.0);
@@ -329,6 +351,15 @@ auto Config::save() -> std::expected<void, std::string> {
              {"fovCenterX", m_optics.fovCenterX},
              {"fovCenterY", m_optics.fovCenterY},
              {"pixelScale", m_optics.pixelScale},
+         }},
+        {"processing",
+         {
+             {"thresholdSigma", m_processing.thresholdSigma},
+             {"diffThreshold", m_processing.diffThreshold},
+             {"minArea", m_processing.minArea},
+             {"maxArea", m_processing.maxArea},
+             {"displayLow", m_processing.displayLow},
+             {"displayHigh", m_processing.displayHigh},
          }},
         {"observatory",
          {

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 #include "dss/processing/i_processing_strategy.h"
 
 namespace Dss::Processing {
@@ -9,6 +11,8 @@ struct OpenCvProcessingOptions {
     double thresholdSigma = 3.0;  ///< 二值化阈值偏移（均值 + sigma × 标准差）
     int minArea = 3;              ///< 连通域最小面积（像素）
     int maxArea = 100000;         ///< 连通域最大面积（像素）
+    std::uint16_t displayLow = 0;
+    std::uint16_t displayHigh = 16384;
 };
 
 /// 基于 OpenCV 的图像处理策略，执行统计、归一化与连通域检测

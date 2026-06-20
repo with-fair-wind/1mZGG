@@ -7,6 +7,8 @@
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include "dss/processing/display_stretch.h"
+
 namespace Dss::Processing {
 
 namespace {
@@ -76,15 +78,9 @@ auto OpenCvProcessingStrategy::process(const FramePacket& input) -> ProcessingRe
     result.stats.avg = mean[0];
     result.stats.stdDev = stddev[0];
 
-    cv::Mat display8;
-    if (maxValue > minValue) {
-        const auto scale = 255.0 / (maxValue - minValue);
-        raw16.convertTo(display8, CV_8U, scale, -minValue * scale);
-    } else {
-        display8 = cv::Mat::zeros(rows, cols, CV_8UC1);
-    }
-
-    result.displayImage.assign(display8.data, display8.data + display8.total());
+    result.displayImage = stretchDisplayImage(
+        input.rawImage,
+        DisplayStretchWindow{.low = m_options.displayLow, .high = m_options.displayHigh});
 
     const auto threshold = std::clamp(mean[0] + (m_options.thresholdSigma * stddev[0]), 0.0,
                                       static_cast<double>(std::numeric_limits<uint16_t>::max()));

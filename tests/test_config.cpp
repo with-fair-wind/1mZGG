@@ -38,6 +38,14 @@ TEST(ConfigTest, LoadsJsonWithoutQt) {
     "imageHeight": 16,
     "pixelScale": 0.125
   },
+  "processing": {
+    "thresholdSigma": 2.5,
+    "diffThreshold": 24,
+    "minArea": 4,
+    "maxArea": 200,
+    "displayLow": 120,
+    "displayHigh": 4000
+  },
   "observatory": {
     "id": "999",
     "longitude": 120.5,
@@ -82,6 +90,12 @@ TEST(ConfigTest, LoadsJsonWithoutQt) {
     EXPECT_EQ(config.optics().imageWidth, 32);
     EXPECT_EQ(config.optics().imageHeight, 16);
     EXPECT_FLOAT_EQ(config.optics().pixelScale, 0.125f);
+    EXPECT_DOUBLE_EQ(config.processing().thresholdSigma, 2.5);
+    EXPECT_EQ(config.processing().diffThreshold, 24);
+    EXPECT_EQ(config.processing().minArea, 4);
+    EXPECT_EQ(config.processing().maxArea, 200);
+    EXPECT_EQ(config.processing().displayLow, 120);
+    EXPECT_EQ(config.processing().displayHigh, 4000);
     EXPECT_EQ(config.observatory().id, "999");
     EXPECT_DOUBLE_EQ(config.observatory().longitude, 120.5);
     EXPECT_DOUBLE_EQ(config.observatory().latitude, 31.25);
@@ -111,6 +125,9 @@ TEST(ConfigTest, LoadsJsonWithoutQt) {
         EXPECT_EQ(savedJson.at("commNet").at("exchangeGdcl").at("remotePort").get<int>(), 6124);
         EXPECT_FALSE(savedJson.at("tracking").at("autoDecide").get<bool>());
         EXPECT_FALSE(savedJson.at("tracking").at("geoFullLeo").get<bool>());
+        EXPECT_DOUBLE_EQ(savedJson.at("processing").at("thresholdSigma").get<double>(), 2.5);
+        EXPECT_EQ(savedJson.at("processing").at("diffThreshold").get<int>(), 24);
+        EXPECT_EQ(savedJson.at("processing").at("displayLow").get<int>(), 120);
         EXPECT_EQ(savedJson.at("observatory").at("id").get<std::string>(), "999");
         EXPECT_DOUBLE_EQ(savedJson.at("tracking").at("geoRaThresholdArcsec").get<double>(), 5.4);
         EXPECT_DOUBLE_EQ(savedJson.at("tracking").at("geoDecThresholdArcsec").get<double>(), 3.0);
@@ -167,6 +184,26 @@ TEST(ConfigTest, RejectsNegativeLogRotationValues) {
     ASSERT_TRUE(loaded.has_value()) << loaded.error();
     EXPECT_EQ(config.logging().maxFileSizeBytes, 10U * 1024U * 1024U);
     EXPECT_EQ(config.logging().maxFiles, 5U);
+
+    std::filesystem::remove(path);
+}
+
+TEST(ConfigTest, UsesSafeDefaultsForInvalidProcessingValues) {
+    const auto path = std::filesystem::temp_directory_path() / "dss_invalid_processing.json";
+    {
+        std::ofstream output(path);
+        output
+            << R"({"processing":{"thresholdSigma":-1,"diffThreshold":-2,"minArea":200000,"maxArea":100,"displayLow":5000,"displayHigh":100}})";
+    }
+
+    auto& config = Dss::Core::Config::instance();
+    ASSERT_TRUE(config.load(path).has_value());
+    EXPECT_DOUBLE_EQ(config.processing().thresholdSigma, 3.0);
+    EXPECT_EQ(config.processing().diffThreshold, 20);
+    EXPECT_EQ(config.processing().minArea, 3);
+    EXPECT_EQ(config.processing().maxArea, 100000);
+    EXPECT_EQ(config.processing().displayLow, 0);
+    EXPECT_EQ(config.processing().displayHigh, 16384);
 
     std::filesystem::remove(path);
 }

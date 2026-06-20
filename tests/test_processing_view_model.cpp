@@ -33,22 +33,28 @@ TEST(ProcessingViewModel, SetProcessingModeConfiguresImageProcessorBackend) {
     Dss::Core::ServiceRegistry registry;
     auto processor = std::make_shared<Dss::Processing::ImageProcessor>(bus);
     registry.registerService<Dss::Processing::ImageProcessor>("image_processor", processor);
-    Dss::Ui::ProcessingViewModel processing(Dss::Ui::UiServiceContext{.bus = bus,
-                                                                       .registry = registry});
+    Dss::Ui::ProcessingViewModel processing(
+        Dss::Ui::UiServiceContext{.bus = bus, .registry = registry});
 
     EXPECT_EQ(processor->currentProcessingMode(), Dss::Core::ProcessingMode::None);
 
-    const auto directInvoked = QMetaObject::invokeMethod(
-        &processing, "setProcessingMode",
-        Q_ARG(int, static_cast<int>(Dss::Core::ProcessingMode::Direct)));
+    const auto directInvoked =
+        QMetaObject::invokeMethod(&processing, "setProcessingMode",
+                                  Q_ARG(int, static_cast<int>(Dss::Core::ProcessingMode::Direct)));
     EXPECT_TRUE(directInvoked);
     EXPECT_EQ(processing.property("processingMode").toInt(),
               static_cast<int>(Dss::Core::ProcessingMode::Direct));
     EXPECT_EQ(processor->currentProcessingMode(), Dss::Core::ProcessingMode::Direct);
 
-    const auto noneInvoked = QMetaObject::invokeMethod(
-        &processing, "setProcessingMode",
-        Q_ARG(int, static_cast<int>(Dss::Core::ProcessingMode::None)));
+    const auto diffInvoked =
+        QMetaObject::invokeMethod(&processing, "setProcessingMode",
+                                  Q_ARG(int, static_cast<int>(Dss::Core::ProcessingMode::Diff)));
+    EXPECT_TRUE(diffInvoked);
+    EXPECT_EQ(processor->currentProcessingMode(), Dss::Core::ProcessingMode::Diff);
+
+    const auto noneInvoked =
+        QMetaObject::invokeMethod(&processing, "setProcessingMode",
+                                  Q_ARG(int, static_cast<int>(Dss::Core::ProcessingMode::None)));
     EXPECT_TRUE(noneInvoked);
     EXPECT_EQ(processing.property("processingMode").toInt(),
               static_cast<int>(Dss::Core::ProcessingMode::None));

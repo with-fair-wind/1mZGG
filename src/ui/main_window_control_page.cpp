@@ -1,5 +1,3 @@
-#include "dss/ui/main_window.h"
-
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFileDialog>
@@ -8,6 +6,8 @@
 #include <QPushButton>
 #include <QSlider>
 #include <QVBoxLayout>
+
+#include "dss/ui/main_window.h"
 
 #ifdef DSS_HAS_ELA
 #include <ElaCheckBox.h>
@@ -85,13 +85,13 @@ void MainWindow::setupControlPage() {
 #else
     auto* processingCombo = new QComboBox;
 #endif
-    processingCombo->addItems({"None", "OpenCV"});
+    processingCombo->addItems({"None", "OpenCV", "Diff"});
     processingRow->addWidget(processingCombo);
 
     connect(processingCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             [processing](int index) {
-                static constexpr int modeMap[] = {0, 3};
-                if (index >= 0 && index < 2) {
+                static constexpr int modeMap[] = {0, 3, 1};
+                if (index >= 0 && index < 3) {
                     processing->setProcessingMode(modeMap[index]);
                 }
             });
@@ -168,6 +168,5 @@ void MainWindow::setupControlPage() {
 
     layout->addStretch();
 }
-
 
 }  // namespace Dss::Ui

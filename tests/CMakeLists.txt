@@ -56,6 +56,7 @@ dss_add_test(test_display_stretch test_display_stretch.cpp dss_processing)
 dss_add_test(test_image_processor test_image_processor.cpp dss_processing)
 dss_add_test(test_frame_view test_frame_view.cpp dss_processing)
 dss_add_test(test_processing_pipeline test_processing_pipeline.cpp dss_processing)
+dss_add_test(test_diff_processing test_diff_processing.cpp dss_processing)
 
 if(TARGET dss_network_qt)
     dss_add_test(test_error_diagnostics test_error_diagnostics.cpp dss_network_qt)
