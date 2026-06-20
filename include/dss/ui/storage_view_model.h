@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QString>
 
+#include "dss/storage/image_storage_format.h"
 #include "dss/ui/view_model_context.h"
 
 namespace Dss::Ui {
@@ -32,6 +33,9 @@ public:
      * @return 正在保存时返回 true。
      */
     [[nodiscard]] bool isSaving() const;
+
+    /// 使用显式业务会话命名启动存储。
+    void startSaving(const Dss::Storage::ImageStorageNaming& naming);
 
 public Q_SLOTS:
     /**

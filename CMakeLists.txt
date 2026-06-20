@@ -240,6 +240,7 @@ if(DSS_BUILD_APP)
     target_link_libraries(dss_ui_qt
         PUBLIC
             dss_core
+            dss_app
             dss_acquisition_qt
             dss_network_qt
             dss_processing

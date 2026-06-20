@@ -39,6 +39,7 @@ TEST(ConfigTest, LoadsJsonWithoutQt) {
     "pixelScale": 0.125
   },
   "observatory": {
+    "id": "999",
     "longitude": 120.5,
     "latitude": 31.25,
     "altitude": 35.0
@@ -81,6 +82,7 @@ TEST(ConfigTest, LoadsJsonWithoutQt) {
     EXPECT_EQ(config.optics().imageWidth, 32);
     EXPECT_EQ(config.optics().imageHeight, 16);
     EXPECT_FLOAT_EQ(config.optics().pixelScale, 0.125f);
+    EXPECT_EQ(config.observatory().id, "999");
     EXPECT_DOUBLE_EQ(config.observatory().longitude, 120.5);
     EXPECT_DOUBLE_EQ(config.observatory().latitude, 31.25);
     EXPECT_DOUBLE_EQ(config.observatory().altitude, 35.0);
@@ -109,6 +111,7 @@ TEST(ConfigTest, LoadsJsonWithoutQt) {
         EXPECT_EQ(savedJson.at("commNet").at("exchangeGdcl").at("remotePort").get<int>(), 6124);
         EXPECT_FALSE(savedJson.at("tracking").at("autoDecide").get<bool>());
         EXPECT_FALSE(savedJson.at("tracking").at("geoFullLeo").get<bool>());
+        EXPECT_EQ(savedJson.at("observatory").at("id").get<std::string>(), "999");
         EXPECT_DOUBLE_EQ(savedJson.at("tracking").at("geoRaThresholdArcsec").get<double>(), 5.4);
         EXPECT_DOUBLE_EQ(savedJson.at("tracking").at("geoDecThresholdArcsec").get<double>(), 3.0);
         EXPECT_DOUBLE_EQ(savedJson.at("tracking").at("geoRaSpeedThresholdArcsec").get<double>(),

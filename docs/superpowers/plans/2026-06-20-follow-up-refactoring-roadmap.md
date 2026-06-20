@@ -64,7 +64,7 @@ git commit -m "docs: align migration status with completed phases"
 - Test: `tests/test_config.cpp`
 - Modify: `tests/CMakeLists.txt`
 
-- [ ] **Step 1: 为主控任务到会话命名的映射编写失败测试**
+- [x] **Step 1: 为主控任务到会话命名的映射编写失败测试**
 
 测试应验证 `taskId`、`targetId`、`start/end`、台站编号和搜索模式被转换为 `ImageStorageNaming`，并验证非法时间或空台站编号返回 `std::unexpected`。
 
@@ -85,27 +85,27 @@ EXPECT_EQ(session->naming.taskId, "7");
 EXPECT_EQ(session->naming.targetId, "42");
 ```
 
-- [ ] **Step 2: 运行测试并确认因接口不存在而失败**
+- [x] **Step 2: 运行测试并确认因接口不存在而失败**
 
 Run: `cmake --build --preset msvc-debug --target test_observation_session && ctest --test-dir build/msvc-debug -R "ObservationSession" --output-on-failure`
 
-- [ ] **Step 3: 实现不可变 `ObservationSession` 与映射函数**
+- [x] **Step 3: 实现不可变 `ObservationSession` 与映射函数**
 
 `ObservationSession` 只保存规范化后的会话 ID、`ImageStorageNaming` 和来源，不持有存储后端或 Qt 对象。台站编号进入 `ObservatoryConfig`，不要继续在 `StorageViewModel` 中硬编码 `"0"`。
 
-- [ ] **Step 4: 让 `StorageViewModel::startSaving()` 接收会话配置**
+- [x] **Step 4: 让 `StorageViewModel::startSaving()` 接收会话配置**
 
 增加 `startSaving(const ImageStorageNaming&)`，保留无参数重载作为本地回放默认会话；先配置图像和轨迹后端，再启动两个 worker，任一失败时回滚已启动资源。
 
-- [ ] **Step 5: 在 `MainViewModel::onMasterControl()` 中完成业务接线**
+- [x] **Step 5: 在 `MainViewModel::onMasterControl()` 中完成业务接线**
 
 当 `event.save` 从 false 变为 true 时创建会话并启动保存；任务字段变化时不得静默覆盖运行中会话，应先停止旧会话再显式创建新会话。
 
-- [ ] **Step 6: 运行会话、存储和主 ViewModel 测试**
+- [x] **Step 6: 运行会话、存储和主 ViewModel 测试**
 
 Run: `ctest --test-dir build/msvc-debug -R "ObservationSession|StorageViewModel|MainViewModel" --output-on-failure`
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 git add include/dss/app src/app include/dss/ui src/ui tests

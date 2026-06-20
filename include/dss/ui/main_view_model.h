@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QString>
+#include <string>
 #include <vector>
 
 #include "dss/core/event_bus.h"
@@ -157,6 +158,7 @@ private:
     DataExchangeViewModel m_dataExchange;  ///< 数据交换子 ViewModel。
     QString m_statusText = "Ready";        ///< 最近一次状态栏文本。
     double m_exposure = 0.0;               ///< 当前曝光时间，单位毫秒。
+    std::string m_activeStorageSessionId;  ///< 当前主控存储会话标识。
 
     std::vector<Dss::Evt::ScopedConnection> m_connections;  ///< 事件订阅连接列表。
 };

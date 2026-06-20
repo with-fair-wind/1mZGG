@@ -46,6 +46,7 @@ struct CommNetConfig {
 
 /// 台站地理坐标配置
 struct ObservatoryConfig {
+    std::string id{"0"};     ///< 台站编号
     double longitude = 0.0;  ///< 经度（度）
     double latitude = 0.0;   ///< 纬度（度）
     double altitude = 0.0;   ///< 海拔（米）

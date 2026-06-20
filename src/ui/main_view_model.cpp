@@ -1,6 +1,10 @@
 #include "dss/ui/main_view_model.h"
 
+#include <chrono>
 #include <utility>
+
+#include "dss/app/observation_session.h"
+#include "dss/core/config.h"
 
 namespace Dss::Ui {
 
@@ -146,10 +150,25 @@ void MainViewModel::onMasterControl(const Dss::Core::MasterControlEvent& event) 
     setExposure(event.exposure);
     m_tracking.setTrackMode(event.trackMode);
 
-    if (event.save && !m_storage.isSaving()) {
-        m_storage.startSaving();
-    } else if (!event.save && m_storage.isSaving()) {
+    if (event.save) {
+        const auto observationDate =
+            std::chrono::floor<std::chrono::days>(std::chrono::system_clock::now());
+        const auto session = Dss::App::makeObservationSession(
+            event, Dss::Core::Config::instance().observatory().id, observationDate);
+        if (!session) {
+            setStatus(QString::fromStdString(session.error()));
+        } else if (!m_storage.isSaving() || session->id != m_activeStorageSessionId) {
+            if (m_storage.isSaving()) {
+                m_storage.stopSaving();
+            }
+            m_storage.startSaving(session->naming);
+            if (m_storage.isSaving()) {
+                m_activeStorageSessionId = session->id;
+            }
+        }
+    } else if (m_storage.isSaving()) {
         m_storage.stopSaving();
+        m_activeStorageSessionId.clear();
     }
 
     if (event.grab && !m_replay.isGrabbing()) {

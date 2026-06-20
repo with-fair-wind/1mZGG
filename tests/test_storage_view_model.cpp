@@ -48,14 +48,24 @@ TEST(StorageViewModel, SavingToggleControlsImageAndTrackStorage) {
 
     Dss::Ui::StorageViewModel storage(Dss::Ui::UiServiceContext{.bus = bus, .registry = registry});
 
-    storage.startSaving();
+    const Dss::Storage::ImageStorageNaming naming{
+        .startTime = "20260620083000",
+        .endTime = "20260620094500",
+        .taskId = "7",
+        .targetId = "42",
+        .observatoryId = "999",
+        .imageFormat = "raw",
+    };
+    storage.startSaving(naming);
 
     EXPECT_TRUE(storage.isSaving());
     EXPECT_TRUE(imageStorage->isRunning());
     EXPECT_TRUE(trackStorage->isRunning());
     EXPECT_TRUE(imageStorage->hasSession());
     EXPECT_TRUE(std::filesystem::exists(imageStorage->sessionPath()));
+    EXPECT_EQ(imageStorage->sessionPath().filename(), "20260620083000_42_999.BMP");
     EXPECT_EQ(trackStorage->outputPath().extension(), ".GAE");
+    EXPECT_EQ(trackStorage->outputPath().filename(), "20260620083000_42_999.GAE");
 
     storage.stopSaving();
 

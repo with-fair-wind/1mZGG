@@ -262,6 +262,7 @@ auto Config::load(const std::filesystem::path& configPath) -> std::expected<void
     m_optics.fovCenterY =
         getFloat(optics, "fovCenterY", static_cast<float>(m_optics.imageHeight) / 2.0f);
 
+    m_observatory.id = getString(observatory, "id", "0");
     m_observatory.longitude = getDouble(observatory, "longitude", 0.0);
     m_observatory.latitude = getDouble(observatory, "latitude", 0.0);
     m_observatory.altitude = getDouble(observatory, "altitude", 0.0);
@@ -331,6 +332,7 @@ auto Config::save() -> std::expected<void, std::string> {
          }},
         {"observatory",
          {
+             {"id", m_observatory.id},
              {"longitude", m_observatory.longitude},
              {"latitude", m_observatory.latitude},
              {"altitude", m_observatory.altitude},

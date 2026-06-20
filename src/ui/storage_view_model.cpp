@@ -2,6 +2,7 @@
 
 #include <QDateTime>
 
+#include "dss/core/config.h"
 #include "dss/storage/local_image_storage_backend.h"
 #include "dss/storage/track_data_storage_backend.h"
 
@@ -17,6 +18,18 @@ bool StorageViewModel::isSaving() const {
 }
 
 void StorageViewModel::startSaving() {
+    const auto sessionTimestamp =
+        QDateTime::currentDateTimeUtc().toString("yyyyMMddhhmmss").toStdString();
+    startSaving(Dss::Storage::ImageStorageNaming{
+        .startTime = sessionTimestamp,
+        .endTime = sessionTimestamp,
+        .observatoryId = Dss::Core::Config::instance().observatory().id,
+        .imageFormat = "raw",
+        .searchMode = true,
+    });
+}
+
+void StorageViewModel::startSaving(const Dss::Storage::ImageStorageNaming& naming) {
     auto storage = m_registry.tryGet<Dss::Storage::LocalImageStorageBackend>("image_storage");
     if (!storage) {
         Q_EMIT statusTextChanged("Image storage is not registered");
@@ -40,15 +53,6 @@ void StorageViewModel::startSaving() {
         }
     }
 
-    const auto sessionTimestamp =
-        QDateTime::currentDateTimeUtc().toString("yyyyMMddhhmmss").toStdString();
-    Dss::Storage::ImageStorageNaming naming{
-        .startTime = sessionTimestamp,
-        .endTime = sessionTimestamp,
-        .observatoryId = "0",
-        .imageFormat = "raw",
-        .searchMode = true,
-    };
     auto imageSessionResult = storage->configureSession(naming);
     if (!imageSessionResult.has_value()) {
         Q_EMIT statusTextChanged(QString::fromStdString(imageSessionResult.error()));
