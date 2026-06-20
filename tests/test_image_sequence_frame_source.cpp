@@ -211,3 +211,66 @@ TEST(ImageSequenceFrameSource, RejectsEmptySequence) {
     EXPECT_FALSE(source.setFiles({}).has_value());
     EXPECT_FALSE(source.init().has_value());
 }
+
+TEST(ImageSequenceFrameSource, SeekChangesNextFrameWithoutPlayingWhilePaused) {
+    QCoreApplicationFixture app;
+    const auto dir = tempSequenceDir();
+    const auto first = dir / "seek_0001.bmp";
+    const auto second = dir / "seek_0002.bmp";
+    ASSERT_TRUE(writeGrayBmp(first, 10));
+    ASSERT_TRUE(writeGrayBmp(second, 40));
+
+    Dss::Acquisition::ImageSequenceFrameSource source({first, second});
+    ASSERT_TRUE(source.init().has_value());
+    std::vector<std::uint64_t> frames;
+    source.setFrameCallback(
+        [&](Dss::Processing::FramePacket packet) { frames.push_back(packet.frameSeq); });
+
+    ASSERT_TRUE(source.seek(1).has_value());
+    EXPECT_EQ(source.nextFrameIndex(), 1U);
+    EXPECT_TRUE(frames.empty());
+    ASSERT_TRUE(source.stepForward().has_value());
+    EXPECT_EQ(frames, std::vector<std::uint64_t>({1U}));
+    EXPECT_FALSE(source.seek(2).has_value());
+}
+
+TEST(ImageSequenceFrameSource, SeekWhileRunningContinuesAtRequestedFrame) {
+    QCoreApplicationFixture app;
+    const auto dir = tempSequenceDir();
+    std::vector<std::filesystem::path> files;
+    for (int index = 0; index < 4; ++index) {
+        const auto file = dir / ("running_seek_" + std::to_string(index) + ".bmp");
+        ASSERT_TRUE(writeGrayBmp(file, static_cast<std::uint8_t>(10 + index * 20)));
+        files.push_back(file);
+    }
+
+    Dss::Acquisition::ImageSequenceFrameSource source(files);
+    source.setFrameInterval(std::chrono::milliseconds{100});
+    ASSERT_TRUE(source.init().has_value());
+    std::mutex mutex;
+    std::condition_variable cv;
+    std::vector<std::uint64_t> frames;
+    source.setFrameCallback([&](Dss::Processing::FramePacket packet) {
+        {
+            std::lock_guard lock(mutex);
+            frames.push_back(packet.frameSeq);
+        }
+        cv.notify_all();
+    });
+
+    source.start();
+    {
+        std::unique_lock lock(mutex);
+        ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds{2}, [&] { return !frames.empty(); }));
+    }
+    EXPECT_FALSE(source.seek(4).has_value());
+    EXPECT_TRUE(source.isRunning());
+    ASSERT_TRUE(source.seek(2).has_value());
+    {
+        std::unique_lock lock(mutex);
+        ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds{2}, [&] { return frames.size() >= 3; }));
+    }
+    source.stop();
+
+    EXPECT_EQ(frames, std::vector<std::uint64_t>({0U, 2U, 3U}));
+}

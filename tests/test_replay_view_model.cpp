@@ -62,8 +62,8 @@ TEST(ReplayViewModel, UpdatesCurrentReplayFrameFromDisplayEvents) {
 
     EXPECT_EQ(replay.replayCurrentFrame(), 0);
 
-    auto image = std::make_shared<const std::vector<std::uint8_t>>(
-        std::vector<std::uint8_t>{1, 2, 3, 4});
+    auto image =
+        std::make_shared<const std::vector<std::uint8_t>>(std::vector<std::uint8_t>{1, 2, 3, 4});
     bus.emit(Dss::Core::DisplayRefreshEvent{4, 2, 2, 2, std::move(image), nullptr});
 
     EXPECT_EQ(replay.replayCurrentFrame(), 5);
@@ -81,10 +81,9 @@ TEST(ReplayViewModel, SelectsSequenceAndStepsForward) {
     Dss::Core::ServiceRegistry registry;
     auto replaySource = std::make_shared<Dss::Acquisition::ImageSequenceFrameSource>();
     replaySource->setFrameCallback([&bus](Dss::Processing::FramePacket packet) {
-        auto image = std::make_shared<const std::vector<std::uint8_t>>(
-            std::move(packet.displayImage));
-        auto raw =
-            std::make_shared<const std::vector<std::uint16_t>>(std::move(packet.rawImage));
+        auto image =
+            std::make_shared<const std::vector<std::uint8_t>>(std::move(packet.displayImage));
+        auto raw = std::make_shared<const std::vector<std::uint16_t>>(std::move(packet.rawImage));
         bus.emit(Dss::Core::DisplayRefreshEvent{packet.frameSeq, packet.width, packet.height,
                                                 packet.width, std::move(image), std::move(raw)});
     });
@@ -100,6 +99,13 @@ TEST(ReplayViewModel, SelectsSequenceAndStepsForward) {
     EXPECT_TRUE(replay.stepReplayForward());
     EXPECT_EQ(replay.replayCurrentFrame(), 1);
 
+    EXPECT_TRUE(replay.stepReplayForward());
+    EXPECT_EQ(replay.replayCurrentFrame(), 2);
+
+    EXPECT_TRUE(replay.stepReplayBackward());
+    EXPECT_EQ(replay.replayCurrentFrame(), 1);
+
+    EXPECT_TRUE(replay.seekReplayFrame(1));
     EXPECT_TRUE(replay.stepReplayForward());
     EXPECT_EQ(replay.replayCurrentFrame(), 2);
 

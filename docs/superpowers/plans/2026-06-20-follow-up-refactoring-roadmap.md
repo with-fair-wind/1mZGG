@@ -179,23 +179,23 @@ git commit -m "feat: add configurable diff processing strategy"
 - Test: `tests/test_runtime_diagnostics.cpp`
 - Modify: `tests/CMakeLists.txt`
 
-- [ ] **Step 1: 为 `seek(index)`、后退和运行中定位编写失败测试**
+- [x] **Step 1: 为 `seek(index)`、后退和运行中定位编写失败测试**
 
 定义索引越界返回错误，暂停时定位不自动播放，运行中定位从目标帧继续且不重复旧帧。
 
-- [ ] **Step 2: 在线程互斥边界内实现帧索引状态机**
+- [x] **Step 2: 在线程互斥边界内实现帧索引状态机**
 
 把当前索引、运行/暂停和单步请求集中在帧源内部；ViewModel 只暴露命令和进度属性。
 
-- [ ] **Step 3: 聚合处理、存储和通信统计**
+- [x] **Step 3: 聚合处理、存储和通信统计**
 
 `RuntimeDiagnostics` 订阅错误事件并读取 `ImageProcessor::droppedFrames()`、存储成功/失败/背压计数，输出线程安全快照；不要让诊断服务依赖 QWidget。
 
-- [ ] **Step 4: 在控制页增加稳定尺寸的进度条和诊断区**
+- [x] **Step 4: 在控制页增加稳定尺寸的进度条和诊断区**
 
 UI 只绑定 `ReplayViewModel` 和诊断快照，避免再把业务逻辑写回 `MainWindow`。
 
-- [ ] **Step 5: 运行回放与诊断测试并提交**
+- [x] **Step 5: 运行回放与诊断测试并提交**
 
 Run: `ctest --test-dir build/msvc-debug -R "ImageSequenceFrameSource|ReplayViewModel|RuntimeDiagnostics" --output-on-failure`
 

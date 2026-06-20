@@ -6,6 +6,7 @@
 #include "dss/acquisition/i_camera_controller.h"
 #include "dss/acquisition/i_frame_source.h"
 #include "dss/acquisition/image_sequence_frame_source.h"
+#include "dss/app/runtime_diagnostics.h"
 #include "dss/app/track_result_data_exchange_bridge.h"
 #include "dss/comm/display_channel.h"
 #include "dss/comm/exposure_channel.h"
@@ -108,6 +109,23 @@ void ApplicationContext::registerCommunicationServices() {
             }
         }));
 
+    auto runtimeDiagnostics = std::make_shared<Dss::App::RuntimeDiagnostics>(
+        m_bus,
+        Dss::App::RuntimeDiagnosticsSources{
+            .processingDroppedFrames = [imageProcessor] { return imageProcessor->droppedFrames(); },
+            .imageSuccessfulWrites =
+                [localImageStorage] { return localImageStorage->successfulWrites(); },
+            .imageFailedWrites = [localImageStorage] { return localImageStorage->failedWrites(); },
+            .imageDroppedRequests =
+                [localImageStorage] { return localImageStorage->droppedRequests(); },
+            .trackSuccessfulWrites =
+                [trackDataStorage] { return trackDataStorage->successfulWrites(); },
+            .trackFailedWrites = [trackDataStorage] { return trackDataStorage->failedWrites(); },
+            .trackDroppedRequests =
+                [trackDataStorage] { return trackDataStorage->droppedRequests(); },
+        });
+    m_registry.registerService<Dss::App::RuntimeDiagnostics>("runtime_diagnostics",
+                                                             runtimeDiagnostics);
     m_registry.registerService<Dss::Processing::ImageProcessor>("image_processor", imageProcessor);
     m_registry.registerService<Dss::Acquisition::ImageSequenceFrameSource>("replay_source",
                                                                            replaySource);

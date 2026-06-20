@@ -1,8 +1,8 @@
 #pragma once
 
+#include <QObject>
 #include <QString>
 #include <QStringList>
-#include <QObject>
 #include <vector>
 
 #include "dss/core/event_bus.h"
@@ -19,6 +19,8 @@ class ReplayViewModel : public QObject {
     Q_PROPERTY(bool isGrabbing READ isGrabbing NOTIFY grabbingChanged)
     Q_PROPERTY(int replayFrameCount READ replayFrameCount NOTIFY replayFrameCountChanged)
     Q_PROPERTY(int replayCurrentFrame READ replayCurrentFrame NOTIFY replayCurrentFrameChanged)
+    Q_PROPERTY(QString runtimeDiagnosticsText READ runtimeDiagnosticsText NOTIFY
+                   runtimeDiagnosticsTextChanged)
 
 public:
     /**
@@ -51,6 +53,8 @@ public:
      */
     [[nodiscard]] int replayCurrentFrame() const;
 
+    [[nodiscard]] auto runtimeDiagnosticsText() const -> QString;
+
 public Q_SLOTS:
     /**
      * @brief 选择回放图像序列文件。
@@ -75,6 +79,14 @@ public Q_SLOTS:
      */
     Q_INVOKABLE bool stepReplayForward();
 
+    /// 单步回放上一帧
+    Q_INVOKABLE bool stepReplayBackward();
+
+    /// 将下一帧定位到零基索引
+    Q_INVOKABLE bool seekReplayFrame(int index);
+
+    Q_INVOKABLE void refreshRuntimeDiagnostics();
+
 Q_SIGNALS:
     /**
      * @brief 采集或回放运行状态变化。
@@ -93,6 +105,8 @@ Q_SIGNALS:
      * @param frame 新的当前帧号。
      */
     void replayCurrentFrameChanged(int frame);
+
+    void runtimeDiagnosticsTextChanged(const QString& text);
 
     /**
      * @brief 回放模块请求更新主状态栏文本。
@@ -130,11 +144,12 @@ private:
      */
     void setGrabbing(bool value);
 
-    UiServiceContext::MessageBus& m_bus;               ///< 应用事件总线。
-    Dss::Core::ServiceRegistry& m_registry;            ///< 应用服务注册表。
-    bool m_grabbing = false;                           ///< 是否正在采集或回放。
-    int m_replayFrameCount = 0;                        ///< 回放序列总帧数。
-    int m_replayCurrentFrame = 0;                      ///< 当前回放帧号。
+    UiServiceContext::MessageBus& m_bus;     ///< 应用事件总线。
+    Dss::Core::ServiceRegistry& m_registry;  ///< 应用服务注册表。
+    bool m_grabbing = false;                 ///< 是否正在采集或回放。
+    int m_replayFrameCount = 0;              ///< 回放序列总帧数。
+    int m_replayCurrentFrame = 0;            ///< 当前回放帧号。
+    QString m_runtimeDiagnosticsText{"Diagnostics unavailable"};
     std::vector<Dss::Evt::ScopedConnection> m_connections;  ///< 事件订阅连接列表。
 };
 

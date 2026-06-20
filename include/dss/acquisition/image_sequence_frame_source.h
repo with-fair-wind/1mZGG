@@ -34,6 +34,13 @@ public:
     /// 下一帧待播放的索引
     [[nodiscard]] auto nextFrameIndex() const -> std::size_t;
 
+    /**
+     * @brief 将下一帧定位到指定的零基索引
+     * @param index 目标帧索引
+     * @return 索引越界时返回错误
+     */
+    auto seek(std::size_t index) -> std::expected<void, std::string>;
+
     /// 设置连续回放时的帧间隔
     void setFrameInterval(std::chrono::milliseconds interval);
 

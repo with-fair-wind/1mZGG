@@ -1,10 +1,12 @@
 #include "dss/ui/replay_view_model.h"
 
+#include <QTimer>
 #include <filesystem>
 #include <utility>
 
 #include "dss/acquisition/i_frame_source.h"
 #include "dss/acquisition/image_sequence_frame_source.h"
+#include "dss/app/runtime_diagnostics.h"
 #include "dss/processing/image_processor.h"
 
 namespace Dss::Ui {
@@ -12,6 +14,11 @@ namespace Dss::Ui {
 ReplayViewModel::ReplayViewModel(UiServiceContext context, QObject* parent)
     : QObject(parent), m_bus(context.bus), m_registry(context.registry) {
     setupSubscriptions();
+    auto* diagnosticsTimer = new QTimer(this);
+    diagnosticsTimer->setInterval(1000);
+    connect(diagnosticsTimer, &QTimer::timeout, this, &ReplayViewModel::refreshRuntimeDiagnostics);
+    diagnosticsTimer->start();
+    refreshRuntimeDiagnostics();
 }
 
 ReplayViewModel::~ReplayViewModel() = default;
@@ -26,6 +33,10 @@ int ReplayViewModel::replayFrameCount() const {
 
 int ReplayViewModel::replayCurrentFrame() const {
     return m_replayCurrentFrame;
+}
+
+auto ReplayViewModel::runtimeDiagnosticsText() const -> QString {
+    return m_runtimeDiagnosticsText;
 }
 
 bool ReplayViewModel::selectReplayFiles(const QStringList& files) {
@@ -82,13 +93,21 @@ void ReplayViewModel::startGrab() {
         return;
     }
 
-    auto initResult = frameSource->init();
-    if (!initResult.has_value()) {
-        Q_EMIT statusTextChanged(QString::fromStdString(initResult.error()));
-        return;
+    if (frameSource->frameWidth() == 0U || frameSource->frameHeight() == 0U) {
+        auto initResult = frameSource->init();
+        if (!initResult.has_value()) {
+            Q_EMIT statusTextChanged(QString::fromStdString(initResult.error()));
+            return;
+        }
+        setReplayCurrentFrame(0);
     }
 
-    setReplayCurrentFrame(0);
+    if (auto replaySource =
+            m_registry.tryGet<Dss::Acquisition::ImageSequenceFrameSource>("replay_source");
+        replaySource && replaySource->nextFrameIndex() >= replaySource->frameCount()) {
+        (void)replaySource->seek(0);
+        setReplayCurrentFrame(0);
+    }
     processor->start();
     frameSource->start();
     setGrabbing(true);
@@ -130,6 +149,69 @@ bool ReplayViewModel::stepReplayForward() {
         return false;
     }
     return true;
+}
+
+bool ReplayViewModel::stepReplayBackward() {
+    auto replaySource =
+        m_registry.tryGet<Dss::Acquisition::ImageSequenceFrameSource>("replay_source");
+    if (!replaySource) {
+        Q_EMIT statusTextChanged("Replay source is not registered");
+        return false;
+    }
+    if (m_grabbing) {
+        stopGrab();
+    }
+
+    const auto next = replaySource->nextFrameIndex();
+    const auto target = next >= 2U ? next - 2U : 0U;
+    auto seekResult = replaySource->seek(target);
+    if (!seekResult.has_value()) {
+        Q_EMIT statusTextChanged(QString::fromStdString(seekResult.error()));
+        return false;
+    }
+    return stepReplayForward();
+}
+
+bool ReplayViewModel::seekReplayFrame(int index) {
+    auto replaySource =
+        m_registry.tryGet<Dss::Acquisition::ImageSequenceFrameSource>("replay_source");
+    if (!replaySource || index < 0) {
+        Q_EMIT statusTextChanged("Replay frame index is invalid");
+        return false;
+    }
+
+    auto result = replaySource->seek(static_cast<std::size_t>(index));
+    if (!result.has_value()) {
+        Q_EMIT statusTextChanged(QString::fromStdString(result.error()));
+        return false;
+    }
+    Q_EMIT statusTextChanged(QString("Replay positioned at frame %1").arg(index + 1));
+    return true;
+}
+
+void ReplayViewModel::refreshRuntimeDiagnostics() {
+    auto diagnostics = m_registry.tryGet<Dss::App::RuntimeDiagnostics>("runtime_diagnostics");
+    if (!diagnostics) {
+        return;
+    }
+
+    const auto value = diagnostics->snapshot();
+    const auto text = QString("Drop P:%1 I:%2 T:%3 | Write I:%4/%5 T:%6/%7 | Err N:%8 S:%9 D:%10")
+                          .arg(value.processingDroppedFrames)
+                          .arg(value.imageDroppedRequests)
+                          .arg(value.trackDroppedRequests)
+                          .arg(value.imageSuccessfulWrites)
+                          .arg(value.imageFailedWrites)
+                          .arg(value.trackSuccessfulWrites)
+                          .arg(value.trackFailedWrites)
+                          .arg(value.networkErrors)
+                          .arg(value.serialErrors)
+                          .arg(value.storageErrors);
+    if (text == m_runtimeDiagnosticsText) {
+        return;
+    }
+    m_runtimeDiagnosticsText = text;
+    Q_EMIT runtimeDiagnosticsTextChanged(text);
 }
 
 void ReplayViewModel::setupSubscriptions() {

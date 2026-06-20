@@ -222,6 +222,29 @@ auto ImageSequenceFrameSource::nextFrameIndex() const -> std::size_t {
     return m_nextFrameIndex;
 }
 
+auto ImageSequenceFrameSource::seek(std::size_t index) -> std::expected<void, std::string> {
+    {
+        std::lock_guard lock(m_mutex);
+        if (index >= m_files.size()) {
+            return std::unexpected("replay frame index is out of range");
+        }
+    }
+    const auto resume = isRunning();
+    if (resume) {
+        stop();
+    }
+
+    {
+        std::lock_guard lock(m_mutex);
+        m_nextFrameIndex = index;
+    }
+
+    if (resume) {
+        start();
+    }
+    return {};
+}
+
 void ImageSequenceFrameSource::setFrameInterval(std::chrono::milliseconds interval) {
     std::lock_guard lock(m_mutex);
     m_frameInterval = interval;
