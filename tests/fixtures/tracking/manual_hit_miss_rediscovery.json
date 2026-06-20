@@ -1,0 +1,138 @@
+{
+    "schema_version":  1,
+    "name":  "Manual 连续命中、释放与重发现",
+    "mode":  "manual",
+    "settings":  {
+                     "optic":  {
+                                   "image_width":  6144,
+                                   "image_height":  6144,
+                                   "center":  [
+                                                  3072,
+                                                  3072
+                                              ],
+                                   "pixel_scale":  0.001
+                               }
+                 },
+    "frames":  [
+                   {
+                       "frame_seq":  1,
+                       "frame_freq":  20,
+                       "fov_center_ae":  [
+                                             100,
+                                             45
+                                         ],
+                       "manual_target":  {
+                                             "id":  "manual-1",
+                                             "centroid":  [
+                                                              3072,
+                                                              3072
+                                                          ],
+                                             "dn":  10000
+                                         },
+                       "expected":  {
+                                        "target_count":  1,
+                                        "targets":  [
+                                                        {
+                                                            "id":  "manual-1",
+                                                            "living":  true,
+                                                            "history_size":  1,
+                                                            "latest_valid":  true,
+                                                            "twdw":  [
+                                                                         100,
+                                                                         45
+                                                                     ],
+                                                            "gdcl":  {
+                                                                         "dn":  10000,
+                                                                         "magnitude":  0
+                                                                     }
+                                                        }
+                                                    ]
+                                    }
+                   },
+                   {
+                       "frame_seq":  2,
+                       "frame_freq":  20,
+                       "fov_center_ae":  [
+                                             100,
+                                             45
+                                         ],
+                       "expected":  {
+                                        "target_count":  1,
+                                        "targets":  [
+                                                        {
+                                                            "id":  "manual-1",
+                                                            "living":  true,
+                                                            "history_size":  2,
+                                                            "latest_valid":  true,
+                                                            "twdw":  [
+                                                                         100,
+                                                                         45
+                                                                     ],
+                                                            "gdcl":  {
+                                                                         "dn":  10000,
+                                                                         "magnitude":  0
+                                                                     }
+                                                        }
+                                                    ]
+                                    }
+                   },
+                   {
+                       "frame_seq":  3,
+                       "reset":  true,
+                       "frame_freq":  20,
+                       "fov_center_ae":  [
+                                             100,
+                                             45
+                                         ],
+                       "expected":  {
+                                        "target_count":  0
+                                    }
+                   },
+                   {
+                       "frame_seq":  4,
+                       "frame_freq":  20,
+                       "fov_center_ae":  [
+                                             100,
+                                             45
+                                         ],
+                       "expected":  {
+                                        "target_count":  0
+                                    }
+                   },
+                   {
+                       "frame_seq":  5,
+                       "frame_freq":  20,
+                       "fov_center_ae":  [
+                                             200,
+                                             30
+                                         ],
+                       "manual_target":  {
+                                             "id":  "manual-2",
+                                             "centroid":  [
+                                                              3072,
+                                                              3072
+                                                          ],
+                                             "dn":  10000
+                                         },
+                       "expected":  {
+                                        "target_count":  1,
+                                        "targets":  [
+                                                        {
+                                                            "id":  "manual-2",
+                                                            "living":  true,
+                                                            "history_size":  1,
+                                                            "latest_valid":  true,
+                                                            "twdw":  [
+                                                                         200,
+                                                                         30
+                                                                     ],
+                                                            "gdcl":  {
+                                                                         "dn":  10000,
+                                                                         "magnitude":  0
+                                                                     }
+                                                        }
+                                                    ]
+                                    }
+                   }
+               ]
+}

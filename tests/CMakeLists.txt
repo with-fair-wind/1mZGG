@@ -52,6 +52,12 @@ dss_add_test(test_manual_tracker test_manual_tracker.cpp dss_tracking)
 dss_add_test(test_leo_tracker test_leo_tracker.cpp dss_tracking)
 dss_add_test(test_geo_tracker test_geo_tracker.cpp dss_tracking)
 dss_add_test(test_sc_tracker test_sc_tracker.cpp dss_tracking)
+dss_add_test(test_tracking_legacy_scenarios test_tracking_legacy_scenarios.cpp dss_tracking)
+target_sources(test_tracking_legacy_scenarios PRIVATE tracking_fixture_loader.cpp)
+target_include_directories(test_tracking_legacy_scenarios PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_compile_definitions(test_tracking_legacy_scenarios PRIVATE
+    DSS_TRACKING_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/tracking"
+)
 dss_add_test(test_bounded_channel test_bounded_channel.cpp dss_processing)
 dss_add_test(test_display_stretch test_display_stretch.cpp dss_processing)
 dss_add_test(test_image_processor test_image_processor.cpp dss_processing)

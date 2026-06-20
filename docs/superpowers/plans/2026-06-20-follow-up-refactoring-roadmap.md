@@ -217,15 +217,15 @@ git commit -m "feat: add replay seeking and runtime diagnostics"
 - Create: `tests/test_tracking_legacy_scenarios.cpp`
 - Modify: `tests/CMakeLists.txt`
 
-- [ ] **Step 1: 从 `oldsrc/TrackAlgo.cpp` 提取最小输入输出场景**
+- [x] **Step 1: 从 `oldsrc/TrackAlgo.cpp` 提取最小输入输出场景**
 
 每个 fixture 使用可审查 JSON，包含帧号、blob、AE/RA-Dec、期望目标 ID、living、TWDW 和 GDCL 字段；不序列化旧类内存布局。
 
-- [ ] **Step 2: 实现 fixture loader 并验证坏格式、缺字段和数值边界**
+- [x] **Step 2: 实现 fixture loader 并验证坏格式、缺字段和数值边界**
 
-- [ ] **Step 3: 为 GEO/LEO/SC/Manual 各建立至少一个连续命中、连续 miss、重发现场景**
+- [x] **Step 3: 为 GEO/LEO/SC/Manual 各建立至少一个连续命中、连续 miss、重发现场景**
 
-- [ ] **Step 4: 运行 `test_tracking_legacy_scenarios` 并提交夹具基线**
+- [x] **Step 4: 运行 `test_tracking_legacy_scenarios` 并提交夹具基线**
 
 ### Task 5: 补齐 GEO 外部校验与 TWDW/GDCL 数据源
 
