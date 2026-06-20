@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <utility>
 
+#include "dss/acquisition/frame_source_coordinator.h"
 #include "dss/acquisition/i_frame_source.h"
 #include "dss/acquisition/image_sequence_frame_source.h"
 #include "dss/app/runtime_diagnostics.h"
@@ -75,6 +76,16 @@ bool ReplayViewModel::selectReplayFiles(const QStringList& files) {
         return false;
     }
 
+    if (auto coordinator =
+            m_registry.tryGet<Dss::Acquisition::FrameSourceCoordinator>("frame_source");
+        coordinator) {
+        const auto selected = coordinator->selectSource(Dss::Acquisition::FrameSourceMode::Replay);
+        if (!selected.has_value()) {
+            Q_EMIT statusTextChanged(QString::fromStdString(selected.error()));
+            return false;
+        }
+    }
+
     setReplayFrameCount(static_cast<int>(replaySource->frameCount()));
     setReplayCurrentFrame(0);
     Q_EMIT statusTextChanged(QString("Sequence selected: %1 frames").arg(m_replayFrameCount));
@@ -87,7 +98,10 @@ void ReplayViewModel::startGrab() {
     }
 
     auto processor = m_registry.tryGet<Dss::Processing::ImageProcessor>("image_processor");
-    auto frameSource = m_registry.tryGet<Dss::Acquisition::IFrameSource>("replay_source");
+    auto frameSource = m_registry.tryGet<Dss::Acquisition::IFrameSource>("frame_source");
+    if (!frameSource) {
+        frameSource = m_registry.tryGet<Dss::Acquisition::IFrameSource>("replay_source");
+    }
     if (!processor || !frameSource) {
         Q_EMIT statusTextChanged("Replay services are not registered");
         return;
@@ -116,7 +130,10 @@ void ReplayViewModel::startGrab() {
 }
 
 void ReplayViewModel::stopGrab() {
-    auto frameSource = m_registry.tryGet<Dss::Acquisition::IFrameSource>("replay_source");
+    auto frameSource = m_registry.tryGet<Dss::Acquisition::IFrameSource>("frame_source");
+    if (!frameSource) {
+        frameSource = m_registry.tryGet<Dss::Acquisition::IFrameSource>("replay_source");
+    }
     if (frameSource) {
         frameSource->stop();
     }

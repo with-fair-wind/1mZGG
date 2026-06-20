@@ -85,6 +85,14 @@ if(TARGET dss_comm_qt AND TARGET dss_network_qt)
 endif()
 
 if(TARGET dss_acquisition_qt)
+    dss_add_test(test_frame_source_coordinator
+        test_frame_source_coordinator.cpp
+        dss_acquisition_qt
+    )
+    dss_add_test(test_serial_camera_controller
+        test_serial_camera_controller.cpp
+        dss_acquisition_qt
+    )
     dss_add_qt_test(test_image_sequence_frame_source
         test_image_sequence_frame_source.cpp
         dss_acquisition_qt

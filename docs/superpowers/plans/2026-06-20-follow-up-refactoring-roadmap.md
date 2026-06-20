@@ -283,11 +283,11 @@ git commit -m "feat: add replay seeking and runtime diagnostics"
 - Test: `tests/test_frame_source_coordinator.cpp`
 - Test: `tests/test_serial_camera_controller.cpp`
 
-- [ ] **Step 1: 测试同一时间只能有一个活动帧源**
-- [ ] **Step 2: 实现 replay/live 的显式切换和失败回滚**
-- [ ] **Step 3: 让相机控制器通过窄串口发送端口发送已有协议字节**
-- [ ] **Step 4: 保持默认启动不打开串口、不启动采集**
-- [ ] **Step 5: 运行无硬件集成测试并提交**
+- [x] **Step 1: 测试同一时间只能有一个活动帧源**
+- [x] **Step 2: 实现 replay/live 的显式切换和失败回滚**
+- [x] **Step 3: 让相机控制器通过窄串口发送端口发送已有协议字节**
+- [x] **Step 4: 保持默认启动不打开串口、不启动采集**
+- [x] **Step 5: 运行无硬件集成测试并提交**
 
 ### Task 8: 可选 Sapera `IFrameSource`
 

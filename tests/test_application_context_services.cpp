@@ -6,6 +6,7 @@
 
 #include <gtest/gtest.h>
 
+#include "dss/acquisition/frame_source_coordinator.h"
 #include "dss/acquisition/i_camera_controller.h"
 #include "dss/acquisition/i_frame_source.h"
 #include "dss/acquisition/image_sequence_frame_source.h"
@@ -175,9 +176,14 @@ TEST(ApplicationContextServices, RegistersCommunicationServicesWithoutOpeningPor
     EXPECT_FALSE(dataExchange->isOpen());
 
     const auto camera = context.registry().get<Dss::Acquisition::ICameraController>("camera");
+    const auto frameSource =
+        context.registry().get<Dss::Acquisition::FrameSourceCoordinator>("frame_source");
 
     ASSERT_NE(camera, nullptr);
     EXPECT_FALSE(camera->isOpen());
+    ASSERT_NE(frameSource, nullptr);
+    EXPECT_EQ(frameSource->activeMode(), Dss::Acquisition::FrameSourceMode::Replay);
+    EXPECT_FALSE(frameSource->isRunning());
 
     const auto imageProcessor =
         context.registry().get<Dss::Processing::ImageProcessor>("image_processor");

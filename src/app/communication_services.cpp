@@ -3,6 +3,7 @@
 #ifdef DSS_BUILD_APP
 #include <memory>
 
+#include "dss/acquisition/frame_source_coordinator.h"
 #include "dss/acquisition/i_camera_controller.h"
 #include "dss/acquisition/i_frame_source.h"
 #include "dss/acquisition/image_sequence_frame_source.h"
@@ -87,7 +88,9 @@ void ApplicationContext::registerCommunicationServices() {
 
     auto imageProcessor = std::make_shared<Dss::Processing::ImageProcessor>(m_bus);
     auto replaySource = std::make_shared<Dss::Acquisition::ImageSequenceFrameSource>();
-    replaySource->setFrameCallback(
+    auto frameSource = std::make_shared<Dss::Acquisition::FrameSourceCoordinator>();
+    (void)frameSource->registerSource(Dss::Acquisition::FrameSourceMode::Replay, replaySource);
+    frameSource->setFrameCallback(
         [imageProcessor, localImageStorage](Dss::Processing::FramePacket packet) {
             if (localImageStorage->isRunning() && !packet.rawImage.empty()) {
                 Dss::Storage::RawImageMetadata metadata{};
@@ -127,10 +130,12 @@ void ApplicationContext::registerCommunicationServices() {
     m_registry.registerService<Dss::App::RuntimeDiagnostics>("runtime_diagnostics",
                                                              runtimeDiagnostics);
     m_registry.registerService<Dss::Processing::ImageProcessor>("image_processor", imageProcessor);
+    m_registry.registerService<Dss::Acquisition::FrameSourceCoordinator>("frame_source",
+                                                                         frameSource);
+    m_registry.registerService<Dss::Acquisition::IFrameSource>("frame_source", frameSource);
     m_registry.registerService<Dss::Acquisition::ImageSequenceFrameSource>("replay_source",
                                                                            replaySource);
-    m_registry.registerService<Dss::Acquisition::IFrameSource>("replay_source",
-                                                               std::move(replaySource));
+    m_registry.registerService<Dss::Acquisition::IFrameSource>("replay_source", replaySource);
     m_registry.registerService<Dss::Storage::LocalImageStorageBackend>("image_storage",
                                                                        localImageStorage);
     m_registry.registerService<Dss::Storage::IStorageBackend>("image_storage",
