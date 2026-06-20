@@ -108,6 +108,26 @@ else()
     set(DSS_HAS_CUDA OFF)
 endif()
 
+set(DSS_HAS_SAPERA OFF)
+if(DSS_ENABLE_SAPERA)
+    set(SAPERA_ROOT "" CACHE PATH "Sapera SDK root directory")
+    find_path(SAPERA_INCLUDE_DIR
+        NAMES SapClassBasic.h
+        HINTS "${SAPERA_ROOT}" "$ENV{SAPERADIR}"
+        PATH_SUFFIXES include classes/basic Sapera/include Sapera/classes/basic
+    )
+    find_library(SAPERA_LIB NAMES Sapera++ HINTS "${SAPERA_ROOT}" "$ENV{SAPERADIR}" PATH_SUFFIXES lib)
+    find_library(SAPERALT_LIB NAMES SaperaLT HINTS "${SAPERA_ROOT}" "$ENV{SAPERADIR}" PATH_SUFFIXES lib)
+    find_library(CORW32_LIB NAMES CorW32 HINTS "${SAPERA_ROOT}" "$ENV{SAPERADIR}" PATH_SUFFIXES lib)
+    if(NOT SAPERA_INCLUDE_DIR OR NOT SAPERA_LIB OR NOT SAPERALT_LIB OR NOT CORW32_LIB)
+        message(FATAL_ERROR
+            "DSS_ENABLE_SAPERA=ON, but the Sapera SDK was not found. "
+            "Set SAPERA_ROOT or SAPERADIR to the SDK root."
+        )
+    endif()
+    set(DSS_HAS_SAPERA ON)
+endif()
+
 if(DSS_BUILD_APP)
     if(WIN32 AND NOT DEFINED ENV{DSS_QT_ROOT} AND NOT CMAKE_PREFIX_PATH AND NOT Qt6_DIR)
         message(STATUS
@@ -220,6 +240,15 @@ if(DSS_BUILD_APP)
     dss_target_defaults(dss_acquisition_qt)
     dss_qt_pch(dss_acquisition_qt)
     target_link_libraries(dss_acquisition_qt PUBLIC dss_processing Qt6::Core Qt6::Gui)
+    if(DSS_HAS_SAPERA)
+        target_compile_definitions(dss_acquisition_qt PUBLIC DSS_HAS_SAPERA=1)
+        target_include_directories(dss_acquisition_qt SYSTEM PRIVATE ${SAPERA_INCLUDE_DIR})
+        target_link_libraries(dss_acquisition_qt PRIVATE
+            ${SAPERA_LIB}
+            ${SAPERALT_LIB}
+            ${CORW32_LIB}
+        )
+    endif()
 
     add_library(dss_comm_qt STATIC ${DSS_COMM_QT_SOURCES})
     dss_target_defaults(dss_comm_qt)
@@ -268,7 +297,7 @@ if(DSS_BUILD_APP)
     dss_qt_pch(DSS_QT)
     target_compile_definitions(DSS_QT PRIVATE
         QT_DEPRECATED_WARNINGS
-        $<$<BOOL:${DSS_ENABLE_SAPERA}>:DSS_HAS_SAPERA>
+        $<$<BOOL:${DSS_HAS_SAPERA}>:DSS_HAS_SAPERA>
         $<$<BOOL:${DSS_ENABLE_STARLIBS}>:DSS_HAS_STARLIBS>
     )
     target_link_libraries(DSS_QT PRIVATE
@@ -294,21 +323,6 @@ if(DSS_BUILD_APP)
 
     if(DSS_HAS_CUDA)
         target_link_libraries(DSS_QT PRIVATE dss_gpu_cuda)
-    endif()
-
-    if(DSS_ENABLE_SAPERA)
-        find_library(SAPERA_LIB Sapera++ PATHS /usr/local/lib)
-        find_library(SAPERALT_LIB SaperaLT PATHS /usr/local/lib)
-        find_library(CORW32_LIB CorW32 PATHS /usr/local/lib)
-        if(SAPERA_LIB AND SAPERALT_LIB AND CORW32_LIB)
-            target_link_libraries(DSS_QT PRIVATE ${SAPERA_LIB} ${SAPERALT_LIB} ${CORW32_LIB})
-            target_include_directories(DSS_QT PRIVATE
-                /usr/local/include/Sapera/include
-                /usr/local/include/Sapera/classes/basic
-            )
-        else()
-            message(WARNING "Sapera SDK not found, disabling hardware grabber.")
-        endif()
     endif()
 
     if(DSS_ENABLE_STARLIBS)

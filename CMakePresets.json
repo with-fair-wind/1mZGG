@@ -16,6 +16,7 @@
         "DSS_BUILD_APP": "ON",
         "DSS_ENABLE_TESTS": "ON",
         "DSS_ENABLE_CUDA": "OFF",
+        "DSS_ENABLE_SAPERA": "OFF",
         "DSS_ENABLE_OPENCV": "ON"
       }
     },

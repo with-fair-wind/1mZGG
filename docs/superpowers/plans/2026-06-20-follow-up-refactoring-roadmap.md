@@ -299,9 +299,9 @@ git commit -m "feat: add replay seeking and runtime diagnostics"
 - Modify: `src/app/communication_services.cpp`
 - Test: `tests/test_sapera_frame_source_contract.cpp`
 
-- [ ] **Step 1: 定义 `DSS_ENABLE_SAPERA=OFF` 时的构建与注册契约**
-- [ ] **Step 2: 用 RAII 包装 Sapera 资源，回调只负责复制/转交 `FramePacket`**
-- [ ] **Step 3: 将 SDK 错误转换为 `std::expected` 和统一采集错误事件**
+- [x] **Step 1: 定义 `DSS_ENABLE_SAPERA=OFF` 时的构建与注册契约**
+- [x] **Step 2: 用 RAII 包装 Sapera 资源，回调只负责复制/转交 `FramePacket`**
+- [x] **Step 3: 将 SDK 错误转换为 `std::expected` 和统一采集错误事件**
 - [ ] **Step 4: 在无 SDK preset 下跑完整测试，在硬件环境跑显式 smoke test**
 
 ---

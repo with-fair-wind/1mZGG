@@ -7,6 +7,9 @@
 #include "dss/acquisition/i_camera_controller.h"
 #include "dss/acquisition/i_frame_source.h"
 #include "dss/acquisition/image_sequence_frame_source.h"
+#ifdef DSS_HAS_SAPERA
+#include "dss/acquisition/sapera_frame_source.h"
+#endif
 #include "dss/app/runtime_diagnostics.h"
 #include "dss/app/track_result_data_exchange_bridge.h"
 #include "dss/comm/display_channel.h"
@@ -90,6 +93,16 @@ void ApplicationContext::registerCommunicationServices() {
     auto replaySource = std::make_shared<Dss::Acquisition::ImageSequenceFrameSource>();
     auto frameSource = std::make_shared<Dss::Acquisition::FrameSourceCoordinator>();
     (void)frameSource->registerSource(Dss::Acquisition::FrameSourceMode::Replay, replaySource);
+#ifdef DSS_HAS_SAPERA
+    auto liveSource = std::make_shared<Dss::Acquisition::SaperaFrameSource>(
+        Dss::Acquisition::SaperaConfig{
+            .ccfPath = Dss::Core::Config::instance().paths().ccfFile.string(),
+        },
+        nullptr,
+        &m_bus);
+    (void)frameSource->registerSource(Dss::Acquisition::FrameSourceMode::Live, liveSource);
+    m_registry.registerService<Dss::Acquisition::IFrameSource>("sapera_source", liveSource);
+#endif
     frameSource->setFrameCallback(
         [imageProcessor, localImageStorage](Dss::Processing::FramePacket packet) {
             if (localImageStorage->isRunning() && !packet.rawImage.empty()) {

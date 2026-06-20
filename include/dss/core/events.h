@@ -12,6 +12,10 @@
 namespace Dss::Core {
 
 /// 采集事件：一帧图像已就绪
+struct AcquisitionErrorEvent {
+    std::string source;
+    std::string message;
+};
 struct FrameAcquiredEvent {
     uint64_t frameSeq = 0;           ///< 帧序号
     uint32_t width = 0;              ///< 图像宽度（像素）

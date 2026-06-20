@@ -93,6 +93,10 @@ if(TARGET dss_acquisition_qt)
         test_serial_camera_controller.cpp
         dss_acquisition_qt
     )
+    dss_add_test(test_sapera_frame_source_contract
+        test_sapera_frame_source_contract.cpp
+        dss_acquisition_qt
+    )
     dss_add_qt_test(test_image_sequence_frame_source
         test_image_sequence_frame_source.cpp
         dss_acquisition_qt
