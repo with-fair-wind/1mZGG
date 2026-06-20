@@ -6,14 +6,17 @@ namespace Dss::Gpu {
 
 /// 析构时销毁所有已创建的 CUDA 流
 CudaDeviceManager::~CudaDeviceManager() {
-    if (m_initialized) {
-        for (auto& s : m_streams) {
-            if (s) {
-                cudaStreamDestroy(s);
-                s = nullptr;
-            }
+    releaseStreams();
+}
+
+void CudaDeviceManager::releaseStreams() noexcept {
+    for (auto& stream : m_streams) {
+        if (stream != nullptr) {
+            (void)cudaStreamDestroy(stream);
+            stream = nullptr;
         }
     }
+    m_initialized = false;
 }
 
 /**
@@ -21,6 +24,8 @@ CudaDeviceManager::~CudaDeviceManager() {
  * @return 成功时返回空值；无设备或 CUDA API 失败时返回错误描述
  */
 auto CudaDeviceManager::init() -> std::expected<void, std::string> {
+    releaseStreams();
+
     int deviceCount = 0;
     auto err = cudaGetDeviceCount(&deviceCount);
     if (err != cudaSuccess || deviceCount == 0) {
@@ -48,8 +53,10 @@ auto CudaDeviceManager::init() -> std::expected<void, std::string> {
     for (auto& s : m_streams) {
         err = cudaStreamCreate(&s);
         if (err != cudaSuccess) {
-            return std::unexpected(
-                std::format("cudaStreamCreate failed: {}", cudaGetErrorString(err)));
+            const auto message =
+                std::format("cudaStreamCreate failed: {}", cudaGetErrorString(err));
+            releaseStreams();
+            return std::unexpected(message);
         }
     }
 

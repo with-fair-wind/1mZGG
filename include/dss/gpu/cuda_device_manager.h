@@ -64,6 +64,8 @@ public:
     }
 
 private:
+    void releaseStreams() noexcept;
+
     bool m_initialized = false;                        ///< 是否已完成初始化
     int m_deviceId = 0;                                ///< 当前使用的 CUDA 设备 ID
     int m_ccMajor = 0;                                 ///< 计算能力主版本号

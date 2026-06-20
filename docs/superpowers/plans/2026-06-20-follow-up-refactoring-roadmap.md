@@ -319,8 +319,8 @@ git commit -m "feat: add replay seeking and runtime diagnostics"
 - Test: `tests/test_cuda_processing_contract.cpp`
 - Create: `benchmarks/processing_benchmark.cpp`
 
-- [ ] **Step 1: 定义 CUDA 不可用时策略创建失败而应用继续运行的契约**
-- [ ] **Step 2: 用 `GpuBuffer` 和 `CudaDeviceManager` 封装 kernel 生命周期**
+- [x] **Step 1: 定义 CUDA 不可用时策略创建失败而应用继续运行的契约**
+- [x] **Step 2: 用 `GpuBuffer` 和 `CudaDeviceManager` 封装 kernel 生命周期**
 - [ ] **Step 3: 对固定帧验证 CPU/OpenCV/CUDA blob 输出容差**
 - [ ] **Step 4: 对 6144 级图像记录吞吐、延迟、显存和丢帧指标**
 - [ ] **Step 5: 仅在基准证明收益后把 CUDA 暴露为 UI 选项**

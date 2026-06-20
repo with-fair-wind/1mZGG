@@ -178,6 +178,7 @@ file(GLOB_RECURSE DSS_UI_QT_SOURCES CONFIGURE_DEPENDS src/ui/*.cpp)
 file(GLOB_RECURSE DSS_UI_QT_HEADERS CONFIGURE_DEPENDS include/dss/ui/*.h)
 
 list(FILTER DSS_PROCESSING_SOURCES EXCLUDE REGEX ".*/opencv_processing_strategy\\.cpp$")
+list(FILTER DSS_PROCESSING_SOURCES EXCLUDE REGEX ".*/cuda_processing_strategy\\.cpp$")
 
 add_library(dss_core STATIC ${DSS_CORE_SOURCES} ${DSS_STORAGE_SOURCES})
 dss_target_defaults(dss_core)
@@ -221,15 +222,19 @@ if(DSS_HAS_CUDA)
     file(GLOB DSS_CUDA_SOURCES CONFIGURE_DEPENDS kernels/*.cu)
     add_library(dss_gpu_cuda STATIC
         src/gpu/cuda_device_manager.cpp
+        src/processing/cuda_processing_strategy.cpp
         ${DSS_CUDA_SOURCES}
     )
     dss_target_defaults(dss_gpu_cuda)
-    target_link_libraries(dss_gpu_cuda PUBLIC dss_core CUDA::cudart)
+    target_link_libraries(dss_gpu_cuda PUBLIC dss_processing CUDA::cudart)
     target_compile_definitions(dss_gpu_cuda PUBLIC DSS_HAS_CUDA=1)
     set_target_properties(dss_gpu_cuda PROPERTIES
         CUDA_SEPARABLE_COMPILATION ON
         CUDA_ARCHITECTURES "50;60;70;75;80;86;89;90"
     )
+    add_executable(dss_processing_benchmark benchmarks/processing_benchmark.cpp)
+    dss_target_defaults(dss_processing_benchmark)
+    target_link_libraries(dss_processing_benchmark PRIVATE dss_gpu_cuda)
 endif()
 
 if(DSS_BUILD_APP)
