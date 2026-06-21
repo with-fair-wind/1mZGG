@@ -25,6 +25,14 @@ function(dss_add_qt_test TEST_NAME TEST_SOURCE)
     endif()
 endfunction()
 
+add_executable(test_event_headers
+    test_event_header.cpp
+    test_event_bus_primitives_header.cpp
+)
+dss_target_defaults(test_event_headers)
+target_link_libraries(test_event_headers PRIVATE dss_core)
+add_test(NAME test_event_headers COMMAND test_event_headers)
+
 dss_add_test(test_frame_codec test_frame_codec.cpp dss_core)
 dss_add_test(test_serial_protocol_codec test_serial_protocol_codec.cpp dss_core)
 dss_add_test(test_camera_control_protocol test_camera_control_protocol.cpp dss_core)

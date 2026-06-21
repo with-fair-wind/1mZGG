@@ -1,5 +1,17 @@
 #pragma once
 
+#include <atomic>
+#include <cassert>
+#include <cstddef>
+#include <exception>
+#include <functional>
+#include <optional>
+#include <shared_mutex>
+#include <stdexcept>
+#include <type_traits>
+#include <utility>
+#include <vector>
+
 namespace Dss::Evt {
 
 /// 无锁策略（单线程或外部同步场景）
@@ -103,11 +115,11 @@ void forEachSafe(Iter begin, Iter end, Fn&& fn) {
     }
 }
 
-template <typename C, typename R, typename = void>
+template <typename C, typename = void>
 struct HasAccumulator : std::false_type {};
 
-template <typename C, typename R>
-struct HasAccumulator<C, R, std::void_t<typename C::Accumulator>> : std::true_type {};
+template <typename C>
+struct HasAccumulator<C, std::void_t<typename C::Accumulator>> : std::true_type {};
 
 template <typename Combiner, typename R, bool HasAccum>
 struct CombinerAdapter;

@@ -1,5 +1,14 @@
 #pragma once
 
+#include <algorithm>
+#include <cstddef>
+#include <exception>
+#include <memory>
+#include <tuple>
+#include <type_traits>
+#include <utility>
+#include <vector>
+
 #include "dss/core/detail/event_bus_primitives.h"
 
 namespace Dss::Evt {
@@ -260,7 +269,7 @@ public:
 private:
     using Core = detail::EventCore<Handler, LockPolicy, Args...>;
     using Adapter =
-        detail::CombinerAdapter<Combiner, R, detail::HasAccumulator<Combiner, R>::value>;
+        detail::CombinerAdapter<Combiner, R, detail::HasAccumulator<Combiner>::value>;
 
 public:
     Event() : m_core(std::make_shared<Core>()) {}
