@@ -6,7 +6,7 @@
 >
 > 源文件: `src/core/`
 >
-> 依赖: `nlohmann_json`
+> 依赖: `nlohmann_json`；私有使用 `spdlog`
 
 ## 模块职责
 
@@ -71,17 +71,17 @@ Core 模块是整个系统的基础层，提供所有其他模块共享的类型
 
 | 事件 | 生产者 | 消费者 |
 |------|--------|--------|
-| `FrameAcquiredEvent` | Grabber | ImageProcessor |
-| `GrabStartedEvent` / `GrabStoppedEvent` | Grabber | ViewModel |
-| `DisplayRefreshEvent` | ImageProcessor | ViewModel → ImageDisplay |
-| `ProcessingCompleteEvent` | ImageProcessor | ViewModel |
-| `RotatedFrameReadyEvent` | ImageProcessor | Storage |
-| `TrackResultEvent` | TrackManager | ViewModel, ServoChannel |
-| `ImageSendEvent` | ImageSender | — |
-| `NetworkTransmissionErrorEvent` | DataExchange | ViewModel/Logger |
-| `SerialFrameErrorEvent` | SerialWorkerBase | ViewModel/Log Panel |
-| `SerialDecodeErrorEvent` | SerialWorkerBase/SerialChannel | ViewModel/Log Panel |
-| `MasterControlEvent` | MasterControlChannel | ViewModel |
+| `FrameAcquiredEvent` | 预留事件；当前帧源使用 `IFrameSource` callback | — |
+| `GrabStartedEvent` / `GrabStoppedEvent` | `ReplayViewModel` | UI 状态订阅者 |
+| `DisplayRefreshEvent` | `ImageProcessor` | `DisplayViewModel` → `ImageDisplay` |
+| `ProcessingCompleteEvent` | `ImageProcessor` | `DisplayViewModel` |
+| `RotatedFrameReadyEvent` | `ImageProcessor` | 存储/扩展订阅者 |
+| `TrackResultEvent` | `ImageProcessor` | `TrackingViewModel`、Storage、DataExchange bridge |
+| `ImageSendEvent` | `ImageProcessor` / `ImageSender` | 图像发送状态订阅者 |
+| `NetworkTransmissionErrorEvent` | `DataExchange` | `LogViewModel` / Logger |
+| `SerialFrameErrorEvent` | `SerialWorkerBase` | `LogViewModel` |
+| `SerialDecodeErrorEvent` | Serial Channel | `LogViewModel` |
+| `MasterControlEvent` | `MasterControlChannel` | `MainViewModel`、DataExchange bridge |
 | `ExposureSyncEvent` | ExposureChannel | ImageProcessor |
 | `Sync25HzEvent` | DisplayChannel | ImageProcessor |
 | `ManualTargetSelectEvent` | UI | ManualTracker |

@@ -5,7 +5,7 @@
 | Legacy 能力 | 当前实现 | 主要验证 |
 |---|---|---|
 | `Grabber` Sapera 采集 | `SaperaFrameSource`、`ISaperaCaptureSession`、`FrameSourceCoordinator` | `test_sapera_frame_source_contract`、`test_frame_source_coordinator` |
-| `CommCamera` 相机串口 | `SerialCameraController`、`camera_control_protocol.h` | `test_serial_camera_controller`、`test_camera_control_protocol` |
+| `CommCamera` 相机命令/串口 | `camera_control_protocol.h`、`SerialCameraController`；默认组合根使用 `CommandOnlyCameraController` | 编码与发送适配器测试已完成，具体运行时串口接线待补 |
 | `ImageReplayer` | `ImageSequenceFrameSource`、`ReplayViewModel` | `test_image_sequence_frame_source`、`test_replay_view_model` |
 | Direct/Diff 处理 | `OpenCvProcessingStrategy`、`DiffProcessingStrategy` | `test_opencv_processing`、`test_diff_processing` |
 | CUDA 图像处理 | `CudaProcessingStrategy`、`CudaDeviceManager`、`GpuBuffer` | `test_cuda_processing_contract`、`dss_processing_benchmark` |

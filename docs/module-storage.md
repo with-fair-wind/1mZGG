@@ -8,7 +8,7 @@
 
 ## 模块职责
 
-Storage 模块定义图像和轨迹数据的存储格式、本地存储后端和回放入口。当前格式定义、图像序列回放读取、本地图像 raw 异步写入和轨迹文本异步写入已迁移，完整会话索引与多格式落盘仍待补齐。
+Storage 模块定义图像和轨迹数据的存储格式、本地异步后端与会话命名。RAW/BMP、IMI/GAE 会话文件、背压统计、错误事件和主控任务到会话命名的自动映射均已接入。
 
 ## 组件清单
 
@@ -81,18 +81,15 @@ class IStorageBackend : public IService {
 |------|------|------|
 | `ImageCode.h/.cpp` (RAW编解码) | `image_storage_format.h` | 格式定义已迁移 |
 | `ImageCode.h/.cpp` (BMP编解码) | `bmp_image_format.h` | 格式定义已迁移 |
-| `ImageStorage.h/.cpp` (文件I/O) | `LocalImageStorageBackend` | raw 异步写入首版已迁移 |
-| `TrackDataStorage.h/.cpp` | `TrackDataStorageBackend` + format | 轨迹文本格式、`ResultPacket` 归一化和 `track_data.txt` 异步写入首版已迁移 |
-| `ImageReplayer.h/.cpp` | `ImageSequenceFrameSource` | 图像序列回放首版已迁移 |
+| `ImageStorage.h/.cpp` (文件I/O) | `LocalImageStorageBackend` | RAW/BMP 异步写入、IMI 会话索引、背压和错误事件已迁移 |
+| `TrackDataStorage.h/.cpp` | `TrackDataStorageBackend` + format | `track_data.txt`/GAE 会话写入、结果归一化、背压和错误事件已迁移 |
+| `ImageReplayer.h/.cpp` | `ImageSequenceFrameSource` | 回放读取已迁至 Acquisition 模块 |
 
 ## 当前缺口
 
 | 缺口 | 说明 |
 |------|------|
-| GAE/会话级轨迹文件 | 已支持显式会话配置并写入 `GAE/<会话名>.GAE`，未配置时兼容 `track_data.txt` |
-| BMP/索引文件写入 | 已支持 legacy BMP、RAW 和 IMI 会话索引，写入失败通过事件总线上报 |
-| 业务会话自动映射 | worker 已具备容量上限、背压统计和 `StorageWriteErrorEvent`；下一步把主控任务字段自动映射到 BMP/IMI/GAE 会话命名 |
-| 回放进度控制 | UI 与帧源已支持进度、前进、后退、拖动定位和运行中 seek |
+| 产品级保留策略 | 当前已具备会话级写入与背压；配额、清理周期和归档策略属于后续产品配置，不是 legacy 迁移阻塞项 |
 
 ## 依赖关系
 

@@ -6,7 +6,7 @@
 >
 > 源文件: `src/ui/`
 >
-> 依赖: `dss_core`, `dss_network_qt`, `dss_processing`, `dss_tracking`, `Qt6::Core/Gui/Widgets/Charts`
+> 依赖: `dss_core`, `dss_app`, `dss_acquisition_qt`, `dss_network_qt`, `dss_processing`, `dss_tracking`, `Qt6::Core/Gui/Widgets/Charts`
 
 ## 模块职责
 
@@ -42,7 +42,7 @@ AppEvent (跨页面 Qt 信号中枢)
 |------|---------|
 | `ReplayViewModel` | 选择图像序列、初始化 `ImageSequenceFrameSource`、开始/暂停、单帧前进、维护当前帧和总帧数 |
 | `DisplayViewModel` | 缓存当前 raw frame、计算统计信息、自动/手动拉伸、实时刷新显示图和裁切图 |
-| `ProcessingViewModel` | 同步 `ImageProcessor` 处理策略，当前支持 None/OpenCV，后续扩展 Diff/CUDA 和参数化处理 |
+| `ProcessingViewModel` | 同步 None/OpenCV/Diff 处理策略与参数快照；CUDA 仅在硬件收益达标后开放 |
 | `TrackingViewModel` | 同步 Manual/GEO/LEO/SC 跟踪策略、处理手动选点、输出跟踪状态与目标信息 |
 | `StorageViewModel` | 控制图像 raw worker 与轨迹文本 worker 的启动、停止和 drain |
 | `SerialPortViewModel` | 管理显示、曝光、主控、伺服串口配置、显式 open/close 和联调命令 |
@@ -130,7 +130,7 @@ signals:
 
 | 旧版 | 新版 | 状态 |
 |------|------|------|
-| `UI_CtrlPad` | `MainWindow` + `MainViewModel` + 子 ViewModel | 回放/保存/Manual 选点跟踪首版接线，OpenCV 处理和 GEO/LEO/SC 策略入口已接 |
+| `UI_CtrlPad` | `MainWindow` + `MainViewModel` + 子 ViewModel | 回放定位、保存、运行诊断、参数化处理及四种跟踪入口已接 |
 | `UI_DispPad` | `ImageDisplay` | 基本功能 + 滚轮缩放迁移 |
 | `UI_DispPadS` | `ImageDisplayCrop` | 基本功能迁移 |
 | `UI_InitDlg` | `InitDialog` | 已迁移 |
@@ -142,14 +142,9 @@ signals:
 
 | 缺口 | 说明 |
 |------|------|
-| 当前帧进度 | 已显示稳定尺寸进度条、总帧数和当前帧号，并支持前进、后退及拖动定位 |
-| 处理/跟踪策略选择 | 已接入 None/OpenCV 与 GEO/Manual/LEO/SC；Diff/CUDA、OpenCV 参数和 LEO/SC 算法体仍待迁移 |
-| 网络端点 UI 控件 | 图像发送、诊断、大气、心跳、GXTC/GDCL 端点编辑已由统一表单生成；图像发送、诊断、大气、心跳显式 open/close 按钮已通过 `INetworkChannel` 接入 |
-| 串口通道 UI 控件 | 显示、曝光、主控、伺服串口已可编辑端口/波特率/数据位/停止位，并通过 `ISerialChannel` 接入显式 open/close；曝光命令、伺服修正、主控状态回包已提供首版联调按钮；帧校验失败和首批字段解码失败会进入日志页 |
-| 数据交换 UI 控件 | GXTC/GDCL 显式 open/close、错误状态提示和日志页分级过滤已接入；发送样例和接收状态待补 |
-| 距离曲线图 | `UI_DistCurve` 未迁移 |
-| 页面布局 | 控制页、显示页、通信页、设置页和日志页已有首版功能；分析页与距离曲线仍待补 |
-| 主题/样式 | 未实现自定义样式，依赖 ElaWidgetTools 或默认样式 |
+| CUDA 模式 | 可选后端和基准入口已存在；达到 [硬件验证](hardware-validation.md) 的收益门槛后再加入处理模式选择 |
+| 串口/网络联调状态 | 参数编辑、显式开关、错误日志和首批命令已接入；发送样例、接收状态和断连重连展示仍需完善 |
+| 距离曲线图 | `UI_DistCurve` 未迁移，分析页仅保留入口空间 |
 
 ## 依赖关系
 

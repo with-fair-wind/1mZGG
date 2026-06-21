@@ -1,18 +1,18 @@
 # GPU 模块 (`dss_gpu_cuda`)
 
-> 命名空间: `Dss::Gpu`
+> 命名空间: 设备与缓冲区使用 `Dss::Gpu`；处理策略使用 `Dss::Processing`
 >
 > 头文件: `include/dss/gpu/`
 >
-> 源文件: `src/gpu/`、`kernels/`
+> 源文件: `src/gpu/`、`src/processing/cuda_processing_strategy.cpp`、`kernels/`
 >
-> 依赖: `dss_core`, `CUDA::cudart`
+> 依赖: `dss_processing`, `CUDA::cudart`
 >
 > 构建选项: `DSS_ENABLE_CUDA=ON` (默认 OFF)
 
 ## 模块职责
 
-GPU 模块将旧版 OpenCL 计算路径迁移为 CUDA 实现，提供高性能的图像处理核函数。当前核函数已移植但尚未接入处理管线。
+GPU 模块将旧版 OpenCL 计算路径迁移为 CUDA 实现。核函数、设备与缓冲区生命周期已由可选 `CudaProcessingStrategy` 接入处理管线；默认构建仍关闭 CUDA。
 
 ## 组件清单
 
@@ -48,7 +48,11 @@ RAII 设备内存管理：
 | `calibration.cu` | `KernelCL.cl` 定标部分 | 暗场/平场校正 |
 | `composite.cu` | `KernelCL.cl` 合成部分 | 多帧合成 |
 
-### 5. 核函数声明 (`cuda_kernels.h`)
+### 5. CudaProcessingStrategy (`cuda_processing_strategy.h`)
+
+可选 `IProcessingStrategy` 实现，使用 `CudaDeviceManager` 和 `GpuBuffer` 执行统计、阈值与公共 `Labeler` 目标提取；创建失败通过 `std::expected` 返回，不影响无 CUDA 应用启动。
+
+### 6. 核函数声明 (`cuda_kernels.h`)
 
 C++ 主机端可调用的核函数包装声明。
 
@@ -77,15 +81,16 @@ option(DSS_ENABLE_CUDA "Build CUDA GPU backend and kernels" OFF)
 
 | 缺口 | 说明 |
 |------|------|
-| 未接入处理管线 | 已有可选 `CudaProcessingStrategy`，复用 `GpuBuffer`、`CudaDeviceManager` 与公共 `Labeler` |
-| `CudaDeviceManager` 未初始化 | 由策略工厂按需初始化；不可用时返回 `std::expected` 错误，不影响应用启动 |
-| 默认关闭 | `DSS_ENABLE_CUDA=OFF`，需手动开启 |
-| 无 GPU 单元测试 | 无 CUDA 契约测试已完成；固定帧 CPU/CUDA 对照测试已定义，需在 CUDA 环境执行 |
+| 硬件正确性 | 固定帧 CPU/OpenCV/CUDA 对照测试已定义，需在 CUDA 设备执行并回填结果 |
+| 性能收益 | 6144 级基准入口已提供，需记录延迟、吞吐、显存和丢帧指标 |
+| UI 启用 | `DSS_ENABLE_CUDA=OFF` 保持默认安全；仅在基准达到门槛后增加 UI 模式 |
+
+执行命令、收益门槛和结果表见 [硬件验证](hardware-validation.md)。
 
 ## 依赖关系
 
 ```
 dss_gpu_cuda
-├── dss_core
+├── dss_processing
 └── CUDA::cudart
 ```

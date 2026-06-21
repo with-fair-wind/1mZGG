@@ -113,6 +113,13 @@ auto labelAndExtract(span<const uint8_t> binaryImage,
 - 自适应阈值分割
 - 连通域检测 (`cv::connectedComponentsWithStats`)
 
+### 9. DiffProcessingStrategy (`diff_processing_strategy.h`)
+
+CPU 帧差策略保留上一帧 16 位图像，尺寸变化时重置历史；绝对差超过阈值的像素进入二值图，再复用公共 `Labeler` 提取目标。阈值和面积范围来自配置快照。
+
+### 10. CudaProcessingStrategy (`cuda_processing_strategy.h`)
+
+可选 CUDA 后端由 `createCudaProcessingStrategy()` 创建。无 CUDA 构建返回 `std::expected` 错误而不抛异常；CUDA 构建复用 `CudaDeviceManager`、`GpuBuffer` 和公共 `Labeler`。硬件正确性与性能结果按 [硬件验证](hardware-validation.md) 记录。
 ## 处理流水线
 
 ```
@@ -141,11 +148,10 @@ auto labelAndExtract(span<const uint8_t> binaryImage,
 
 | 缺口 | 说明 |
 |------|------|
-| GPU 后端未接入 | CUDA 核函数已移植但未作为 `IProcessingStrategy` 实现 |
-| 帧差法未实现 | `ProcessingMode::Diff` 仅定义枚举，无实现 |
-| 光度测量未接入 | `photometryBuffer` 未使用 |
-| 星图匹配未接入 | `DSS_ENABLE_STARLIBS` 接口未实现 |
-| 完整处理策略命令 | UI 已支持 None/OpenCV 切换；OpenCV 参数、Diff 模式和 CUDA 模式尚未接入 |
+| 光度测量 | `photometryBuffer` 尚未形成完整业务链路 |
+| 星图匹配 | `DSS_ENABLE_STARLIBS` 仍是预留构建边界 |
+| 完整定标与指向误差 | CUDA 核函数已有暗场/平场能力，但尚未形成统一的处理策略与 UI 参数闭环 |
+| CUDA 硬件验收 | `CudaProcessingStrategy` 已接入可选构建；输出对照、6144 性能和 UI 启用门槛见 [硬件验证](hardware-validation.md) |
 
 ## 依赖关系
 
@@ -157,4 +163,8 @@ dss_processing
 dss_processing_opencv (可选)
 ├── dss_processing
 └── OpenCV (core, imgproc)
+
+dss_gpu_cuda (可选)
+├── dss_processing
+└── CUDA::cudart
 ```
