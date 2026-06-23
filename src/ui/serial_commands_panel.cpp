@@ -12,6 +12,7 @@
 
 #include "dss/ui/communication_panels.h"
 #include "dss/ui/serial_port_view_model.h"
+#include "dss/ui/wheel_guarded_spin_box.h"
 
 #ifdef DSS_HAS_ELA
 #include <ElaCheckBox.h>
@@ -21,14 +22,14 @@
 namespace Dss::Ui {
 namespace {
 auto makeIntSpin(int minimum, int maximum, int value, QWidget* parent) -> QSpinBox* {
-    auto* spin = new QSpinBox(parent);
+    auto* spin = new WheelGuardedSpinBox(parent);
     spin->setRange(minimum, maximum);
     spin->setValue(value);
     return spin;
 }
 
 auto makeDoubleSpin(double minimum, double maximum, QWidget* parent) -> QDoubleSpinBox* {
-    auto* spin = new QDoubleSpinBox(parent);
+    auto* spin = new WheelGuardedDoubleSpinBox(parent);
     spin->setRange(minimum, maximum);
     spin->setDecimals(3);
     return spin;

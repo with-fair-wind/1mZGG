@@ -171,6 +171,10 @@ if(TARGET dss_ui_qt)
         test_main_window_layout.cpp
         dss_ui_qt
     )
+    dss_add_qt_test(test_wheel_guarded_spin_box
+        test_wheel_guarded_spin_box.cpp
+        dss_ui_qt
+    )
     dss_add_qt_test(test_main_view_model
         test_main_view_model.cpp
         dss_ui_qt

@@ -14,6 +14,7 @@
 #include "dss/ui/communication_panels.h"
 #include "dss/ui/data_exchange_view_model.h"
 #include "dss/ui/network_view_model.h"
+#include "dss/ui/wheel_guarded_spin_box.h"
 
 #ifdef DSS_HAS_ELA
 #include <ElaPushButton.h>
@@ -34,7 +35,7 @@ struct EndpointEditor {
 };
 
 auto makePortSpin(int value, QWidget* parent) -> QSpinBox* {
-    auto* spin = new QSpinBox(parent);
+    auto* spin = new WheelGuardedSpinBox(parent);
     spin->setRange(0, 65535);
     spin->setValue(value);
     return spin;

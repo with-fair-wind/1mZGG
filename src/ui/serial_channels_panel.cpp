@@ -13,6 +13,7 @@
 
 #include "dss/ui/communication_panels.h"
 #include "dss/ui/serial_port_view_model.h"
+#include "dss/ui/wheel_guarded_spin_box.h"
 
 #ifdef DSS_HAS_ELA
 #include <ElaPushButton.h>
@@ -50,11 +51,11 @@ auto createSerialChannelsPanel(SerialPortViewModel& viewModel, QWidget* parent) 
         auto* form = new QFormLayout(group);
         auto* portName = new QLineEdit(channel.portName, group);
         portName->setClearButtonEnabled(true);
-        auto* baudRate = new QSpinBox(group);
+        auto* baudRate = new WheelGuardedSpinBox(group);
         baudRate->setRange(1, 4'000'000);
-        auto* dataBits = new QSpinBox(group);
+        auto* dataBits = new WheelGuardedSpinBox(group);
         dataBits->setRange(5, 8);
-        auto* stopBits = new QSpinBox(group);
+        auto* stopBits = new WheelGuardedSpinBox(group);
         stopBits->setRange(1, 2);
         auto* frameSize = new QLabel(group);
         auto* serviceState = new QLabel(group);

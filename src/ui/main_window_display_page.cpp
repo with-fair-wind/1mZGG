@@ -1,5 +1,3 @@
-#include "dss/ui/main_window.h"
-
 #include <QCheckBox>
 #include <QFormLayout>
 #include <QGroupBox>
@@ -11,6 +9,8 @@
 
 #include "dss/ui/app_event.h"
 #include "dss/ui/image_display.h"
+#include "dss/ui/main_window.h"
+#include "dss/ui/wheel_guarded_spin_box.h"
 
 #ifdef DSS_HAS_ELA
 #include <ElaCheckBox.h>
@@ -38,8 +38,8 @@ void MainWindow::setupDisplayPage() {
     auto* lowSlider = new QSlider(Qt::Horizontal);
     auto* highSlider = new QSlider(Qt::Horizontal);
 #endif
-    auto* lowSpin = new QSpinBox;
-    auto* highSpin = new QSpinBox;
+    auto* lowSpin = new WheelGuardedSpinBox;
+    auto* highSpin = new WheelGuardedSpinBox;
     autoStretch->setObjectName("display_stretch_auto");
     lowSlider->setObjectName("display_stretch_low_slider");
     highSlider->setObjectName("display_stretch_high_slider");
@@ -140,6 +140,5 @@ void MainWindow::setupDisplayPage() {
     connect(m_imageDisplay, &ImageDisplay::positionClicked, &AppEvent::instance(),
             &AppEvent::publishTargetPositionSelected);
 }
-
 
 }  // namespace Dss::Ui

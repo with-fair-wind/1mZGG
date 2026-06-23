@@ -19,6 +19,7 @@
 
 #include "dss/ui/log_palette.h"
 #include "dss/ui/main_window.h"
+#include "dss/ui/wheel_guarded_spin_box.h"
 
 #ifdef DSS_HAS_ELA
 #include <ElaComboBox.h>
@@ -72,19 +73,19 @@ void MainWindow::setupSettingsPage() {
     logEnabled->setChecked(snapshot.logEnabled);
     auto* logPath = new QLineEdit(snapshot.logFilePath, m_settingsPage);
     logPath->setObjectName("settings_log_path");
-    auto* logSize = new QSpinBox(m_settingsPage);
+    auto* logSize = new WheelGuardedSpinBox(m_settingsPage);
     logSize->setRange(1, 2'000'000'000);
     logSize->setValue(static_cast<int>(snapshot.logMaxFileSizeBytes));
-    auto* logFiles = new QSpinBox(m_settingsPage);
+    auto* logFiles = new WheelGuardedSpinBox(m_settingsPage);
     logFiles->setRange(1, 100);
     logFiles->setValue(static_cast<int>(snapshot.logMaxFiles));
-    auto* imageWidth = new QSpinBox(m_settingsPage);
+    auto* imageWidth = new WheelGuardedSpinBox(m_settingsPage);
     imageWidth->setRange(1, 100'000);
     imageWidth->setValue(snapshot.imageWidth);
-    auto* imageHeight = new QSpinBox(m_settingsPage);
+    auto* imageHeight = new WheelGuardedSpinBox(m_settingsPage);
     imageHeight->setRange(1, 100'000);
     imageHeight->setValue(snapshot.imageHeight);
-    auto* pixelScale = new QDoubleSpinBox(m_settingsPage);
+    auto* pixelScale = new WheelGuardedDoubleSpinBox(m_settingsPage);
     pixelScale->setRange(0.000001, 1'000'000.0);
     pixelScale->setDecimals(8);
     pixelScale->setValue(snapshot.pixelScale);
