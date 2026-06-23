@@ -41,7 +41,7 @@ AppEvent (跨页面 Qt 信号中枢)
 | 子模块 | 主要职责 |
 |------|---------|
 | `ReplayViewModel` | 选择图像序列、初始化 `ImageSequenceFrameSource`、开始/暂停、单帧前进、维护当前帧和总帧数 |
-| `DisplayViewModel` | 缓存当前 raw frame、计算统计信息、自动/手动拉伸、实时刷新显示图和裁切图 |
+| `DisplayViewModel` | 缓存当前 raw frame、计算统计信息、自动/手动拉伸、实时刷新显示图 |
 | `ProcessingViewModel` | 同步 None/OpenCV/Diff 处理策略与参数快照；CUDA 仅在硬件收益达标后开放 |
 | `TrackingViewModel` | 同步 Manual/GEO/LEO/SC 跟踪策略、处理手动选点、输出跟踪状态与目标信息 |
 | `StorageViewModel` | 控制图像 raw worker 与轨迹文本 worker 的启动、停止和 drain |
@@ -114,17 +114,9 @@ signals:
 | `setImage(QImage)` | 更新显示图像 |
 | `resetView()` | 回到整图适配视图 |
 | 鼠标滚轮 | 围绕鼠标所在图像像素区域放大/缩小 |
+| 按住鼠标中键拖动 | 放大后平移图像，且边缘不露出空白 |
 | 坐标映射 | Widget 坐标 ↔ 图像坐标 |
 | 点击/移动信号 | 用户交互事件 |
-
-### 6. ImageDisplayCrop (`image_display_crop.h`)
-
-裁切放大显示控件（从旧版 `UI_DispPadS` 迁移）：
-
-| 方法 | 说明 |
-|------|------|
-| `setCropCenter(x, y)` | 设置裁切中心 |
-| `setCropSize(w, h)` | 设置裁切区域大小 |
 
 ## 旧版对照
 
@@ -132,7 +124,6 @@ signals:
 |------|------|------|
 | `UI_CtrlPad` | `MainWindow` + `MainViewModel` + 子 ViewModel | 回放定位、保存、运行诊断、参数化处理及四种跟踪入口已接 |
 | `UI_DispPad` | `ImageDisplay` | 基本功能 + 滚轮缩放迁移 |
-| `UI_DispPadS` | `ImageDisplayCrop` | 基本功能迁移 |
 | `UI_InitDlg` | `InitDialog` | 已迁移 |
 | `UI_DistCurve` | — | **未迁移** |
 | `QLabelImage` | `ImageDisplay` | 已迁移 |

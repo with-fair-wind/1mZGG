@@ -13,7 +13,6 @@
 namespace Dss::Ui {
 
 class ImageDisplay;
-class ImageDisplayCrop;
 
 /// 应用主窗口，组织导航页面与图像显示控件
 #ifdef DSS_HAS_ELA
@@ -61,8 +60,7 @@ private:
     QWidget* m_settingsPage = nullptr;  ///< 设置页容器
     QWidget* m_logPage = nullptr;       ///< 日志页容器
 
-    ImageDisplay* m_imageDisplay = nullptr;          ///< 主图像显示控件
-    ImageDisplayCrop* m_imageDisplayCrop = nullptr;  ///< 裁剪区域显示控件
+    ImageDisplay* m_imageDisplay = nullptr;  ///< 主图像显示控件
 };
 
 }  // namespace Dss::Ui

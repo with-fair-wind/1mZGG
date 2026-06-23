@@ -41,6 +41,7 @@ protected:
     void paintEvent(QPaintEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
 
@@ -53,9 +54,11 @@ private:
     /// 限制偏移量与缩放比例在有效范围内
     void clampOffset();
 
-    QImage m_currentImage;       ///< 当前显示图像
-    double m_scaleFactor = 1.0;  ///< 当前缩放比例
-    QPointF m_offset{};          ///< 图像左上角在控件中的偏移
+    QImage m_currentImage;        ///< 当前显示图像
+    double m_scaleFactor = 1.0;   ///< 当前缩放比例
+    QPointF m_offset{};           ///< 图像左上角在控件中的偏移
+    bool m_isPanning = false;     ///< 是否正在使用中键拖动图像
+    QPointF m_lastPanPosition{};  ///< 上一次拖动位置（控件坐标）
 };
 
 }  // namespace Dss::Ui

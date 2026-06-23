@@ -90,17 +90,46 @@ void ImageDisplay::paintEvent(QPaintEvent* /*event*/) {
 }
 
 void ImageDisplay::mousePressEvent(QMouseEvent* event) {
+    if (event->button() == Qt::MiddleButton && !m_currentImage.isNull()) {
+        m_isPanning = true;
+        m_lastPanPosition = event->position();
+        event->accept();
+        return;
+    }
+
     if (event->button() == Qt::LeftButton) {
-        auto imgPos = imagePositionAt(event->position());
+        const auto imgPos = imagePositionAt(event->position());
         Q_EMIT positionClicked(imgPos);
     }
     QWidget::mousePressEvent(event);
 }
 
 void ImageDisplay::mouseMoveEvent(QMouseEvent* event) {
-    auto imgPos = imagePositionAt(event->position());
+    const auto isMiddleDrag = m_isPanning && event->buttons().testFlag(Qt::MiddleButton);
+    if (isMiddleDrag) {
+        const auto delta = event->position() - m_lastPanPosition;
+        m_lastPanPosition = event->position();
+        m_offset += delta;
+        clampOffset();
+        update();
+    }
+
+    const auto imgPos = imagePositionAt(event->position());
     Q_EMIT mouseMoved(imgPos);
+    if (isMiddleDrag) {
+        event->accept();
+        return;
+    }
     QWidget::mouseMoveEvent(event);
+}
+
+void ImageDisplay::mouseReleaseEvent(QMouseEvent* event) {
+    if (event->button() == Qt::MiddleButton && m_isPanning) {
+        m_isPanning = false;
+        event->accept();
+        return;
+    }
+    QWidget::mouseReleaseEvent(event);
 }
 
 /**
