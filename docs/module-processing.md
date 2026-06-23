@@ -168,3 +168,187 @@ dss_gpu_cuda (可选)
 ├── dss_processing
 └── CUDA::cudart
 ```
+## 深入架构与调用链
+
+### 模块边界与依赖
+
+Processing 是帧流水线的调度中心：接收 `FramePacket`、在单一工作线程执行处理策略和跟踪策略、生成显示图与事件。它不负责采集线程、磁盘写入、网络发送或 Widget。
+
+```mermaid
+flowchart LR
+    PROC["dss_processing"] --> CORE["dss_core"]
+    PROC --> TRACK["dss_tracking"]
+    OCVT["dss_processing_opencv"] --> OCV["OpenCV（可选）"]
+    OCVT --> PROC
+    CUDA["dss_gpu_cuda（可选）"] --> PROC
+    ACQ["dss_acquisition_qt"] -->|"FramePacket"| PROC
+    UI["UI"] --> PROC
+    PROC -->|"TrackResultEvent"| APP["App/Storage/Network"]
+```
+
+### 关键类关系
+
+```mermaid
+classDiagram
+    class FramePacket {
+        +frameSeq uint64
+        +width uint32
+        +height uint32
+        +metadata ExposureDisplayData
+        +rawImage vector~uint16~
+        +displayImage vector~uint8~
+        +targetBlobs vector~MeasuredBlob~
+    }
+    class BoundedChannel {
+        +tryPush(value) bool
+        +pop(stop_token) optional~T~
+        +open()
+        +close()
+    }
+    class ImageProcessor {
+        -BoundedChannel frameChannel
+        -jthread workerThread
+        -ProcessingPipeline pipeline
+        -unique_ptr~ITrackingStrategy~ trackStrategy
+        +start()
+        +stop()
+        +submitFrame(packet) bool
+        +setProcessingStrategy(strategy)
+        +setTrackingStrategy(strategy)
+    }
+    class ProcessingPipeline {
+        -unique_ptr~IProcessingStrategy~ backend
+        +setBackend(backend)
+        +process(packet) ProcessingResult
+    }
+    class IProcessingStrategy {
+        <<interface>>
+        +process(packet) ProcessingResult
+        +name() string_view
+        +mode() ProcessingMode
+    }
+    class DiffProcessingStrategy
+    class OpenCvProcessingStrategy
+    class CudaProcessingStrategy
+    class Labeler {
+        +labelAndExtract(binary,width,height)
+    }
+    class ITrackingStrategy {
+        <<interface>>
+        +track(measurements) vector~TargetInfo~
+    }
+
+    ImageProcessor *-- BoundedChannel
+    ImageProcessor *-- ProcessingPipeline
+    ProcessingPipeline o-- IProcessingStrategy
+    IProcessingStrategy <|.. DiffProcessingStrategy
+    IProcessingStrategy <|.. OpenCvProcessingStrategy
+    IProcessingStrategy <|.. CudaProcessingStrategy
+    DiffProcessingStrategy *-- Labeler
+    OpenCvProcessingStrategy *-- Labeler
+    CudaProcessingStrategy *-- Labeler
+    ImageProcessor o-- ITrackingStrategy
+    BoundedChannel --> FramePacket
+```
+
+### 从提交到事件扇出的完整调用栈
+
+```mermaid
+sequenceDiagram
+    participant Producer as 帧源回调
+    participant Processor as ImageProcessor
+    participant Queue as BoundedChannel容量4
+    participant Pipeline as ProcessingPipeline
+    participant Strategy as IProcessingStrategy
+    participant Tracker as ITrackingStrategy
+    participant Bus as MessageBus
+
+    Producer->>Processor: submitFrame(move(packet))
+    Processor->>Queue: tryPush(packet)
+    alt 队列满或已关闭
+        Processor->>Processor: droppedFrames++
+        Processor-->>Producer: false
+    else 入队成功
+        Processor-->>Producer: true
+    end
+    Processor->>Queue: pop(stop_token)
+    Queue-->>Processor: FramePacket
+    Processor->>Pipeline: process(packet)
+    opt 已配置处理后端
+        Pipeline->>Strategy: process(packet)
+        Strategy-->>Pipeline: ProcessingResult
+    end
+    opt 已配置跟踪且处理成功，或没有处理后端
+        Processor->>Processor: 组装 FrameMeasurements
+        Processor->>Tracker: track(measurements)
+        Tracker-->>Processor: TargetInfo 列表
+    end
+    Processor->>Processor: 从 rawImage 重新生成当前拉伸显示图
+    Processor->>Bus: DisplayRefreshEvent
+    Processor->>Bus: ProcessingCompleteEvent
+    opt 结果非空
+        Processor->>Bus: TrackResultEvent
+    end
+    Processor->>Bus: RotatedFrameReadyEvent
+    Processor->>Bus: ImageSendEvent
+```
+
+显示缓冲的优先级很重要：尺寸合法且有 `rawImage` 时，总是根据当前 `DisplayStretchSettings` 重新构造 8 位图；否则退回策略的 `displayImage`，再退回输入包已有显示图。原始像素以 `shared_ptr<const vector<uint16_t>>` 放进 `DisplayRefreshEvent`，让 UI 可在不复制业务状态的情况下重新拉伸。
+
+### 处理策略行为
+
+| 策略 | 主要步骤 | 状态性 | 输出 |
+|---|---|---|---|
+| 无后端 | Pipeline 返回默认失败结果 | 无 | 可直接使用 `FramePacket` 自带 blobs 做跟踪 |
+| `DiffProcessingStrategy` | 统计 → 与上一帧绝对差 → 阈值二值化 → Labeler | 保存上一帧和尺寸 | target blobs、二值显示图 |
+| `OpenCvProcessingStrategy` | 统计/拉伸 → 阈值 → OpenCV 连通域 → DTO 转换 | 参数状态 | blobs、统计、显示图 |
+| `CudaProcessingStrategy` | 上传 → CUDA 拉伸/二值化 → 下载 → CPU Labeler | 复用设备缓冲 | blobs、统计/显示图 |
+
+Diff 首帧或尺寸变化时只缓存基准帧并返回成功，不会产生跨帧差分目标。策略切换由 `ProcessingViewModel` 创建新实例并通过 `setProcessingStrategy()` 替换，旧策略状态随实例销毁。
+
+### Labeler 与数据契约
+
+```mermaid
+flowchart LR
+    BINARY["8 位二值图"] --> SCAN["扫描连通区域"]
+    SCAN --> ACC["面积/边界/灰度累积"]
+    ACC --> FILTER{"minArea <= area <= maxArea"}
+    FILTER -->|"通过"| BLOB["MeasuredBlob"]
+    FILTER -->|"拒绝"| DROP["丢弃"]
+    BLOB --> RESULT["ProcessingResult::targetBlobs"]
+```
+
+`FramePacket` 拥有输入缓冲，适合在线程间移动；`FrameView`/ `MutableFrameView` 是不拥有内存的轻量视图，只能在底层缓冲有效期内使用。新增算法时不要把临时 `span` 保存进异步对象。
+
+### 生命周期与并发
+
+```mermaid
+stateDiagram-v2
+    [*] --> Stopped
+    Stopped --> Running: start / channel.open / 创建 jthread
+    Running --> Running: start 再次调用（忽略）
+    Running --> Stopping: stop / request_stop / channel.close
+    Stopping --> Stopped: worker join
+    Stopped --> [*]: 析构
+```
+
+- 队列容量固定为 4，生产者非阻塞；满时丢新帧并累计 `droppedFrames`。
+- `m_strategyMutex` 同时保护处理策略和跟踪策略。工作线程执行整个策略期间持锁，因此 UI 切换策略会等待当前帧结束。
+- 显示拉伸设置使用独立 mutex，可在不替换策略的情况下更新。
+- `stop()` 先请求停止并关闭通道，再 join；工作线程退出后把 `m_running` 置 false。
+- 处理和跟踪当前在同一工作线程串行执行，避免策略内部状态被并发访问。
+
+### 错误与可观测性
+
+策略用 `ProcessingResult::success=false` 表示单帧处理失败，主循环仍会尝试构建显示并继续下一帧；没有异常或错误事件自动上报。队列丢帧通过 `droppedFrames()` 被 `RuntimeDiagnostics` 读取。扩展策略时应保证错误帧不破坏下一帧状态，并明确是否需要新增诊断事件。
+
+### 配置与扩展点
+
+- 处理模式由 `ProcessingViewModel` 映射为具体策略；可用性受 `DSS_HAS_OPENCV` / `DSS_HAS_CUDA` 控制。
+- 显示拉伸包含 Auto/Manual、低高阈值和信号上限；UI 修改后同步到 Processor，并可用缓存 raw 立即重绘当前帧。
+- 新策略实现 `IProcessingStrategy` 后，需要补工厂/UI 模式映射、CMake target 依赖、无效输入契约和至少一个算法测试。
+- 如果算法会长期阻塞，不应简单增大队列掩盖延迟；先用 `droppedFrames` 和基准测试定位。
+
+重点测试：`test_bounded_channel.cpp`、`test_frame_view.cpp`、`test_processing_pipeline.cpp`、`test_image_processor.cpp`、`test_diff_processing.cpp`、`test_opencv_processing.cpp`、`test_display_stretch.cpp`、`test_cuda_processing_contract.cpp`。
+
+推荐源码顺序：`frame_packet.h` → `bounded_channel.h` → `i_processing_strategy.h` → `processing_pipeline.*` → `image_processor.*` → `display_stretch.*` → `labeler.*` → Diff/OpenCV/CUDA 策略 → `ProcessingViewModel`。

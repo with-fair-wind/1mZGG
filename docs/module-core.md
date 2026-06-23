@@ -82,10 +82,10 @@ Core 模块是整个系统的基础层，提供所有其他模块共享的类型
 | `SerialFrameErrorEvent` | `SerialWorkerBase` | `LogViewModel` |
 | `SerialDecodeErrorEvent` | Serial Channel | `LogViewModel` |
 | `MasterControlEvent` | `MasterControlChannel` | `MainViewModel`、DataExchange bridge |
-| `ExposureSyncEvent` | ExposureChannel | ImageProcessor |
-| `Sync25HzEvent` | DisplayChannel | ImageProcessor |
-| `ManualTargetSelectEvent` | UI | ManualTracker |
-| `ZoomChangeEvent` | UI | ImageDisplay |
+| `ExposureSyncEvent` | ExposureChannel | 当前无后端订阅 |
+| `Sync25HzEvent` | DisplayChannel | 当前无后端订阅 |
+| `ManualTargetSelectEvent` | UI | 语义通知；实际目标通过 ViewModel 直接配置 |
+| `ZoomChangeEvent` | UI | 当前无 ImageDisplay 订阅；控件直接处理滚轮 |
 | `CloseEvent` | UI | ApplicationContext |
 | `LogMessageEvent` | Logger | UI Log Panel，带 `LogLevel` 供分级过滤 |
 | `AtmosphereDataEvent` | AtmosReceiver | — |
@@ -163,3 +163,206 @@ dss_core
 ```
 
 Core 模块是所有其他模块的基础依赖，不依赖 Qt 或任何其他项目模块。
+## 深入架构与调用链
+
+### 边界与一跳依赖
+
+Core 负责稳定的数据契约和基础设施，不负责 Qt 对象、硬件 I/O、图像算法或业务页面。它是其余模块可以共同依赖的“内层”；Storage 源文件虽然位于独立命名空间和目录，当前仍与 Core 一起编译。
+
+```mermaid
+flowchart LR
+    CORE["dss_core"] --> JSON["nlohmann_json"]
+    CORE --> SPD["spdlog（PRIVATE）"]
+    CORE -. "编译包含" .-> STORE["src/storage（同一 target）"]
+    APP["App"] --> CORE
+    TRACK["Tracking"] --> CORE
+    PROC["Processing"] --> CORE
+    COMM["Comm"] --> CORE
+    NET["Network"] --> CORE
+    UI["UI"] --> CORE
+```
+
+| 依赖 | 用途 | 暴露方式 |
+|---|---|---|
+| `nlohmann_json` | JSON 配置序列化/反序列化 | `PUBLIC` |
+| `spdlog` | 日志后端与 sink | `PRIVATE` |
+| C++ 标准库 | `expected`、线程同步、类型索引、智能指针 | 公共接口直接使用 |
+| Qt | 无 | Core 必须保持 Qt-free |
+
+### 关键类关系
+
+```mermaid
+classDiagram
+    class BasicMessageBus {
+        +subscribe~Message~(handler) ScopedConnection
+        +emit~Message~(message)
+        +post~Message~(message)
+        +flush~Message~()
+    }
+    class ScopedConnection {
+        +disconnect()
+        +connected() bool
+    }
+    class ServiceRegistry {
+        +registerService~T~(name, shared_ptr)
+        +get~T~(name) shared_ptr
+        +tryGet~T~(name) shared_ptr
+        +has~T~(name) bool
+        +clear()
+    }
+    class IService {
+        <<interface>>
+        +name() string_view
+        +start() expected
+        +stop()
+    }
+    class ServiceHost {
+        +add(shared_ptr~IService~)
+        +startAll() expected
+        +stopAll()
+    }
+    class Config {
+        +instance() Config
+        +load(path) expected
+        +save(path) expected
+        +trackingSettings()
+        +comm()
+        +paths()
+    }
+    class Logger {
+        +instance() Logger
+        +setBus(bus)
+        +configureRotatingFileLogging()
+        +info()
+        +warn()
+        +error()
+    }
+
+    BasicMessageBus --> ScopedConnection : 创建
+    ServiceHost o-- IService : 持有并编排
+    ServiceRegistry o-- IService : 可按接口注册同一实例
+    Logger --> BasicMessageBus : 发布 LogMessageEvent
+    Config ..> ServiceRegistry : 为组合根提供配置
+```
+
+`ServiceRegistry` 与 `ServiceHost` 解决不同问题：前者按“类型 + 名称”查找共享实例，后者按顺序拥有 `IService` 并负责启停回滚。把对象放进 Registry 不会自动启动它，也不会自动进入 Host。
+
+### 事件分发调用栈
+
+```mermaid
+sequenceDiagram
+    participant Producer as 发布者
+    participant Bus as BasicMessageBus
+    participant Channel as Event<Message>
+    participant Snapshot as 处理器快照
+    participant Subscriber as 订阅者
+
+    Producer->>Bus: emit(message)
+    Bus->>Channel: 获取/创建类型通道
+    Channel->>Snapshot: 读取 COW 快照
+    loop 当前快照中的处理器
+        Snapshot->>Subscriber: handler(message)
+    end
+    Subscriber-->>Producer: 同步返回
+```
+
+- `emit()` 同步执行，不切线程。
+- `post()` 只入队，直到调用对应类型的 `flush()` 才分发。
+- `ScopedConnection` 析构断连；订阅者类通常把它保存在 `std::vector` 中，使订阅生命周期与对象一致。
+- COW 快照允许处理器执行期间发生订阅/取消订阅，但业务对象本身的线程安全仍由业务代码负责。
+
+### 当前事件连接真值
+
+上方“事件系统”表同时列出了语义用途；实际已经接通的关键路径如下：
+
+```mermaid
+flowchart LR
+    IP["ImageProcessor"] --> DR["DisplayRefreshEvent"]
+    IP --> PC["ProcessingCompleteEvent"]
+    IP --> TR["TrackResultEvent"]
+    DR --> DVM["DisplayViewModel"]
+    DR --> RVM["ReplayViewModel"]
+    PC --> DVM
+    TR --> TVM["TrackingViewModel"]
+    TR --> TS["TrackDataStorageBackend 订阅"]
+    TR --> DX["TrackResultDataExchangeBridge"]
+    MC["MasterControlChannel"] --> MCE["MasterControlEvent"]
+    MCE --> MVM["MainViewModel"]
+    MCE --> DX
+    COMM["SerialWorkerBase/Channel"] --> SE["串口错误事件"]
+    STORE["Storage workers"] --> SWE["StorageWriteErrorEvent"]
+    DATA["DataExchange"] --> NTE["NetworkTransmissionErrorEvent"]
+    SE --> DIAG["ErrorDiagnostics/RuntimeDiagnostics"]
+    SWE --> DIAG
+    NTE --> DIAG
+```
+
+`ExposureSyncEvent`、`Sync25HzEvent`、`ManualTargetSelectEvent`、`ZoomChangeEvent` 已有发布点，但不要仅凭事件名称假设存在后端订阅。当前手动目标的真正配置路径是 `TrackingViewModel::selectTarget() → configureTrackingStrategy() → ManualTracker::setManualTarget()`；图像缩放由 `ImageDisplay::wheelEvent()` 直接处理。
+
+### ServiceHost 启停与回滚
+
+```mermaid
+sequenceDiagram
+    participant Caller as 调用方
+    participant Host as ServiceHost
+    participant A as Service A
+    participant B as Service B
+    participant C as Service C
+
+    Caller->>Host: startAll()
+    Host->>A: start()
+    A-->>Host: 成功
+    Host->>B: start()
+    B-->>Host: 成功
+    Host->>C: start()
+    C-->>Host: 失败
+    Host->>B: stop()
+    Host->>A: stop()
+    Host-->>Caller: unexpected(error)
+```
+
+`stopAll()` 始终按注册逆序停止。Host 已进入启动/运行状态后不应再随意追加服务；这样可以保证依赖服务晚启动、早停止。
+
+### 配置加载链
+
+```mermaid
+flowchart TD
+    PATH["SystemInit.json"] --> LOAD["Config::load(path)"]
+    LOAD --> PARSE["nlohmann_json 解析"]
+    PARSE --> DTO["Config DTO 分域赋值"]
+    DTO --> ACCESS["optics / comm / tracking / paths / logging"]
+    ACCESS --> APP["ApplicationContext 与各 ViewModel"]
+    LOAD -->|"失败"| EXP["std::unexpected(error)"]
+```
+
+配置是进程级单例。读取通常发生在启动阶段，UI 设置页可能修改可变 DTO 并保存；新增字段时必须同时检查默认值、JSON 兼容读取、保存输出和 `test_config.cpp`。
+
+### 线程与所有权
+
+| 组件 | 所有权 | 线程安全策略 |
+|---|---|---|
+| App 中的 `BasicMessageBus<SharedMutexLock>` | `ApplicationContext` 独占 | 通道表与处理器列表使用共享互斥/COW；处理器内容不自动受保护 |
+| `ServiceRegistry` | `ApplicationContext` 独占，内部持有 `shared_ptr` | `shared_mutex` 保护注册和查询 |
+| `ServiceHost` | `ApplicationContext` 独占 | 生命周期操作应由单一编排线程执行 |
+| `Config` / `Logger` | 静态单例 | 启动期配置；并发变更要额外审查 |
+| 领域 DTO | 值对象或智能指针只读快照 | 跨线程优先移动值或传 `shared_ptr<const T>` |
+
+### 错误与诊断
+
+- 配置、服务启动使用 `std::expected<..., std::string>`，调用方必须检查，不能只依赖日志。
+- 运行期串口、网络、存储错误通过类型化事件扇出到诊断与日志。
+- Registry 的 `get()` 是强约束查询，缺失会抛异常；UI 的可选功能通常使用 `tryGet()` 并转换成状态提示。
+- Logger 在 `wireLogger()` 后才会把日志发布到总线；`ApplicationContext` 析构时先停止服务，再断开 Logger 的总线指针。
+
+### 扩展、测试与阅读顺序
+
+新增跨模块数据时，优先在 `types.h` 定义稳定 DTO；只用于通知的载荷放进 `events.h`。新增服务接口时，先判断是否真的需要统一 `IService` 生命周期，避免把 Registry 当作服务定位器滥用。
+
+重点测试：
+
+- `test_event_bus_primitives_header.cpp`、`test_event_header.cpp`
+- `test_service_registry.cpp`、`test_service_host.cpp`
+- `test_config.cpp`、`test_logger.cpp`
+- `test_result_packet_utils.cpp`
+
+推荐源码顺序：`types.h` → `events.h` → `event_bus.h` → `service_registry.h` → `i_service.h` / `service_host.*` → `config_types.h` / `config.*` → `logger.*` → `result_packet_utils.*`。

@@ -157,3 +157,179 @@ dss_comm_qt
 ├── Qt6::Core
 └── Qt6::SerialPort
 ```
+## 深入架构与调用链
+
+### 模块边界与依赖
+
+Comm 把四路遗留定长串口协议封装成统一通道和类型化命令端口。它负责串口打开、工作循环、帧校验、编解码和事件发布；不负责 UI 表单、跟踪算法或网络协议。
+
+```mermaid
+flowchart LR
+    COMM["dss_comm_qt"] --> CORE["dss_core"]
+    COMM --> QT["Qt6 Core/SerialPort"]
+    APP["ApplicationContext"] --> COMM
+    UI["SerialPortViewModel"] -->|"open/close/send"| COMM
+    COMM -->|"同步与错误事件"| BUS["MessageBus"]
+```
+
+### 关键类关系
+
+```mermaid
+classDiagram
+    class ISerialChannel {
+        <<interface>>
+        +open(SerialConfig) expected
+        +close()
+        +isOpen() bool
+        +status() Status
+        +recvFrameSize() size_t
+        +sendFrameSize() size_t
+    }
+    class SerialWorkerBase {
+        -unique_ptr~QSerialPort~ serialPort
+        -jthread workerThread
+        +open(config)
+        +close()
+        #requestSend()
+        #decodeFrame(data)*
+        #encodeFrame(buffer)*
+    }
+    class DisplayChannel
+    class ExposureChannel {
+        +latestData()
+        +sendExposureCommand(command)
+    }
+    class MasterControlChannel {
+        +sendMasterControlStatus(status)
+    }
+    class ServoChannel {
+        +setTrackResult(target)
+        +sendServoCorrection(correction)
+    }
+    class FrameCodec {
+        +validateDetailed(frame,size)
+        +wrap(frame)
+    }
+    class IExposureCommandPort
+    class IMasterControlStatusPort
+    class IServoCorrectionPort
+
+    ISerialChannel <|.. SerialWorkerBase
+    SerialWorkerBase <|-- DisplayChannel
+    SerialWorkerBase <|-- ExposureChannel
+    SerialWorkerBase <|-- MasterControlChannel
+    SerialWorkerBase <|-- ServoChannel
+    ExposureChannel ..|> IExposureCommandPort
+    MasterControlChannel ..|> IMasterControlStatusPort
+    ServoChannel ..|> IServoCorrectionPort
+    SerialWorkerBase ..> FrameCodec
+```
+
+### 打开与工作线程
+
+```mermaid
+sequenceDiagram
+    participant UI as SerialPortViewModel
+    participant Base as SerialWorkerBase
+    participant Port as QSerialPort
+    participant Worker as std::jthread
+
+    UI->>Base: open(SerialConfig)
+    Base->>Port: 构造并设置端口/波特率/8N1/无流控
+    Base->>Port: open(ReadWrite)
+    alt 打开失败
+        Base-->>UI: unexpected(errorString)
+    else 成功
+        Base->>Base: status=Ok
+        Base->>Worker: 启动 workerLoop
+        Base-->>UI: success
+    end
+```
+
+当前 `QSerialPort` 在调用 `open()` 的线程创建，随后在 `std::jthread` 中调用阻塞读写，没有使用 `QThread::moveToThread()`。这是必须通过真实硬件验收的线程亲和性边界；若重构，应在工作线程内创建/销毁端口，或统一改为 Qt 线程事件循环模型。
+
+### 接收调用栈
+
+```mermaid
+flowchart TD
+    WAIT["workerLoop: waitForReadyRead(20ms)"] --> READ["onDataReceived"]
+    READ --> SIZE{"bytesAvailable >= recvFrameSize"}
+    SIZE -->|"否"| LOOP["返回循环"]
+    SIZE -->|"是"| CHUNK["按固定长度 read"]
+    CHUNK --> VALID["FrameCodec::validateDetailed"]
+    VALID -->|"头/尾/长度正确"| DECODE["派生类 decodeFrame"]
+    VALID -->|"失败"| FE["SerialFrameErrorEvent"]
+    DECODE -->|"字段合法"| DOMAIN["发布领域事件/更新缓存"]
+    DECODE -->|"BCD/范围等错误"| DE["SerialDecodeErrorEvent"]
+    DOMAIN --> FPS["recvCount++"]
+```
+
+基础层只做定长帧和首尾字节校验；字段范围由 `serial_protocol_codec.h` 详细解码器检查。当前读取按固定块切分，不包含从噪声流中扫描帧头的重同步状态机，线路丢字节后可能连续错位，属于硬件联调重点。
+
+### 发送调用栈
+
+```mermaid
+sequenceDiagram
+    participant UI as 调用方
+    participant Channel as 具体 Channel
+    participant Base as SerialWorkerBase
+    participant Worker as 工作线程
+    participant Codec as 协议编码
+    participant Port as QSerialPort
+
+    UI->>Channel: send...Command(value)
+    Channel->>Channel: mutex 下覆盖 pending value
+    Channel->>Base: requestSend()
+    Base->>Base: sendRequested=true
+    Worker->>Base: 发现发送请求并清零
+    Base->>Channel: encodeFrame(buffer)
+    Channel->>Codec: encode...
+    Base->>Base: FrameCodec::wrap(header/tail)
+    Base->>Port: write(buffer)
+```
+
+发送请求是布尔标志，不是命令队列；工作线程取走之前的多次调用会合并为“发送最新 pending 值”。这适合状态/修正量更新，不适合要求逐条可靠送达的事务命令。
+
+### 四路协议行为
+
+| 通道 | 接收成功 | 发送载荷 | 运行时接口 |
+|---|---|---|---|
+| Display | 解码指向时间数据后发布 `Sync25HzEvent` | 当前无有效载荷 | `ISerialChannel` |
+| Exposure | 缓存 `ExposureDisplayData`，发布 `ExposureSyncEvent` | `ExposureCommand` | `IExposureCommandPort` |
+| MasterControl | 转换并发布 `MasterControlEvent` | `MasterControlStatus` | `IMasterControlStatusPort` |
+| Servo | 当前接收解码为空 | `ServoCorrection` | `IServoCorrectionPort` |
+
+`ServoChannel::setTrackResult()` 可把 `TargetInfo` 的 AE 位置/速度换算成角秒修正并请求发送，但当前 App 没有自动订阅 `TrackResultEvent` 调用它；通信页支持显式发送修正命令。
+
+### 协议层次
+
+```mermaid
+flowchart LR
+    BYTES["原始字节"] --> FRAME["FrameCodec<br/>长度/帧头/帧尾"]
+    FRAME --> LAYOUT["layoutFor(SerialProtocol)<br/>固定收发长度"]
+    LAYOUT --> DETAIL["detail 编解码<br/>小端/BCD/角度/符号幅值"]
+    DETAIL --> DTO["ExposureCommand / MasterControlCommand / ServoCorrection"]
+    DTO --> EVENT["Core 事件或发送缓存"]
+```
+
+所有多字节字段、缩放系数和 BCD 范围应集中在 codec；Channel 只做状态缓存和事件映射。新增字段不要在 UI 或 worker 里直接按偏移读写。
+
+### 生命周期、线程与错误
+
+| 状态/数据 | 保护 |
+|---|---|
+| status、收发计数/FPS | atomic |
+| `sendRequested` | send mutex |
+| 各通道 pending 命令与 latest data | 各自 mutex |
+| QSerialPort | 当前由 worker 执行 I/O；线程亲和需硬件验证 |
+| 总线事件 | 在串口 worker 线程同步发布 |
+
+`close()` 请求停止并 join，然后关闭/释放串口，状态回到 Init。帧结构错误和字段解码错误分别发布不同事件，`ErrorDiagnostics` 会把 Display/Exposure 错误标记为通信失败，`RuntimeDiagnostics` 统一累计串口错误数。
+
+### 配置、扩展与测试
+
+端口名和波特率来自 `Config::comm()`，UI 可编辑并保存；应用修改配置时会先关闭已打开通道，避免在运行中替换端口参数。新增协议应先增加 `SerialProtocol` layout 和 codec 测试，再实现薄 Channel，最后注册接口和 UI。
+
+重点测试：`test_frame_codec.cpp`、`test_serial_protocol_codec.cpp`、`test_serial_port_view_model.cpp`、`test_application_context_services.cpp`。真实串口还需覆盖断线、噪声错位、半帧、持续高频发送和关闭竞态。
+
+推荐源码顺序：`i_serial_channel.h` → `frame_codec.h` → `serial_protocol_codec.h` / detail → `serial_command_interfaces.h` → `serial_worker_base.*` → 四个 Channel → App 注册 → `SerialPortViewModel` 和通信面板。

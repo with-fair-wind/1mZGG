@@ -123,7 +123,7 @@ signals:
 | 旧版 | 新版 | 状态 |
 |------|------|------|
 | `UI_CtrlPad` | `MainWindow` + `MainViewModel` + 子 ViewModel | 回放定位、保存、运行诊断、参数化处理及四种跟踪入口已接 |
-| `UI_DispPad` | `ImageDisplay` | 基本功能 + 滚轮缩放迁移 |
+| `UI_DispPad` | `ImageDisplay` | 图像显示、坐标映射、滚轮缩放和中键平移已迁移 |
 | `UI_InitDlg` | `InitDialog` | 已迁移 |
 | `UI_DistCurve` | — | **未迁移** |
 | `QLabelImage` | `ImageDisplay` | 已迁移 |
@@ -151,3 +151,290 @@ dss_ui_qt
 ├── Qt6::Charts
 └── elawidgettools (可选, DSS_HAS_ELA)
 ```
+## 深入架构与调用链
+
+### 模块边界与一跳依赖
+
+UI 负责用户操作、页面装配、Qt 信号槽和后端命令适配；业务服务由 App 创建并放入 Registry，UI 不拥有第二套后端实例。
+
+```mermaid
+flowchart LR
+    UI["dss_ui_qt"] --> CORE["dss_core"]
+    UI --> APP["dss_app"]
+    UI --> ACQ["dss_acquisition_qt"]
+    UI --> NET["dss_network_qt"]
+    UI --> PROC["dss_processing"]
+    UI --> TRACK["dss_tracking"]
+    UI --> QT["Qt6 Core/Gui/Widgets/Charts"]
+    UI --> ELA["ElaWidgetTools（可选）"]
+    UI --> OCV["dss_processing_opencv（可选）"]
+```
+
+UI 不直接链接 Comm target，但 App 对象已按 `ISerialChannel` 和命令接口注册，串口 ViewModel 通过 Core Registry 获取接口；实际可执行程序同时链接 `dss_comm_qt`。
+
+### 组合关系
+
+```mermaid
+classDiagram
+    class MainWindow {
+        -MainViewModel& mainViewModel
+        -ImageDisplay* imageDisplay
+        +setupNavigation()
+        +setupControlPage()
+        +setupDisplayPage()
+        +setupCommStatusPage()
+        +connectSignals()
+    }
+    class MainViewModel {
+        -LogViewModel logs
+        -ReplayViewModel replay
+        -DisplayViewModel display
+        -ProcessingViewModel processing
+        -TrackingViewModel tracking
+        -StorageViewModel storage
+        -SettingsViewModel settings
+        -SerialPortViewModel serialPorts
+        -NetworkViewModel network
+        -DataExchangeViewModel dataExchange
+    }
+    class UiServiceContext {
+        +MessageBus& bus
+        +ServiceRegistry& registry
+    }
+    class AppEvent {
+        +instance()
+        +publishTargetPositionSelected(pos)
+        +publishZoomLevelChanged(level)
+    }
+    class ImageDisplay {
+        +setImage(image)
+        +resetView()
+        +imagePositionAt(pos)
+    }
+    class WheelGuardedSpinBox
+
+    MainWindow --> MainViewModel
+    MainViewModel *-- UiServiceContext
+    MainViewModel *-- ReplayViewModel
+    MainViewModel *-- DisplayViewModel
+    MainViewModel *-- TrackingViewModel
+    MainViewModel *-- StorageViewModel
+    MainViewModel *-- SerialPortViewModel
+    MainViewModel *-- NetworkViewModel
+    MainViewModel *-- DataExchangeViewModel
+    MainWindow *-- ImageDisplay
+    MainWindow --> AppEvent
+    MainWindow ..> WheelGuardedSpinBox
+```
+
+Qt 父子树管理 ViewModel/Widget 生命周期：`MainViewModel` 在构造列表中创建所有子 ViewModel，并把 `this` 作为 QObject parent；`MainWindow` 只保存主 ViewModel 引用，要求它比窗口长寿。
+
+### UI 启动与页面装配
+
+```mermaid
+sequenceDiagram
+    participant Main as main
+    participant VM as MainViewModel
+    participant Child as 子 ViewModel
+    participant Win as MainWindow
+    participant Page as 页面/控件
+
+    Main->>VM: 构造(bus,registry)
+    loop 每个子 ViewModel
+        VM->>Child: 构造(UiServiceContext,parent)
+        Child->>Child: 订阅事件/初始化状态
+    end
+    VM->>VM: connectChildViewModels()
+    VM->>VM: setupSubscriptions(MasterControlEvent)
+    Main->>Win: 构造(VM)
+    Win->>Win: setupNavigation()
+    Win->>Page: Control/Display/Analysis/Comm/Settings/Log
+    Win->>Win: connectSignals()
+    Main->>Win: show()
+```
+
+| 页面 | 主要 ViewModel | 关键动作 |
+|---|---|---|
+| Control | Replay、Processing、Tracking、Storage、Display | 选序列、开始/停止/步进、切处理/跟踪模式、保存、查看统计 |
+| Display | Display、Tracking | 拉伸设置、图像显示、左键选目标、滚轮缩放、中键平移 |
+| Analysis | 当前基础占位/分析控件 | 扩展统计图表 |
+| Communication | SerialPort、Network、DataExchange | 配置、打开/关闭、发送联调命令 |
+| Settings | Settings | 编辑并保存系统配置 |
+| Log | Log | 事件日志过滤、搜索、导出 |
+
+### 回放按钮到主帧流水线
+
+```mermaid
+sequenceDiagram
+    participant Button as Start 按钮
+    participant Replay as ReplayViewModel
+    participant Registry as ServiceRegistry
+    participant Processor as ImageProcessor
+    participant Source as IFrameSource
+    participant Bus as MessageBus
+
+    Button->>Replay: startGrab()
+    Replay->>Registry: tryGet(image_processor)
+    Replay->>Registry: tryGet(frame_source)
+    Replay->>Source: init()（必要时）
+    Replay->>Processor: start()
+    Replay->>Source: start()
+    Replay->>Replay: grabbing=true
+    Replay->>Bus: GrabStartedEvent
+```
+
+`stopGrab()` 先停止 FrameSource，再停止 ImageProcessor，更新状态并发布 `GrabStoppedEvent`。步进和 seek 会先停止连续回放，避免两个生产路径同时推进索引。
+
+### 显示事件到控件
+
+```mermaid
+sequenceDiagram
+    participant Processor as ImageProcessor工作线程
+    participant Bus as MessageBus
+    participant DVM as DisplayViewModel
+    participant Signal as displayImageReady
+    participant Display as ImageDisplay
+    participant Painter as QPainter
+
+    Processor->>Bus: DisplayRefreshEvent
+    Bus->>DVM: onDisplayRefresh(event)
+    DVM->>DVM: 校验尺寸并缓存 raw/宽高/seq
+    DVM->>DVM: QImage(...).copy()
+    DVM->>Signal: emit(QImage)
+    Signal-->>Display: setImage(image)
+    Display->>Display: 同尺寸保留视口，否则 resetView
+    Display->>Painter: update → paintEvent 可见区域绘制
+```
+
+MessageBus 同步执行，因此 `DisplayViewModel::onDisplayRefresh()` 通常运行在 Processor 工作线程；它先复制独立 QImage，再通过 Qt 信号送到主线程 Widget。当前 raw 缓存使用 mutex，供 UI 修改拉伸后立即重绘当前帧。
+
+### 拉伸设置链
+
+```mermaid
+flowchart LR
+    CONTROL["Checkbox/Slider/WheelGuardedSpinBox"] --> APPLY["DisplayViewModel::applyDisplayStretch"]
+    APPLY --> VALID{"0 <= low < high <= 16384"}
+    VALID -->|"失败"| STATUS["statusTextChanged"]
+    VALID -->|"成功"| PROC["ImageProcessor::setDisplayStretchSettings"]
+    VALID --> REDRAW["refreshCurrentDisplayFromStretch"]
+    REDRAW --> CACHE["缓存 rawImage"]
+    CACHE --> BUILD["buildDisplayImage / stretchDisplayImage"]
+    BUILD --> READY["displayImageReady"]
+```
+
+`WheelGuardedSpinBox` 只有在控件已获得明确焦点时才处理滚轮，否则忽略事件并让父级滚动区域继续滚动；Communication 页的端口数值编辑也使用该类，避免鼠标经过数值框时截走整页滚轮。
+
+### ImageDisplay 交互状态
+
+```mermaid
+stateDiagram-v2
+    [*] --> Fit: setImage/尺寸改变
+    Fit --> Zoomed: 滚轮向上
+    Zoomed --> Zoomed: 以鼠标为锚点继续缩放
+    Zoomed --> Fit: 缩放至 fitScale
+    Zoomed --> Panning: 中键按下
+    Panning --> Panning: 中键移动并 clampOffset
+    Panning --> Zoomed: 中键释放
+    Fit --> Selected: 左键点击
+    Zoomed --> Selected: 左键点击
+    Selected --> Fit: 信号处理后视口不变
+```
+
+- 缩放范围是 `fitScale()` 到 `max(32, fitScale())`，以滚轮位置对应的图像点为锚。
+- 中键拖动改变图像左上角 offset；小图自动居中，大图边缘不允许完全拖出视口。
+- 左键把控件坐标通过 `imagePositionAt()` 转成图像坐标，再发布 `positionClicked`。
+- 绘制只取视口与图像相交的 source rect；缩小时启用平滑变换。
+- 同尺寸新帧保留缩放/偏移，尺寸变化或空图重置。当前已不存在 `ImageDisplayCrop`、`setCropCenter`、`setCropSize`。
+
+### 手动选点跨 UI 调用栈
+
+```mermaid
+sequenceDiagram
+    participant Display as ImageDisplay
+    participant Event as AppEvent
+    participant TrackVM as TrackingViewModel
+    participant Factory as Tracking Factory
+    participant Processor as ImageProcessor
+
+    Display->>Event: publishTargetPositionSelected(imagePos)
+    Event->>TrackVM: targetPositionSelected
+    TrackVM->>TrackVM: selectTarget(pos)
+    TrackVM->>TrackVM: 构造 manual MeasuredBlob
+    TrackVM->>TrackVM: trackMode=Manual
+    TrackVM->>Factory: makeTrackingStrategy(Manual)
+    TrackVM->>Processor: setTrackingStrategy(strategy)
+```
+
+`AppEvent` 只解决 Widget 之间的 Qt 信号解耦，后端状态仍通过 Core MessageBus。两者不要互相替代：AppEvent 的载荷是 Qt 类型，不能下沉到 Core。
+
+### 主控事件到 UI/会话
+
+```mermaid
+flowchart TD
+    MC["MasterControlEvent<br/>串口工作线程"] --> MVM["MainViewModel::onMasterControl"]
+    MVM --> EXP["更新 exposure"]
+    MVM --> MODE["TrackingViewModel::setTrackMode"]
+    MVM --> SAVE{"event.save"}
+    SAVE -->|"是"| SESSION["makeObservationSession"]
+    SESSION --> START["StorageViewModel::startSaving(naming)"]
+    SAVE -->|"否"| STOP["StorageViewModel::stopSaving"]
+```
+
+这是跨线程敏感路径：MessageBus 会在串口线程直接调用 `MainViewModel`，而 Qt QObject 状态通常应只在其所属主线程修改。后续演进宜在订阅 lambda 中用 queued invocation 切回主线程；硬件联调应覆盖主控高频变化和窗口关闭竞态。
+
+### 通信页调用栈
+
+```mermaid
+flowchart LR
+    EDIT["编辑端点/串口"] --> APPLY["ViewModel::apply...Config"]
+    APPLY --> CONFIG["Config DTO 更新"]
+    APPLY -->|"已打开则先关闭"| SERVICE["Registry 中共享服务"]
+    OPEN["Open 按钮"] --> GET["tryGet 接口/具体类型"]
+    GET --> SERVICE
+    SERVICE -->|"expected 失败"| STATUS["statusTextChanged"]
+    SERVICE -->|"成功"| CHANGED["状态信号刷新页面"]
+    CMD["联调命令按钮"] --> PORT["命令端口接口"]
+```
+
+Network 与 DataExchange 分开管理：普通单端点服务由 `NetworkViewModel` 控制，GXTC/GDCL 双端点由 `DataExchangeViewModel` 控制。修改交换端点时，`MainViewModel` 把 Network 的编辑信号连接到 DataExchange 的关闭槽，避免带旧地址继续发送。
+
+### 子 ViewModel 职责与后端入口
+
+| ViewModel | MessageBus 订阅 | Registry 查询/命令 |
+|---|---|---|
+| `LogViewModel` | `LogMessageEvent` 及错误事件 | 无主要服务 |
+| `ReplayViewModel` | `DisplayRefreshEvent` | replay source、frame source、processor、runtime diagnostics |
+| `DisplayViewModel` | 显示刷新、处理完成 | image processor |
+| `ProcessingViewModel` | 无 | image processor，创建策略 |
+| `TrackingViewModel` | 跟踪结果 | image processor，创建策略 |
+| `StorageViewModel` | 无 | 两个具体 storage backend |
+| `SerialPortViewModel` | 无主要后端事件 | serial channel 与三个命令端口 |
+| `NetworkViewModel` | 无 | 四个 `INetworkChannel`/具体服务 |
+| `DataExchangeViewModel` | 无 | `DataExchange` |
+| `SettingsViewModel` | 无 | `Config` 单例 |
+
+### 线程、所有权与信号规则
+
+- QObject 子 ViewModel 由 `MainViewModel` 父子树拥有；后端服务由 Registry 的 `shared_ptr` 拥有。
+- 每个订阅型 ViewModel 保存 `ScopedConnection`，析构时自动断开 MessageBus。
+- 从处理/串口/存储线程进入的 MessageBus handler 不会自动切回 UI 线程；handler 应只处理线程安全状态，然后通过 Qt queued signal/invoke 更新 Widget。
+- QImage 事件进入 Widget 前必须拥有自己的像素；当前 `makeGrayImageCopy()` 已显式 `copy()`。
+- UI 不应持有指向事件临时载荷的裸指针或 span。
+
+### 错误反馈与可测试性
+
+ViewModel 把后端 `expected` 错误统一转换成 `statusTextChanged`，MainWindow 再显示 MessageBar 或 status bar。测试优先直接实例化 ViewModel + MessageBus + Registry 注入 fake/真实轻量服务，不通过鼠标驱动所有业务。
+
+重点测试：
+
+- `test_main_view_model.cpp`、`test_main_window_layout.cpp`
+- `test_replay_view_model.cpp`、`test_display_view_model.cpp`、`test_processing_view_model.cpp`、`test_tracking_view_model.cpp`、`test_storage_view_model.cpp`
+- `test_serial_port_view_model.cpp`、`test_network_view_model.cpp`、`test_data_exchange_view_model.cpp`
+- `test_image_display.cpp`、`test_wheel_guarded_spin_box.cpp`
+- `test_log_view_model.cpp`、`test_settings_view_model.cpp`
+
+### 扩展与推荐阅读顺序
+
+新增页面时先判断业务属于哪个子 ViewModel，保持 MainViewModel 只做组合和跨子模块协调；页面文件只装配控件和信号，不直接编码协议或 new 后端服务。跨线程事件先写线程边界测试，再接 Widget。
+
+推荐源码顺序：`view_model_context.h` → `main_view_model.*` → 各子 ViewModel → `main_window.cpp` 与各 page 文件 → `app_event.*` → `image_display.*` → `wheel_guarded_spin_box.*` → communication panels → 对应模块后端与测试。

@@ -132,3 +132,206 @@ LEO 目标跟踪器，对应 `TrackAlgo` 中 LEO 模式。
 dss_tracking
 └── dss_core
 ```
+## 深入架构与调用链
+
+### 模块边界与依赖
+
+Tracking 是纯 C++、Qt-free 的有状态策略层。输入是单帧 `FrameMeasurements`，输出是跨帧 `TargetInfo` 列表；它不负责检测二值图、发布事件、存储或协议发送。
+
+```mermaid
+flowchart LR
+    TRACK["dss_tracking"] --> CORE["dss_core<br/>领域 DTO/配置"]
+    PROC["dss_processing"] --> TRACK
+    PROC -->|"FrameMeasurements"| STRAT["ITrackingStrategy"]
+    STRAT -->|"TargetInfo 列表"| PROC
+    PROC -->|"TrackResultEvent"| OUT["UI / Storage / DataExchange"]
+```
+
+当前在线主链由 `ImageProcessor` 直接持有 `unique_ptr<ITrackingStrategy>`，并不经过 `TrackManager`；`TrackManager` 是可复用的策略门面和独立测试入口。阅读线上行为时从 `TrackingViewModel::configureTrackingStrategy()` 跳到策略工厂，再到 `ImageProcessor::workerLoop()`。
+
+### 关键类关系
+
+```mermaid
+classDiagram
+    class ITrackingStrategy {
+        <<interface>>
+        +track(FrameMeasurements) vector~TargetInfo~
+        +mode() TrackMode
+        +reset()
+    }
+    class TrackManager {
+        -unique_ptr~ITrackingStrategy~ strategy
+        +setStrategy(strategy)
+        +setMode(mode,settings)
+        +track(measurements)
+        +reset()
+    }
+    class GeoTracker {
+        -deque~FrameMeasurements~ fifo
+        -vector~TargetInfo~ targets
+        -GeoStarSpeedResult starSpeed
+    }
+    class LeoTracker {
+        -deque~FrameMeasurements~ fifo
+        -vector~TargetInfo~ candidates
+        -TargetInfo currentTarget
+    }
+    class ScTracker {
+        -deque~FrameMeasurements~ fifo
+        -vector~TargetInfo~ candidates
+        -TargetInfo currentTarget
+    }
+    class ManualTracker {
+        -optional~MeasuredBlob~ manualTarget
+        -TargetInfo currentTarget
+        +setManualTarget(blob)
+    }
+    class CandidateUtils
+    class PredictionUtils
+    class LifecycleUtils
+
+    TrackManager o-- ITrackingStrategy
+    ITrackingStrategy <|.. GeoTracker
+    ITrackingStrategy <|.. LeoTracker
+    ITrackingStrategy <|.. ScTracker
+    ITrackingStrategy <|.. ManualTracker
+    GeoTracker ..> CandidateUtils
+    GeoTracker ..> PredictionUtils
+    GeoTracker ..> LifecycleUtils
+    LeoTracker ..> PredictionUtils
+    LeoTracker ..> LifecycleUtils
+    ScTracker ..> CandidateUtils
+    ScTracker ..> PredictionUtils
+    ScTracker ..> LifecycleUtils
+    ManualTracker ..> PredictionUtils
+```
+
+### 在线调用栈
+
+```mermaid
+sequenceDiagram
+    participant UI as TrackingViewModel
+    participant Factory as makeTrackingStrategy
+    participant Processor as ImageProcessor
+    participant Strategy as ITrackingStrategy
+    participant Bus as MessageBus
+
+    UI->>Factory: mode + Config::trackingSettings()
+    Factory-->>UI: unique_ptr<ITrackingStrategy>
+    opt Manual 且已有点击目标
+        UI->>Strategy: ManualTracker::setManualTarget(blob)
+    end
+    UI->>Processor: setTrackingStrategy(move(strategy))
+    Processor->>Processor: workerLoop 组装 FrameMeasurements
+    Processor->>Strategy: track(measurements)
+    Strategy-->>Processor: vector<TargetInfo>
+    opt 非空
+        Processor->>Bus: emit(TrackResultEvent)
+    end
+```
+
+策略切换会销毁旧实例，因此 FIFO、候选和预测状态全部重置。相同模式再次配置同样会创建新策略；若需要保留状态，不能只比较模式枚举，必须明确热更新参数的语义。
+
+### 公共跟踪阶段
+
+```mermaid
+stateDiagram-v2
+    [*] --> Collecting: reset/新策略
+    Collecting --> Candidate: 满足三帧或四帧关联
+    Candidate --> Verified: 后续帧命中预测门限
+    Candidate --> Collecting: 验证失败
+    Verified --> Tracking: 选择当前目标
+    Tracking --> Tracking: 命中并更新预测
+    Tracking --> Tracking: 短时 miss，追加 invalid 帧
+    Tracking --> Collecting: 生命周期规则判定失活
+    Collecting --> [*]: reset/策略销毁
+```
+
+`TargetInfo::frameInfos` 是状态核心：每帧追加有效或 invalid 的 `TargetFrameInfo`，预测和 living/validity 均从最近窗口计算。网络、存储不要自行解释内部历史，应优先通过 `makeResultPacket(s)` 读取标准化最新结果。
+
+### GEO 四帧链
+
+```mermaid
+flowchart TD
+    IN["FrameMeasurements"] --> FIFO["维护最近四帧"]
+    FIFO --> STAR["estimateGeoStarSpeed<br/>恒星速度估计"]
+    STAR --> SPACE{"geoFullLeo？"}
+    SPACE -->|"是"| PIXEL["像面/AE 四帧关联"]
+    SPACE -->|"否"| RADEC["RA/Dec 四帧关联"]
+    PIXEL --> DEDUP["候选去重与测量占用检查"]
+    RADEC --> DEDUP
+    DEDUP --> FIND["发现并建立 TargetInfo"]
+    FIND --> GATE["预测位置/速度/AE或RA-Dec gate"]
+    GATE --> UPDATE["追加帧、更新预测与有效率"]
+    UPDATE --> LIFE{"越界或连续失效？"}
+    LIFE -->|"否"| OUT["输出存活目标"]
+    LIFE -->|"是"| REDISCOVER["释放并回到关联"]
+```
+
+GEO 与其他策略的最大区别是四帧关联和恒星速度补偿。FullLEO 分支使用像面与 AE 门限；非 FullLEO 分支使用 RA/Dec 半径、位移和速度门限。实现拆分在 `geo_association.cpp`、`geo_validation.cpp`、`geo_continuous_tracking.cpp`，不要只读 `geo_tracker.cpp` 就判断完整逻辑。
+
+### LEO 与 SC 三帧链
+
+```mermaid
+flowchart LR
+    F1["帧1"] --> F2["帧2"]
+    F2 --> F3["帧3"]
+    F3 --> ASSOC["Assoc3 候选"]
+    ASSOC --> F4["第4帧验证"]
+    F4 --> PRED["最近三段运动 median 预测"]
+    PRED --> SELECT{"策略选择"}
+    SELECT -->|"LEO"| FAST["AE 速度最大目标"]
+    SELECT -->|"SC"| AREA["最新面积最大目标"]
+    FAST --> CONT["持续跟踪/miss/释放"]
+    AREA --> CONT
+```
+
+- LEO 按 AE 速度下限和两段运动一致性关联，持续跟踪使用 AE 预测位置。
+- SC 按像素位移、FOV 中心窗口和运动一致性关联，并压缩复用初始测量点的相似候选。
+- 两者在第 4 帧验证后才进入稳定跟踪；miss 会追加 invalid 帧，达到各自 lifecycle policy 的阈值后释放并允许重发现。
+- 预测 helper 使用最近运动的中位数降低单帧异常值影响。
+
+### Manual 点击到结果
+
+```mermaid
+sequenceDiagram
+    participant Display as ImageDisplay
+    participant AppEvent as AppEvent
+    participant VM as TrackingViewModel
+    participant Manual as ManualTracker
+    participant Processor as ImageProcessor
+
+    Display->>AppEvent: positionClicked(图像坐标)
+    AppEvent->>VM: targetPositionSelected
+    VM->>VM: makeManualTarget()
+    VM->>VM: 切换 TrackMode::Manual
+    VM->>Manual: setManualTarget(blob)
+    VM->>Processor: setTrackingStrategy(move)
+    Processor->>Manual: track(FrameMeasurements)
+    Manual-->>Processor: 目标结果或空
+```
+
+当前 Manual 是“人工种子 + 最小持续预测”闭环，不等同于历史实现完整的三帧关联/校验。点击事件虽同时发布 `ManualTargetSelectEvent`，实际策略配置依靠上图的直接调用。
+
+### 坐标、门限与生命周期工具
+
+| 工具 | 负责内容 | 不负责内容 |
+|---|---|---|
+| `candidate_utils` | 测量空间读取、候选去重、同帧占用/重叠判断 | 决定某模式的全部门限 |
+| `prediction_utils` | 构造帧信息、匹配最近 blob、追加命中/invalid、median 预测 | 策略状态机 |
+| `lifecycle_utils` | invalid 计数、latest-valid、有效率窗口、living rule | 选择目标 |
+| `math_utils` | 多项式拟合、FFT、周期等数学原语 | 业务 DTO 和事件 |
+
+像素、AE、RA/Dec 的单位和阈值不能混用。新增门限时应在名称中带出坐标空间/单位，并同步 `TrackingSettings`、JSON 读写和黄金场景。
+
+### 线程、错误与重置
+
+所有策略都在 `ImageProcessor` 单工作线程内调用，本身不加锁；UI 替换策略由 Processor 的 strategy mutex 与当前帧串行化。策略通过空结果、living/validity 状态表达“未发现/失活”，没有异常或事件错误通道。输入序号回退、图像尺寸改变或观测会话切换是否需要 `reset()`，应由上层明确触发，不能依赖策略自动猜测。
+
+### 扩展、测试与阅读顺序
+
+新增模式需要：扩展 `TrackMode` 与配置 → 实现策略 → 更新 `makeTrackingStrategy` / UI 映射 → 定义坐标空间和生命周期 → 增加 hit/miss/释放/重发现黄金场景 → 检查结果包、Storage、GXTC/GDCL 字段。
+
+重点测试：`test_track_manager.cpp`、四个 `test_*_tracker.cpp`、`test_tracking_candidate_utils.cpp`、`test_tracking_prediction_utils.cpp`、`test_tracking_lifecycle_utils.cpp`、`test_tracking_legacy_scenarios.cpp`、`tests/fixtures/tracking/*.json`。
+
+推荐源码顺序：`i_tracking_strategy.h` → `track_manager.*` 与工厂 → `candidate_utils.*` → `prediction_utils.*` → `lifecycle_utils.*` → LEO/SC → GEO 四个拆分源文件 → Manual → `math_utils.*`，最后回看 `ImageProcessor::workerLoop()` 和 `TrackingViewModel`。
