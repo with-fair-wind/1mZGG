@@ -47,36 +47,51 @@ public:
     /// 关闭串口并停止工作线程
     void close() override;
 
-    /// 查询串口是否已打开
+    /** @brief 查询串口是否已打开。 @return Qt 串口处于打开状态时返回 true。 */
     [[nodiscard]] bool isOpen() const override;
 
-    /// 获取当前通道运行状态
+    /** @brief 获取当前通道状态。 @return 原子读取的生命周期状态。 */
     [[nodiscard]] auto status() const -> Dss::Core::Status override;
 
-    /// 返回最近一秒内的接收帧速率（帧/秒）
+    /**
+     * @brief 获取最近统计周期的接收帧速率。
+     * @return 每秒接收帧数。
+     */
     [[nodiscard]] int recvFramesPerSec() const {
         return m_recvFps.load();
     }
 
-    /// 返回最近一秒内的发送帧速率（帧/秒）
+    /**
+     * @brief 获取最近统计周期的发送帧速率。
+     * @return 每秒发送帧数。
+     */
     [[nodiscard]] int sendFramesPerSec() const {
         return m_sendFps.load();
     }
 
 protected:
-    /// 返回本通道接收帧的固定字节长度
+    /** @brief 获取本通道接收帧长度。 @return 协议定义的固定字节数。 */
     [[nodiscard]] virtual auto recvFrameSize() const -> size_t override = 0;
 
-    /// 返回本通道发送帧的固定字节长度
+    /** @brief 获取本通道发送帧长度。 @return 协议定义的固定字节数。 */
     [[nodiscard]] virtual auto sendFrameSize() const -> size_t override = 0;
 
-    /// 解码接收到的原始帧数据
+    /**
+     * @brief 解码接收到的完整原始帧。
+     * @param data 已通过帧头、帧尾和长度校验的字节视图。
+     */
     virtual void decodeFrame(std::span<const uint8_t> data) = 0;
 
-    /// 将待发送数据编码到缓冲区
+    /**
+     * @brief 将待发送状态编码到固定长度缓冲区。
+     * @param buffer 由工作线程分配的可写发送缓冲区。
+     */
     virtual void encodeFrame(std::span<uint8_t> buffer) = 0;
 
-    /// 返回用于日志和诊断事件的通道名称
+    /**
+     * @brief 获取用于日志和诊断事件的通道名称。
+     * @return 稳定的通道名称字符串视图。
+     */
     [[nodiscard]] virtual auto channelName() const -> std::string_view {
         return "serial";
     }
@@ -84,12 +99,18 @@ protected:
     /// 请求工作线程发送一帧
     void requestSend();
 
-    /// 获取关联的消息总线引用
+    /** @brief 获取关联的消息总线。 @return 构造时绑定的消息总线引用。 */
     MessageBus& bus() {
         return m_bus;
     }
 
-    /// 发布协议字段级解码失败事件
+    /**
+     * @brief 发布协议字段级解码失败事件。
+     * @param field 解码失败的协议字段名称。
+     * @param message 错误描述。
+     * @param byteOffset 字段在帧中的起始字节偏移。
+     * @param rawValue 触发错误的原始字段值。
+     */
     void publishDecodeError(std::string_view field, std::string_view message,
                             std::size_t byteOffset, uint64_t rawValue);
 

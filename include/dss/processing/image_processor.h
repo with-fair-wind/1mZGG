@@ -26,6 +26,7 @@ public:
      * @param bus 事件消息总线引用
      */
     explicit ImageProcessor(MessageBus& bus);
+    /// @brief 停止后台线程并销毁处理器。
     ~ImageProcessor();
 
     /// 启动后台处理线程
@@ -41,10 +42,10 @@ public:
      */
     [[nodiscard]] bool submitFrame(FramePacket packet);
 
-    /// 因队列满而被丢弃的帧计数
+    /** @brief 获取累计丢帧数。 @return 因输入队列已满而丢弃的帧数。 */
     [[nodiscard]] auto droppedFrames() const -> uint64_t;
 
-    /// 后台处理线程是否正在运行
+    /** @brief 查询处理器运行状态。 @return 后台处理线程运行时返回 true。 */
     [[nodiscard]] bool isRunning() const;
 
     /**
@@ -59,21 +60,25 @@ public:
      */
     void setTrackingStrategy(std::unique_ptr<Dss::Tracking::ITrackingStrategy> strategy);
 
-    /// 当前处理策略的模式
+    /** @brief 获取当前处理模式。 @return 管线后端的处理模式。 */
     [[nodiscard]] auto currentProcessingMode() const -> Dss::Core::ProcessingMode;
 
-    /// 当前跟踪策略的模式；无策略时返回 TrackMode::Init
+    /**
+     * @brief 获取当前跟踪模式。
+     * @return 跟踪策略模式；无策略时返回 TrackMode::Init。
+     */
     [[nodiscard]] auto currentTrackMode() const -> Dss::Core::TrackMode;
 
     /**
-     * @brief 设置 16 位 RAW 到 8 位显示图的拉伸参数
-     * @param settings
-     * 显示拉伸设置
-
+     * @brief 设置 16 位 RAW 到 8 位显示图的拉伸参数。
+     * @param settings 显示拉伸设置。
      */
     void setDisplayStretchSettings(DisplayStretchSettings settings);
 
-    /// 当前显示拉伸设置快照
+    /**
+     * @brief 获取当前显示拉伸设置。
+     * @return 线程安全复制的设置快照。
+     */
     [[nodiscard]] auto displayStretchSettings() const -> DisplayStretchSettings;
 
 private:
@@ -83,7 +88,10 @@ private:
      */
     void workerLoop(std::stop_token token);
 
-    /// 获取当前显示拉伸设置快照
+    /**
+     * @brief 在处理线程中获取当前显示拉伸设置。
+     * @return 线程安全复制的设置快照。
+     */
     [[nodiscard]] auto currentDisplayStretchSettings() const -> DisplayStretchSettings;
 
     MessageBus& m_bus;                              ///< 事件消息总线

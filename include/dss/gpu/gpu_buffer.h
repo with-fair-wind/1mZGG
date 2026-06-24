@@ -33,6 +33,7 @@ public:
         }
     }
 
+    /// @brief 释放持有的设备内存。
     ~GpuBuffer() noexcept {
         free();
     }
@@ -40,11 +41,18 @@ public:
     GpuBuffer(const GpuBuffer&) = delete;
     GpuBuffer& operator=(const GpuBuffer&) = delete;
 
-    /// 移动构造，接管 other 的设备指针与元素计数
+    /**
+     * @brief 移动构造并接管设备内存。
+     * @param other 被置为空状态的源缓冲区。
+     */
     GpuBuffer(GpuBuffer&& other) noexcept
         : m_ptr(std::exchange(other.m_ptr, nullptr)), m_count(std::exchange(other.m_count, 0)) {}
 
-    /// 移动赋值，释放当前资源后接管 other 的设备指针与元素计数
+    /**
+     * @brief 释放当前资源后接管另一个缓冲区。
+     * @param other 被置为空状态的源缓冲区。
+     * @return 当前缓冲区。
+     */
     GpuBuffer& operator=(GpuBuffer&& other) noexcept {
         if (this != &other) {
             free();
@@ -96,27 +104,27 @@ public:
         }
     }
 
-    /// 获取可写的设备端指针
+    /** @brief 获取可写设备指针。 @return 设备内存地址；未分配时返回 nullptr。 */
     [[nodiscard]] auto devicePtr() -> T* {
         return m_ptr;
     }
 
-    /// 获取只读的设备端指针
+    /** @brief 获取只读设备指针。 @return 设备内存地址；未分配时返回 nullptr。 */
     [[nodiscard]] auto devicePtr() const -> const T* {
         return m_ptr;
     }
 
-    /// 获取元素个数
+    /** @brief 获取元素数量。 @return 当前分配可容纳的 T 元素数。 */
     [[nodiscard]] auto size() const -> size_t {
         return m_count;
     }
 
-    /// 获取占用字节数
+    /** @brief 获取占用字节数。 @return 元素数量与 sizeof(T) 的乘积。 */
     [[nodiscard]] auto bytes() const -> size_t {
         return m_count * sizeof(T);
     }
 
-    /// 缓冲区是否已分配有效设备内存
+    /** @brief 查询是否持有设备内存。 @return 指针非空时返回 true。 */
     [[nodiscard]] bool valid() const {
         return m_ptr != nullptr;
     }

@@ -26,15 +26,18 @@ namespace Dss::Storage {
 /// 跟踪数据异步存储后端，将跟踪结果追加写入遗留格式文本文件
 class TrackDataStorageBackend final : public IStorageBackend {
 public:
-    using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;
+    using MessageBus =
+        Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;  ///< 跨线程消息总线类型
     /**
-     * @brief 构造跟踪数据存储后端
-     * @param baseDir 默认存储根目录
+     * @brief 构造跟踪数据存储后端。
+     * @param baseDir 默认存储根目录。
+     * @param maxPendingRequests 写入队列允许的最大待处理批次数。
      */
     explicit TrackDataStorageBackend(std::filesystem::path baseDir,
                                      std::size_t maxPendingRequests = 1024)
         : m_baseDir(std::move(baseDir)), m_maxPendingRequests(maxPendingRequests) {}
 
+    /// @brief 停止后台写入线程后销毁后端。
     ~TrackDataStorageBackend() override {
         stop();
     }
@@ -56,17 +59,20 @@ public:
         return {};
     }
 
-    /// 查询存储后端是否已初始化
+    /** @brief 查询后端是否已初始化。 @return 存储目录可用时返回 true。 */
     [[nodiscard]] bool isReady() const override {
         return m_ready.load();
     }
 
-    /// 获取当前存储根目录
+    /** @brief 获取当前存储根目录。 @return 根目录路径的常量引用。 */
     [[nodiscard]] auto baseDir() const -> const std::filesystem::path& {
         return m_baseDir;
     }
 
-    /// 获取跟踪数据输出文件的完整路径
+    /**
+     * @brief 获取跟踪数据输出路径。
+     * @return 会话 GAE 文件路径；未配置会话时返回默认文本路径。
+     */
     [[nodiscard]] auto outputPath() const -> std::filesystem::path {
         return m_sessionOutputPath.empty() ? m_baseDir / "track_data.txt" : m_sessionOutputPath;
     }
@@ -98,26 +104,41 @@ public:
         m_running = false;
     }
 
-    /// 查询后台写入线程是否正在运行
+    /** @brief 查询后台写入状态。 @return 工作线程运行时返回 true。 */
     [[nodiscard]] bool isRunning() const {
         return m_running.load();
     }
 
+    /**
+     * @brief 获取累计丢弃请求数。
+     * @return 因队列已满而拒绝的跟踪结果批次数。
+     */
     [[nodiscard]] auto droppedRequests() const -> std::uint64_t {
         return m_droppedRequests.load();
     }
+    /**
+     * @brief 设置用于发布存储错误事件的消息总线。
+     * @param bus 非拥有消息总线指针；应在启动工作线程前设置。
+     */
     void setBus(MessageBus* bus) {
         m_bus = bus;
     }
 
+    /** @brief 获取成功写入次数。 @return 成功追加到文件的记录批次数。 */
     [[nodiscard]] auto successfulWrites() const -> std::uint64_t {
         return m_successfulWrites.load();
     }
 
+    /** @brief 获取失败写入次数。 @return 文件追加失败的记录批次数。 */
     [[nodiscard]] auto failedWrites() const -> std::uint64_t {
         return m_failedWrites.load();
     }
 
+    /**
+     * @brief 根据观测会话配置 GAE 输出文件。
+     * @param naming 会话命名信息。
+     * @return 配置成功时为空；工作线程运行或目录创建失败时返回错误描述。
+     */
     auto configureSession(const ImageStorageNaming& naming) -> std::expected<void, std::string> {
         if (m_running.load()) {
             return std::unexpected(
@@ -168,7 +189,11 @@ public:
     }
 
 private:
-    /// 从跟踪结果事件构建遗留格式数据记录列表
+    /**
+     * @brief 从跟踪结果事件构建遗留格式记录。
+     * @param event 包含帧序号和目标列表的跟踪事件。
+     * @return 由有效目标转换得到的数据记录列表。
+     */
     [[nodiscard]] static auto buildRecords(const Dss::Core::TrackResultEvent& event)
         -> std::vector<TrackDataRecord> {
         std::vector<TrackDataRecord> records;
@@ -191,7 +216,10 @@ private:
         return records;
     }
 
-    /// 后台工作线程主循环，从队列取出记录并写入磁盘
+    /**
+     * @brief 从队列取出记录批次并追加到磁盘。
+     * @param token 用于停止等待并在队列排空后退出的令牌。
+     */
     void workerLoop(std::stop_token token) {
         while (true) {
             std::vector<TrackDataRecord> records;
@@ -222,6 +250,11 @@ private:
         }
     }
 
+    /**
+     * @brief 将记录批次追加到当前输出文件。
+     * @param records 待格式化并写入的数据记录。
+     * @return 写入成功时为空；目录或文件操作失败时返回错误描述。
+     */
     auto writeRecords(const std::vector<TrackDataRecord>& records) const
         -> std::expected<void, std::string> {
         std::error_code error;
@@ -243,14 +276,14 @@ private:
         return {};
     }
 
-    std::filesystem::path m_baseDir;   ///< 存储根目录
-    std::atomic<bool> m_ready{false};  ///< 是否已完成初始化
-    std::atomic<bool> m_running{false};
-    std::size_t m_maxPendingRequests = 1024;
-    std::atomic<std::uint64_t> m_droppedRequests{0};  ///< 被背压拒绝的请求数量
-    std::atomic<std::uint64_t> m_successfulWrites{0};
-    std::atomic<std::uint64_t> m_failedWrites{0};
-    std::filesystem::path m_sessionOutputPath;
+    std::filesystem::path m_baseDir;                   ///< 存储根目录
+    std::atomic<bool> m_ready{false};                  ///< 是否已完成初始化
+    std::atomic<bool> m_running{false};                ///< 后台线程运行状态
+    std::size_t m_maxPendingRequests = 1024;           ///< 写入队列容量上限
+    std::atomic<std::uint64_t> m_droppedRequests{0};   ///< 被背压拒绝的请求数量
+    std::atomic<std::uint64_t> m_successfulWrites{0};  ///< 成功写入批次数量
+    std::atomic<std::uint64_t> m_failedWrites{0};      ///< 写入失败批次数量
+    std::filesystem::path m_sessionOutputPath;         ///< 当前会话 GAE 输出路径
     MessageBus* m_bus = nullptr;                       ///< 非拥有事件总线指针
     std::jthread m_worker;                             ///< 后台写入工作线程
     std::mutex m_queueMutex;                           ///< 保护写入队列的互斥锁

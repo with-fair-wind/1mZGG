@@ -33,7 +33,10 @@ public:
     auto labelAndExtract(std::span<const uint8_t> binaryImage, uint32_t width, uint32_t height)
         -> std::vector<Dss::Core::MeasuredBlob>;
 
-    /// 更新标注参数
+    /**
+     * @brief 更新标注参数。
+     * @param config 新的面积过滤参数。
+     */
     void setConfig(LabelConfig config) {
         m_config = config;
     }

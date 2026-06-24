@@ -24,7 +24,10 @@ class TrackManager {
 public:
     TrackManager() = default;
 
-    /// 替换当前跟踪策略
+    /**
+     * @brief 替换当前跟踪策略。
+     * @param strategy 新策略的独占所有权；传入空指针可禁用跟踪。
+     */
     void setStrategy(std::unique_ptr<ITrackingStrategy> strategy);
 
     /**
@@ -42,7 +45,10 @@ public:
     auto track(const Dss::Core::FrameMeasurements& measurements)
         -> std::vector<Dss::Core::TargetInfo>;
 
-    /// 返回当前策略的跟踪模式
+    /**
+     * @brief 获取当前跟踪模式。
+     * @return 当前策略模式；无策略时返回 TrackMode::Init。
+     */
     [[nodiscard]] auto currentMode() const -> Dss::Core::TrackMode;
 
     /// 重置当前策略的内部状态

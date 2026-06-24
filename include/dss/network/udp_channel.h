@@ -50,7 +50,7 @@ public:
      */
     auto sendTo(std::span<const uint8_t> data, const std::string& host, uint16_t port) -> int64_t;
 
-    /// 查询套接字是否已成功绑定
+    /** @brief 查询套接字是否已绑定。 @return 本地端点绑定成功时返回 true。 */
     [[nodiscard]] bool isBound() const;
 
     /**

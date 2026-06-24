@@ -53,6 +53,10 @@ public:
      */
     [[nodiscard]] int replayCurrentFrame() const;
 
+    /**
+     * @brief 获取运行期诊断摘要。
+     * @return 供界面展示的诊断文本。
+     */
     [[nodiscard]] auto runtimeDiagnosticsText() const -> QString;
 
 public Q_SLOTS:
@@ -79,12 +83,17 @@ public Q_SLOTS:
      */
     Q_INVOKABLE bool stepReplayForward();
 
-    /// 单步回放上一帧
+    /** @brief 单步回放上一帧。 @return 成功定位并播放时返回 true。 */
     Q_INVOKABLE bool stepReplayBackward();
 
-    /// 将下一帧定位到零基索引
+    /**
+     * @brief 将下一帧定位到零基索引。
+     * @param index 目标帧索引。
+     * @return 索引有效且定位成功时返回 true。
+     */
     Q_INVOKABLE bool seekReplayFrame(int index);
 
+    /// @brief 从运行服务重新读取并更新诊断摘要。
     Q_INVOKABLE void refreshRuntimeDiagnostics();
 
 Q_SIGNALS:
@@ -106,6 +115,10 @@ Q_SIGNALS:
      */
     void replayCurrentFrameChanged(int frame);
 
+    /**
+     * @brief 运行期诊断摘要变化。
+     * @param text 新的诊断文本。
+     */
     void runtimeDiagnosticsTextChanged(const QString& text);
 
     /**
@@ -144,13 +157,13 @@ private:
      */
     void setGrabbing(bool value);
 
-    UiServiceContext::MessageBus& m_bus;     ///< 应用事件总线。
-    Dss::Core::ServiceRegistry& m_registry;  ///< 应用服务注册表。
-    bool m_grabbing = false;                 ///< 是否正在采集或回放。
-    int m_replayFrameCount = 0;              ///< 回放序列总帧数。
-    int m_replayCurrentFrame = 0;            ///< 当前回放帧号。
-    QString m_runtimeDiagnosticsText{"Diagnostics unavailable"};
-    std::vector<Dss::Evt::ScopedConnection> m_connections;  ///< 事件订阅连接列表。
+    UiServiceContext::MessageBus& m_bus;                          ///< 应用事件总线。
+    Dss::Core::ServiceRegistry& m_registry;                       ///< 应用服务注册表。
+    bool m_grabbing = false;                                      ///< 是否正在采集或回放。
+    int m_replayFrameCount = 0;                                   ///< 回放序列总帧数。
+    int m_replayCurrentFrame = 0;                                 ///< 当前回放帧号。
+    QString m_runtimeDiagnosticsText{"Diagnostics unavailable"};  ///< 当前诊断摘要文本
+    std::vector<Dss::Evt::ScopedConnection> m_connections;        ///< 事件订阅连接列表。
 };
 
 }  // namespace Dss::Ui

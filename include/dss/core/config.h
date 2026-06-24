@@ -21,10 +21,10 @@ struct PathConfig {
 
 /// 日志输出配置
 struct LoggingConfig {
-    bool enabled = true;
-    std::filesystem::path filePath{"./logs/dss.log"};
-    std::size_t maxFileSizeBytes = 10U * 1024U * 1024U;
-    std::size_t maxFiles = 5U;
+    bool enabled = true;                                 ///< 是否启用文件日志
+    std::filesystem::path filePath{"./logs/dss.log"};    ///< 日志文件路径
+    std::size_t maxFileSizeBytes = 10U * 1024U * 1024U;  ///< 单个日志文件的最大字节数
+    std::size_t maxFiles = 5U;                           ///< 保留的轮转日志文件数量
 };
 
 /// 通信与网络配置
@@ -46,12 +46,12 @@ struct CommNetConfig {
 
 /// 图像处理策略配置
 struct ProcessingConfig {
-    double thresholdSigma = 3.0;
-    std::uint16_t diffThreshold = 20;
-    int minArea = 3;
-    int maxArea = 100000;
-    std::uint16_t displayLow = 0;
-    std::uint16_t displayHigh = 16384;
+    double thresholdSigma = 3.0;        ///< 目标检测阈值的标准差倍数
+    std::uint16_t diffThreshold = 20;   ///< 帧差检测的灰度阈值
+    int minArea = 3;                    ///< 有效目标的最小像素面积
+    int maxArea = 100000;               ///< 有效目标的最大像素面积
+    std::uint16_t displayLow = 0;       ///< 显示拉伸的输入下限
+    std::uint16_t displayHigh = 16384;  ///< 显示拉伸的输入上限
 };
 
 /// 台站地理坐标配置
@@ -65,7 +65,10 @@ struct ObservatoryConfig {
 /// 全局配置单例，负责从 JSON 加载和持久化系统配置
 class Config {
 public:
-    /// 获取全局唯一实例
+    /**
+     * @brief 获取全局唯一配置实例。
+     * @return 全局配置实例的引用。
+     */
     static auto instance() -> Config& {
         static Config config;
         return config;
@@ -84,52 +87,52 @@ public:
      */
     auto save() -> std::expected<void, std::string>;
 
-    /// 获取路径配置（只读）
+    /** @brief 获取只读路径配置。 @return 路径配置的常量引用。 */
     [[nodiscard]] auto paths() const -> const PathConfig& {
         return m_paths;
     }
-    /// 获取日志配置（只读）
+    /** @brief 获取只读日志配置。 @return 日志配置的常量引用。 */
     [[nodiscard]] auto logging() const -> const LoggingConfig& {
         return m_logging;
     }
-    /// 获取通信网络配置（只读）
+    /** @brief 获取只读通信网络配置。 @return 通信网络配置的常量引用。 */
     [[nodiscard]] auto commNet() const -> const CommNetConfig& {
         return m_commNet;
     }
-    /// 获取光学参数（只读）
+    /** @brief 获取只读光学参数。 @return 光学参数的常量引用。 */
     [[nodiscard]] auto optics() const -> const OpticParams& {
         return m_optics;
     }
-    /// 获取图像处理参数（只读）
+    /** @brief 获取只读图像处理参数。 @return 图像处理配置的常量引用。 */
     [[nodiscard]] auto processing() const -> const ProcessingConfig& {
         return m_processing;
     }
-    /// 获取台站坐标（只读）
+    /** @brief 获取只读台站坐标。 @return 台站坐标配置的常量引用。 */
     [[nodiscard]] auto observatory() const -> const ObservatoryConfig& {
         return m_observatory;
     }
-    /// 获取跟踪参数（只读）
+    /** @brief 获取只读跟踪参数。 @return 跟踪配置的常量引用。 */
     [[nodiscard]] auto trackingSettings() const -> const TrackingSettings& {
         return m_tracking;
     }
 
-    /// 获取路径配置（可写）
+    /** @brief 获取可写路径配置。 @return 路径配置的引用。 */
     auto mutablePaths() -> PathConfig& {
         return m_paths;
     }
-    /// 获取日志配置（可写）
+    /** @brief 获取可写日志配置。 @return 日志配置的引用。 */
     auto mutableLogging() -> LoggingConfig& {
         return m_logging;
     }
-    /// 获取通信网络配置（可写）
+    /** @brief 获取可写通信网络配置。 @return 通信网络配置的引用。 */
     auto mutableCommNet() -> CommNetConfig& {
         return m_commNet;
     }
-    /// 获取光学参数（可写）
+    /** @brief 获取可写光学参数。 @return 光学参数的引用。 */
     auto mutableOptics() -> OpticParams& {
         return m_optics;
     }
-    /// 获取跟踪参数（可写）
+    /** @brief 获取可写跟踪参数。 @return 跟踪配置的引用。 */
     auto mutableTracking() -> TrackingSettings& {
         return m_tracking;
     }

@@ -32,21 +32,21 @@ public:
      */
     [[nodiscard]] bool isDataExchangeOpen() const;
 
-    /// GXTC 数据交换本地 IP。
+    /** @brief 获取 GXTC 本地 IP。 @return 当前配置的地址文本。 */
     [[nodiscard]] QString dataExchangeGxtcLocalIp() const;
-    /// GXTC 数据交换本地端口。
+    /** @brief 获取 GXTC 本地端口。 @return 当前配置的端口号。 */
     [[nodiscard]] int dataExchangeGxtcLocalPort() const;
-    /// GXTC 数据交换远端 IP。
+    /** @brief 获取 GXTC 远端 IP。 @return 当前配置的地址文本。 */
     [[nodiscard]] QString dataExchangeGxtcRemoteIp() const;
-    /// GXTC 数据交换远端端口。
+    /** @brief 获取 GXTC 远端端口。 @return 当前配置的端口号。 */
     [[nodiscard]] int dataExchangeGxtcRemotePort() const;
-    /// GDCL 数据交换本地 IP。
+    /** @brief 获取 GDCL 本地 IP。 @return 当前配置的地址文本。 */
     [[nodiscard]] QString dataExchangeGdclLocalIp() const;
-    /// GDCL 数据交换本地端口。
+    /** @brief 获取 GDCL 本地端口。 @return 当前配置的端口号。 */
     [[nodiscard]] int dataExchangeGdclLocalPort() const;
-    /// GDCL 数据交换远端 IP。
+    /** @brief 获取 GDCL 远端 IP。 @return 当前配置的地址文本。 */
     [[nodiscard]] QString dataExchangeGdclRemoteIp() const;
-    /// GDCL 数据交换远端端口。
+    /** @brief 获取 GDCL 远端端口。 @return 当前配置的端口号。 */
     [[nodiscard]] int dataExchangeGdclRemotePort() const;
 
     /**
@@ -59,6 +59,14 @@ public:
 public Q_SLOTS:
     /**
      * @brief 应用 GXTC/GDCL 数据交换端点配置。
+     * @param gxtcLocalIp GXTC 本地 IP。
+     * @param gxtcLocalPort GXTC 本地端口。
+     * @param gxtcRemoteIp GXTC 远端 IP。
+     * @param gxtcRemotePort GXTC 远端端口。
+     * @param gdclLocalIp GDCL 本地 IP。
+     * @param gdclLocalPort GDCL 本地端口。
+     * @param gdclRemoteIp GDCL 远端 IP。
+     * @param gdclRemotePort GDCL 远端端口。
      * @return 参数合法并写入内存配置时返回 true。
      */
     Q_INVOKABLE bool applyDataExchangeEndpoints(const QString& gxtcLocalIp, int gxtcLocalPort,

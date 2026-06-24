@@ -15,7 +15,8 @@ namespace Dss::App {
 /// 应用程序上下文，管理服务注册、事件总线和生命周期
 class ApplicationContext {
 public:
-    using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;
+    using MessageBus =
+        Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;  ///< 跨线程应用消息总线类型
 
     /// 构造应用程序上下文
     ApplicationContext();
@@ -27,11 +28,11 @@ public:
     ApplicationContext(ApplicationContext&&) = delete;
     ApplicationContext& operator=(ApplicationContext&&) = delete;
 
-    /// 获取事件总线引用
+    /** @brief 获取应用事件总线。 @return 应用事件总线的引用。 */
     [[nodiscard]] auto bus() -> MessageBus&;
-    /// 获取服务注册表引用
+    /** @brief 获取服务注册表。 @return 服务注册表的引用。 */
     [[nodiscard]] auto registry() -> Dss::Core::ServiceRegistry&;
-    /// 获取服务宿主引用
+    /** @brief 获取服务生命周期管理器。 @return 服务宿主的引用。 */
     [[nodiscard]] auto services() -> Dss::Core::ServiceHost&;
 
     /// 将全局日志实例绑定到本上下文的事件总线

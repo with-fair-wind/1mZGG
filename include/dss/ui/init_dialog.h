@@ -14,6 +14,10 @@ class InitDialog : public QDialog {
     Q_OBJECT
 
 public:
+    /**
+     * @brief 创建初始化进度对话框。
+     * @param parent Qt 父控件。
+     */
     explicit InitDialog(QWidget* parent = nullptr);
 
     /**

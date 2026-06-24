@@ -36,13 +36,13 @@ public:
      */
     virtual void setFrameCallback(FrameCallback callback) = 0;
 
-    /// 当前是否处于运行状态
+    /** @brief 查询帧源是否正在运行。 @return 正在连续采集或回放时返回 true。 */
     [[nodiscard]] virtual bool isRunning() const = 0;
 
-    /// 帧宽度（像素）
+    /** @brief 获取当前帧宽度。 @return 帧宽度，单位为像素；未知时返回 0。 */
     [[nodiscard]] virtual auto frameWidth() const -> uint32_t = 0;
 
-    /// 帧高度（像素）
+    /** @brief 获取当前帧高度。 @return 帧高度，单位为像素；未知时返回 0。 */
     [[nodiscard]] virtual auto frameHeight() const -> uint32_t = 0;
 };
 

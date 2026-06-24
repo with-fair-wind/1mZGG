@@ -23,13 +23,19 @@ public:
      */
     [[nodiscard]] auto process(const FramePacket& packet) -> ProcessingResult;
 
-    /// 当前后端的处理模式；无后端时返回 ProcessingMode::None
+    /**
+     * @brief 获取当前处理模式。
+     * @return 后端模式；无后端时返回 ProcessingMode::None。
+     */
     [[nodiscard]] auto currentMode() const -> Dss::Core::ProcessingMode;
 
-    /// 当前后端名称；无后端时返回 "none"
+    /**
+     * @brief 获取当前后端名称。
+     * @return 后端名称；无后端时返回 "none"。
+     */
     [[nodiscard]] auto backendName() const -> std::string_view;
 
-    /// 是否已设置处理后端
+    /** @brief 查询是否已设置后端。 @return 存在处理后端时返回 true。 */
     [[nodiscard]] bool hasBackend() const;
 
 private:

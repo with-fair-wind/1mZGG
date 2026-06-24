@@ -34,7 +34,10 @@ public:
      */
     [[nodiscard]] bool isSaving() const;
 
-    /// 使用显式业务会话命名启动存储。
+    /**
+     * @brief 使用显式业务会话命名启动存储。
+     * @param naming 图像和跟踪数据共享的会话命名信息。
+     */
     void startSaving(const Dss::Storage::ImageStorageNaming& naming);
 
 public Q_SLOTS:

@@ -40,6 +40,10 @@ struct GeoStarSpeedResult {
 /// 地球同步轨道（GEO）目标跟踪器，基于四帧关联与恒星速度补偿
 class GeoTracker final : public ITrackingStrategy {
 public:
+    /**
+     * @brief 创建地球同步轨道目标跟踪器。
+     * @param settings 跟踪门限、光学参数和生命周期配置。
+     */
     explicit GeoTracker(const Dss::Core::TrackingSettings& settings);
 
     /**
@@ -50,7 +54,7 @@ public:
     auto track(const Dss::Core::FrameMeasurements& measurements)
         -> std::vector<Dss::Core::TargetInfo> override;
 
-    /// 返回 Geo 跟踪模式
+    /** @brief 获取策略模式。 @return 固定返回 TrackMode::Geo。 */
     [[nodiscard]] auto mode() const -> Dss::Core::TrackMode override {
         return Dss::Core::TrackMode::Geo;
     }
@@ -59,17 +63,20 @@ public:
     void reset() override;
 
 private:
-    /// 估算当前帧间恒星背景速度
+    /** @brief 估算当前帧间恒星背景速度。 @return 成功返回 0，否则返回 1。 */
     int calcStarSpeed();
-    /// 对最近四帧执行目标关联，生成初始候选
+    /** @brief 对最近四帧执行目标关联。 @return 生成候选时返回 0，否则返回 1。 */
     int assoc4();
-    /// 确认是否找到有效目标
+    /** @brief 更新目标发现状态。 @return 找到目标时返回 0，否则返回 1。 */
     int findTargets();
-    /// 在跟踪过程中重新发现新目标
+    /** @brief 在跟踪过程中重新发现新目标。 @return 成功执行时返回 0，否则返回 1。 */
     int refindTargets();
-    /// 对已有目标执行逐帧跟踪与有效性更新
+    /** @brief 对已有目标执行逐帧跟踪。 @return 成功执行时返回 0，否则返回 1。 */
     int trackTargets();
-    /// 为尚未分配 ID 的目标生成唯一标识
+    /**
+     * @brief 为尚未分配 ID 的目标生成唯一标识。
+     * @param targets 待检查并原位更新的目标列表。
+     */
     void assignTargetIds(std::vector<Dss::Core::TargetInfo>& targets);
 
     Dss::Core::TrackingSettings m_settings;                 ///< 跟踪算法参数

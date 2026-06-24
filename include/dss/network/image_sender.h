@@ -46,10 +46,10 @@ public:
     /// 停止工作线程并关闭 UDP 通道
     void close() override;
 
-    /// 查询通道是否已绑定
+    /** @brief 查询图像发送通道是否已绑定。 @return UDP 通道可发送时返回 true。 */
     [[nodiscard]] bool isOpen() const override;
 
-    /// 获取当前网络通道运行状态
+    /** @brief 获取图像发送服务状态。 @return 已绑定时为 Running，否则为 Init。 */
     [[nodiscard]] auto status() const -> Dss::Core::Status override;
 
     /**

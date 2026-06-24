@@ -20,7 +20,10 @@ public:
      */
     virtual auto init(const std::filesystem::path& baseDir) -> std::expected<void, std::string> = 0;
 
-    /// 查询存储后端是否已完成初始化且可用
+    /**
+     * @brief 查询存储后端是否已完成初始化。
+     * @return 后端可接受存储请求时返回 true。
+     */
     [[nodiscard]] virtual bool isReady() const = 0;
 };
 

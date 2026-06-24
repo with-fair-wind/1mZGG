@@ -20,7 +20,10 @@ public:
      */
     [[nodiscard]] bool add(std::shared_ptr<IService> service);
 
-    /// 获取已注册服务数量
+    /**
+     * @brief 获取已注册服务数量。
+     * @return 当前服务列表中的实例数量。
+     */
     [[nodiscard]] auto serviceCount() const -> std::size_t;
 
     /**

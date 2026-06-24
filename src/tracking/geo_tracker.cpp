@@ -115,6 +115,7 @@ void GeoTracker::assignTargetIds(std::vector<Dss::Core::TargetInfo>& targets) {
 
 /**
  * @brief 在匹配恒星数量足够时更新缓存的背景恒星速度。
+ * @return 成功更新或无需更新时返回 0，帧数不足时返回 1。
  */
 int GeoTracker::calcStarSpeed() {
     if (m_fifoStar.size() < 2U) {
@@ -140,6 +141,7 @@ int GeoTracker::calcStarSpeed() {
 
 /**
  * @brief 对目标 FIFO 执行四帧关联并分配目标 ID。
+ * @return 关联执行时返回 0，帧数不足时返回 1。
  */
 int GeoTracker::assoc4() {
     if (m_fifoTarget.size() < 4U) {
@@ -164,6 +166,7 @@ int GeoTracker::assoc4() {
 
 /**
  * @brief 根据关联结果更新 GEO 目标发现状态。
+ * @return 找到目标时返回 0，否则返回 1。
  */
 int GeoTracker::findTargets() {
     m_targetFound = !m_targets.empty();
@@ -173,6 +176,7 @@ int GeoTracker::findTargets() {
 
 /**
  * @brief 在跟踪阶段重新执行四帧关联，并追加有效的重发现候选。
+ * @return 重发现执行时返回 0，帧数不足时返回 1。
  */
 int GeoTracker::refindTargets() {
     if (m_fifoTarget.size() < 5U) {
@@ -200,9 +204,8 @@ int GeoTracker::refindTargets() {
 }
 
 /**
- * @brief
- * 将活跃目标与当前帧像斑匹配，并刷新预测、有效性与存活状态。
-
+ * @brief 将活跃目标与当前帧像斑匹配，并刷新预测、有效性与存活状态。
+ * @return 跟踪执行时返回 0，无目标或无测量帧时返回 1。
  */
 int GeoTracker::trackTargets() {
     if (m_targets.empty() || m_fifoTarget.empty()) {

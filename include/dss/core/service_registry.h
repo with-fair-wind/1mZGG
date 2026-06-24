@@ -105,8 +105,9 @@ public:
     }
 
     /**
-     * @brief 检查默认名称的服务是否已注册
-     * @tparam Interface 服务接口类型
+     * @brief 检查默认名称的服务是否已注册。
+     * @tparam Interface 服务接口类型。
+     * @return 默认服务已注册时返回 true。
      */
     template <typename Interface>
     [[nodiscard]] bool has() const {
@@ -114,9 +115,10 @@ public:
     }
 
     /**
-     * @brief 检查指定名称的服务是否已注册
-     * @tparam Interface 服务接口类型
-     * @param name 服务名称
+     * @brief 检查指定名称的服务是否已注册。
+     * @tparam Interface 服务接口类型。
+     * @param name 服务名称。
+     * @return 对应服务已注册时返回 true。
      */
     template <typename Interface>
     [[nodiscard]] bool has(std::string_view name) const {
@@ -136,11 +138,21 @@ private:
         std::type_index type;  ///< 接口类型索引
         std::string name;      ///< 服务名称
 
-        [[nodiscard]] bool operator==(const ServiceKey&) const = default;
+        /**
+         * @brief 比较两个服务查找键。
+         * @param other 待比较的查找键。
+         * @return 类型和名称均相同时返回 true。
+         */
+        [[nodiscard]] bool operator==(const ServiceKey& other) const = default;
     };
 
     /// ServiceKey 哈希函数
     struct ServiceKeyHash {
+        /**
+         * @brief 计算服务查找键的哈希值。
+         * @param key 待计算的查找键。
+         * @return 合并接口类型和服务名称后的哈希值。
+         */
         [[nodiscard]] auto operator()(const ServiceKey& key) const noexcept -> std::size_t {
             auto seed = key.type.hash_code();
             seed ^= std::hash<std::string>{}(key.name) + 0x9E3779B9U + (seed << 6U) + (seed >> 2U);
@@ -148,11 +160,23 @@ private:
         }
     };
 
+    /**
+     * @brief 构造服务查找键。
+     * @tparam Interface 服务接口类型。
+     * @param name 服务名称。
+     * @return 包含接口类型和名称的查找键。
+     */
     template <typename Interface>
     [[nodiscard]] static auto makeKey(std::string_view name) -> ServiceKey {
         return ServiceKey{std::type_index(typeid(Interface)), std::string(name)};
     }
 
+    /**
+     * @brief 构造服务未注册错误文本。
+     * @tparam Interface 服务接口类型。
+     * @param name 服务名称。
+     * @return 包含接口类型及可选名称的错误文本。
+     */
     template <typename Interface>
     [[nodiscard]] static auto unregisteredMessage(std::string_view name) -> std::string {
         auto message = std::string("Service not registered: ") + typeid(Interface).name();

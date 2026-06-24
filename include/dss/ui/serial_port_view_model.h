@@ -73,6 +73,11 @@ public Q_SLOTS:
 
     /**
      * @brief 应用单个串口通道配置。
+     * @param key 串口通道键名。
+     * @param portName 串口设备名称。
+     * @param baudRate 波特率。
+     * @param dataBits 数据位数。
+     * @param stopBits 停止位枚举值。
      * @return 参数合法并写入内存配置时返回 true。
      */
     Q_INVOKABLE bool applySerialChannelConfig(const QString& key, const QString& portName,
@@ -80,6 +85,9 @@ public Q_SLOTS:
 
     /**
      * @brief 发送曝光通道联调命令。
+     * @param freeRun 是否启用自由运行模式。
+     * @param frameFrequencyCode 帧频编码值。
+     * @param exposureDelayTicks 曝光延时节拍数。
      * @return 参数合法、命令服务存在且串口已打开时返回 true。
      */
     Q_INVOKABLE bool sendExposureCommand(bool freeRun, int frameFrequencyCode,
@@ -87,6 +95,13 @@ public Q_SLOTS:
 
     /**
      * @brief 发送伺服距离/速度修正联调命令。
+     * @param distanceValid 距离修正量是否有效。
+     * @param speedValid 速度修正量是否有效。
+     * @param distanceXArcsec X 方向距离修正，单位角秒。
+     * @param distanceYArcsec Y 方向距离修正，单位角秒。
+     * @param speedXArcsecPerSec X 方向速度修正，单位角秒每秒。
+     * @param speedYArcsecPerSec Y 方向速度修正，单位角秒每秒。
+     * @param mode 伺服工作模式。
      * @return 参数合法、命令服务存在且串口已打开时返回 true。
      */
     Q_INVOKABLE bool sendServoCorrection(bool distanceValid, bool speedValid,
@@ -96,6 +111,22 @@ public Q_SLOTS:
 
     /**
      * @brief 发送主控状态回包联调命令。
+     * @param year 年。
+     * @param month 月。
+     * @param day 日。
+     * @param hour 时。
+     * @param minute 分。
+     * @param second 秒。
+     * @param millisecond 毫秒。
+     * @param azimuthDegrees 方位角，单位度。
+     * @param elevationDegrees 俯仰角，单位度。
+     * @param distanceValid 距离修正量是否有效。
+     * @param speedValid 速度修正量是否有效。
+     * @param distanceXArcsec X 方向距离修正，单位角秒。
+     * @param distanceYArcsec Y 方向距离修正，单位角秒。
+     * @param speedXArcsecPerSec X 方向速度修正，单位角秒每秒。
+     * @param speedYArcsecPerSec Y 方向速度修正，单位角秒每秒。
+     * @param servoMode 伺服工作模式。
      * @return 参数合法、命令服务存在且串口已打开时返回 true。
      */
     Q_INVOKABLE bool sendMasterControlStatus(int year, int month, int day, int hour, int minute,

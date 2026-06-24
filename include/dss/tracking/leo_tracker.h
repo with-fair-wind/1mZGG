@@ -9,6 +9,10 @@ namespace Dss::Tracking {
 /// 低轨（LEO）目标跟踪器，基于三帧方位-俯仰运动关联
 class LeoTracker final : public ITrackingStrategy {
 public:
+    /**
+     * @brief 创建低轨目标跟踪器。
+     * @param settings 跟踪门限、光学参数和生命周期配置。
+     */
     explicit LeoTracker(const Dss::Core::TrackingSettings& settings);
 
     /**
@@ -19,7 +23,7 @@ public:
     auto track(const Dss::Core::FrameMeasurements& measurements)
         -> std::vector<Dss::Core::TargetInfo> override;
 
-    /// 返回 LEO 跟踪模式
+    /** @brief 获取策略模式。 @return 固定返回 TrackMode::Leo。 */
     [[nodiscard]] auto mode() const -> Dss::Core::TrackMode override {
         return Dss::Core::TrackMode::Leo;
     }

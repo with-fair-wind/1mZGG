@@ -45,6 +45,15 @@ void updatePredictionFromHistory(Dss::Core::TargetInfo& target, float frameFrequ
     const Dss::Core::TrackingSettings& settings) -> std::vector<Dss::Core::TargetInfo>;
 
 [[nodiscard]] bool exceedsRediscoverySpeedLimit(const Dss::Core::TargetInfo& target);
+
+/**
+ * @brief 在当前帧中查找满足 GEO 跟踪门限的最近像斑。
+ * @param blobs 当前帧候选像斑。
+ * @param target 带有预测位置和速度的目标。
+ * @param settings GEO 跟踪门限设置。
+ * @param usedBlobs 已被其他目标占用的像斑。
+ * @return 最近的可用像斑；没有候选通过门限时返回 std::nullopt。
+ */
 [[nodiscard]] auto findNearestTrackedBlob(const std::vector<Dss::Core::MeasuredBlob>& blobs,
                                           const Dss::Core::TargetInfo& target,
                                           const Dss::Core::TrackingSettings& settings,

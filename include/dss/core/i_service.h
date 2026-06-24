@@ -11,7 +11,10 @@ class IService {
 public:
     virtual ~IService() = default;
 
-    /// 获取服务名称
+    /**
+     * @brief 获取服务名称。
+     * @return 用于诊断和日志输出的稳定名称。
+     */
     [[nodiscard]] virtual auto name() const -> std::string_view = 0;
 
     /**

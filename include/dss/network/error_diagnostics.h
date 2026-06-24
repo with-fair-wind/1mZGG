@@ -39,10 +39,10 @@ public:
     /// 停止工作线程并关闭 UDP 通道
     void close() override;
 
-    /// 查询通道是否已绑定
+    /** @brief 查询诊断通道是否已绑定。 @return UDP 通道可发送时返回 true。 */
     [[nodiscard]] bool isOpen() const override;
 
-    /// 获取当前网络通道运行状态
+    /** @brief 获取诊断服务状态。 @return 已绑定时为 Running，否则为 Init。 */
     [[nodiscard]] auto status() const -> Dss::Core::Status override;
 
     /**
@@ -51,7 +51,10 @@ public:
      */
     void setStatus(const DiagnosticStatus& status);
 
-    /// 获取线程安全的诊断状态快照
+    /**
+     * @brief 获取线程安全的诊断状态快照。
+     * @return 当前子系统状态的副本。
+     */
     [[nodiscard]] auto statusSnapshot() const -> DiagnosticStatus;
 
 private:
@@ -61,11 +64,11 @@ private:
      */
     void workerLoop(std::stop_token token);
 
-    MessageBus& m_bus;                 ///< 事件总线引用
-    UdpChannel m_channel;              ///< 诊断报文 UDP 通道
-    std::jthread m_workerThread;       ///< 周期性发送工作线程
-    mutable std::mutex m_statusMutex;  ///< 保护诊断状态的互斥锁
-    DiagnosticStatus m_status{};
+    MessageBus& m_bus;                                      ///< 事件总线引用
+    UdpChannel m_channel;                                   ///< 诊断报文 UDP 通道
+    std::jthread m_workerThread;                            ///< 周期性发送工作线程
+    mutable std::mutex m_statusMutex;                       ///< 保护诊断状态的互斥锁
+    DiagnosticStatus m_status{};                            ///< 最近一次设置的诊断状态
     std::vector<Dss::Evt::ScopedConnection> m_connections;  ///< 事件订阅连接
 };
 

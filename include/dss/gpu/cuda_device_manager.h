@@ -27,12 +27,12 @@ public:
      */
     auto init() -> std::expected<void, std::string> override;
 
-    /// 是否已完成初始化
+    /** @brief 查询 CUDA 管理器是否已初始化。 @return 设备和流均可用时返回 true。 */
     [[nodiscard]] bool isInitialized() const override {
         return m_initialized;
     }
 
-    /// 获取当前 GPU 设备名称
+    /** @brief 获取 CUDA 设备名称。 @return 初始化时读取的设备名称。 */
     [[nodiscard]] auto deviceName() const -> std::string override {
         return m_deviceName;
     }
@@ -53,17 +53,21 @@ public:
      */
     void synchronize(int streamIndex = 0) const;
 
-    /// 获取设备计算能力（主版本号, 次版本号）
+    /**
+     * @brief 获取设备计算能力。
+     * @return 由主版本号和次版本号组成的数对。
+     */
     [[nodiscard]] auto computeCapability() const -> std::pair<int, int> {
         return {m_ccMajor, m_ccMinor};
     }
 
-    /// 获取设备全局内存总量（字节）
+    /** @brief 获取设备全局内存总量。 @return 驱动报告的字节数。 */
     [[nodiscard]] auto totalMemory() const -> size_t {
         return m_totalMemory;
     }
 
 private:
+    /// @brief 销毁所有已创建的 CUDA 流并重置句柄。
     void releaseStreams() noexcept;
 
     bool m_initialized = false;                        ///< 是否已完成初始化

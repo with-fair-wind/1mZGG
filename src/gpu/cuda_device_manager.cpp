@@ -64,11 +64,7 @@ auto CudaDeviceManager::init() -> std::expected<void, std::string> {
     return {};
 }
 
-/**
- * @brief 按索引返回预创建的 CUDA 流
- * @param index 流索引，范围 [0, NumStreams)
- * @return 有效流句柄；索引越界时返回 nullptr
- */
+// 按索引返回预创建的 CUDA 流；公共契约记录在头文件中。
 auto CudaDeviceManager::stream(int index) const -> cudaStream_t {
     if (index < 0 || index >= NumStreams) {
         return nullptr;
@@ -85,10 +81,7 @@ void CudaDeviceManager::synchronizeAll() const {
     }
 }
 
-/**
- * @brief 同步指定索引的 CUDA 流
- * @param streamIndex 流索引；越界时无操作
- */
+// 同步指定索引的 CUDA 流；公共契约记录在头文件中。
 void CudaDeviceManager::synchronize(int streamIndex) const {
     if (auto s = stream(streamIndex)) {
         cudaStreamSynchronize(s);

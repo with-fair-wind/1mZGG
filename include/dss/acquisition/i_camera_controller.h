@@ -15,10 +15,10 @@ class ICameraController {
 public:
     virtual ~ICameraController() = default;
 
-    /// 串口是否已打开
+    /** @brief 查询串口是否已打开。 @return 串口可用时返回 true。 */
     [[nodiscard]] virtual bool isOpen() const = 0;
 
-    /// 当前绑定的串口名称
+    /** @brief 获取当前绑定的串口名称。 @return 串口名称的非拥有字符串视图。 */
     [[nodiscard]] virtual auto portName() const -> std::string_view = 0;
 
     /**
@@ -64,12 +64,12 @@ public:
      */
     explicit CommandOnlyCameraController(std::string portName) : m_portName(std::move(portName)) {}
 
-    /// 始终返回 false，表示未打开真实串口
+    /** @brief 查询串口状态。 @return 始终返回 false，因为该实现不持有真实串口。 */
     [[nodiscard]] bool isOpen() const override {
         return false;
     }
 
-    /// 返回构造时指定的串口名称
+    /** @brief 获取逻辑串口名称。 @return 构造时指定的串口名称。 */
     [[nodiscard]] auto portName() const -> std::string_view override {
         return m_portName;
     }

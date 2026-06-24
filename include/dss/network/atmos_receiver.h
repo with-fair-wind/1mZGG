@@ -32,10 +32,10 @@ public:
     /// 关闭 UDP 通道
     void close() override;
 
-    /// 查询通道是否已绑定
+    /** @brief 查询接收通道是否已绑定。 @return UDP 通道可接收数据时返回 true。 */
     [[nodiscard]] bool isOpen() const override;
 
-    /// 获取当前网络通道运行状态
+    /** @brief 获取接收服务状态。 @return 已绑定时为 Running，否则为 Init。 */
     [[nodiscard]] auto status() const -> Dss::Core::Status override;
 
 private:

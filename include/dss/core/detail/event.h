@@ -24,6 +24,9 @@ template <typename Handler, typename LockPolicy, typename... Args>
 class EventCore {
 public:
     using Id = std::size_t;  ///< 处理器槽位 ID
+    /**
+     * @brief 处理器及其槽位标识。
+     */
     struct Slot {
         Id id;            ///< 槽位 ID
         Handler handler;  ///< 处理器
@@ -31,15 +34,23 @@ public:
     using HandlerList = std::vector<Slot>;                 ///< 处理器列表
     using StoredArgs = std::tuple<std::decay_t<Args>...>;  ///< 待派发参数元组
 
+    /// @brief 创建空处理器列表与待派发队列。
     EventCore() : m_handlers(std::make_shared<HandlerList>()) {}
 
-    /// 获取处理器列表快照（共享指针，COW 安全）
+    /**
+     * @brief 获取处理器列表快照。
+     * @return 共享的只读时刻快照；后续写操作会触发 COW 分离。
+     */
     std::shared_ptr<HandlerList> snapshot() const {
         SharedLockGuard<LockPolicy> guard(m_lock);
         return m_handlers;
     }
 
-    /// 添加处理器，返回槽位 ID
+    /**
+     * @brief 添加事件处理器。
+     * @param handler 待注册的处理器。
+     * @return 新处理器的槽位 ID。
+     */
     Id addHandler(Handler handler) {
         UniqueLockGuard<LockPolicy> guard(m_lock);
         cowDetach();
@@ -48,7 +59,10 @@ public:
         return id;
     }
 
-    /// 按 ID 移除处理器
+    /**
+     * @brief 按槽位 ID 移除处理器。
+     * @param id 待移除的槽位 ID。
+     */
     void removeHandler(Id id) {
         UniqueLockGuard<LockPolicy> guard(m_lock);
         cowDetach();
@@ -62,15 +76,19 @@ public:
         m_handlers = std::make_shared<HandlerList>();
     }
 
-    /// 获取当前处理器数量
+    /**
+     * @brief 获取当前处理器数量。
+     * @return 已注册处理器数量。
+     */
     [[nodiscard]] std::size_t handlerCount() const {
         SharedLockGuard<LockPolicy> guard(m_lock);
         return m_handlers ? m_handlers->size() : 0;
     }
 
     /**
-     * @brief 将事件参数加入待派发队列
-     * @tparam UArgs 参数类型
+     * @brief 将事件参数加入待派发队列。
+     * @tparam UArgs 参数类型。
+     * @param uargs 待存储的事件参数。
      */
     template <typename... UArgs>
     void pushPending(UArgs&&... uargs) {
@@ -78,13 +96,19 @@ public:
         m_pending.emplace_back(std::decay_t<Args>(std::forward<UArgs>(uargs))...);
     }
 
-    /// 取出并清空待派发队列
+    /**
+     * @brief 取出并清空待派发队列。
+     * @return 原待派发参数批次。
+     */
     std::vector<StoredArgs> takePending() {
         UniqueLockGuard<LockPolicy> guard(m_lock);
         return std::move(m_pending);
     }
 
-    /// 待派发事件数量
+    /**
+     * @brief 获取待派发事件数量。
+     * @return 队列中的事件数量。
+     */
     [[nodiscard]] std::size_t pendingCount() const {
         SharedLockGuard<LockPolicy> guard(m_lock);
         return m_pending.size();
@@ -137,9 +161,10 @@ public:
     using Id = std::size_t;                   ///< 槽位 ID
 
 private:
-    using Core = detail::EventCore<Handler, LockPolicy, Args...>;
+    using Core = detail::EventCore<Handler, LockPolicy, Args...>;  ///< 事件核心类型。
 
 public:
+    /// @brief 创建没有订阅者的 void 事件。
     Event() : m_core(std::make_shared<Core>()) {}
 
     /**
@@ -159,8 +184,10 @@ public:
     }
 
     /**
-     * @brief 从可调用对象订阅事件
-     * @tparam F 可调用对象类型
+     * @brief 从可调用对象订阅事件。
+     * @tparam F 可调用对象类型。
+     * @param func 待注册的可调用对象。
+     * @return 管理本次订阅的作用域连接。
      */
     template <typename F>
     ScopedConnection subscribe(F&& func) {
@@ -174,11 +201,17 @@ public:
         }
     }
 
-    /// 处理器数量
+    /**
+     * @brief 获取处理器数量。
+     * @return 已注册处理器数量。
+     */
     [[nodiscard]] std::size_t size() const {
         return m_core ? m_core->handlerCount() : 0;
     }
-    /// 是否无处理器
+    /**
+     * @brief 查询事件是否没有处理器。
+     * @return 没有处理器时返回 true。
+     */
     [[nodiscard]] bool empty() const {
         return size() == 0;
     }
@@ -202,14 +235,18 @@ public:
         });
     }
 
-    /// 同 emit，函数调用语法糖
+    /**
+     * @brief 使用函数调用语法同步派发事件。
+     * @param args 事件参数。
+     */
     void operator()(Args... args) const {
         emit(std::forward<Args>(args)...);
     }
 
     /**
-     * @brief 异步投递事件（入队，需 flush 派发）
-     * @tparam UArgs 参数类型
+     * @brief 异步投递事件（入队，需 flush 派发）。
+     * @tparam UArgs 参数类型。
+     * @param uargs 待入队的事件参数。
      */
     template <typename... UArgs>
     void post(UArgs&&... uargs) {
@@ -228,7 +265,10 @@ public:
         });
     }
 
-    /// 待派发事件数量
+    /**
+     * @brief 获取待派发事件数量。
+     * @return 队列中的事件数量。
+     */
     [[nodiscard]] std::size_t pendingCount() const {
         return m_core ? m_core->pendingCount() : 0;
     }
@@ -267,11 +307,13 @@ public:
     using ResultType = typename Combiner::result_type;  ///< 组合结果类型
 
 private:
-    using Core = detail::EventCore<Handler, LockPolicy, Args...>;
+    using Core = detail::EventCore<Handler, LockPolicy, Args...>;  ///< 事件核心类型。
     using Adapter =
-        detail::CombinerAdapter<Combiner, R, detail::HasAccumulator<Combiner>::value>;
+        detail::CombinerAdapter<Combiner, R,
+                                detail::HasAccumulator<Combiner>::value>;  ///< 组合适配器。
 
 public:
+    /// @brief 创建没有订阅者的返回值事件。
     Event() : m_core(std::make_shared<Core>()) {}
 
     /**
@@ -291,8 +333,10 @@ public:
     }
 
     /**
-     * @brief 从可调用对象订阅事件
-     * @tparam F 可调用对象类型
+     * @brief 从可调用对象订阅事件。
+     * @tparam F 可调用对象类型。
+     * @param func 待注册的可调用对象。
+     * @return 管理本次订阅的作用域连接。
      */
     template <typename F>
     ScopedConnection subscribe(F&& func) {
@@ -306,11 +350,17 @@ public:
         }
     }
 
-    /// 处理器数量
+    /**
+     * @brief 获取处理器数量。
+     * @return 已注册处理器数量。
+     */
     [[nodiscard]] std::size_t size() const {
         return m_core ? m_core->handlerCount() : 0;
     }
-    /// 是否无处理器
+    /**
+     * @brief 查询事件是否没有处理器。
+     * @return 没有处理器时返回 true。
+     */
     [[nodiscard]] bool empty() const {
         return size() == 0;
     }
@@ -351,14 +401,19 @@ public:
         return acc.finalize();
     }
 
-    /// 同 emit，函数调用语法糖
+    /**
+     * @brief 使用函数调用语法同步派发事件。
+     * @param args 事件参数。
+     * @return 组合后的处理器返回值。
+     */
     ResultType operator()(Args... args) const {
         return emit(std::forward<Args>(args)...);
     }
 
     /**
-     * @brief 异步投递事件
-     * @tparam UArgs 参数类型
+     * @brief 异步投递事件。
+     * @tparam UArgs 参数类型。
+     * @param uargs 待入队的事件参数。
      */
     template <typename... UArgs>
     void post(UArgs&&... uargs) {
@@ -366,7 +421,10 @@ public:
         m_core->pushPending(std::forward<UArgs>(uargs)...);
     }
 
-    /// 派发所有待处理事件，返回各次 emit 的组合结果
+    /**
+     * @brief 派发所有待处理事件。
+     * @return 每次事件派发产生的组合结果。
+     */
     std::vector<ResultType> flush() {
         if (!m_core) {
             return {};
@@ -381,7 +439,10 @@ public:
         return allResults;
     }
 
-    /// 待派发事件数量
+    /**
+     * @brief 获取待派发事件数量。
+     * @return 队列中的事件数量。
+     */
     [[nodiscard]] std::size_t pendingCount() const {
         return m_core ? m_core->pendingCount() : 0;
     }
@@ -401,7 +462,10 @@ private:
         }
     }
 
-    /// 无处理器时的默认返回值
+    /**
+     * @brief 获取无处理器时的默认返回值。
+     * @return 组合器定义的空结果。
+     */
     static ResultType emptyResult() {
         return detail::EmptyResultAdapter<Combiner, detail::HasEmptyResult<Combiner>::value>::get();
     }

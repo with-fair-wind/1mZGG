@@ -31,10 +31,10 @@ public:
      */
     [[nodiscard]] virtual auto process(const FramePacket& input) -> ProcessingResult = 0;
 
-    /// 策略名称标识
+    /** @brief 获取策略名称。 @return 稳定的后端名称标识。 */
     [[nodiscard]] virtual auto name() const -> std::string_view = 0;
 
-    /// 策略对应的处理模式
+    /** @brief 获取策略处理模式。 @return 与策略实现对应的处理模式。 */
     [[nodiscard]] virtual auto mode() const -> Dss::Core::ProcessingMode = 0;
 };
 

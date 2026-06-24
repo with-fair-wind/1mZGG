@@ -8,7 +8,7 @@
 
 namespace Dss::Network {
 
-using UdpEndpointConfig = Dss::Core::UdpEndpointConfig;
+using UdpEndpointConfig = Dss::Core::UdpEndpointConfig;  ///< UDP 端点配置类型别名
 
 /// 网络通道抽象接口，定义 UDP 端点的打开/关闭及状态查询能力
 class INetworkChannel {
@@ -25,10 +25,10 @@ public:
     /// 关闭通道并释放资源
     virtual void close() = 0;
 
-    /// 查询通道是否已打开
+    /** @brief 查询通道是否已打开。 @return 通道可收发数据时返回 true。 */
     [[nodiscard]] virtual bool isOpen() const = 0;
 
-    /// 获取当前通道运行状态
+    /** @brief 获取当前通道状态。 @return 生命周期状态。 */
     [[nodiscard]] virtual auto status() const -> Dss::Core::Status = 0;
 };
 

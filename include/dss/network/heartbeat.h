@@ -36,19 +36,25 @@ public:
     /// 停止工作线程并关闭 UDP 通道
     void close() override;
 
-    /// 查询通道是否已绑定
+    /** @brief 查询心跳通道是否已绑定。 @return UDP 通道可发送时返回 true。 */
     [[nodiscard]] bool isOpen() const override;
 
-    /// 获取当前网络通道运行状态
+    /** @brief 获取心跳服务状态。 @return 已绑定时为 Running，否则为 Init。 */
     [[nodiscard]] auto status() const -> Dss::Core::Status override;
 
     /// 立即发送一帧关闭守护心跳（用于进程退出前通知对端）
     void sendCloseGuard();
 
-    /// 构建标准心跳帧（10 字节，含帧头/帧尾）
+    /**
+     * @brief 构建标准心跳帧。
+     * @return 包含帧头、载荷与帧尾的 10 字节数组。
+     */
     [[nodiscard]] static auto buildFrame() -> std::array<uint8_t, 10>;
 
-    /// 构建关闭守护心跳帧（在标准帧基础上设置关闭标志位）
+    /**
+     * @brief 构建关闭守护心跳帧。
+     * @return 在标准帧基础上设置关闭标志的 10 字节数组。
+     */
     [[nodiscard]] static auto buildCloseGuardFrame() -> std::array<uint8_t, 10>;
 
 private:

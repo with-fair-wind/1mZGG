@@ -17,10 +17,10 @@ public:
      */
     virtual auto init() -> std::expected<void, std::string> = 0;
 
-    /// 是否已完成初始化
+    /** @brief 查询后端是否已初始化。 @return GPU 资源可用时返回 true。 */
     [[nodiscard]] virtual bool isInitialized() const = 0;
 
-    /// 获取当前 GPU 设备名称
+    /** @brief 获取当前 GPU 设备名称。 @return 驱动报告的设备名称。 */
     [[nodiscard]] virtual auto deviceName() const -> std::string = 0;
 };
 

@@ -17,8 +17,16 @@ namespace Dss::Acquisition {
 /// 从本地图像文件序列按序回放帧的帧源实现
 class ImageSequenceFrameSource final : public IFrameSource {
 public:
+    /// @brief 创建尚未配置文件的回放帧源。
     ImageSequenceFrameSource();
+
+    /**
+     * @brief 使用文件序列创建回放帧源。
+     * @param files 按播放顺序排列的图像文件路径。
+     */
     explicit ImageSequenceFrameSource(std::vector<std::filesystem::path> files);
+
+    /// @brief 停止并等待后台回放线程退出。
     ~ImageSequenceFrameSource() override;
 
     /**
@@ -28,10 +36,10 @@ public:
      */
     auto setFiles(std::vector<std::filesystem::path> files) -> std::expected<void, std::string>;
 
-    /// 当前序列中的帧总数
+    /** @brief 获取当前序列帧数。 @return 已配置的图像文件数量。 */
     [[nodiscard]] auto frameCount() const -> std::size_t;
 
-    /// 下一帧待播放的索引
+    /** @brief 获取下一帧播放索引。 @return 下一帧的零基索引。 */
     [[nodiscard]] auto nextFrameIndex() const -> std::size_t;
 
     /**
@@ -41,7 +49,10 @@ public:
      */
     auto seek(std::size_t index) -> std::expected<void, std::string>;
 
-    /// 设置连续回放时的帧间隔
+    /**
+     * @brief 设置连续回放时的帧间隔。
+     * @param interval 相邻帧回调之间的目标间隔。
+     */
     void setFrameInterval(std::chrono::milliseconds interval);
 
     /**
@@ -59,16 +70,19 @@ public:
     /// 停止回放并等待工作线程退出
     void stop() override;
 
-    /// 设置帧就绪回调
+    /**
+     * @brief 设置帧就绪回调。
+     * @param callback 每帧解码完成后调用的回调。
+     */
     void setFrameCallback(FrameCallback callback) override;
 
-    /// 是否正在连续回放
+    /** @brief 查询是否正在连续回放。 @return 后台回放线程运行时返回 true。 */
     [[nodiscard]] bool isRunning() const override;
 
-    /// 帧宽度（像素）
+    /** @brief 获取帧宽度。 @return 初始化得到的像素宽度。 */
     [[nodiscard]] auto frameWidth() const -> std::uint32_t override;
 
-    /// 帧高度（像素）
+    /** @brief 获取帧高度。 @return 初始化得到的像素高度。 */
     [[nodiscard]] auto frameHeight() const -> std::uint32_t override;
 
 private:

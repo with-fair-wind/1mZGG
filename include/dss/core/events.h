@@ -11,11 +11,13 @@
 
 namespace Dss::Core {
 
-/// 采集事件：一帧图像已就绪
+/// 采集事件：采集源报告错误。
 struct AcquisitionErrorEvent {
-    std::string source;
-    std::string message;
+    std::string source;   ///< 报告错误的采集源名称
+    std::string message;  ///< 错误描述
 };
+
+/// 采集事件：一帧图像已就绪。
 struct FrameAcquiredEvent {
     uint64_t frameSeq = 0;           ///< 帧序号
     uint32_t width = 0;              ///< 图像宽度（像素）

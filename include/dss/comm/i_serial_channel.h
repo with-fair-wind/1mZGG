@@ -26,16 +26,16 @@ public:
     /// 关闭串口并释放资源
     virtual void close() = 0;
 
-    /// 查询串口是否已打开
+    /** @brief 查询串口是否已打开。 @return 串口可收发数据时返回 true。 */
     [[nodiscard]] virtual bool isOpen() const = 0;
 
-    /// 获取当前通道运行状态
+    /** @brief 获取通道运行状态。 @return 当前生命周期状态。 */
     [[nodiscard]] virtual auto status() const -> Dss::Core::Status = 0;
 
-    /// 返回接收帧的固定字节长度
+    /** @brief 获取接收帧长度。 @return 协议定义的固定字节数。 */
     [[nodiscard]] virtual auto recvFrameSize() const -> size_t = 0;
 
-    /// 返回发送帧的固定字节长度
+    /** @brief 获取发送帧长度。 @return 协议定义的固定字节数。 */
     [[nodiscard]] virtual auto sendFrameSize() const -> size_t = 0;
 };
 

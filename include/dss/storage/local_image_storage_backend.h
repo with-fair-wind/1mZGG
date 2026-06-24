@@ -27,15 +27,18 @@ namespace Dss::Storage {
 /// 本地 RAW 图像异步存储后端，通过后台线程写入磁盘
 class LocalImageStorageBackend final : public IStorageBackend {
 public:
-    using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;
+    using MessageBus =
+        Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;  ///< 跨线程消息总线类型
     /**
-     * @brief 构造本地图像存储后端
-     * @param baseDir 默认存储根目录
+     * @brief 构造本地图像存储后端。
+     * @param baseDir 默认存储根目录。
+     * @param maxPendingRequests 写入队列允许的最大待处理请求数。
      */
     explicit LocalImageStorageBackend(std::filesystem::path baseDir,
                                       std::size_t maxPendingRequests = 1024)
         : m_baseDir(std::move(baseDir)), m_maxPendingRequests(maxPendingRequests) {}
 
+    /// @brief 停止后台写入线程后销毁后端。
     ~LocalImageStorageBackend() override {
         stop();
     }
@@ -57,12 +60,12 @@ public:
         return {};
     }
 
-    /// 查询存储后端是否已初始化
+    /** @brief 查询后端是否已初始化。 @return 存储根目录可用时返回 true。 */
     [[nodiscard]] bool isReady() const override {
         return m_ready.load();
     }
 
-    /// 获取当前存储根目录
+    /** @brief 获取当前存储根目录。 @return 根目录路径的常量引用。 */
     [[nodiscard]] auto baseDir() const -> const std::filesystem::path& {
         return m_baseDir;
     }
@@ -94,36 +97,56 @@ public:
         m_running = false;
     }
 
-    /// 查询后台写入线程是否正在运行
+    /** @brief 查询后台写入状态。 @return 工作线程运行时返回 true。 */
     [[nodiscard]] bool isRunning() const {
         return m_running;
     }
 
+    /**
+     * @brief 获取累计丢弃请求数。
+     * @return 因写入队列已满而拒绝的请求数量。
+     */
     [[nodiscard]] auto droppedRequests() const -> std::uint64_t {
         return m_droppedRequests.load();
     }
+    /**
+     * @brief 设置用于发布存储错误事件的消息总线。
+     * @param bus 非拥有消息总线指针；应在启动工作线程前设置。
+     */
     void setBus(MessageBus* bus) {
         m_bus = bus;
     }
 
+    /** @brief 获取成功写入次数。 @return 后台成功完成的帧写入数量。 */
     [[nodiscard]] auto successfulWrites() const -> std::uint64_t {
         return m_successfulWrites.load();
     }
 
+    /** @brief 获取失败写入次数。 @return 后台写入失败的帧数量。 */
     [[nodiscard]] auto failedWrites() const -> std::uint64_t {
         return m_failedWrites.load();
     }
 
+    /** @brief 查询是否已配置观测会话。 @return 会话命名配置存在时返回 true。 */
     [[nodiscard]] bool hasSession() const {
         return m_sessionNaming.has_value();
     }
 
+    /**
+     * @brief 获取当前会话目录。
+     * @return 会话目录路径；未配置会话时返回空路径。
+     */
     [[nodiscard]] auto sessionPath() const -> std::filesystem::path {
         if (!m_sessionNaming.has_value()) {
             return {};
         }
         return buildSessionPath(*m_sessionNaming);
     }
+    /**
+     * @brief 配置会话命名并创建目录及 IFM 索引。
+     * @param naming 会话命名信息；根目录会被替换为当前后端根目录。
+     * @return 配置成功时为空；工作线程运行或文件创建失败时返回错误描述。
+     */
     auto configureSession(ImageStorageNaming naming) -> std::expected<void, std::string> {
         if (m_running.load()) {
             return std::unexpected("cannot configure session while storage worker is running");
@@ -147,6 +170,13 @@ public:
         return {};
     }
 
+    /**
+     * @brief 按当前会话命名生成路径并提交一帧。
+     * @param sequence 会话内帧序号。
+     * @param metadata RAW 图像元数据。
+     * @param pixels 16 位像素视图；函数返回前会复制数据。
+     * @return 入队成功时为空；会话未配置或队列不可用时返回错误描述。
+     */
     auto enqueueSessionFrame(std::uint64_t sequence, RawImageMetadata metadata,
                              std::span<const std::uint16_t> pixels)
         -> std::expected<void, std::string> {
@@ -198,7 +228,11 @@ private:
         std::vector<std::uint16_t> pixels;  ///< 16 位像素数据
     };
 
-    /// 将相对路径解析为基于存储根目录的绝对路径
+    /**
+     * @brief 将相对路径解析到存储根目录。
+     * @param path 相对或绝对目标路径。
+     * @return 绝对路径保持不变；相对路径拼接到根目录。
+     */
     [[nodiscard]] auto resolvePath(std::filesystem::path path) const -> std::filesystem::path {
         if (path.is_absolute()) {
             return path;
@@ -206,7 +240,10 @@ private:
         return m_baseDir / path;
     }
 
-    /// 后台工作线程主循环，从队列取出请求并写入磁盘
+    /**
+     * @brief 从队列取出请求并写入磁盘。
+     * @param token 用于停止等待并在队列排空后退出的令牌。
+     */
     void workerLoop(std::stop_token token) {
         while (true) {
             SaveRawFrameRequest request;
@@ -237,6 +274,11 @@ private:
         }
     }
 
+    /**
+     * @brief 编码并写入一个 RAW 或兼容 BMP 帧。
+     * @param request 包含目标路径、元数据及像素副本的写入请求。
+     * @return 写入成功时为空；目录、编码或文件写入失败时返回错误描述。
+     */
     auto writeFrame(const SaveRawFrameRequest& request) const -> std::expected<void, std::string> {
         std::error_code error;
         std::filesystem::create_directories(request.path.parent_path(), error);
@@ -281,13 +323,13 @@ private:
         return {};
     }
 
-    std::filesystem::path m_baseDir;   ///< 存储根目录
-    std::atomic<bool> m_ready{false};  ///< 是否已完成初始化
-    std::atomic<bool> m_running{false};
-    std::size_t m_maxPendingRequests = 1024;
-    std::atomic<std::uint64_t> m_droppedRequests{0};  ///< 被背压拒绝的请求数量
-    std::atomic<std::uint64_t> m_successfulWrites{0};
-    std::atomic<std::uint64_t> m_failedWrites{0};
+    std::filesystem::path m_baseDir;                    ///< 存储根目录
+    std::atomic<bool> m_ready{false};                   ///< 是否已完成初始化
+    std::atomic<bool> m_running{false};                 ///< 后台线程运行状态
+    std::size_t m_maxPendingRequests = 1024;            ///< 写入队列容量上限
+    std::atomic<std::uint64_t> m_droppedRequests{0};    ///< 被背压拒绝的请求数量
+    std::atomic<std::uint64_t> m_successfulWrites{0};   ///< 成功写入数量
+    std::atomic<std::uint64_t> m_failedWrites{0};       ///< 写入失败数量
     std::optional<ImageStorageNaming> m_sessionNaming;  ///< 当前会话命名配置
     MessageBus* m_bus = nullptr;                        ///< 非拥有事件总线指针
     std::jthread m_worker;                              ///< 后台写入工作线程

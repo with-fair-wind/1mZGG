@@ -10,6 +10,10 @@ namespace Dss::Tracking {
 /// 手动跟踪器，根据操作员指定的目标位置生成跟踪轨迹
 class ManualTracker final : public ITrackingStrategy {
 public:
+    /**
+     * @brief 创建手动目标跟踪器。
+     * @param settings 跟踪门限、光学参数和生命周期配置。
+     */
     explicit ManualTracker(const Dss::Core::TrackingSettings& settings);
 
     /**
@@ -20,7 +24,7 @@ public:
     auto track(const Dss::Core::FrameMeasurements& measurements)
         -> std::vector<Dss::Core::TargetInfo> override;
 
-    /// 返回手动跟踪模式
+    /** @brief 获取策略模式。 @return 固定返回 TrackMode::Manual。 */
     [[nodiscard]] auto mode() const -> Dss::Core::TrackMode override {
         return Dss::Core::TrackMode::Manual;
     }

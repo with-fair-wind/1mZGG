@@ -21,7 +21,10 @@ public:
     virtual auto track(const Dss::Core::FrameMeasurements& measurements)
         -> std::vector<Dss::Core::TargetInfo> = 0;
 
-    /// 返回当前策略对应的跟踪模式
+    /**
+     * @brief 获取当前策略对应的跟踪模式。
+     * @return 策略实现所支持的跟踪模式。
+     */
     [[nodiscard]] virtual auto mode() const -> Dss::Core::TrackMode = 0;
 
     /// 重置内部状态，清除历史帧与目标缓存

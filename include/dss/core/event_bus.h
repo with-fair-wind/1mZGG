@@ -27,10 +27,14 @@
 #define DSS_EVT_RESTORE_EMIT
 #endif
 
-#include "dss/core/detail/event_bus_primitives.h"
 #include "dss/core/detail/event.h"
+#include "dss/core/detail/event_bus_primitives.h"
 
 namespace Dss::Evt {
+/**
+ * @brief 按消息类型组织通道的线程策略化消息总线。
+ * @tparam LockPolicy 保护通道表和事件处理器的锁策略。
+ */
 template <typename LockPolicy = NoLock>
 class BasicMessageBus : private detail::MovePolicy<std::is_same_v<LockPolicy, NoLock>> {
 public:
@@ -49,9 +53,11 @@ public:
     }
 
     /**
-     * @brief 从可调用对象订阅指定消息类型
-     * @tparam Message 消息类型
-     * @tparam F 可调用对象类型
+     * @brief 从可调用对象订阅指定消息类型。
+     * @tparam Message 消息类型。
+     * @tparam F 可调用对象类型。
+     * @param func 消息处理函数。
+     * @return 管理本次订阅的作用域连接。
      */
     template <typename Message, typename F>
     ScopedConnection subscribe(F&& func) {
@@ -96,7 +102,10 @@ public:
         detail::forEachSafe(ptrs.begin(), ptrs.end(), [](auto* ch) { ch->flush(); });
     }
 
-    /// 所有通道待派发消息总数
+    /**
+     * @brief 获取所有通道待派发消息总数。
+     * @return 全部类型化通道中的待派发消息数量。
+     */
     [[nodiscard]] std::size_t pendingCount() const {
         detail::SharedLockGuard<LockPolicy> guard(m_lock);
         std::size_t total = 0;
@@ -113,7 +122,12 @@ private:
         virtual ~IChannel() = default;
         IChannel(const IChannel&) = delete;
         IChannel& operator=(const IChannel&) = delete;
+        /// @brief 派发本通道中的全部待处理消息。
         virtual void flush() = 0;
+        /**
+         * @brief 获取本通道中的待处理消息数量。
+         * @return 待处理消息数量。
+         */
         virtual std::size_t pendingCount() const = 0;
     };
 
@@ -124,15 +138,21 @@ private:
     template <typename Message>
     struct TypedChannel : IChannel {
         Event<void(const Message&), CollectAll, LockPolicy> m_event;  ///< 底层 void 事件
+        /// @copydoc IChannel::flush
         void flush() override {
             m_event.flush();
         }
+        /// @copydoc IChannel::pendingCount
         std::size_t pendingCount() const override {
             return m_event.pendingCount();
         }
     };
 
-    /// 获取或创建指定消息类型的通道
+    /**
+     * @brief 获取或创建指定消息类型的通道。
+     * @tparam Message 消息类型。
+     * @return 对应类型化通道的非拥有指针。
+     */
     template <typename Message>
     TypedChannel<Message>* ensureChannel() {
         detail::UniqueLockGuard<LockPolicy> guard(m_lock);
@@ -144,7 +164,11 @@ private:
         return static_cast<TypedChannel<Message>*>(it->second.get());
     }
 
-    /// 查找指定消息类型的通道（不存在返回 nullptr）
+    /**
+     * @brief 查找指定消息类型的通道。
+     * @tparam Message 消息类型。
+     * @return 已存在通道的非拥有指针；不存在时返回 nullptr。
+     */
     template <typename Message>
     TypedChannel<Message>* findChannel() const {
         detail::SharedLockGuard<LockPolicy> guard(m_lock);

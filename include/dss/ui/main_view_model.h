@@ -60,45 +60,45 @@ public:
      */
     [[nodiscard]] double exposure() const;
 
-    /// 获取日志子 ViewModel。
+    /** @brief 获取日志子 ViewModel。 @return 可写日志 ViewModel 引用。 */
     [[nodiscard]] LogViewModel& logs();
-    /// 获取只读日志子 ViewModel。
+    /** @brief 获取只读日志子 ViewModel。 @return 日志 ViewModel 常量引用。 */
     [[nodiscard]] const LogViewModel& logs() const;
-    /// 获取回放子 ViewModel。
+    /** @brief 获取回放子 ViewModel。 @return 可写回放 ViewModel 引用。 */
     [[nodiscard]] ReplayViewModel& replay();
-    /// 获取只读回放子 ViewModel。
+    /** @brief 获取只读回放子 ViewModel。 @return 回放 ViewModel 常量引用。 */
     [[nodiscard]] const ReplayViewModel& replay() const;
-    /// 获取显示子 ViewModel。
+    /** @brief 获取显示子 ViewModel。 @return 可写显示 ViewModel 引用。 */
     [[nodiscard]] DisplayViewModel& display();
-    /// 获取只读显示子 ViewModel。
+    /** @brief 获取只读显示子 ViewModel。 @return 显示 ViewModel 常量引用。 */
     [[nodiscard]] const DisplayViewModel& display() const;
-    /// 获取处理子 ViewModel。
+    /** @brief 获取处理子 ViewModel。 @return 可写处理 ViewModel 引用。 */
     [[nodiscard]] ProcessingViewModel& processing();
-    /// 获取只读处理子 ViewModel。
+    /** @brief 获取只读处理子 ViewModel。 @return 处理 ViewModel 常量引用。 */
     [[nodiscard]] const ProcessingViewModel& processing() const;
-    /// 获取跟踪子 ViewModel。
+    /** @brief 获取跟踪子 ViewModel。 @return 可写跟踪 ViewModel 引用。 */
     [[nodiscard]] TrackingViewModel& tracking();
-    /// 获取只读跟踪子 ViewModel。
+    /** @brief 获取只读跟踪子 ViewModel。 @return 跟踪 ViewModel 常量引用。 */
     [[nodiscard]] const TrackingViewModel& tracking() const;
-    /// 获取存储子 ViewModel。
+    /** @brief 获取存储子 ViewModel。 @return 可写存储 ViewModel 引用。 */
     [[nodiscard]] StorageViewModel& storage();
-    /// 获取只读存储子 ViewModel。
+    /** @brief 获取只读存储子 ViewModel。 @return 存储 ViewModel 常量引用。 */
     [[nodiscard]] const StorageViewModel& storage() const;
-    /// 获取系统设置子 ViewModel。
+    /** @brief 获取设置子 ViewModel。 @return 可写设置 ViewModel 引用。 */
     [[nodiscard]] SettingsViewModel& settings();
-    /// 获取只读系统设置子 ViewModel。
+    /** @brief 获取只读设置子 ViewModel。 @return 设置 ViewModel 常量引用。 */
     [[nodiscard]] const SettingsViewModel& settings() const;
-    /// 获取串口子 ViewModel。
+    /** @brief 获取串口子 ViewModel。 @return 可写串口 ViewModel 引用。 */
     [[nodiscard]] SerialPortViewModel& serialPorts();
-    /// 获取只读串口子 ViewModel。
+    /** @brief 获取只读串口子 ViewModel。 @return 串口 ViewModel 常量引用。 */
     [[nodiscard]] const SerialPortViewModel& serialPorts() const;
-    /// 获取网络端点子 ViewModel。
+    /** @brief 获取网络子 ViewModel。 @return 可写网络 ViewModel 引用。 */
     [[nodiscard]] NetworkViewModel& network();
-    /// 获取只读网络端点子 ViewModel。
+    /** @brief 获取只读网络子 ViewModel。 @return 网络 ViewModel 常量引用。 */
     [[nodiscard]] const NetworkViewModel& network() const;
-    /// 获取数据交换子 ViewModel。
+    /** @brief 获取数据交换子 ViewModel。 @return 可写数据交换 ViewModel 引用。 */
     [[nodiscard]] DataExchangeViewModel& dataExchange();
-    /// 获取只读数据交换子 ViewModel。
+    /** @brief 获取只读数据交换子 ViewModel。 @return 数据交换 ViewModel 常量引用。 */
     [[nodiscard]] const DataExchangeViewModel& dataExchange() const;
 
 public Q_SLOTS:
@@ -151,14 +151,14 @@ private:
     DisplayViewModel m_display;              ///< 显示子 ViewModel。
     ProcessingViewModel m_processing;        ///< 处理子 ViewModel。
     TrackingViewModel m_tracking;            ///< 跟踪子 ViewModel。
-    StorageViewModel m_storage;
-    SettingsViewModel m_settings;          ///< 存储子 ViewModel。
-    SerialPortViewModel m_serialPorts;     ///< 串口子 ViewModel。
-    NetworkViewModel m_network;            ///< 网络端点子 ViewModel。
-    DataExchangeViewModel m_dataExchange;  ///< 数据交换子 ViewModel。
-    QString m_statusText = "Ready";        ///< 最近一次状态栏文本。
-    double m_exposure = 0.0;               ///< 当前曝光时间，单位毫秒。
-    std::string m_activeStorageSessionId;  ///< 当前主控存储会话标识。
+    StorageViewModel m_storage;              ///< 存储子 ViewModel。
+    SettingsViewModel m_settings;            ///< 设置子 ViewModel。
+    SerialPortViewModel m_serialPorts;       ///< 串口子 ViewModel。
+    NetworkViewModel m_network;              ///< 网络端点子 ViewModel。
+    DataExchangeViewModel m_dataExchange;    ///< 数据交换子 ViewModel。
+    QString m_statusText = "Ready";          ///< 最近一次状态栏文本。
+    double m_exposure = 0.0;                 ///< 当前曝光时间，单位毫秒。
+    std::string m_activeStorageSessionId;    ///< 当前主控存储会话标识。
 
     std::vector<Dss::Evt::ScopedConnection> m_connections;  ///< 事件订阅连接列表。
 };

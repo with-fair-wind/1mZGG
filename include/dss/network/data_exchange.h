@@ -35,7 +35,10 @@ public:
     /// 关闭所有 UDP 通道
     void close();
 
-    /// 查询两个通道是否均已绑定
+    /**
+     * @brief 查询 GXTC 与 GDCL 通道是否均已绑定。
+     * @return 两个 UDP 通道均可用时返回 true。
+     */
     [[nodiscard]] bool isOpen() const;
 
     /**

@@ -74,7 +74,10 @@ public:
         return value;
     }
 
-    /// 非阻塞出队，通道为空时返回 std::nullopt
+    /**
+     * @brief 非阻塞出队。
+     * @return 取出的元素；通道为空时返回 std::nullopt。
+     */
     [[nodiscard]] auto tryPop() -> std::optional<T> {
         std::lock_guard lock(m_mutex);
         if (m_count == 0) {
@@ -87,13 +90,13 @@ public:
         return value;
     }
 
-    /// 当前队列中的元素数量
+    /** @brief 获取当前元素数量。 @return 通道内尚未取出的元素数。 */
     [[nodiscard]] size_t size() const {
         std::lock_guard lock(m_mutex);
         return m_count;
     }
 
-    /// 队列是否为空
+    /** @brief 查询通道是否为空。 @return 没有待取元素时返回 true。 */
     [[nodiscard]] bool empty() const {
         std::lock_guard lock(m_mutex);
         return m_count == 0;

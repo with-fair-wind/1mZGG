@@ -14,16 +14,18 @@ inline constexpr float kGeoTrackingRadiusInvalidStep = 10.0F;
 inline constexpr float kGeoTrackingBaseSpeedErrorThreshold = 5.0F;
 inline constexpr double kGeoRaDecTrackingRadiusArcsec = 50.0;
 
+/// @brief 单次 GEO 跟踪匹配所需的坐标空间与门限集合。
 struct GeoTrackingGateOptions {
-    GeoTrackingSpace space = GeoTrackingSpace::Frame;
-    CandidateMeasurementSpace measurementSpace = CandidateMeasurementSpace::Centroid;
-    MeasurementReuseRule reuseRule{};
-    float searchRadius = 0.0F;
-    float frameSpeedErrorThreshold = 0.0F;
-    float aePositionThreshold = 0.0F;
-    float raDecTrackingRadius = 0.0F;
-    float raSpeedThreshold = 0.0F;
-    float decSpeedThreshold = 0.0F;
+    GeoTrackingSpace space = GeoTrackingSpace::Frame;  ///< 当前跟踪坐标空间
+    CandidateMeasurementSpace measurementSpace =
+        CandidateMeasurementSpace::Centroid;  ///< 用于距离比较的测量空间
+    MeasurementReuseRule reuseRule{};         ///< 已使用像斑的判重规则
+    float searchRadius = 0.0F;                ///< 像面搜索半径
+    float frameSpeedErrorThreshold = 0.0F;    ///< 像面速度误差阈值
+    float aePositionThreshold = 0.0F;         ///< 方位俯仰位置误差阈值
+    float raDecTrackingRadius = 0.0F;         ///< 赤经赤纬跟踪半径
+    float raSpeedThreshold = 0.0F;            ///< 赤经速度误差阈值
+    float decSpeedThreshold = 0.0F;           ///< 赤纬速度误差阈值
 };
 [[nodiscard]] bool exceedsRediscoverySpeedLimit(const Dss::Core::TargetInfo& target) {
     return std::abs(target.predictedSpdFrame.x) > kMaxGeoRediscoveryFrameSpeed ||
@@ -117,13 +119,7 @@ struct GeoTrackingGateOptions {
            std::abs(measuredMotion.y - target.predictedSpdFrame.y) < options.decSpeedThreshold;
 }
 
-/**
- * @brief 在当前帧中查找满足 GEO 跟踪门限的最近像斑。
- *
- *
- * 搜索半径会随最近无效帧数扩大，并支持像面与赤经/赤纬两种跟踪空间。
-
- */
+// 搜索半径会随最近无效帧数扩大，并支持像面与赤经/赤纬两种跟踪空间。
 [[nodiscard]] auto findNearestTrackedBlob(const std::vector<Dss::Core::MeasuredBlob>& blobs,
                                           const Dss::Core::TargetInfo& target,
                                           const Dss::Core::TrackingSettings& settings,

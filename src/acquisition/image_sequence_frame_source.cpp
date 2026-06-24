@@ -190,11 +190,7 @@ ImageSequenceFrameSource::~ImageSequenceFrameSource() {
     stop();
 }
 
-/**
- * @brief 替换文件列表并重置播放状态
- * @param files 新的图像文件路径序列
- * @return 列表为空时返回错误
- */
+// 替换文件列表并重置播放状态；公共契约记录在头文件中。
 auto ImageSequenceFrameSource::setFiles(std::vector<std::filesystem::path> files)
     -> std::expected<void, std::string> {
     stop();
