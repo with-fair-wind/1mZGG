@@ -1,0 +1,24 @@
+# Normalize repository text files to LF unless a platform format is required.
+* text=auto eol=lf
+
+# Windows command scripts use CRLF for maximum shell compatibility.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Keep generated/runtime binaries out of line-ending normalization.
+*.bmp binary
+*.dll binary
+*.exe binary
+*.gif binary
+*.ico binary
+*.jpg binary
+*.jpeg binary
+*.lib binary
+*.pdf binary
+*.pdb binary
+*.png binary
+*.raw binary
+*.tif binary
+*.tiff binary
+*.zip binary

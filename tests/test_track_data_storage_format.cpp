@@ -1,0 +1,53 @@
+#include <gtest/gtest.h>
+
+#include "dss/storage/track_data_storage_format.h"
+
+TEST(TrackDataStorageFormat, BuildsLegacyTrackDataLine) {
+    Dss::Storage::TrackDataRecord record{};
+    record.frameSeq = 123;
+    record.timestamp = {
+        .year = 2026, .month = 6, .day = 2, .hour = 3, .minute = 4, .second = 5, .millisecond = 6};
+    record.fovCenterAe = {.x = 10.1234567F, .y = -20.5F};
+    record.blobPosition = {.x = 3100.5F, .y = 3065.75F};
+    record.opticCenter = {.x = 3072.0F, .y = 3072.0F};
+    record.area = 10.0F;
+    record.exposureTimeMilliseconds = 12.5;
+
+    EXPECT_EQ(Dss::Storage::formatLegacyTrackDataLine(record),
+              "123 2026-06-02  3:04:05.006 10.123457 -20.500000 28.5 6.25 "
+              "10 17.3965 12.5 1350 13.2");
+}
+
+TEST(TrackDataStorageFormat, AllowsLegacyDefaultRangeAndMagnitudeOverrides) {
+    Dss::Storage::TrackDataRecord record{};
+    record.area = 2.0F;
+    record.rangeMeters = 42.25;
+    record.magnitude = -1.5;
+
+    const auto line = Dss::Storage::formatLegacyTrackDataLine(record);
+
+    EXPECT_TRUE(line.ends_with("2 0.695859 0 42.25 -1.5"));
+}
+
+TEST(TrackDataStorageFormat, BuildsRecordFromResultPacket) {
+    Dss::Core::ResultPacket packet{};
+    packet.frameSeq = 321U;
+    packet.timestamp = {
+        .year = 2026, .month = 6, .day = 12, .hour = 1, .minute = 2, .second = 3, .millisecond = 4};
+    packet.fovCenterAeModified = Dss::Core::Vec2f{11.25F, -22.5F};
+    packet.targetPosFrame = Dss::Core::Vec2f{3100.0F, 3050.0F};
+    packet.blob.area = 4.0F;
+    packet.exposureTime = 0.033F;
+    packet.targetMvGdcl = 12.75F;
+
+    const auto record =
+        Dss::Storage::makeTrackDataRecord(packet, Dss::Core::Vec2f{3072.0F, 3072.0F});
+
+    EXPECT_EQ(record.frameSeq, 321U);
+    EXPECT_FLOAT_EQ(record.fovCenterAe.x, 11.25F);
+    EXPECT_FLOAT_EQ(record.blobPosition.y, 3050.0F);
+    EXPECT_FLOAT_EQ(record.opticCenter.x, 3072.0F);
+    EXPECT_FLOAT_EQ(record.area, 4.0F);
+    EXPECT_NEAR(record.exposureTimeMilliseconds, 33.0, 1.0e-5);
+    EXPECT_DOUBLE_EQ(record.magnitude, 12.75);
+}

@@ -1,0 +1,15 @@
+{% set compiler, version, compiler_exe = detect_api.detect_clang_compiler(compiler_exe="clang-cl") %}
+
+[settings]
+os=Windows
+arch={{ detect_api.detect_arch() }}
+compiler={{ compiler }}
+compiler.version={{ detect_api.default_compiler_version(compiler, version) }}
+compiler.cppstd=23
+compiler.runtime=dynamic
+compiler.runtime_version=v145
+
+[conf]
+tools.build:compiler_executables={"c": "{{ compiler_exe }}", "cpp": "{{ compiler_exe }}"}
+tools.cmake.cmaketoolchain:generator=Ninja
+tools.microsoft.msbuild:vs_version=18

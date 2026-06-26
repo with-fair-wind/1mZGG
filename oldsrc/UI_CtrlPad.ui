@@ -1,0 +1,1841 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>894</width>
+    <height>981</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>DPS-控制面板</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true"/>
+  </property>
+  <widget class="QWidget" name="MainWidget">
+   <layout class="QGridLayout" name="gridLayout_17">
+    <item row="0" column="0">
+     <layout class="QGridLayout" name="gridLayout_16">
+      <item row="3" column="0" colspan="2">
+       <widget class="QWidget" name="widget_3" native="true">
+        <layout class="QGridLayout" name="gridLayout_15">
+         <item row="0" column="0">
+          <widget class="QTextEdit" name="textEdit_Log">
+           <property name="font">
+            <font>
+             <family>Times New Roman</family>
+             <pointsize>11</pointsize>
+            </font>
+           </property>
+           <property name="toolTip">
+            <string>工作日志</string>
+           </property>
+           <property name="readOnly">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item row="0" column="0">
+       <widget class="QGroupBox" name="groupBox">
+        <property name="title">
+         <string>相机与图像处理参数设置</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+        </property>
+        <layout class="QGridLayout" name="gridLayout_11">
+         <item row="0" column="0">
+          <layout class="QGridLayout" name="gridLayout_6">
+           <item row="0" column="0" colspan="3">
+            <layout class="QGridLayout" name="gridLayout_7">
+             <item row="0" column="1">
+              <widget class="QCheckBox" name="checkBox_MCCtrl">
+               <property name="toolTip">
+                <string>接受操控管理</string>
+               </property>
+               <property name="statusTip">
+                <string/>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+               <property name="icon">
+                <iconset resource="MainWindow.qrc">
+                 <normaloff>:/Icon/Icon/multiple.png</normaloff>:/Icon/Icon/multiple.png</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>26</width>
+                 <height>26</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="2">
+              <widget class="QCheckBox" name="checkBox_TrackProc">
+               <property name="toolTip">
+                <string>开启搜索或跟踪</string>
+               </property>
+               <property name="statusTip">
+                <string/>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+               <property name="icon">
+                <iconset resource="MainWindow.qrc">
+                 <normaloff>:/Icon/Resources/detect.png</normaloff>:/Icon/Resources/detect.png</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>24</width>
+                 <height>24</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="4">
+              <widget class="QCheckBox" name="checkBox_SpdValid">
+               <property name="toolTip">
+                <string>对伺服速度有效</string>
+               </property>
+               <property name="statusTip">
+                <string/>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+               <property name="icon">
+                <iconset resource="MainWindow.qrc">
+                 <normaloff>:/Icon/Resources/velocity .png</normaloff>:/Icon/Resources/velocity .png</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>20</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="5">
+              <widget class="QComboBox" name="comboBox_TrackMode_2">
+               <property name="minimumSize">
+                <size>
+                 <width>125</width>
+                 <height>35</height>
+                </size>
+               </property>
+               <property name="font">
+                <font>
+                 <pointsize>13</pointsize>
+                </font>
+               </property>
+               <property name="toolTip">
+                <string>目标提取方式</string>
+               </property>
+               <item>
+                <property name="text">
+                 <string>形心跟踪</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>质心跟踪</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>边缘跟踪</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>相关跟踪</string>
+                </property>
+               </item>
+              </widget>
+             </item>
+             <item row="0" column="3">
+              <widget class="QCheckBox" name="checkBox_DistValid">
+               <property name="toolTip">
+                <string>对伺服脱靶量有效</string>
+               </property>
+               <property name="statusTip">
+                <string/>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+               <property name="icon">
+                <iconset resource="MainWindow.qrc">
+                 <normaloff>:/Icon/Resources/DistErr.png</normaloff>:/Icon/Resources/DistErr.png</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>26</width>
+                 <height>26</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="0">
+              <widget class="QCheckBox" name="checkBox_ImageGrab">
+               <property name="font">
+                <font>
+                 <family>微软雅黑</family>
+                 <pointsize>12</pointsize>
+                </font>
+               </property>
+               <property name="toolTip">
+                <string>相机采集</string>
+               </property>
+               <property name="statusTip">
+                <string/>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+               <property name="icon">
+                <iconset resource="MainWindow.qrc">
+                 <normaloff>:/Icon/Icon/cameraOn.png</normaloff>:/Icon/Icon/cameraOn.png</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>26</width>
+                 <height>26</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item row="1" column="0" colspan="3">
+            <layout class="QHBoxLayout" name="horizontalLayout_2">
+             <item>
+              <widget class="QCheckBox" name="checkBox_EnhanceDisp">
+               <property name="enabled">
+                <bool>true</bool>
+               </property>
+               <property name="font">
+                <font>
+                 <family>微软雅黑</family>
+                 <pointsize>12</pointsize>
+                </font>
+               </property>
+               <property name="toolTip">
+                <string>增强图像显示</string>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+               <property name="icon">
+                <iconset resource="MainWindow.qrc">
+                 <normaloff>:/Icon/Icon/Plus.png</normaloff>:/Icon/Icon/Plus.png</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>23</width>
+                 <height>23</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="label_BlobUp_2">
+               <property name="font">
+                <font>
+                 <family>微软雅黑</family>
+                 <pointsize>13</pointsize>
+                </font>
+               </property>
+               <property name="text">
+                <string>拉伸高</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QSlider" name="horizontalSlider_ScaleUp">
+               <property name="minimumSize">
+                <size>
+                 <width>243</width>
+                 <height>0</height>
+                </size>
+               </property>
+               <property name="maximum">
+                <number>16384</number>
+               </property>
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLineEdit" name="lineEdit_ScaleUp">
+               <property name="minimumSize">
+                <size>
+                 <width>60</width>
+                 <height>30</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>60</width>
+                 <height>16777215</height>
+                </size>
+               </property>
+               <property name="alignment">
+                <set>Qt::AlignCenter</set>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item row="2" column="0" colspan="3">
+            <layout class="QHBoxLayout" name="horizontalLayout">
+             <item>
+              <widget class="QCheckBox" name="checkBox_AutoScale">
+               <property name="font">
+                <font>
+                 <family>微软雅黑</family>
+                 <pointsize>12</pointsize>
+                </font>
+               </property>
+               <property name="toolTip">
+                <string>自动拉伸</string>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+               <property name="icon">
+                <iconset resource="MainWindow.qrc">
+                 <normaloff>:/Icon/Icon/scale.png</normaloff>:/Icon/Icon/scale.png</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>26</width>
+                 <height>26</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="label_BlobDown_2">
+               <property name="font">
+                <font>
+                 <family>微软雅黑</family>
+                 <pointsize>13</pointsize>
+                </font>
+               </property>
+               <property name="text">
+                <string>拉伸低</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QSlider" name="horizontalSlider_ScaleDown">
+               <property name="maximum">
+                <number>16384</number>
+               </property>
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLineEdit" name="lineEdit_ScaleDown">
+               <property name="minimumSize">
+                <size>
+                 <width>60</width>
+                 <height>30</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>60</width>
+                 <height>16777215</height>
+                </size>
+               </property>
+               <property name="alignment">
+                <set>Qt::AlignCenter</set>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item row="3" column="0" colspan="3">
+            <layout class="QGridLayout" name="gridLayout_5">
+             <item row="0" column="1">
+              <widget class="QLineEdit" name="lineEdit_BlobDown">
+               <property name="minimumSize">
+                <size>
+                 <width>100</width>
+                 <height>30</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>100</width>
+                 <height>16777215</height>
+                </size>
+               </property>
+               <property name="alignment">
+                <set>Qt::AlignCenter</set>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="5">
+              <widget class="QCheckBox" name="checkBox_TrackSave">
+               <property name="toolTip">
+                <string>目标搜索或跟踪数据存储</string>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+               <property name="icon">
+                <iconset resource="MainWindow.qrc">
+                 <normaloff>:/Icon/Icon/Save.png</normaloff>:/Icon/Icon/Save.png</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>23</width>
+                 <height>23</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="3">
+              <widget class="QLineEdit" name="lineEdit_BlobUp">
+               <property name="minimumSize">
+                <size>
+                 <width>100</width>
+                 <height>30</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>100</width>
+                 <height>16777215</height>
+                </size>
+               </property>
+               <property name="alignment">
+                <set>Qt::AlignCenter</set>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="2">
+              <widget class="QLabel" name="label_BlobUp">
+               <property name="font">
+                <font>
+                 <family>微软雅黑</family>
+                 <pointsize>13</pointsize>
+                </font>
+               </property>
+               <property name="text">
+                <string>Blob高</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="0">
+              <widget class="QLabel" name="label_BlobDown">
+               <property name="font">
+                <font>
+                 <family>微软雅黑</family>
+                 <pointsize>13</pointsize>
+                </font>
+               </property>
+               <property name="text">
+                <string>Blob低</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="6">
+              <widget class="QCheckBox" name="checkBox_DrawStarMap">
+               <property name="font">
+                <font>
+                 <family>微软雅黑</family>
+                 <pointsize>12</pointsize>
+                </font>
+               </property>
+               <property name="toolTip">
+                <string>绘制理论星图</string>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+               <property name="icon">
+                <iconset resource="MainWindow.qrc">
+                 <normaloff>:/Icon/Icon/binary.png</normaloff>:/Icon/Icon/binary.png</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>25</width>
+                 <height>25</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="4">
+              <spacer name="horizontalSpacer_6">
+               <property name="font">
+                <font>
+                 <family>微软雅黑</family>
+                 <pointsize>12</pointsize>
+                 <weight>50</weight>
+                 <italic>false</italic>
+                 <bold>false</bold>
+                </font>
+               </property>
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>18</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+            </layout>
+           </item>
+           <item row="4" column="0" colspan="3">
+            <layout class="QGridLayout" name="gridLayout_10">
+             <item row="0" column="2">
+              <widget class="QPushButton" name="pushButton_TrackParamsSet">
+               <property name="minimumSize">
+                <size>
+                 <width>50</width>
+                 <height>30</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>30</width>
+                 <height>16777215</height>
+                </size>
+               </property>
+               <property name="toolTip">
+                <string>配置文件参数设置</string>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+               <property name="icon">
+                <iconset resource="MainWindow.qrc">
+                 <normaloff>:/Icon/Resources/Set.png</normaloff>:/Icon/Resources/Set.png</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>23</width>
+                 <height>23</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="0">
+              <widget class="QCheckBox" name="checkBox_TrackInfoEN">
+               <property name="toolTip">
+                <string>激活配置文件编辑框</string>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QPushButton" name="pushButton_TrackParamsRefresh">
+               <property name="minimumSize">
+                <size>
+                 <width>50</width>
+                 <height>30</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>30</width>
+                 <height>16777215</height>
+                </size>
+               </property>
+               <property name="toolTip">
+                <string>配置文件参数刷新与加载</string>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+               <property name="icon">
+                <iconset resource="MainWindow.qrc">
+                 <normaloff>:/Icon/Icon/clock.png</normaloff>:/Icon/Icon/clock.png</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>23</width>
+                 <height>23</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="5">
+              <widget class="QPushButton" name="pushButton_TrainCam">
+               <property name="minimumSize">
+                <size>
+                 <width>60</width>
+                 <height>35</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>60</width>
+                 <height>16777215</height>
+                </size>
+               </property>
+               <property name="font">
+                <font>
+                 <pointsize>13</pointsize>
+                </font>
+               </property>
+               <property name="text">
+                <string>训 练</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="4">
+              <widget class="QComboBox" name="comboBox_TrackMode">
+               <property name="minimumSize">
+                <size>
+                 <width>250</width>
+                 <height>35</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>250</width>
+                 <height>16777215</height>
+                </size>
+               </property>
+               <property name="font">
+                <font>
+                 <pointsize>13</pointsize>
+                </font>
+               </property>
+               <property name="toolTip">
+                <string>工作模式</string>
+               </property>
+               <item>
+                <property name="text">
+                 <string>凝视搜索/引导跟踪（全帧）</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>恒动搜索（全帧）</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>闭环跟踪 （开窗）</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>星校（开窗）</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>手动提取（全帧）</string>
+                </property>
+               </item>
+              </widget>
+             </item>
+             <item row="0" column="3">
+              <spacer name="horizontalSpacer_5">
+               <property name="font">
+                <font>
+                 <family>微软雅黑</family>
+                 <pointsize>12</pointsize>
+                 <weight>50</weight>
+                 <italic>false</italic>
+                 <bold>false</bold>
+                </font>
+               </property>
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>18</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+            </layout>
+           </item>
+           <item row="5" column="0">
+            <layout class="QGridLayout" name="gridLayout_8">
+             <item row="0" column="0">
+              <widget class="QLabel" name="label_BlobUp_3">
+               <property name="font">
+                <font>
+                 <family>微软雅黑</family>
+                 <pointsize>13</pointsize>
+                </font>
+               </property>
+               <property name="text">
+                <string>提取阈值</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QComboBox" name="comboBox_ThreshBW">
+               <property name="minimumSize">
+                <size>
+                 <width>120</width>
+                 <height>35</height>
+                </size>
+               </property>
+               <property name="font">
+                <font>
+                 <pointsize>13</pointsize>
+                </font>
+               </property>
+               <property name="toolTip">
+                <string>目标提取方式</string>
+               </property>
+               <item>
+                <property name="text">
+                 <string>5.0</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>6.0</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>7.0</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>8.0</string>
+                </property>
+               </item>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item row="5" column="1">
+            <spacer name="horizontalSpacer_4">
+             <property name="font">
+              <font>
+               <family>微软雅黑</family>
+               <pointsize>12</pointsize>
+               <weight>50</weight>
+               <italic>false</italic>
+               <bold>false</bold>
+              </font>
+             </property>
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>18</width>
+               <height>20</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+           <item row="5" column="2">
+            <layout class="QGridLayout" name="gridLayout_9">
+             <item row="0" column="0">
+              <widget class="QLabel" name="label_BlobUp_4">
+               <property name="font">
+                <font>
+                 <family>微软雅黑</family>
+                 <pointsize>13</pointsize>
+                </font>
+               </property>
+               <property name="text">
+                <string>中高轨帧周期</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QComboBox" name="comboBox_FrameFreq">
+               <property name="minimumSize">
+                <size>
+                 <width>120</width>
+                 <height>35</height>
+                </size>
+               </property>
+               <property name="font">
+                <font>
+                 <pointsize>13</pointsize>
+                </font>
+               </property>
+               <property name="toolTip">
+                <string>目标提取方式</string>
+               </property>
+               <item>
+                <property name="text">
+                 <string>4.0 s</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>5.0 s</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>6.0 s</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>8.0 s</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>10.0 s</string>
+                </property>
+               </item>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item row="6" column="0" colspan="3">
+            <layout class="QGridLayout" name="gridLayout_2">
+             <item row="0" column="5">
+              <widget class="QLineEdit" name="lineEdit_RaThresh">
+               <property name="toolTip">
+                <string>Ra Thresh</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="0">
+              <widget class="QRadioButton" name="radioButton_ZoomFit">
+               <property name="font">
+                <font>
+                 <pointsize>13</pointsize>
+                </font>
+               </property>
+               <property name="text">
+                <string>全屏显示</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="5">
+              <widget class="QLineEdit" name="lineEdit_DecThresh">
+               <property name="toolTip">
+                <string>Dec Thresh</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="3" colspan="2">
+              <widget class="QPushButton" name="pushButton_CleanData">
+               <property name="text">
+                <string>数据清洗</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QRadioButton" name="radioButton_ZoomOut">
+               <property name="font">
+                <font>
+                 <pointsize>13</pointsize>
+                </font>
+               </property>
+               <property name="text">
+                <string>放大显示</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="0">
+              <widget class="QCheckBox" name="checkBox_LooseThresh">
+               <property name="font">
+                <font>
+                 <pointsize>13</pointsize>
+                </font>
+               </property>
+               <property name="text">
+                <string>放宽阈值</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QCheckBox" name="checkBox_ForceRePoint">
+               <property name="font">
+                <font>
+                 <pointsize>13</pointsize>
+                </font>
+               </property>
+               <property name="text">
+                <string>强制修正</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="2">
+              <widget class="QCheckBox" name="checkBox_DispBW">
+               <property name="font">
+                <font>
+                 <pointsize>13</pointsize>
+                </font>
+               </property>
+               <property name="text">
+                <string>BW显示</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="2">
+              <widget class="QRadioButton" name="radioButton_ZoomIn">
+               <property name="font">
+                <font>
+                 <pointsize>13</pointsize>
+                </font>
+               </property>
+               <property name="text">
+                <string>缩小显示</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="3" colspan="2">
+              <widget class="QCheckBox" name="checkBox_Dark">
+               <property name="font">
+                <font>
+                 <pointsize>13</pointsize>
+                </font>
+               </property>
+               <property name="text">
+                <string>暗弱目标</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="6">
+              <widget class="QLineEdit" name="lineEdit_RaSpdThresh">
+               <property name="toolTip">
+                <string>RaSpd Thresh</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="6">
+              <widget class="QLineEdit" name="lineEdit_DecSpdThresh">
+               <property name="toolTip">
+                <string>DecSpd Thresh</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+          </layout>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item row="0" column="1" rowspan="2">
+       <widget class="QWidget" name="widget" native="true">
+        <layout class="QGridLayout" name="gridLayout_12">
+         <item row="0" column="1">
+          <widget class="QTextEdit" name="textEdit_TrackInfo">
+           <property name="font">
+            <font>
+             <family>Times New Roman</family>
+             <pointsize>11</pointsize>
+            </font>
+           </property>
+           <property name="toolTip">
+            <string>配置文件参数设置框</string>
+           </property>
+           <property name="frameShape">
+            <enum>QFrame::StyledPanel</enum>
+           </property>
+           <property name="frameShadow">
+            <enum>QFrame::Sunken</enum>
+           </property>
+           <property name="readOnly">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QGroupBox" name="groupBox_2">
+        <property name="title">
+         <string>图像存储与浏览</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+        </property>
+        <layout class="QGridLayout" name="gridLayout_13">
+         <item row="0" column="0">
+          <layout class="QVBoxLayout" name="verticalLayout">
+           <item>
+            <layout class="QGridLayout" name="gridLayout_4">
+             <item row="0" column="4">
+              <widget class="QCheckBox" name="checkBox_MatchTimeSave">
+               <property name="font">
+                <font>
+                 <family>微软雅黑</family>
+                 <pointsize>12</pointsize>
+                 <weight>50</weight>
+                 <italic>false</italic>
+                 <bold>false</bold>
+                </font>
+               </property>
+               <property name="tabletTracking">
+                <bool>false</bool>
+               </property>
+               <property name="toolTip">
+                <string>图像匹配曝光中心时刻存储标识</string>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+               <property name="icon">
+                <iconset resource="MainWindow.qrc">
+                 <normaloff>:/Icon/Resources/time.png</normaloff>:/Icon/Resources/time.png</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>23</width>
+                 <height>23</height>
+                </size>
+               </property>
+               <property name="checkable">
+                <bool>true</bool>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+               <property name="tristate">
+                <bool>false</bool>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="3">
+              <widget class="QPushButton" name="pushButton_SavePathBrowse">
+               <property name="minimumSize">
+                <size>
+                 <width>50</width>
+                 <height>30</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>50</width>
+                 <height>30</height>
+                </size>
+               </property>
+               <property name="font">
+                <font>
+                 <family>微软雅黑</family>
+                 <pointsize>12</pointsize>
+                 <weight>50</weight>
+                 <italic>false</italic>
+                 <bold>false</bold>
+                </font>
+               </property>
+               <property name="toolTip">
+                <string>图像存储路径选择</string>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+               <property name="icon">
+                <iconset resource="MainWindow.qrc">
+                 <normaloff>:/Icon/Resources/doc.png</normaloff>:/Icon/Resources/doc.png</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>23</width>
+                 <height>23</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="5">
+              <widget class="QCheckBox" name="checkBox_ImageSave">
+               <property name="font">
+                <font>
+                 <family>微软雅黑</family>
+                 <pointsize>12</pointsize>
+                 <weight>50</weight>
+                 <italic>false</italic>
+                 <bold>false</bold>
+                </font>
+               </property>
+               <property name="toolTip">
+                <string>图像数据存储</string>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+               <property name="icon">
+                <iconset resource="MainWindow.qrc">
+                 <normaloff>:/Icon/Icon/Save.png</normaloff>:/Icon/Icon/Save.png</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>23</width>
+                 <height>23</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QLineEdit" name="lineEdit_ImageSavePath">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+                 <horstretch>0</horstretch>
+                 <verstretch>0</verstretch>
+                </sizepolicy>
+               </property>
+               <property name="minimumSize">
+                <size>
+                 <width>175</width>
+                 <height>0</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>203</width>
+                 <height>16777215</height>
+                </size>
+               </property>
+               <property name="font">
+                <font>
+                 <family>微软雅黑</family>
+                 <pointsize>12</pointsize>
+                 <weight>50</weight>
+                 <italic>false</italic>
+                 <bold>false</bold>
+                </font>
+               </property>
+               <property name="readOnly">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="0">
+              <widget class="QLabel" name="label_ImageSavePath">
+               <property name="font">
+                <font>
+                 <family>微软雅黑</family>
+                 <pointsize>13</pointsize>
+                 <weight>50</weight>
+                 <italic>false</italic>
+                 <bold>false</bold>
+                </font>
+               </property>
+               <property name="text">
+                <string>存储路径</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="2">
+              <spacer name="horizontalSpacer_7">
+               <property name="font">
+                <font>
+                 <family>微软雅黑</family>
+                 <pointsize>12</pointsize>
+                 <weight>50</weight>
+                 <italic>false</italic>
+                 <bold>false</bold>
+                </font>
+               </property>
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <layout class="QGridLayout" name="gridLayout">
+             <item row="0" column="5">
+              <widget class="QPushButton" name="pushButton_DistCurve_2">
+               <property name="minimumSize">
+                <size>
+                 <width>50</width>
+                 <height>30</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>50</width>
+                 <height>30</height>
+                </size>
+               </property>
+               <property name="font">
+                <font>
+                 <family>微软雅黑</family>
+                 <pointsize>12</pointsize>
+                 <weight>50</weight>
+                 <italic>false</italic>
+                 <bold>false</bold>
+                </font>
+               </property>
+               <property name="toolTip">
+                <string>光度测量数据分析</string>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+               <property name="icon">
+                <iconset resource="MainWindow.qrc">
+                 <normaloff>:/Icon/Resources/Curves.png</normaloff>:/Icon/Resources/Curves.png</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>23</width>
+                 <height>23</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="2">
+              <spacer name="horizontalSpacer_3">
+               <property name="font">
+                <font>
+                 <family>微软雅黑</family>
+                 <pointsize>12</pointsize>
+                 <weight>50</weight>
+                 <italic>false</italic>
+                 <bold>false</bold>
+                </font>
+               </property>
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+             <item row="0" column="3">
+              <widget class="QPushButton" name="pushButton_PlayPathBrowse">
+               <property name="minimumSize">
+                <size>
+                 <width>50</width>
+                 <height>30</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>50</width>
+                 <height>30</height>
+                </size>
+               </property>
+               <property name="font">
+                <font>
+                 <family>微软雅黑</family>
+                 <pointsize>12</pointsize>
+                 <weight>50</weight>
+                 <italic>false</italic>
+                 <bold>false</bold>
+                </font>
+               </property>
+               <property name="toolTip">
+                <string>图像浏览路径选择</string>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+               <property name="icon">
+                <iconset resource="MainWindow.qrc">
+                 <normaloff>:/Icon/Resources/doc.png</normaloff>:/Icon/Resources/doc.png</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>23</width>
+                 <height>23</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="0">
+              <widget class="QLabel" name="label_ImagePlayPath">
+               <property name="font">
+                <font>
+                 <family>微软雅黑</family>
+                 <pointsize>13</pointsize>
+                 <weight>50</weight>
+                 <italic>false</italic>
+                 <bold>false</bold>
+                </font>
+               </property>
+               <property name="text">
+                <string>浏览路径</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="4">
+              <widget class="QPushButton" name="pushButton_DistCurve">
+               <property name="minimumSize">
+                <size>
+                 <width>50</width>
+                 <height>30</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>50</width>
+                 <height>30</height>
+                </size>
+               </property>
+               <property name="font">
+                <font>
+                 <family>微软雅黑</family>
+                 <pointsize>12</pointsize>
+                 <weight>50</weight>
+                 <italic>false</italic>
+                 <bold>false</bold>
+                </font>
+               </property>
+               <property name="toolTip">
+                <string>目标脱靶量数据事后判读</string>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+               <property name="icon">
+                <iconset resource="MainWindow.qrc">
+                 <normaloff>:/Icon/Resources/curve.png</normaloff>:/Icon/Resources/curve.png</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>23</width>
+                 <height>23</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QLineEdit" name="lineEdit_ImagePlayPath"/>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <layout class="QGridLayout" name="gridLayout_3">
+             <item row="0" column="1">
+              <widget class="QPushButton" name="pushButton_Previous">
+               <property name="minimumSize">
+                <size>
+                 <width>40</width>
+                 <height>30</height>
+                </size>
+               </property>
+               <property name="font">
+                <font>
+                 <family>微软雅黑</family>
+                 <pointsize>12</pointsize>
+                 <weight>50</weight>
+                 <italic>false</italic>
+                 <bold>false</bold>
+                </font>
+               </property>
+               <property name="toolTip">
+                <string>反向单帧播放</string>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+               <property name="icon">
+                <iconset resource="MainWindow.qrc">
+                 <normaloff>:/Icon/Resources/play-r.png</normaloff>:/Icon/Resources/play-r.png</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>21</width>
+                 <height>21</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="3">
+              <widget class="QPushButton" name="pushButton_Next">
+               <property name="minimumSize">
+                <size>
+                 <width>40</width>
+                 <height>30</height>
+                </size>
+               </property>
+               <property name="font">
+                <font>
+                 <family>微软雅黑</family>
+                 <pointsize>12</pointsize>
+                 <weight>50</weight>
+                 <italic>false</italic>
+                 <bold>false</bold>
+                </font>
+               </property>
+               <property name="toolTip">
+                <string>正向单帧播放</string>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+               <property name="icon">
+                <iconset resource="MainWindow.qrc">
+                 <normaloff>:/Icon/Resources/play.png</normaloff>:/Icon/Resources/play.png</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>21</width>
+                 <height>21</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="4">
+              <widget class="QPushButton" name="pushButton_NextAuto">
+               <property name="minimumSize">
+                <size>
+                 <width>40</width>
+                 <height>30</height>
+                </size>
+               </property>
+               <property name="font">
+                <font>
+                 <family>微软雅黑</family>
+                 <pointsize>12</pointsize>
+                 <weight>50</weight>
+                 <italic>false</italic>
+                 <bold>false</bold>
+                </font>
+               </property>
+               <property name="toolTip">
+                <string>正向连续播放</string>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+               <property name="icon">
+                <iconset resource="MainWindow.qrc">
+                 <normaloff>:/Icon/Resources/play1.png</normaloff>:/Icon/Resources/play1.png</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>21</width>
+                 <height>21</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="0">
+              <widget class="QPushButton" name="pushButton_PreviousAuto">
+               <property name="minimumSize">
+                <size>
+                 <width>40</width>
+                 <height>30</height>
+                </size>
+               </property>
+               <property name="font">
+                <font>
+                 <family>微软雅黑</family>
+                 <pointsize>12</pointsize>
+                 <weight>50</weight>
+                 <italic>false</italic>
+                 <bold>false</bold>
+                </font>
+               </property>
+               <property name="toolTip">
+                <string>反向连续播放</string>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+               <property name="icon">
+                <iconset resource="MainWindow.qrc">
+                 <normaloff>:/Icon/Resources/play1-r.png</normaloff>:/Icon/Resources/play1-r.png</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>21</width>
+                 <height>21</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="2">
+              <widget class="QPushButton" name="pushButton_Pause">
+               <property name="minimumSize">
+                <size>
+                 <width>40</width>
+                 <height>30</height>
+                </size>
+               </property>
+               <property name="font">
+                <font>
+                 <family>微软雅黑</family>
+                 <pointsize>12</pointsize>
+                 <weight>50</weight>
+                 <italic>false</italic>
+                 <bold>false</bold>
+                </font>
+               </property>
+               <property name="toolTip">
+                <string>暂停</string>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+               <property name="icon">
+                <iconset resource="MainWindow.qrc">
+                 <normaloff>:/Icon/Resources/Pause.png</normaloff>:/Icon/Resources/Pause.png</iconset>
+               </property>
+               <property name="iconSize">
+                <size>
+                 <width>21</width>
+                 <height>21</height>
+                </size>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+          </layout>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item row="2" column="0" colspan="2">
+       <widget class="QWidget" name="widget_2" native="true">
+        <layout class="QGridLayout" name="gridLayout_14">
+         <item row="0" column="0">
+          <widget class="QTableWidget" name="tableWidget_TargetInfo">
+           <property name="font">
+            <font>
+             <pointsize>12</pointsize>
+            </font>
+           </property>
+           <property name="layoutDirection">
+            <enum>Qt::LeftToRight</enum>
+           </property>
+           <row>
+            <property name="text">
+             <string>1</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>2</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>3</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>4</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>5</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>6</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>7</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>8</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>9</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>10</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>11</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>12</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>13</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>14</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>15</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>16</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>17</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>18</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>19</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>20</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>21</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>22</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>23</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>24</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>25</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>26</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>27</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>28</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>29</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>30</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>31</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>32</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>33</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>34</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>35</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>36</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>37</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>38</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>39</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>40</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>41</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>42</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>43</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>44</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>45</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>46</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>47</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>48</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>49</string>
+            </property>
+           </row>
+           <row>
+            <property name="text">
+             <string>50</string>
+            </property>
+           </row>
+           <column>
+            <property name="text">
+             <string>目标编号</string>
+            </property>
+           </column>
+           <column>
+            <property name="text">
+             <string>图像位置</string>
+            </property>
+           </column>
+           <column>
+            <property name="text">
+             <string>轴系定位 / °</string>
+            </property>
+           </column>
+           <column>
+            <property name="text">
+             <string>天文定位 / °</string>
+            </property>
+           </column>
+           <column>
+            <property name="text">
+             <string>光度 / mV</string>
+            </property>
+           </column>
+           <column>
+            <property name="text">
+             <string>测量时间</string>
+            </property>
+           </column>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+     </layout>
+    </item>
+   </layout>
+  </widget>
+ </widget>
+ <layoutdefault spacing="6" margin="11"/>
+ <tabstops>
+  <tabstop>pushButton_PlayPathBrowse</tabstop>
+  <tabstop>pushButton_Previous</tabstop>
+  <tabstop>pushButton_PreviousAuto</tabstop>
+  <tabstop>pushButton_Pause</tabstop>
+  <tabstop>pushButton_NextAuto</tabstop>
+  <tabstop>pushButton_Next</tabstop>
+  <tabstop>lineEdit_ImageSavePath</tabstop>
+ </tabstops>
+ <resources>
+  <include location="MainWindow.qrc"/>
+ </resources>
+ <connections/>
+</ui>

@@ -1,0 +1,1194 @@
+{
+    "schema_version":  1,
+    "name":  "GEO 连续命中、连续失配与重发现",
+    "mode":  "geo",
+    "settings":  {
+                     "search_radius":  20,
+                     "threshold_gaze_mode":  2.5,
+                     "threshold_star_mode":  10,
+                     "num_frames_living":  3,
+                     "optic":  {
+                                   "image_width":  1000,
+                                   "image_height":  1000,
+                                   "center":  [
+                                                  500,
+                                                  500
+                                              ],
+                                   "pixel_scale":  0.01
+                               }
+                 },
+    "frames":  [
+                   {
+                       "frame_seq":  1,
+                       "frame_freq":  1,
+                       "target_blobs":  [
+                                            {
+                                                "centroid":  [
+                                                                 105,
+                                                                 100
+                                                             ],
+                                                "area":  4,
+                                                "dn":  1000,
+                                                "pos_ae":  [
+                                                               0.05,
+                                                               0
+                                                           ],
+                                                "alpha":  0.0005,
+                                                "sigma":  0,
+                                                "ra":  0.05,
+                                                "dec":  0,
+                                                "magnitude":  8.5
+                                            }
+                                        ],
+                       "star_blobs":  [
+                                          {
+                                              "centroid":  [
+                                                               420.25,
+                                                               420.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               450.25,
+                                                               450.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               480.25,
+                                                               480.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               510.25,
+                                                               510.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               540.25,
+                                                               540.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          }
+                                      ],
+                       "expected":  {
+                                        "target_count":  0
+                                    }
+                   },
+                   {
+                       "frame_seq":  2,
+                       "frame_freq":  1,
+                       "target_blobs":  [
+                                            {
+                                                "centroid":  [
+                                                                 110,
+                                                                 104
+                                                             ],
+                                                "area":  4,
+                                                "dn":  1000,
+                                                "pos_ae":  [
+                                                               0.1,
+                                                               0.04
+                                                           ],
+                                                "alpha":  0.001,
+                                                "sigma":  0.0004,
+                                                "ra":  0.1,
+                                                "dec":  0.04,
+                                                "magnitude":  8.5
+                                            }
+                                        ],
+                       "star_blobs":  [
+                                          {
+                                              "centroid":  [
+                                                               421.25,
+                                                               420.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               451.25,
+                                                               450.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               481.25,
+                                                               480.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               511.25,
+                                                               510.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               541.25,
+                                                               540.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          }
+                                      ],
+                       "expected":  {
+                                        "target_count":  0
+                                    }
+                   },
+                   {
+                       "frame_seq":  3,
+                       "frame_freq":  1,
+                       "target_blobs":  [
+                                            {
+                                                "centroid":  [
+                                                                 115,
+                                                                 108
+                                                             ],
+                                                "area":  4,
+                                                "dn":  1000,
+                                                "pos_ae":  [
+                                                               0.15,
+                                                               0.08
+                                                           ],
+                                                "alpha":  0.0015,
+                                                "sigma":  0.0008,
+                                                "ra":  0.15,
+                                                "dec":  0.08,
+                                                "magnitude":  8.5
+                                            }
+                                        ],
+                       "star_blobs":  [
+                                          {
+                                              "centroid":  [
+                                                               422.25,
+                                                               420.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               452.25,
+                                                               450.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               482.25,
+                                                               480.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               512.25,
+                                                               510.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               542.25,
+                                                               540.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          }
+                                      ],
+                       "expected":  {
+                                        "target_count":  0
+                                    }
+                   },
+                   {
+                       "frame_seq":  4,
+                       "frame_freq":  1,
+                       "target_blobs":  [
+                                            {
+                                                "centroid":  [
+                                                                 120,
+                                                                 112
+                                                             ],
+                                                "area":  4,
+                                                "dn":  1000,
+                                                "pos_ae":  [
+                                                               0.2,
+                                                               0.12
+                                                           ],
+                                                "alpha":  0.002,
+                                                "sigma":  0.0012,
+                                                "ra":  0.2,
+                                                "dec":  0.12,
+                                                "magnitude":  8.5
+                                            }
+                                        ],
+                       "star_blobs":  [
+                                          {
+                                              "centroid":  [
+                                                               423.25,
+                                                               420.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               453.25,
+                                                               450.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               483.25,
+                                                               480.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               513.25,
+                                                               510.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               543.25,
+                                                               540.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          }
+                                      ],
+                       "expected":  {
+                                        "target_count":  1,
+                                        "targets":  [
+                                                        {
+                                                            "id":  "geo-1",
+                                                            "living":  true,
+                                                            "history_size":  4,
+                                                            "latest_valid":  true,
+                                                            "twdw":  [
+                                                                         0.2,
+                                                                         0.12
+                                                                     ],
+                                                            "gdcl":  {
+                                                                         "dn":  1000,
+                                                                         "magnitude":  8.5
+                                                                     }
+                                                        }
+                                                    ]
+                                    }
+                   },
+                   {
+                       "frame_seq":  5,
+                       "frame_freq":  1,
+                       "target_blobs":  [
+
+                                        ],
+                       "star_blobs":  [
+                                          {
+                                              "centroid":  [
+                                                               424.25,
+                                                               420.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               454.25,
+                                                               450.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               484.25,
+                                                               480.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               514.25,
+                                                               510.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               544.25,
+                                                               540.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          }
+                                      ],
+                       "expected":  {
+                                        "target_count":  1
+                                    }
+                   },
+                   {
+                       "frame_seq":  6,
+                       "frame_freq":  1,
+                       "target_blobs":  [
+
+                                        ],
+                       "star_blobs":  [
+                                          {
+                                              "centroid":  [
+                                                               425.25,
+                                                               420.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               455.25,
+                                                               450.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               485.25,
+                                                               480.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               515.25,
+                                                               510.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               545.25,
+                                                               540.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          }
+                                      ],
+                       "expected":  {
+                                        "target_count":  1
+                                    }
+                   },
+                   {
+                       "frame_seq":  7,
+                       "frame_freq":  1,
+                       "target_blobs":  [
+
+                                        ],
+                       "star_blobs":  [
+                                          {
+                                              "centroid":  [
+                                                               426.25,
+                                                               420.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               456.25,
+                                                               450.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               486.25,
+                                                               480.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               516.25,
+                                                               510.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               546.25,
+                                                               540.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          }
+                                      ],
+                       "expected":  {
+                                        "target_count":  1
+                                    }
+                   },
+                   {
+                       "frame_seq":  8,
+                       "frame_freq":  1,
+                       "target_blobs":  [
+                                            {
+                                                "centroid":  [
+                                                                 300,
+                                                                 350
+                                                             ],
+                                                "area":  4,
+                                                "dn":  1000,
+                                                "pos_ae":  [
+                                                               2,
+                                                               2.5
+                                                           ],
+                                                "alpha":  0.02,
+                                                "sigma":  0.025,
+                                                "ra":  2,
+                                                "dec":  2.5,
+                                                "magnitude":  8.5
+                                            }
+                                        ],
+                       "star_blobs":  [
+                                          {
+                                              "centroid":  [
+                                                               427.25,
+                                                               420.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               457.25,
+                                                               450.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               487.25,
+                                                               480.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               517.25,
+                                                               510.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               547.25,
+                                                               540.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          }
+                                      ],
+                       "expected":  {
+                                        "target_count":  0
+                                    }
+                   },
+                   {
+                       "frame_seq":  9,
+                       "frame_freq":  1,
+                       "target_blobs":  [
+                                            {
+                                                "centroid":  [
+                                                                 304,
+                                                                 355
+                                                             ],
+                                                "area":  4,
+                                                "dn":  1000,
+                                                "pos_ae":  [
+                                                               2.04,
+                                                               2.5500000000000003
+                                                           ],
+                                                "alpha":  0.0204,
+                                                "sigma":  0.025500000000000002,
+                                                "ra":  2.04,
+                                                "dec":  2.5500000000000003,
+                                                "magnitude":  8.5
+                                            }
+                                        ],
+                       "star_blobs":  [
+                                          {
+                                              "centroid":  [
+                                                               428.25,
+                                                               420.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               458.25,
+                                                               450.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               488.25,
+                                                               480.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               518.25,
+                                                               510.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               548.25,
+                                                               540.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          }
+                                      ],
+                       "expected":  {
+                                        "target_count":  0
+                                    }
+                   },
+                   {
+                       "frame_seq":  10,
+                       "frame_freq":  1,
+                       "target_blobs":  [
+                                            {
+                                                "centroid":  [
+                                                                 308,
+                                                                 360
+                                                             ],
+                                                "area":  4,
+                                                "dn":  1000,
+                                                "pos_ae":  [
+                                                               2.08,
+                                                               2.6
+                                                           ],
+                                                "alpha":  0.020800000000000003,
+                                                "sigma":  0.026000000000000002,
+                                                "ra":  2.08,
+                                                "dec":  2.6,
+                                                "magnitude":  8.5
+                                            }
+                                        ],
+                       "star_blobs":  [
+                                          {
+                                              "centroid":  [
+                                                               429.25,
+                                                               420.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               459.25,
+                                                               450.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               489.25,
+                                                               480.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               519.25,
+                                                               510.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               549.25,
+                                                               540.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          }
+                                      ],
+                       "expected":  {
+                                        "target_count":  0
+                                    }
+                   },
+                   {
+                       "frame_seq":  11,
+                       "frame_freq":  1,
+                       "target_blobs":  [
+                                            {
+                                                "centroid":  [
+                                                                 312,
+                                                                 365
+                                                             ],
+                                                "area":  4,
+                                                "dn":  1000,
+                                                "pos_ae":  [
+                                                               2.12,
+                                                               2.65
+                                                           ],
+                                                "alpha":  0.0212,
+                                                "sigma":  0.0265,
+                                                "ra":  2.12,
+                                                "dec":  2.65,
+                                                "magnitude":  8.5
+                                            }
+                                        ],
+                       "star_blobs":  [
+                                          {
+                                              "centroid":  [
+                                                               430.25,
+                                                               420.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               460.25,
+                                                               450.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               490.25,
+                                                               480.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               520.25,
+                                                               510.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          },
+                                          {
+                                              "centroid":  [
+                                                               550.25,
+                                                               540.75
+                                                           ],
+                                              "area":  4,
+                                              "dn":  100,
+                                              "pos_ae":  [
+                                                             0,
+                                                             0
+                                                         ],
+                                              "alpha":  0,
+                                              "sigma":  0,
+                                              "ra":  0,
+                                              "dec":  0
+                                          }
+                                      ],
+                       "expected":  {
+                                        "target_count":  1,
+                                        "targets":  [
+                                                        {
+                                                            "id":  "geo-2",
+                                                            "living":  true,
+                                                            "history_size":  4,
+                                                            "latest_valid":  true,
+                                                            "twdw":  [
+                                                                         2.12,
+                                                                         2.65
+                                                                     ],
+                                                            "gdcl":  {
+                                                                         "dn":  1000,
+                                                                         "magnitude":  8.5
+                                                                     }
+                                                        }
+                                                    ]
+                                    }
+                   }
+               ]
+}

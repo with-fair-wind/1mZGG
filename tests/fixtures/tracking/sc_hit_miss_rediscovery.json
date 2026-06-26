@@ -1,0 +1,260 @@
+{
+    "schema_version":  1,
+    "name":  "SC 连续命中、失配与重发现",
+    "mode":  "sc",
+    "settings":  {
+                     "search_radius":  50,
+                     "threshold_meo":  0.5,
+                     "optic":  {
+                                   "image_width":  6144,
+                                   "image_height":  6144,
+                                   "center":  [
+                                                  3072,
+                                                  3072
+                                              ],
+                                   "pixel_scale":  0.001
+                               }
+                 },
+    "frames":  [
+                   {
+                       "frame_seq":  1,
+                       "frame_freq":  1,
+                       "target_blobs":  [
+                                            {
+                                                "centroid":  [
+                                                                 3060,
+                                                                 3060
+                                                             ],
+                                                "area":  4,
+                                                "dn":  100,
+                                                "pos_ae":  [
+                                                               1,
+                                                               2
+                                                           ],
+                                                "alpha":  0.01,
+                                                "sigma":  0.02,
+                                                "ra":  1,
+                                                "dec":  2,
+                                                "magnitude":  10.5
+                                            }
+                                        ],
+                       "expected":  {
+                                        "target_count":  0
+                                    }
+                   },
+                   {
+                       "frame_seq":  2,
+                       "frame_freq":  1,
+                       "target_blobs":  [
+                                            {
+                                                "centroid":  [
+                                                                 3064,
+                                                                 3063
+                                                             ],
+                                                "area":  4,
+                                                "dn":  100,
+                                                "pos_ae":  [
+                                                               1.01,
+                                                               2.01
+                                                           ],
+                                                "alpha":  0.0101,
+                                                "sigma":  0.0201,
+                                                "ra":  1.01,
+                                                "dec":  2.01,
+                                                "magnitude":  10.5
+                                            }
+                                        ],
+                       "expected":  {
+                                        "target_count":  0
+                                    }
+                   },
+                   {
+                       "frame_seq":  3,
+                       "frame_freq":  1,
+                       "target_blobs":  [
+                                            {
+                                                "centroid":  [
+                                                                 3068,
+                                                                 3066
+                                                             ],
+                                                "area":  4,
+                                                "dn":  100,
+                                                "pos_ae":  [
+                                                               1.02,
+                                                               2.02
+                                                           ],
+                                                "alpha":  0.0102,
+                                                "sigma":  0.0202,
+                                                "ra":  1.02,
+                                                "dec":  2.02,
+                                                "magnitude":  10.5
+                                            }
+                                        ],
+                       "expected":  {
+                                        "target_count":  1
+                                    }
+                   },
+                   {
+                       "frame_seq":  4,
+                       "frame_freq":  1,
+                       "target_blobs":  [
+                                            {
+                                                "centroid":  [
+                                                                 3072,
+                                                                 3069
+                                                             ],
+                                                "area":  4,
+                                                "dn":  100,
+                                                "pos_ae":  [
+                                                               1.03,
+                                                               2.03
+                                                           ],
+                                                "alpha":  0.0103,
+                                                "sigma":  0.0203,
+                                                "ra":  1.03,
+                                                "dec":  2.03,
+                                                "magnitude":  10.5
+                                            }
+                                        ],
+                       "expected":  {
+                                        "target_count":  1,
+                                        "targets":  [
+                                                        {
+                                                            "id":  "sc-1",
+                                                            "living":  true,
+                                                            "history_size":  4,
+                                                            "latest_valid":  true,
+                                                            "twdw":  [
+                                                                         1.03,
+                                                                         2.03
+                                                                     ],
+                                                            "gdcl":  {
+                                                                         "dn":  100,
+                                                                         "magnitude":  10.5
+                                                                     }
+                                                        }
+                                                    ]
+                                    }
+                   },
+                   {
+                       "frame_seq":  5,
+                       "frame_freq":  1,
+                       "target_blobs":  [
+                                            {
+                                                "centroid":  [
+                                                                 3200,
+                                                                 3200
+                                                             ],
+                                                "area":  4,
+                                                "dn":  100,
+                                                "pos_ae":  [
+                                                               3,
+                                                               4
+                                                           ],
+                                                "alpha":  0.03,
+                                                "sigma":  0.04,
+                                                "ra":  3,
+                                                "dec":  4,
+                                                "magnitude":  10.5
+                                            }
+                                        ],
+                       "expected":  {
+                                        "target_count":  0
+                                    }
+                   },
+                   {
+                       "frame_seq":  6,
+                       "frame_freq":  1,
+                       "target_blobs":  [
+                                            {
+                                                "centroid":  [
+                                                                 3060,
+                                                                 3060
+                                                             ],
+                                                "area":  4,
+                                                "dn":  100,
+                                                "pos_ae":  [
+                                                               5,
+                                                               6
+                                                           ],
+                                                "alpha":  0.05,
+                                                "sigma":  0.06,
+                                                "ra":  5,
+                                                "dec":  6,
+                                                "magnitude":  10.5
+                                            }
+                                        ],
+                       "expected":  {
+                                        "target_count":  0
+                                    }
+                   },
+                   {
+                       "frame_seq":  7,
+                       "frame_freq":  1,
+                       "target_blobs":  [
+                                            {
+                                                "centroid":  [
+                                                                 3062,
+                                                                 3062
+                                                             ],
+                                                "area":  4,
+                                                "dn":  100,
+                                                "pos_ae":  [
+                                                               5.01,
+                                                               6.01
+                                                           ],
+                                                "alpha":  0.0501,
+                                                "sigma":  0.0601,
+                                                "ra":  5.01,
+                                                "dec":  6.01,
+                                                "magnitude":  10.5
+                                            }
+                                        ],
+                       "expected":  {
+                                        "target_count":  0
+                                    }
+                   },
+                   {
+                       "frame_seq":  8,
+                       "frame_freq":  1,
+                       "target_blobs":  [
+                                            {
+                                                "centroid":  [
+                                                                 3064,
+                                                                 3064
+                                                             ],
+                                                "area":  4,
+                                                "dn":  100,
+                                                "pos_ae":  [
+                                                               5.02,
+                                                               6.02
+                                                           ],
+                                                "alpha":  0.050199999999999995,
+                                                "sigma":  0.0602,
+                                                "ra":  5.02,
+                                                "dec":  6.02,
+                                                "magnitude":  10.5
+                                            }
+                                        ],
+                       "expected":  {
+                                        "target_count":  1,
+                                        "targets":  [
+                                                        {
+                                                            "id":  "sc-1",
+                                                            "living":  true,
+                                                            "history_size":  3,
+                                                            "latest_valid":  true,
+                                                            "twdw":  [
+                                                                         5.02,
+                                                                         6.02
+                                                                     ],
+                                                            "gdcl":  {
+                                                                         "dn":  100,
+                                                                         "magnitude":  10.5
+                                                                     }
+                                                        }
+                                                    ]
+                                    }
+                   }
+               ]
+}

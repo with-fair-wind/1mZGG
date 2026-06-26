@@ -1,0 +1,7 @@
+[settings]
+compiler.cppstd=23
+compiler.runtime=dynamic
+
+[conf]
+tools.cmake.cmaketoolchain:generator=Ninja
+

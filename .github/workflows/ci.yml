@@ -1,0 +1,132 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+      - master
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BUILD_TYPE: Release
+  CONAN_HOME: ${{ github.workspace }}/.conan2
+  PRESET: ci-msvc-release
+  QT_ARCH: win64_msvc2022_64
+  QT_CACHE_SUFFIX: qtcharts-qtserialport
+  QT_INSTALL_DIR: ${{ github.workspace }}/Qt
+  QT_VERSION: 6.8.0
+
+jobs:
+  windows-msvc-release:
+    name: Windows MSVC Release
+    runs-on: windows-2022
+    timeout-minutes: 120
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Cache Conan and Qt
+        uses: actions/cache@v5
+        with:
+          path: |
+            ${{ env.CONAN_HOME }}
+            ${{ env.QT_INSTALL_DIR }}
+          key: windows-msvc-${{ env.QT_VERSION }}-${{ env.QT_CACHE_SUFFIX }}-${{ hashFiles('conanfile.py', 'profiles/conan/windows-msvc') }}
+          restore-keys: |
+            windows-msvc-${{ env.QT_VERSION }}-${{ env.QT_CACHE_SUFFIX }}-
+
+      - name: Install build tools
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          python -m pip install --upgrade pip
+          python -m pip install "cmake>=3.28,<4" "ninja" "conan==2.29.0" "aqtinstall>=3.3,<4"
+          cmake --version
+          ninja --version
+          conan --version
+
+      - name: Install Qt
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $qtRoot = Join-Path $env:QT_INSTALL_DIR "$env:QT_VERSION\msvc2022_64"
+          $chartsConfig = Join-Path $qtRoot "lib\cmake\Qt6Charts\Qt6ChartsConfig.cmake"
+          $serialPortConfig = Join-Path $qtRoot "lib\cmake\Qt6SerialPort\Qt6SerialPortConfig.cmake"
+          if ((Test-Path $qtRoot) -and (!(Test-Path $chartsConfig) -or !(Test-Path $serialPortConfig))) {
+            Remove-Item -LiteralPath $qtRoot -Recurse -Force
+          }
+
+          if (!(Test-Path $qtRoot)) {
+            python -m aqt install-qt windows desktop $env:QT_VERSION $env:QT_ARCH -O $env:QT_INSTALL_DIR -m qtcharts qtserialport
+          }
+
+          $deployTool = Join-Path $qtRoot "bin\windeployqt6.exe"
+          if (!(Test-Path $deployTool)) {
+            throw "windeployqt6.exe was not found at $deployTool"
+          }
+
+          "DSS_QT_ROOT=$qtRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          (Join-Path $qtRoot "bin") | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Configure, build, and test
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (!$vsPath) {
+            throw "Visual Studio with the MSVC C++ toolset was not found."
+          }
+
+          $vcvars = Join-Path $vsPath "VC\Auxiliary\Build\vcvars64.bat"
+          $commands = @(
+            'conan profile detect --force --name ci',
+            'conan install . --build=missing -pr:h ci -pr:h profiles/conan/windows-msvc -pr:b ci -s:h build_type=%BUILD_TYPE% -o:h "&:with_opencv=True" --output-folder=build\%PRESET%',
+            'call build\%PRESET%\generators\conanbuild.bat',
+            'cmake --preset %PRESET% --fresh -DDSS_BUILD_APP=ON',
+            'cmake --build --preset %PRESET%',
+            'call build\%PRESET%\generators\conanrun.bat',
+            'ctest --test-dir build\%PRESET% -C %BUILD_TYPE% --output-on-failure --no-tests=error'
+          ) -join " && "
+
+          cmd.exe /d /s /c "`"$vcvars`" && $commands"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Build or test step failed with exit code $LASTEXITCODE."
+          }
+
+      - name: Verify deployment bundle
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $binDir = Join-Path (Join-Path "build" $env:PRESET) "bin"
+          $exePath = Join-Path $binDir "DSS_QT.exe"
+          $platformPlugin = Join-Path $binDir "platforms\qwindows.dll"
+
+          if (!(Test-Path $exePath)) {
+            throw "DSS_QT.exe was not produced at $exePath"
+          }
+          if (!(Test-Path $platformPlugin)) {
+            throw "Qt platform plugin was not deployed at $platformPlugin"
+          }
+
+          Get-ChildItem $binDir
+
+      - name: Upload deployment artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: dss_qt-windows-msvc-release
+          path: build/${{ env.PRESET }}/bin/**
+          if-no-files-found: error
+          retention-days: 14

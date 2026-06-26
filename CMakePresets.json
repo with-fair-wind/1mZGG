@@ -1,0 +1,261 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 28,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "DSS_BUILD_APP": "ON",
+        "DSS_ENABLE_TESTS": "ON",
+        "DSS_ENABLE_CUDA": "OFF",
+        "DSS_ENABLE_SAPERA": "OFF",
+        "DSS_ENABLE_OPENCV": "ON"
+      }
+    },
+    {
+      "name": "conan-base",
+      "hidden": true,
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/build/${presetName}/generators/conan_toolchain.cmake",
+        "CMAKE_POLICY_DEFAULT_CMP0091": "NEW",
+        "CMAKE_PREFIX_PATH": "$env{DSS_QT_ROOT}"
+      }
+    },
+    {
+      "name": "core-dev",
+      "displayName": "Core Dev (No Qt/CUDA)",
+      "inherits": "conan-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "DSS_BUILD_APP": "OFF",
+        "DSS_ENABLE_TESTS": "OFF",
+        "DSS_ENABLE_CUDA": "OFF"
+      }
+    },
+    {
+      "name": "core-tests",
+      "displayName": "Core Tests (No Qt/CUDA)",
+      "inherits": "core-dev",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "DSS_ENABLE_TESTS": "ON"
+      }
+    },
+    {
+      "name": "msvc-debug",
+      "displayName": "MSVC Debug",
+      "inherits": "conan-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_COMPILER": "cl"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "msvc-release",
+      "displayName": "MSVC Release",
+      "inherits": "conan-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_COMPILER": "cl"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "ci-msvc-release",
+      "displayName": "CI MSVC Release",
+      "inherits": "conan-base",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "clang-cl-debug",
+      "displayName": "Clang-CL Debug",
+      "inherits": "conan-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_COMPILER": "clang-cl"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "clang-cl-release",
+      "displayName": "Clang-CL Release",
+      "inherits": "conan-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_COMPILER": "clang-cl"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "mingw-gcc-debug",
+      "displayName": "MinGW GCC Debug",
+      "inherits": "conan-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_COMPILER": "g++"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "mingw-gcc-release",
+      "displayName": "MinGW GCC Release",
+      "inherits": "conan-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_COMPILER": "g++"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "gcc-debug",
+      "displayName": "GCC Debug",
+      "inherits": "conan-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_COMPILER": "g++"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "gcc-release",
+      "displayName": "GCC Release",
+      "inherits": "conan-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_COMPILER": "g++"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "clang-debug",
+      "displayName": "Clang Debug",
+      "inherits": "conan-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_CXX_COMPILER": "clang++"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "clang-release",
+      "displayName": "Clang Release",
+      "inherits": "conan-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_COMPILER": "clang++"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "core-dev",
+      "configurePreset": "core-dev"
+    },
+    {
+      "name": "core-tests",
+      "configurePreset": "core-tests"
+    },
+    {
+      "name": "msvc-debug",
+      "configurePreset": "msvc-debug"
+    },
+    {
+      "name": "msvc-release",
+      "configurePreset": "msvc-release"
+    },
+    {
+      "name": "ci-msvc-release",
+      "configurePreset": "ci-msvc-release",
+      "configuration": "Release"
+    },
+    {
+      "name": "clang-cl-debug",
+      "configurePreset": "clang-cl-debug"
+    },
+    {
+      "name": "clang-cl-release",
+      "configurePreset": "clang-cl-release"
+    },
+    {
+      "name": "mingw-gcc-debug",
+      "configurePreset": "mingw-gcc-debug"
+    },
+    {
+      "name": "mingw-gcc-release",
+      "configurePreset": "mingw-gcc-release"
+    },
+    {
+      "name": "gcc-debug",
+      "configurePreset": "gcc-debug"
+    },
+    {
+      "name": "gcc-release",
+      "configurePreset": "gcc-release"
+    },
+    {
+      "name": "clang-debug",
+      "configurePreset": "clang-debug"
+    },
+    {
+      "name": "clang-release",
+      "configurePreset": "clang-release"
+    }
+  ]
+}

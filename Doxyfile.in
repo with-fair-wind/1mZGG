@@ -1,0 +1,65 @@
+# Doxyfile.in — CMake 配置模板
+# 使用 cmake --build <build-dir> --target doxygen 生成文档
+
+PROJECT_NAME           = "@CMAKE_PROJECT_NAME@"
+PROJECT_NUMBER         = "@CMAKE_PROJECT_VERSION@"
+PROJECT_BRIEF          = "@CMAKE_PROJECT_DESCRIPTION@"
+OUTPUT_DIRECTORY       = "@DOXYGEN_OUTPUT_DIR@"
+OUTPUT_LANGUAGE        = Chinese
+
+INPUT                  = "@CMAKE_CURRENT_SOURCE_DIR@/include/dss" \
+                         "@CMAKE_CURRENT_SOURCE_DIR@/src"
+RECURSIVE              = YES
+FILE_PATTERNS          = *.h *.cpp *.cu
+
+EXCLUDE_PATTERNS       = */oldsrc/* */tests/* */build/* */.cache/*
+
+EXTRACT_ALL            = NO
+EXTRACT_PRIVATE        = YES
+EXTRACT_STATIC         = YES
+
+JAVADOC_AUTOBRIEF      = YES
+QT_AUTOBRIEF           = YES
+MULTILINE_CPP_IS_BRIEF = YES
+
+TAB_SIZE               = 4
+OPTIMIZE_OUTPUT_FOR_C  = NO
+
+BUILTIN_STL_SUPPORT    = YES
+
+# Qt 宏展开
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = YES
+PREDEFINED             = Q_OBJECT= \
+                         "Q_PROPERTY(x)=" \
+                         Q_INVOKABLE= \
+                         "signals:=public:" \
+                         Q_SLOTS= \
+                         Q_SIGNALS=public \
+                         "Q_EMIT=" \
+                         DSS_HAS_OPENCV=1 \
+                         DSS_HAS_CUDA=1 \
+                         DSS_BUILD_APP=1
+
+GENERATE_HTML          = YES
+HTML_OUTPUT            = html
+HTML_DYNAMIC_SECTIONS  = YES
+GENERATE_TREEVIEW      = YES
+
+GENERATE_LATEX         = NO
+
+SOURCE_BROWSER         = YES
+INLINE_SOURCES         = NO
+STRIP_CODE_COMMENTS    = NO
+REFERENCED_BY_RELATION = YES
+REFERENCES_RELATION    = YES
+
+HAVE_DOT               = NO
+COLLABORATION_GRAPH    = NO
+
+WARN_IF_UNDOCUMENTED   = YES
+WARN_IF_DOC_ERROR      = YES
+WARN_NO_PARAMDOC       = YES
+
+QUIET                  = YES
