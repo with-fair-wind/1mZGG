@@ -8,6 +8,9 @@
 #include <gtest/gtest.h>
 
 #include "dss/ui/image_display.h"
+#ifdef DSS_HAS_OPENGL_WIDGETS
+#include "dss/ui/gpu_image_display.h"
+#endif
 
 namespace {
 
@@ -171,3 +174,45 @@ TEST(ImageDisplay, MiddleButtonReleaseStopsPanningUntilNextPress) {
 
     EXPECT_EQ(display.imageOffset(), offsetAfterRelease);
 }
+
+#ifdef DSS_HAS_OPENGL_WIDGETS
+TEST(GpuImageDisplay, AcceptsStridedRawFramesAndKeepsViewportForSameSize) {
+    auto& app = ensureApplication();
+    (void)app;
+
+    Dss::Ui::GpuImageDisplay display;
+    display.resize(400, 400);
+    auto raw = std::make_shared<const std::vector<std::uint16_t>>(
+        std::vector<std::uint16_t>{10, 20, 0, 0, 30, 40, 0, 0});
+    display.setRawFrame(raw, 2, 2, 4);
+
+    const QPointF cursor{300.0, 100.0};
+    const auto scaleAfterFirstFrame = display.imageScaleFactor();
+    const auto imagePosAfterFirstFrame = display.imagePositionAt(cursor);
+    EXPECT_DOUBLE_EQ(scaleAfterFirstFrame, 200.0);
+
+    auto nextRaw = std::make_shared<const std::vector<std::uint16_t>>(
+        std::vector<std::uint16_t>{100, 200, 0, 0, 300, 400, 0, 0});
+    display.setRawFrame(nextRaw, 2, 2, 4);
+
+    EXPECT_DOUBLE_EQ(display.imageScaleFactor(), scaleAfterFirstFrame);
+    const auto imagePosAfterNextFrame = display.imagePositionAt(cursor);
+    EXPECT_NEAR(imagePosAfterNextFrame.x(), imagePosAfterFirstFrame.x(), 1.0e-6);
+    EXPECT_NEAR(imagePosAfterNextFrame.y(), imagePosAfterFirstFrame.y(), 1.0e-6);
+}
+
+TEST(GpuImageDisplay, RejectsTruncatedRawFramesSafely) {
+    auto& app = ensureApplication();
+    (void)app;
+
+    Dss::Ui::GpuImageDisplay display;
+    display.resize(400, 400);
+    auto truncatedRaw =
+        std::make_shared<const std::vector<std::uint16_t>>(std::vector<std::uint16_t>{10, 20, 30});
+
+    display.setRawFrame(truncatedRaw, 2, 2, 4);
+
+    EXPECT_DOUBLE_EQ(display.imageScaleFactor(), 1.0);
+    EXPECT_EQ(display.imageOffset(), QPointF{});
+}
+#endif

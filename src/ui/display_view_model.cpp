@@ -10,8 +10,8 @@
 namespace Dss::Ui {
 namespace {
 
-constexpr int kMinDisplayStretchValue = 0;       ///< 显示拉伸最小阈值。
-constexpr int kMaxDisplayStretchValue = 16384;   ///< 显示拉伸最大阈值。
+constexpr int kMinDisplayStretchValue = 0;      ///< 显示拉伸最小阈值。
+constexpr int kMaxDisplayStretchValue = 16384;  ///< 显示拉伸最大阈值。
 
 /// @brief 判断显示拉伸阈值是否位于 UI 支持范围内。
 [[nodiscard]] auto isDisplayStretchValueInRange(int value) -> bool {
@@ -59,6 +59,10 @@ int DisplayViewModel::displayStretchHigh() const {
     return m_displayStretchHigh;
 }
 
+bool DisplayViewModel::rawDisplayEnabled() const {
+    return m_rawDisplayEnabled;
+}
+
 void DisplayViewModel::toggleZoom(int level) {
     m_bus.emit(Dss::Core::ZoomChangeEvent{level});
 }
@@ -71,6 +75,7 @@ bool DisplayViewModel::applyDisplayStretch(bool autoStretch, int low, int high) 
 
     const auto changed = m_displayAutoStretch != autoStretch || m_displayStretchLow != low ||
                          m_displayStretchHigh != high;
+    const auto wasAutoStretch = m_displayAutoStretch;
     m_displayAutoStretch = autoStretch;
     m_displayStretchLow = low;
     m_displayStretchHigh = high;
@@ -81,7 +86,11 @@ bool DisplayViewModel::applyDisplayStretch(bool autoStretch, int low, int high) 
         Q_EMIT displayStretchSettingsChanged();
         Q_EMIT displayStretchChanged(m_displayAutoStretch, m_displayStretchLow,
                                      m_displayStretchHigh);
-        (void)refreshCurrentDisplayFromStretch();
+        if (!m_rawDisplayEnabled || m_displayAutoStretch) {
+            (void)refreshCurrentDisplayFromStretch();
+        } else if (wasAutoStretch) {
+            (void)emitCurrentRawDisplayFrame();
+        }
     }
     return true;
 }
@@ -100,6 +109,10 @@ void DisplayViewModel::setDisplayStretchHigh(int high) {
     const auto boundedHigh = std::clamp(high, kMinDisplayStretchValue + 1, kMaxDisplayStretchValue);
     const auto normalizedHigh = std::max(boundedHigh, m_displayStretchLow + 1);
     (void)applyDisplayStretch(m_displayAutoStretch, m_displayStretchLow, normalizedHigh);
+}
+
+void DisplayViewModel::setRawDisplayEnabled(bool enabled) {
+    m_rawDisplayEnabled = enabled;
 }
 
 void DisplayViewModel::clearCurrentDisplayFrame() {
@@ -130,6 +143,13 @@ void DisplayViewModel::onDisplayRefresh(const Dss::Core::DisplayRefreshEvent& ev
     }
 
     cacheCurrentDisplayFrame(event);
+    const auto expectedPixelCount =
+        static_cast<std::size_t>(event.width) * static_cast<std::size_t>(event.height);
+    if (m_rawDisplayEnabled && !m_displayAutoStretch && event.rawImage &&
+        event.rawImage->size() == expectedPixelCount) {
+        Q_EMIT rawDisplayFrameReady(event.rawImage, event.width, event.height, event.width);
+        return;
+    }
     Q_EMIT displayImageReady(
         makeGrayImageCopy(*event.displayImage, event.width, event.height, event.stride));
 }
@@ -154,6 +174,26 @@ void DisplayViewModel::cacheCurrentDisplayFrame(const Dss::Core::DisplayRefreshE
     }
 }
 
+bool DisplayViewModel::emitCurrentRawDisplayFrame() {
+    std::shared_ptr<const std::vector<std::uint16_t>> rawImage;
+    std::uint32_t width = 0;
+    std::uint32_t height = 0;
+    {
+        std::lock_guard lock(m_currentDisplayMutex);
+        rawImage = m_currentRawImage;
+        width = m_currentDisplayWidth;
+        height = m_currentDisplayHeight;
+    }
+    const auto expectedPixelCount =
+        static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+    if (!rawImage || width == 0 || height == 0 || rawImage->size() != expectedPixelCount) {
+        return false;
+    }
+
+    Q_EMIT rawDisplayFrameReady(std::move(rawImage), width, height, width);
+    return true;
+}
+
 bool DisplayViewModel::refreshCurrentDisplayFromStretch() {
     std::shared_ptr<const std::vector<std::uint16_t>> rawImage;
     std::uint32_t width = 0;
@@ -168,7 +208,8 @@ bool DisplayViewModel::refreshCurrentDisplayFromStretch() {
         return false;
     }
 
-    const auto expectedPixelCount = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+    const auto expectedPixelCount =
+        static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
     if (rawImage->size() != expectedPixelCount) {
         return false;
     }
@@ -200,8 +241,8 @@ bool DisplayViewModel::syncDisplayStretchToProcessor() {
         return false;
     }
 
-    processor->setDisplayStretchSettings(
-        makeDisplayStretchSettings(m_displayAutoStretch, m_displayStretchLow, m_displayStretchHigh));
+    processor->setDisplayStretchSettings(makeDisplayStretchSettings(
+        m_displayAutoStretch, m_displayStretchLow, m_displayStretchHigh));
     return true;
 }
 

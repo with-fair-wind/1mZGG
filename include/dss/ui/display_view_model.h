@@ -54,6 +54,12 @@ public:
      */
     [[nodiscard]] int displayStretchHigh() const;
 
+    /**
+     * @brief 查询是否启用 RAW 帧直通显示模式。
+     * @return 启用 GPU RAW 显示路径时返回 true。
+     */
+    [[nodiscard]] bool rawDisplayEnabled() const;
+
 public Q_SLOTS:
     /**
      * @brief 通过事件总线发送缩放级别变化。
@@ -89,6 +95,12 @@ public Q_SLOTS:
     Q_INVOKABLE void setDisplayStretchHigh(int high);
 
     /**
+     * @brief 设置是否启用 RAW 帧直通显示模式。
+     * @param enabled 为 true 时，manual 显示拉伸下会发送 RAW 帧给 GPU 显示控件。
+     */
+    Q_INVOKABLE void setRawDisplayEnabled(bool enabled);
+
+    /**
      * @brief 清除当前可重绘帧缓存。
      */
     void clearCurrentDisplayFrame();
@@ -112,6 +124,16 @@ Q_SIGNALS:
      * @param image 可显示的灰度图。
      */
     void displayImageReady(QImage image);
+
+    /**
+     * @brief RAW 显示帧已准备好，可由 GPU 显示控件直接上传。
+     * @param rawImage 16-bit RAW 像素缓冲。
+     * @param width 图像有效宽度，单位为像素。
+     * @param height 图像有效高度，单位为像素。
+     * @param stride 每行 RAW 像素跨度，单位为像素。
+     */
+    void rawDisplayFrameReady(std::shared_ptr<const std::vector<std::uint16_t>> rawImage,
+                              std::uint32_t width, std::uint32_t height, std::uint32_t stride);
 
     /**
      * @brief 图像统计量更新。
@@ -159,22 +181,29 @@ private:
     [[nodiscard]] bool refreshCurrentDisplayFromStretch();
 
     /**
+     * @brief 重新发送当前 RAW 帧给 GPU 显示控件。
+     * @return 当前缓存存在合法 RAW 帧时返回 true。
+     */
+    [[nodiscard]] bool emitCurrentRawDisplayFrame();
+
+    /**
      * @brief 将当前显示拉伸设置同步到图像处理器。
      * @return 同步成功时返回 true。
      */
     [[nodiscard]] bool syncDisplayStretchToProcessor();
 
-    UiServiceContext::MessageBus& m_bus;  ///< 应用事件总线。
-    Dss::Core::ServiceRegistry& m_registry;  ///< 应用服务注册表。
-    bool m_displayAutoStretch = true;        ///< 是否启用显示自动拉伸。
-    int m_displayStretchLow = 1000;          ///< 显示拉伸低阈值。
-    int m_displayStretchHigh = 5000;         ///< 显示拉伸高阈值。
+    UiServiceContext::MessageBus& m_bus;       ///< 应用事件总线。
+    Dss::Core::ServiceRegistry& m_registry;    ///< 应用服务注册表。
+    bool m_displayAutoStretch = true;          ///< 是否启用显示自动拉伸。
+    int m_displayStretchLow = 1000;            ///< 显示拉伸低阈值。
+    int m_displayStretchHigh = 5000;           ///< 显示拉伸高阈值。
+    bool m_rawDisplayEnabled = false;          ///< 是否直接发送 RAW 帧给显示控件。
     mutable std::mutex m_currentDisplayMutex;  ///< 保护当前显示帧缓存。
     std::shared_ptr<const std::vector<std::uint16_t>> m_currentRawImage;  ///< 当前 RAW 图像。
-    std::uint64_t m_currentDisplayFrameSeq = 0;  ///< 当前显示帧序号。
-    std::uint32_t m_currentDisplayWidth = 0;     ///< 当前显示帧宽度。
-    std::uint32_t m_currentDisplayHeight = 0;    ///< 当前显示帧高度。
-    std::vector<Dss::Evt::ScopedConnection> m_connections;  ///< 事件订阅连接列表。
+    std::uint64_t m_currentDisplayFrameSeq = 0;                           ///< 当前显示帧序号。
+    std::uint32_t m_currentDisplayWidth = 0;                              ///< 当前显示帧宽度。
+    std::uint32_t m_currentDisplayHeight = 0;                             ///< 当前显示帧高度。
+    std::vector<Dss::Evt::ScopedConnection> m_connections;                ///< 事件订阅连接列表。
 };
 
 }  // namespace Dss::Ui
