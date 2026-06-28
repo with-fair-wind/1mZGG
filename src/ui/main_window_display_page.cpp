@@ -1,14 +1,22 @@
 #include <QCheckBox>
+#include <QElapsedTimer>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QSignalBlocker>
 #include <QSlider>
 #include <QSpinBox>
+#include <QTimer>
+#include <QtGlobal>
 #include <algorithm>
+#include <functional>
+#include <memory>
 
 #include "dss/ui/app_event.h"
 #include "dss/ui/image_display.h"
+#ifdef DSS_HAS_OPENGL_WIDGETS
+#include "dss/ui/gpu_image_display.h"
+#endif
 #include "dss/ui/main_window.h"
 #include "dss/ui/wheel_guarded_spin_box.h"
 
@@ -23,8 +31,25 @@ void MainWindow::setupDisplayPage() {
     auto* layout = new QHBoxLayout(m_displayPage);
     auto* display = &m_mainViewModel.display();
 
-    m_imageDisplay = new ImageDisplay(m_displayPage);
-    layout->addWidget(m_imageDisplay, 4);
+#ifdef DSS_HAS_OPENGL_WIDGETS
+    const auto gpuDisplayDisabled =
+        qEnvironmentVariableIntValue("DSS_DISABLE_GPU_IMAGE_DISPLAY") != 0;
+    if (!gpuDisplayDisabled && GpuImageDisplay::isSupported()) {
+        m_gpuImageDisplay = new GpuImageDisplay(m_displayPage);
+        m_gpuImageDisplay->setDisplayStretch(display->displayAutoStretch(),
+                                             display->displayStretchLow(),
+                                             display->displayStretchHigh());
+        m_imageDisplayWidget = m_gpuImageDisplay;
+        display->setRawDisplayEnabled(true);
+    }
+#endif
+    if (m_imageDisplayWidget == nullptr) {
+        m_imageDisplay = new ImageDisplay(m_displayPage);
+        m_imageDisplayWidget = m_imageDisplay;
+        display->setRawDisplayEnabled(false);
+    }
+    m_imageDisplayWidget->setObjectName("main_image_display");
+    layout->addWidget(m_imageDisplayWidget, 4);
 
     auto* stretchGroup = new QGroupBox("Display Stretch", m_displayPage);
     stretchGroup->setObjectName("display_stretch_group");
@@ -85,46 +110,77 @@ void MainWindow::setupDisplayPage() {
         highSlider->setValue(high);
         highSpin->setValue(high);
     };
-    auto applyStretch = [this, display, autoStretch, lowSpin, highSlider, highSpin,
-                         syncStretchControls] {
+    enum class StretchEditedBound { Low, High };
+    constexpr int kStretchPreviewIntervalMs = 40;
+    auto* stretchThrottleTimer = new QTimer(m_displayPage);
+    stretchThrottleTimer->setSingleShot(true);
+    auto lastStretchApply = std::make_shared<QElapsedTimer>();
+    auto lastEditedBound = std::make_shared<StretchEditedBound>(StretchEditedBound::Low);
+
+    std::function<void()> applyStretchNow;
+    applyStretchNow = [display, autoStretch, lowSpin, highSpin, syncStretchControls,
+                       stretchThrottleTimer, lastStretchApply, lastEditedBound] {
+        stretchThrottleTimer->stop();
         auto low = lowSpin->value();
         auto high = highSpin->value();
         if (low >= high) {
-            if (this->sender() == highSlider || this->sender() == highSpin) {
+            if (*lastEditedBound == StretchEditedBound::High) {
                 high = std::min(16384, low + 1);
             } else {
                 low = std::max(0, high - 1);
             }
         }
         syncStretchControls(low, high);
+        lastStretchApply->restart();
         (void)display->applyDisplayStretch(autoStretch->isChecked(), low, high);
     };
+    const auto scheduleStretchPreview = [stretchThrottleTimer, lastStretchApply, applyStretchNow] {
+        if (!lastStretchApply->isValid() ||
+            lastStretchApply->elapsed() >= kStretchPreviewIntervalMs) {
+            applyStretchNow();
+            return;
+        }
+        if (!stretchThrottleTimer->isActive()) {
+            const auto remainingMs = std::max(
+                1, kStretchPreviewIntervalMs - static_cast<int>(lastStretchApply->elapsed()));
+            stretchThrottleTimer->start(remainingMs);
+        }
+    };
 
-    connect(autoStretch, &QCheckBox::toggled, [refreshStretchEnabled, applyStretch](bool) {
+    connect(stretchThrottleTimer, &QTimer::timeout, applyStretchNow);
+    connect(autoStretch, &QCheckBox::toggled, [refreshStretchEnabled, applyStretchNow](bool) {
         refreshStretchEnabled();
-        applyStretch();
+        applyStretchNow();
     });
-    connect(lowSlider, &QSlider::valueChanged, [lowSpin, applyStretch](int value) {
-        const QSignalBlocker blocker(lowSpin);
-        lowSpin->setValue(value);
-        applyStretch();
-    });
+    connect(lowSlider, &QSlider::valueChanged,
+            [lowSpin, lastEditedBound, scheduleStretchPreview](int value) {
+                *lastEditedBound = StretchEditedBound::Low;
+                const QSignalBlocker blocker(lowSpin);
+                lowSpin->setValue(value);
+                scheduleStretchPreview();
+            });
+    connect(lowSlider, &QSlider::sliderReleased, applyStretchNow);
     connect(lowSpin, QOverload<int>::of(&QSpinBox::valueChanged),
-            [lowSlider, applyStretch](int value) {
+            [lowSlider, lastEditedBound, scheduleStretchPreview](int value) {
+                *lastEditedBound = StretchEditedBound::Low;
                 const QSignalBlocker blocker(lowSlider);
                 lowSlider->setValue(value);
-                applyStretch();
+                scheduleStretchPreview();
             });
-    connect(highSlider, &QSlider::valueChanged, [highSpin, applyStretch](int value) {
-        const QSignalBlocker blocker(highSpin);
-        highSpin->setValue(value);
-        applyStretch();
-    });
+    connect(highSlider, &QSlider::valueChanged,
+            [highSpin, lastEditedBound, scheduleStretchPreview](int value) {
+                *lastEditedBound = StretchEditedBound::High;
+                const QSignalBlocker blocker(highSpin);
+                highSpin->setValue(value);
+                scheduleStretchPreview();
+            });
+    connect(highSlider, &QSlider::sliderReleased, applyStretchNow);
     connect(highSpin, QOverload<int>::of(&QSpinBox::valueChanged),
-            [highSlider, applyStretch](int value) {
+            [highSlider, lastEditedBound, scheduleStretchPreview](int value) {
+                *lastEditedBound = StretchEditedBound::High;
                 const QSignalBlocker blocker(highSlider);
                 highSlider->setValue(value);
-                applyStretch();
+                scheduleStretchPreview();
             });
     connect(display, &DisplayViewModel::displayStretchChanged,
             [autoStretch, syncStretchControls, refreshStretchEnabled](bool autoScale, int low,
@@ -136,9 +192,24 @@ void MainWindow::setupDisplayPage() {
             });
     refreshStretchEnabled();
 
-    connect(display, &DisplayViewModel::displayImageReady, m_imageDisplay, &ImageDisplay::setImage);
-    connect(m_imageDisplay, &ImageDisplay::positionClicked, &AppEvent::instance(),
-            &AppEvent::publishTargetPositionSelected);
+    if (m_imageDisplay != nullptr) {
+        connect(display, &DisplayViewModel::displayImageReady, m_imageDisplay,
+                &ImageDisplay::setImage);
+        connect(m_imageDisplay, &ImageDisplay::positionClicked, &AppEvent::instance(),
+                &AppEvent::publishTargetPositionSelected);
+    }
+#ifdef DSS_HAS_OPENGL_WIDGETS
+    if (m_gpuImageDisplay != nullptr) {
+        connect(display, &DisplayViewModel::displayImageReady, m_gpuImageDisplay,
+                &GpuImageDisplay::setImage);
+        connect(display, &DisplayViewModel::rawDisplayFrameReady, m_gpuImageDisplay,
+                &GpuImageDisplay::setRawFrame);
+        connect(display, &DisplayViewModel::displayStretchChanged, m_gpuImageDisplay,
+                &GpuImageDisplay::setDisplayStretch);
+        connect(m_gpuImageDisplay, &GpuImageDisplay::positionClicked, &AppEvent::instance(),
+                &AppEvent::publishTargetPositionSelected);
+    }
+#endif
 }
 
 }  // namespace Dss::Ui
