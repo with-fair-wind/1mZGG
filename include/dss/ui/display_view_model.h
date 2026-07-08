@@ -131,9 +131,12 @@ Q_SIGNALS:
      * @param width 图像有效宽度，单位为像素。
      * @param height 图像有效高度，单位为像素。
      * @param stride 每行 RAW 像素跨度，单位为像素。
+     * @param low 当前帧实际显示低阈值。
+     * @param high 当前帧实际显示高阈值。
      */
     void rawDisplayFrameReady(std::shared_ptr<const std::vector<std::uint16_t>> rawImage,
-                              std::uint32_t width, std::uint32_t height, std::uint32_t stride);
+                              std::uint32_t width, std::uint32_t height, std::uint32_t stride,
+                              int low, int high);
 
     /**
      * @brief 图像统计量更新。
@@ -181,8 +184,8 @@ private:
     [[nodiscard]] bool refreshCurrentDisplayFromStretch();
 
     /**
-     * @brief 重新发送当前 RAW 帧给 GPU 显示控件。
-     * @return 当前缓存存在合法 RAW 帧时返回 true。
+     * @brief 重新发送当前 RAW 帧与当前显示窗口给 GPU 显示控件。
+     * @return 当前缓存存在合法 RAW 帧且可解析显示窗口时返回 true。
      */
     [[nodiscard]] bool emitCurrentRawDisplayFrame();
 
@@ -203,7 +206,11 @@ private:
     std::uint64_t m_currentDisplayFrameSeq = 0;                           ///< 当前显示帧序号。
     std::uint32_t m_currentDisplayWidth = 0;                              ///< 当前显示帧宽度。
     std::uint32_t m_currentDisplayHeight = 0;                             ///< 当前显示帧高度。
-    std::vector<Dss::Evt::ScopedConnection> m_connections;                ///< 事件订阅连接列表。
+    Dss::Core::ImageStats m_currentDisplayStats{};                        ///< 当前 RAW 图像统计量。
+    int m_currentAutoStretchLow = 0;                        ///< 当前帧 auto 显示低阈值。
+    int m_currentAutoStretchHigh = 1;                       ///< 当前帧 auto 显示高阈值。
+    bool m_currentAutoStretchWindowValid = false;           ///< 当前帧 auto 阈值是否有效。
+    std::vector<Dss::Evt::ScopedConnection> m_connections;  ///< 事件订阅连接列表。
 };
 
 }  // namespace Dss::Ui

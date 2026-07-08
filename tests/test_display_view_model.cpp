@@ -102,7 +102,7 @@ TEST(DisplayViewModel, RebuildsCurrentDisplayWhenStretchSettingsChange) {
     QObject::disconnect(connection);
 }
 
-TEST(DisplayViewModel, RawDisplayModeUsesDisplayImageWhileAutoStretchIsEnabled) {
+TEST(DisplayViewModel, RawDisplayModeUsesRawFrameWhileAutoStretchIsEnabled) {
     QCoreApplicationFixture app;
     MessageBus bus;
     Dss::Core::ServiceRegistry registry;
@@ -113,30 +113,53 @@ TEST(DisplayViewModel, RawDisplayModeUsesDisplayImageWhileAutoStretchIsEnabled) 
 
     int imageReadyCount = 0;
     int rawReadyCount = 0;
+    int lastLow = 0;
+    int lastHigh = 0;
     const auto imageConnection =
         QObject::connect(&displayViewModel, &Dss::Ui::DisplayViewModel::displayImageReady,
                          [&imageReadyCount](const QImage&) { ++imageReadyCount; });
-    const auto rawConnection = QObject::connect(
-        &displayViewModel, &Dss::Ui::DisplayViewModel::rawDisplayFrameReady,
-        [&rawReadyCount](const std::shared_ptr<const std::vector<std::uint16_t>>&, std::uint32_t,
-                         std::uint32_t, std::uint32_t) { ++rawReadyCount; });
+    const auto rawConnection =
+        QObject::connect(&displayViewModel, &Dss::Ui::DisplayViewModel::rawDisplayFrameReady,
+                         [&rawReadyCount, &lastLow, &lastHigh](
+                             const std::shared_ptr<const std::vector<std::uint16_t>>&,
+                             std::uint32_t, std::uint32_t, std::uint32_t, int low, int high) {
+                             ++rawReadyCount;
+                             lastLow = low;
+                             lastHigh = high;
+                         });
 
     auto display =
         std::make_shared<const std::vector<std::uint8_t>>(std::vector<std::uint8_t>{9, 9, 9, 9});
     auto raw = std::make_shared<const std::vector<std::uint16_t>>(
         std::vector<std::uint16_t>{500, 1000, 3000, 5000});
-    bus.emit(Dss::Core::DisplayRefreshEvent{7, 2, 2, 2, std::move(display), raw});
+    Dss::Core::DisplayRefreshEvent event{};
+    event.frameSeq = 7;
+    event.width = 2;
+    event.height = 2;
+    event.stride = 2;
+    event.displayImage = std::move(display);
+    event.rawImage = raw;
+    event.displayStretchLow = 120;
+    event.displayStretchHigh = 3400;
+    event.displayStretchWindowValid = true;
+    bus.emit(event);
 
-    EXPECT_EQ(imageReadyCount, 1);
-    EXPECT_EQ(rawReadyCount, 0);
+    EXPECT_EQ(imageReadyCount, 0);
+    EXPECT_EQ(rawReadyCount, 1);
+    EXPECT_EQ(lastLow, 120);
+    EXPECT_EQ(lastHigh, 3400);
 
     ASSERT_TRUE(displayViewModel.applyDisplayStretch(false, 1000, 5000));
-    EXPECT_EQ(imageReadyCount, 1);
-    EXPECT_EQ(rawReadyCount, 1);
+    EXPECT_EQ(imageReadyCount, 0);
+    EXPECT_EQ(rawReadyCount, 2);
+    EXPECT_EQ(lastLow, 1000);
+    EXPECT_EQ(lastHigh, 5000);
 
     ASSERT_TRUE(displayViewModel.applyDisplayStretch(true, 1000, 5000));
-    EXPECT_EQ(imageReadyCount, 2);
-    EXPECT_EQ(rawReadyCount, 1);
+    EXPECT_EQ(imageReadyCount, 0);
+    EXPECT_EQ(rawReadyCount, 3);
+    EXPECT_EQ(lastLow, 120);
+    EXPECT_EQ(lastHigh, 3400);
 
     QObject::disconnect(imageConnection);
     QObject::disconnect(rawConnection);
@@ -158,13 +181,14 @@ TEST(DisplayViewModel, RawDisplayModeEmitsRawFrameAndSkipsCpuRebuildOnStretchCha
     const auto imageConnection =
         QObject::connect(&displayViewModel, &Dss::Ui::DisplayViewModel::displayImageReady,
                          [&imageReadyCount](const QImage&) { ++imageReadyCount; });
-    const auto rawConnection = QObject::connect(
-        &displayViewModel, &Dss::Ui::DisplayViewModel::rawDisplayFrameReady,
-        [&rawReadyCount, &lastRawWidth](const std::shared_ptr<const std::vector<std::uint16_t>>&,
-                                        std::uint32_t width, std::uint32_t, std::uint32_t) {
-            ++rawReadyCount;
-            lastRawWidth = width;
-        });
+    const auto rawConnection =
+        QObject::connect(&displayViewModel, &Dss::Ui::DisplayViewModel::rawDisplayFrameReady,
+                         [&rawReadyCount, &lastRawWidth](
+                             const std::shared_ptr<const std::vector<std::uint16_t>>&,
+                             std::uint32_t width, std::uint32_t, std::uint32_t, int, int) {
+                             ++rawReadyCount;
+                             lastRawWidth = width;
+                         });
 
     auto display =
         std::make_shared<const std::vector<std::uint8_t>>(std::vector<std::uint8_t>{9, 9, 9, 9});
@@ -177,6 +201,10 @@ TEST(DisplayViewModel, RawDisplayModeEmitsRawFrameAndSkipsCpuRebuildOnStretchCha
     EXPECT_EQ(lastRawWidth, 2U);
 
     ASSERT_TRUE(displayViewModel.applyDisplayStretch(false, 1000, 5000));
+    EXPECT_EQ(imageReadyCount, 0);
+    EXPECT_EQ(rawReadyCount, 1);
+
+    ASSERT_TRUE(displayViewModel.applyDisplayStretch(false, 1200, 5000));
     EXPECT_EQ(imageReadyCount, 0);
     EXPECT_EQ(rawReadyCount, 1);
 

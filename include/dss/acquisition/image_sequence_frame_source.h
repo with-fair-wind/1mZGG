@@ -61,7 +61,7 @@ public:
      */
     auto stepForward() -> std::expected<void, std::string>;
 
-    /// 加载首帧确定尺寸并重置播放索引
+    /// 加载首帧确定尺寸；已初始化时保持当前播放索引并直接返回。
     auto init() -> std::expected<void, std::string> override;
 
     /// 在后台线程中连续回放剩余帧

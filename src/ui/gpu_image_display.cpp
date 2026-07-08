@@ -102,7 +102,10 @@ void GpuImageDisplay::setImage(const QImage& image) {
 }
 
 void GpuImageDisplay::setRawFrame(std::shared_ptr<const std::vector<std::uint16_t>> rawImage,
-                                  std::uint32_t width, std::uint32_t height, std::uint32_t stride) {
+                                  std::uint32_t width, std::uint32_t height, std::uint32_t stride,
+                                  int low, int high) {
+    m_stretchLow = low;
+    m_stretchHigh = std::max(high, low + 1);
     const QSize nextSize{static_cast<int>(width), static_cast<int>(height)};
     const auto keepViewport =
         imageSize() == nextSize && rawFramePayloadFits(rawImage, width, height, stride);
