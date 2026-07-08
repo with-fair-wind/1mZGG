@@ -35,6 +35,7 @@ void MainWindow::setupControlPage() {
 #endif
     auto* sequenceLabel = new QLabel("Frames: 0");
     auto* currentFrameLabel = new QLabel("Current: 0/0");
+    auto* replayStateLabel = new QLabel("Replay: Ready");
     auto* replayProgress = new QSlider(Qt::Horizontal);
     replayProgress->setObjectName("replay_progress");
     replayProgress->setRange(0, 0);
@@ -42,6 +43,7 @@ void MainWindow::setupControlPage() {
     sequenceRow->addWidget(btnSelectSequence);
     sequenceRow->addWidget(sequenceLabel);
     sequenceRow->addWidget(currentFrameLabel);
+    sequenceRow->addWidget(replayStateLabel);
     sequenceRow->addWidget(replayProgress, 1);
 
     connect(btnSelectSequence, &QPushButton::clicked, [this, replay] {
@@ -94,6 +96,19 @@ void MainWindow::setupControlPage() {
     connect(btnStop, &QPushButton::clicked, replay, &ReplayViewModel::stopGrab);
     connect(btnStepBackward, &QPushButton::clicked, replay, &ReplayViewModel::stepReplayBackward);
     connect(btnStepForward, &QPushButton::clicked, replay, &ReplayViewModel::stepReplayForward);
+
+    auto refreshReplayBusyState = [btnSelectSequence, btnStart, btnStop, btnStepBackward,
+                                   btnStepForward, replayProgress, replayStateLabel](bool busy) {
+        btnSelectSequence->setEnabled(!busy);
+        btnStart->setEnabled(!busy);
+        btnStop->setEnabled(!busy);
+        btnStepBackward->setEnabled(!busy);
+        btnStepForward->setEnabled(!busy);
+        replayProgress->setEnabled(!busy);
+        replayStateLabel->setText(busy ? "Replay: Loading" : "Replay: Ready");
+    };
+    connect(replay, &ReplayViewModel::replayBusyChanged, refreshReplayBusyState);
+    refreshReplayBusyState(replay->replayBusy());
 
     auto* processingRow = new QHBoxLayout;
     processingRow->addWidget(new QLabel("Processing:"));

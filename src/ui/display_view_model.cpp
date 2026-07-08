@@ -1,5 +1,7 @@
 #include "dss/ui/display_view_model.h"
 
+#include <QMetaObject>
+#include <QThread>
 #include <algorithm>
 #include <cstddef>
 #include <utility>
@@ -86,11 +88,15 @@ bool DisplayViewModel::applyDisplayStretch(bool autoStretch, int low, int high) 
         Q_EMIT displayStretchSettingsChanged();
         Q_EMIT displayStretchChanged(m_displayAutoStretch, m_displayStretchLow,
                                      m_displayStretchHigh);
-        if (!m_rawDisplayEnabled || m_displayAutoStretch) {
-            (void)refreshCurrentDisplayFromStretch();
-        } else if (wasAutoStretch) {
-            (void)emitCurrentRawDisplayFrame();
+        if (m_rawDisplayEnabled) {
+            if ((m_displayAutoStretch || wasAutoStretch) && emitCurrentRawDisplayFrame()) {
+                return true;
+            }
+            if (!m_displayAutoStretch) {
+                return true;
+            }
         }
+        (void)refreshCurrentDisplayFromStretch();
     }
     return true;
 }
@@ -112,7 +118,15 @@ void DisplayViewModel::setDisplayStretchHigh(int high) {
 }
 
 void DisplayViewModel::setRawDisplayEnabled(bool enabled) {
+    if (m_rawDisplayEnabled == enabled) {
+        return;
+    }
     m_rawDisplayEnabled = enabled;
+    if (m_rawDisplayEnabled) {
+        (void)emitCurrentRawDisplayFrame();
+    } else {
+        (void)refreshCurrentDisplayFromStretch();
+    }
 }
 
 void DisplayViewModel::clearCurrentDisplayFrame() {
@@ -121,6 +135,10 @@ void DisplayViewModel::clearCurrentDisplayFrame() {
     m_currentDisplayFrameSeq = 0;
     m_currentDisplayWidth = 0;
     m_currentDisplayHeight = 0;
+    m_currentDisplayStats = {};
+    m_currentAutoStretchLow = 0;
+    m_currentAutoStretchHigh = 1;
+    m_currentAutoStretchWindowValid = false;
 }
 
 void DisplayViewModel::setupSubscriptions() {
@@ -132,22 +150,29 @@ void DisplayViewModel::setupSubscriptions() {
 }
 
 void DisplayViewModel::onDisplayRefresh(const Dss::Core::DisplayRefreshEvent& event) {
-    if (!event.displayImage || event.width == 0 || event.height == 0 || event.stride == 0) {
+    if (QThread::currentThread() != thread()) {
+        auto eventCopy = event;
+        QMetaObject::invokeMethod(
+            this, [this, eventCopy = std::move(eventCopy)] { onDisplayRefresh(eventCopy); },
+            Qt::QueuedConnection);
         return;
     }
 
-    const auto expectedSize =
-        static_cast<std::size_t>(event.stride) * static_cast<std::size_t>(event.height);
-    if (event.displayImage->size() < expectedSize) {
+    if (event.width == 0 || event.height == 0 || event.stride == 0) {
         return;
     }
 
     cacheCurrentDisplayFrame(event);
-    const auto expectedPixelCount =
-        static_cast<std::size_t>(event.width) * static_cast<std::size_t>(event.height);
-    if (m_rawDisplayEnabled && !m_displayAutoStretch && event.rawImage &&
-        event.rawImage->size() == expectedPixelCount) {
-        Q_EMIT rawDisplayFrameReady(event.rawImage, event.width, event.height, event.width);
+    if (m_rawDisplayEnabled && emitCurrentRawDisplayFrame()) {
+        return;
+    }
+
+    if (!event.displayImage) {
+        return;
+    }
+    const auto expectedSize =
+        static_cast<std::size_t>(event.stride) * static_cast<std::size_t>(event.height);
+    if (event.displayImage->size() < expectedSize) {
         return;
     }
     Q_EMIT displayImageReady(
@@ -155,6 +180,17 @@ void DisplayViewModel::onDisplayRefresh(const Dss::Core::DisplayRefreshEvent& ev
 }
 
 void DisplayViewModel::onProcessingComplete(const Dss::Core::ProcessingCompleteEvent& event) {
+    if (QThread::currentThread() != thread()) {
+        const auto stats = event.stats;
+        QMetaObject::invokeMethod(
+            this,
+            [this, stats] {
+                Q_EMIT imageStatsUpdated(stats.minVal, stats.maxVal, stats.avg, stats.stdDev);
+            },
+            Qt::QueuedConnection);
+        return;
+    }
+
     const auto& stats = event.stats;
     Q_EMIT imageStatsUpdated(stats.minVal, stats.maxVal, stats.avg, stats.stdDev);
 }
@@ -167,10 +203,15 @@ void DisplayViewModel::cacheCurrentDisplayFrame(const Dss::Core::DisplayRefreshE
     m_currentDisplayFrameSeq = event.frameSeq;
     m_currentDisplayWidth = event.width;
     m_currentDisplayHeight = event.height;
+    m_currentDisplayStats = event.stats;
+    m_currentAutoStretchLow = static_cast<int>(event.displayStretchLow);
+    m_currentAutoStretchHigh = static_cast<int>(event.displayStretchHigh);
+    m_currentAutoStretchWindowValid = event.displayStretchWindowValid;
     if (event.rawImage && event.rawImage->size() == expectedPixelCount) {
         m_currentRawImage = event.rawImage;
     } else {
         m_currentRawImage.reset();
+        m_currentAutoStretchWindowValid = false;
     }
 }
 
@@ -178,19 +219,31 @@ bool DisplayViewModel::emitCurrentRawDisplayFrame() {
     std::shared_ptr<const std::vector<std::uint16_t>> rawImage;
     std::uint32_t width = 0;
     std::uint32_t height = 0;
+    int low = m_displayStretchLow;
+    int high = m_displayStretchHigh;
     {
         std::lock_guard lock(m_currentDisplayMutex);
         rawImage = m_currentRawImage;
         width = m_currentDisplayWidth;
         height = m_currentDisplayHeight;
+        if (m_displayAutoStretch) {
+            if (!m_currentAutoStretchWindowValid) {
+                return false;
+            }
+            low = m_currentAutoStretchLow;
+            high = m_currentAutoStretchHigh;
+        }
     }
     const auto expectedPixelCount =
         static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
     if (!rawImage || width == 0 || height == 0 || rawImage->size() != expectedPixelCount) {
         return false;
     }
+    if (high <= low) {
+        high = low + 1;
+    }
 
-    Q_EMIT rawDisplayFrameReady(std::move(rawImage), width, height, width);
+    Q_EMIT rawDisplayFrameReady(std::move(rawImage), width, height, width, low, high);
     return true;
 }
 

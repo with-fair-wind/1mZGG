@@ -184,7 +184,7 @@ TEST(GpuImageDisplay, AcceptsStridedRawFramesAndKeepsViewportForSameSize) {
     display.resize(400, 400);
     auto raw = std::make_shared<const std::vector<std::uint16_t>>(
         std::vector<std::uint16_t>{10, 20, 0, 0, 30, 40, 0, 0});
-    display.setRawFrame(raw, 2, 2, 4);
+    display.setRawFrame(raw, 2, 2, 4, 0, 16384);
 
     const QPointF cursor{300.0, 100.0};
     const auto scaleAfterFirstFrame = display.imageScaleFactor();
@@ -193,7 +193,7 @@ TEST(GpuImageDisplay, AcceptsStridedRawFramesAndKeepsViewportForSameSize) {
 
     auto nextRaw = std::make_shared<const std::vector<std::uint16_t>>(
         std::vector<std::uint16_t>{100, 200, 0, 0, 300, 400, 0, 0});
-    display.setRawFrame(nextRaw, 2, 2, 4);
+    display.setRawFrame(nextRaw, 2, 2, 4, 0, 16384);
 
     EXPECT_DOUBLE_EQ(display.imageScaleFactor(), scaleAfterFirstFrame);
     const auto imagePosAfterNextFrame = display.imagePositionAt(cursor);
@@ -210,7 +210,7 @@ TEST(GpuImageDisplay, RejectsTruncatedRawFramesSafely) {
     auto truncatedRaw =
         std::make_shared<const std::vector<std::uint16_t>>(std::vector<std::uint16_t>{10, 20, 30});
 
-    display.setRawFrame(truncatedRaw, 2, 2, 4);
+    display.setRawFrame(truncatedRaw, 2, 2, 4, 0, 16384);
 
     EXPECT_DOUBLE_EQ(display.imageScaleFactor(), 1.0);
     EXPECT_EQ(display.imageOffset(), QPointF{});

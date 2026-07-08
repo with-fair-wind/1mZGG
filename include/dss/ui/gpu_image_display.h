@@ -53,13 +53,16 @@ public:
      * @param width 有效图像宽度，单位为像素。
      * @param height 有效图像高度，单位为像素。
      * @param stride 每行 RAW 像素跨度，单位为像素；允许大于 width。
+     * @param low 当前帧显示低阈值。
+     * @param high 当前帧显示高阈值。
      */
     void setRawFrame(std::shared_ptr<const std::vector<std::uint16_t>> rawImage,
-                     std::uint32_t width, std::uint32_t height, std::uint32_t stride);
+                     std::uint32_t width, std::uint32_t height, std::uint32_t stride, int low,
+                     int high);
 
     /**
      * @brief 更新显示拉伸参数。
-     * @param autoStretch 当前 UI 是否处于自动拉伸模式；GPU RAW 路径仅使用 manual low/high。
+     * @param autoStretch 当前 UI 是否处于自动拉伸模式；保留该参数用于 UI 状态同步。
      * @param low 手动显示拉伸低阈值。
      * @param high 手动显示拉伸高阈值。
      */

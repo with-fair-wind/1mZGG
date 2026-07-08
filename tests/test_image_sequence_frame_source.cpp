@@ -173,6 +173,29 @@ TEST(ImageSequenceFrameSource, StepForwardAdvancesReplayPositionBeforeContinuous
     EXPECT_EQ(frames[2].displayImage[0], 70U);
 }
 
+TEST(ImageSequenceFrameSource, InitDoesNotRewindAlreadyInitializedSequence) {
+    QCoreApplicationFixture app;
+    const auto dir = tempSequenceDir();
+    const auto first = dir / "idempotent_init_0001.bmp";
+    const auto second = dir / "idempotent_init_0002.bmp";
+    ASSERT_TRUE(writeGrayBmp(first, 10));
+    ASSERT_TRUE(writeGrayBmp(second, 40));
+
+    Dss::Acquisition::ImageSequenceFrameSource source;
+    ASSERT_TRUE(source.setFiles({first, second}).has_value());
+    ASSERT_TRUE(source.init().has_value());
+
+    std::vector<std::uint64_t> frames;
+    source.setFrameCallback(
+        [&](Dss::Processing::FramePacket packet) { frames.push_back(packet.frameSeq); });
+    ASSERT_TRUE(source.stepForward().has_value());
+    EXPECT_EQ(source.nextFrameIndex(), 1U);
+
+    ASSERT_TRUE(source.init().has_value());
+    EXPECT_EQ(source.nextFrameIndex(), 1U);
+    ASSERT_TRUE(source.stepForward().has_value());
+    EXPECT_EQ(frames, std::vector<std::uint64_t>({0U, 1U}));
+}
 TEST(ImageSequenceFrameSource, ReplaysLegacyBmpWithCustomHeaderAsSixteenBitPixels) {
     QCoreApplicationFixture app;
     const auto dir = tempSequenceDir();

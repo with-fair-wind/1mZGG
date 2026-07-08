@@ -42,6 +42,10 @@ struct DisplayRefreshEvent {
     uint32_t stride = 0;                                       ///< 行跨度（字节）
     std::shared_ptr<const std::vector<uint8_t>> displayImage;  ///< 显示用图像数据
     std::shared_ptr<const std::vector<uint16_t>> rawImage;     ///< 可用于实时重拉伸的 16 位原始图像
+    ImageStats stats{};                                        ///< 当前 RAW 图像统计量
+    uint16_t displayStretchLow = 0;                            ///< 当前帧实际使用的显示低阈值
+    uint16_t displayStretchHigh = 1;                           ///< 当前帧实际使用的显示高阈值
+    bool displayStretchWindowValid = false;                    ///< low/high 是否来自有效显示窗口
 };
 
 /// 处理事件：单帧处理完成

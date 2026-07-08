@@ -117,12 +117,16 @@ void ImageProcessor::workerLoop(std::stop_token token) {
         }
 
         auto displayStats = procResult.success ? procResult.stats : packet.stats;
+        DisplayStretchWindow displayWindow{};
+        bool displayWindowValid = false;
         std::vector<std::uint8_t> displayBuffer;
         const auto expectedPixelCount =
             static_cast<std::size_t>(packet.width) * static_cast<std::size_t>(packet.height);
         if (expectedPixelCount > 0U && packet.rawImage.size() == expectedPixelCount) {
             auto display = buildDisplayImage(packet.rawImage, currentDisplayStretchSettings());
             displayStats = display.stats;
+            displayWindow = display.window;
+            displayWindowValid = true;
             displayBuffer = std::move(display.displayImage);
         } else if (!procResult.displayImage.empty()) {
             displayBuffer = std::move(procResult.displayImage);
@@ -137,9 +141,19 @@ void ImageProcessor::workerLoop(std::stop_token token) {
             rawImage =
                 std::make_shared<const std::vector<std::uint16_t>>(std::move(packet.rawImage));
         }
-        m_bus.emit(Dss::Core::DisplayRefreshEvent{packet.frameSeq, packet.width, packet.height,
-                                                  packet.width, std::move(displayImage),
-                                                  std::move(rawImage)});
+
+        Dss::Core::DisplayRefreshEvent refreshEvent{};
+        refreshEvent.frameSeq = packet.frameSeq;
+        refreshEvent.width = packet.width;
+        refreshEvent.height = packet.height;
+        refreshEvent.stride = packet.width;
+        refreshEvent.displayImage = std::move(displayImage);
+        refreshEvent.rawImage = std::move(rawImage);
+        refreshEvent.stats = displayStats;
+        refreshEvent.displayStretchLow = displayWindow.low;
+        refreshEvent.displayStretchHigh = displayWindow.high;
+        refreshEvent.displayStretchWindowValid = displayWindowValid;
+        m_bus.emit(refreshEvent);
         m_bus.emit(Dss::Core::ProcessingCompleteEvent{packet.frameSeq, displayStats});
 
         if (!trackResults.empty()) {

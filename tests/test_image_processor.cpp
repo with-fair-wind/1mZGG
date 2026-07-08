@@ -118,6 +118,9 @@ TEST(ImageProcessor, AppliesManualDisplayStretchToRawFrames) {
     const auto event = displayFuture.get();
     ASSERT_TRUE(event.displayImage);
     EXPECT_EQ(*event.displayImage, (std::vector<uint8_t>{0, 0, 127, 255}));
+    EXPECT_TRUE(event.displayStretchWindowValid);
+    EXPECT_EQ(event.displayStretchLow, 1000U);
+    EXPECT_EQ(event.displayStretchHigh, 5000U);
 }
 
 TEST(ImageProcessor, PublishesManualTrackResultsWithoutProcessingBackend) {

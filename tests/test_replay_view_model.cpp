@@ -1,10 +1,13 @@
 #include <QCoreApplication>
+#include <QEventLoop>
 #include <QImage>
+#include <chrono>
 #include <condition_variable>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <mutex>
+#include <thread>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -52,6 +55,18 @@ using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;
     return image.save(QString::fromStdWString(path.wstring()), "BMP");
 }
 
+template <typename Predicate>
+[[nodiscard]] auto waitForQt(Predicate predicate,
+                             std::chrono::milliseconds timeout = std::chrono::seconds{2}) -> bool {
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (!predicate() && std::chrono::steady_clock::now() < deadline) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+        std::this_thread::sleep_for(std::chrono::milliseconds{1});
+    }
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+    return predicate();
+}
+
 }  // namespace
 
 TEST(ReplayViewModel, UpdatesCurrentReplayFrameFromDisplayEvents) {
@@ -91,24 +106,42 @@ TEST(ReplayViewModel, SelectsSequenceAndStepsForward) {
                                                                          replaySource);
 
     Dss::Ui::ReplayViewModel replay({.bus = bus, .registry = registry});
+    std::vector<bool> busyStates;
+    const auto busyConnection =
+        QObject::connect(&replay, &Dss::Ui::ReplayViewModel::replayBusyChanged,
+                         [&busyStates](bool busy) { busyStates.push_back(busy); });
+
     ASSERT_TRUE(replay.selectReplayFiles(QStringList{QString::fromStdWString(first.wstring()),
                                                      QString::fromStdWString(second.wstring())}));
+    EXPECT_TRUE(replay.replayBusy());
+    ASSERT_TRUE(waitForQt([&] { return !replay.replayBusy(); }));
     EXPECT_EQ(replay.replayFrameCount(), 2);
     EXPECT_EQ(replay.replayCurrentFrame(), 0);
+    EXPECT_GE(busyStates.size(), 2U);
+    EXPECT_TRUE(busyStates.front());
+    EXPECT_FALSE(busyStates.back());
 
     EXPECT_TRUE(replay.stepReplayForward());
+    EXPECT_TRUE(replay.replayBusy());
+    ASSERT_TRUE(waitForQt([&] { return !replay.replayBusy(); }));
     EXPECT_EQ(replay.replayCurrentFrame(), 1);
 
     EXPECT_TRUE(replay.stepReplayForward());
+    ASSERT_TRUE(waitForQt([&] { return !replay.replayBusy(); }));
     EXPECT_EQ(replay.replayCurrentFrame(), 2);
 
     EXPECT_TRUE(replay.stepReplayBackward());
+    ASSERT_TRUE(waitForQt([&] { return !replay.replayBusy(); }));
     EXPECT_EQ(replay.replayCurrentFrame(), 1);
 
     EXPECT_TRUE(replay.seekReplayFrame(1));
     EXPECT_TRUE(replay.stepReplayForward());
+    ASSERT_TRUE(waitForQt([&] { return !replay.replayBusy(); }));
     EXPECT_EQ(replay.replayCurrentFrame(), 2);
 
-    EXPECT_FALSE(replay.stepReplayForward());
+    EXPECT_TRUE(replay.stepReplayForward());
+    ASSERT_TRUE(waitForQt([&] { return !replay.replayBusy(); }));
     EXPECT_EQ(replay.replayCurrentFrame(), 2);
+
+    QObject::disconnect(busyConnection);
 }

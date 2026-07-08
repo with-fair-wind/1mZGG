@@ -286,13 +286,16 @@ auto ImageSequenceFrameSource::stepForward() -> std::expected<void, std::string>
 }
 
 /**
- * @brief 加载首帧以确定帧尺寸并重置播放索引
+ * @brief 加载首帧以确定帧尺寸；已初始化时保持当前播放索引
  * @return 序列为空或首帧加载失败时返回错误
  */
 auto ImageSequenceFrameSource::init() -> std::expected<void, std::string> {
     std::vector<std::filesystem::path> files;
     {
         std::lock_guard lock(m_mutex);
+        if (m_initialized && m_width > 0U && m_height > 0U) {
+            return {};
+        }
         files = m_files;
     }
     if (files.empty()) {
