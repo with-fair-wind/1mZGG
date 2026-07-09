@@ -7,8 +7,8 @@
 #include <gtest/gtest.h>
 
 #include "dss/acquisition/sapera_frame_source.h"
-#include "dss/core/event_bus.h"
 #include "dss/core/events.h"
+#include "dss/core/message_bus.h"
 
 namespace {
 
@@ -78,7 +78,7 @@ TEST(SaperaFrameSourceContract, CopiesSdkBufferBeforeCallbackReturns) {
 }
 
 TEST(SaperaFrameSourceContract, ConvertsBackendErrorsAndPublishesAcquisitionEvent) {
-    Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock> bus;
+    Dss::Core::MessageBus bus;
     std::vector<Dss::Core::AcquisitionErrorEvent> errors;
     auto connection = bus.subscribe<Dss::Core::AcquisitionErrorEvent>(
         [&](const auto& event) { errors.push_back(event); });
@@ -98,7 +98,7 @@ TEST(SaperaFrameSourceContract, ConvertsBackendErrorsAndPublishesAcquisitionEven
 }
 
 TEST(SaperaFrameSourceContract, RejectsWrongSdkBufferSize) {
-    Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock> bus;
+    Dss::Core::MessageBus bus;
     std::vector<Dss::Core::AcquisitionErrorEvent> errors;
     auto connection = bus.subscribe<Dss::Core::AcquisitionErrorEvent>(
         [&](const auto& event) { errors.push_back(event); });

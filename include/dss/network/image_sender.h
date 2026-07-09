@@ -11,7 +11,7 @@
 #include <thread>
 #include <vector>
 
-#include "dss/core/event_bus.h"
+#include "dss/core/message_bus.h"
 #include "dss/network/i_network_channel.h"
 #include "dss/network/udp_channel.h"
 
@@ -20,7 +20,7 @@ namespace Dss::Network {
 /// 图像 UDP 发送服务，将图像分片编码后通过后台线程异步发送
 class ImageSender : public INetworkChannel {
 public:
-    using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;  ///< 事件总线类型别名
+    using MessageBus = Dss::Core::MessageBus;  ///< 事件总线类型别名
 
     static constexpr std::size_t MaxUdpPayload = 60U * 1024U;  ///< 单个 UDP 分片最大载荷（字节）
     static constexpr std::size_t PacketHeaderSize = 20U;       ///< 分片包头长度（字节）

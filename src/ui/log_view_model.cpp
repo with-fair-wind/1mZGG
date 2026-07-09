@@ -2,6 +2,8 @@
 
 #include <utility>
 
+#include "dss/ui/qt_thread_utils.h"
+
 namespace Dss::Ui {
 namespace {
 
@@ -94,26 +96,40 @@ void LogViewModel::setLogMinimumLevel(int level) {
 
 void LogViewModel::setupSubscriptions() {
     m_connections.push_back(m_bus.subscribe<Dss::Core::NetworkTransmissionErrorEvent>(
-        [this](const Dss::Core::NetworkTransmissionErrorEvent& e) {
-            onNetworkTransmissionError(e);
+        [this](const Dss::Core::NetworkTransmissionErrorEvent& event) {
+            auto eventCopy = event;
+            invokeOnObjectThread(this, [this, eventCopy = std::move(eventCopy)] {
+                onNetworkTransmissionError(eventCopy);
+            });
         }));
 
     m_connections.push_back(m_bus.subscribe<Dss::Core::SerialFrameErrorEvent>(
-        [this](const Dss::Core::SerialFrameErrorEvent& e) { onSerialFrameError(e); }));
+        [this](const Dss::Core::SerialFrameErrorEvent& event) {
+            auto eventCopy = event;
+            invokeOnObjectThread(
+                this, [this, eventCopy = std::move(eventCopy)] { onSerialFrameError(eventCopy); });
+        }));
 
     m_connections.push_back(m_bus.subscribe<Dss::Core::SerialDecodeErrorEvent>(
-        [this](const Dss::Core::SerialDecodeErrorEvent& e) { onSerialDecodeError(e); }));
+        [this](const Dss::Core::SerialDecodeErrorEvent& event) {
+            auto eventCopy = event;
+            invokeOnObjectThread(
+                this, [this, eventCopy = std::move(eventCopy)] { onSerialDecodeError(eventCopy); });
+        }));
+
     m_connections.push_back(m_bus.subscribe<Dss::Core::StorageWriteErrorEvent>(
         [this](const Dss::Core::StorageWriteErrorEvent& event) {
-            appendLogEntry(
-                Dss::Core::LogLevel::Error,
-                QString("Storage write failed [%1] %2: %3")
-                    .arg(QString::fromStdString(event.backend), QString::fromStdString(event.path),
-                         QString::fromStdString(event.message)));
+            auto eventCopy = event;
+            invokeOnObjectThread(
+                this, [this, eventCopy = std::move(eventCopy)] { onStorageWriteError(eventCopy); });
         }));
 
     m_connections.push_back(m_bus.subscribe<Dss::Core::LogMessageEvent>(
-        [this](const Dss::Core::LogMessageEvent& e) { onLogMessage(e); }));
+        [this](const Dss::Core::LogMessageEvent& event) {
+            auto eventCopy = event;
+            invokeOnObjectThread(
+                this, [this, eventCopy = std::move(eventCopy)] { onLogMessage(eventCopy); });
+        }));
 }
 
 void LogViewModel::onNetworkTransmissionError(
@@ -132,6 +148,13 @@ void LogViewModel::onSerialDecodeError(const Dss::Core::SerialDecodeErrorEvent& 
 
 void LogViewModel::onLogMessage(const Dss::Core::LogMessageEvent& event) {
     appendLogEntry(event.level, QString::fromStdString(event.message));
+}
+
+void LogViewModel::onStorageWriteError(const Dss::Core::StorageWriteErrorEvent& event) {
+    appendLogEntry(Dss::Core::LogLevel::Error, QString("Storage write failed [%1] %2: %3")
+                                                   .arg(QString::fromStdString(event.backend),
+                                                        QString::fromStdString(event.path),
+                                                        QString::fromStdString(event.message)));
 }
 
 void LogViewModel::appendLogEntry(Dss::Core::LogLevel level, QString text) {

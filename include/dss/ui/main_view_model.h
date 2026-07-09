@@ -5,8 +5,8 @@
 #include <string>
 #include <vector>
 
-#include "dss/core/event_bus.h"
 #include "dss/core/events.h"
+#include "dss/core/message_bus.h"
 #include "dss/core/service_registry.h"
 #include "dss/ui/data_exchange_view_model.h"
 #include "dss/ui/display_view_model.h"
@@ -31,8 +31,7 @@ class MainViewModel : public QObject {
     Q_OBJECT
 
 public:
-    using MessageBus =
-        Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;  ///< 事件总线类型别名。
+    using MessageBus = Dss::Core::MessageBus;  ///< 事件总线类型别名。
 
     /**
      * @brief 构造 UI 层主 ViewModel。

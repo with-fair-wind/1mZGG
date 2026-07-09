@@ -9,7 +9,7 @@
 #include <string>
 
 #include "dss/acquisition/i_frame_source.h"
-#include "dss/core/event_bus.h"
+#include "dss/core/message_bus.h"
 
 namespace Dss::Acquisition {
 
@@ -60,8 +60,7 @@ public:
  */
 class SaperaFrameSource final : public IFrameSource {
 public:
-    using MessageBus =
-        Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;  ///< 跨线程消息总线类型
+    using MessageBus = Dss::Core::MessageBus;  ///< 跨线程消息总线类型
 
     /**
      * @brief 创建 Sapera 帧源。

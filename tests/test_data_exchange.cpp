@@ -9,7 +9,7 @@
 
 namespace {
 
-using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;
+using MessageBus = Dss::Core::MessageBus;
 
 }  // namespace
 

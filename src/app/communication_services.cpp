@@ -11,6 +11,7 @@
 #include "dss/acquisition/sapera_frame_source.h"
 #endif
 #include "dss/app/runtime_diagnostics.h"
+#include "dss/app/service_keys.h"
 #include "dss/app/track_result_data_exchange_bridge.h"
 #include "dss/comm/display_channel.h"
 #include "dss/comm/exposure_channel.h"
@@ -38,30 +39,30 @@ void ApplicationContext::registerCommunicationServices() {
     auto masterControl = std::make_shared<Dss::Comm::MasterControlChannel>(m_bus);
     auto servo = std::make_shared<Dss::Comm::ServoChannel>(m_bus);
 
-    m_registry.registerService<Dss::Comm::ISerialChannel>("display", display);
-    m_registry.registerService<Dss::Comm::ISerialChannel>("exposure", exposure);
-    m_registry.registerService<Dss::Comm::IExposureCommandPort>("exposure", exposure);
-    m_registry.registerService<Dss::Comm::ISerialChannel>("master_control", masterControl);
-    m_registry.registerService<Dss::Comm::IMasterControlStatusPort>("master_control",
+    m_registry.registerService<Dss::Comm::ISerialChannel>(ServiceKey::display, display);
+    m_registry.registerService<Dss::Comm::ISerialChannel>(ServiceKey::exposure, exposure);
+    m_registry.registerService<Dss::Comm::IExposureCommandPort>(ServiceKey::exposure, exposure);
+    m_registry.registerService<Dss::Comm::ISerialChannel>(ServiceKey::masterControl, masterControl);
+    m_registry.registerService<Dss::Comm::IMasterControlStatusPort>(ServiceKey::masterControl,
                                                                     masterControl);
-    m_registry.registerService<Dss::Comm::ISerialChannel>("servo", servo);
-    m_registry.registerService<Dss::Comm::IServoCorrectionPort>("servo", servo);
+    m_registry.registerService<Dss::Comm::ISerialChannel>(ServiceKey::servo, servo);
+    m_registry.registerService<Dss::Comm::IServoCorrectionPort>(ServiceKey::servo, servo);
 
     auto imageSender = std::make_shared<Dss::Network::ImageSender>(m_bus);
     auto heartbeat = std::make_shared<Dss::Network::Heartbeat>(m_bus);
     auto errorDiagnostics = std::make_shared<Dss::Network::ErrorDiagnostics>(m_bus);
     auto atmosReceiver = std::make_shared<Dss::Network::AtmosReceiver>(m_bus);
 
-    m_registry.registerService<Dss::Network::ImageSender>("image_sender", imageSender);
-    m_registry.registerService<Dss::Network::INetworkChannel>("image_sender", imageSender);
-    m_registry.registerService<Dss::Network::Heartbeat>("heartbeat", heartbeat);
-    m_registry.registerService<Dss::Network::INetworkChannel>("heartbeat", heartbeat);
-    m_registry.registerService<Dss::Network::ErrorDiagnostics>("error_diagnostics",
+    m_registry.registerService<Dss::Network::ImageSender>(ServiceKey::imageSender, imageSender);
+    m_registry.registerService<Dss::Network::INetworkChannel>(ServiceKey::imageSender, imageSender);
+    m_registry.registerService<Dss::Network::Heartbeat>(ServiceKey::heartbeat, heartbeat);
+    m_registry.registerService<Dss::Network::INetworkChannel>(ServiceKey::heartbeat, heartbeat);
+    m_registry.registerService<Dss::Network::ErrorDiagnostics>(ServiceKey::errorDiagnostics,
                                                                errorDiagnostics);
-    m_registry.registerService<Dss::Network::INetworkChannel>("error_diagnostics",
+    m_registry.registerService<Dss::Network::INetworkChannel>(ServiceKey::errorDiagnostics,
                                                               errorDiagnostics);
     auto dataExchange = std::make_shared<Dss::Network::DataExchange>(m_bus);
-    m_registry.registerService<Dss::Network::DataExchange>("data_exchange", dataExchange);
+    m_registry.registerService<Dss::Network::DataExchange>(ServiceKey::dataExchange, dataExchange);
     auto trackResultDataExchangeBridge = std::make_shared<Dss::App::TrackResultDataExchangeBridge>(
         m_bus,
         [dataExchange](const Dss::Network::GxtcMetadata& metadata,
@@ -76,12 +77,14 @@ void ApplicationContext::registerCommunicationServices() {
             }
         });
     m_registry.registerService<Dss::App::TrackResultDataExchangeBridge>(
-        "track_result_data_exchange_bridge", std::move(trackResultDataExchangeBridge));
-    m_registry.registerService<Dss::Network::AtmosReceiver>("atmos_receiver", atmosReceiver);
-    m_registry.registerService<Dss::Network::INetworkChannel>("atmos_receiver", atmosReceiver);
+        ServiceKey::trackResultDataExchangeBridge, std::move(trackResultDataExchangeBridge));
+    m_registry.registerService<Dss::Network::AtmosReceiver>(ServiceKey::atmosReceiver,
+                                                            atmosReceiver);
+    m_registry.registerService<Dss::Network::INetworkChannel>(ServiceKey::atmosReceiver,
+                                                              atmosReceiver);
     m_registry.registerService<Dss::Acquisition::ICameraController>(
-        "camera", std::make_shared<Dss::Acquisition::CommandOnlyCameraController>(
-                      Dss::Core::Config::instance().commNet().cameraPort));
+        ServiceKey::camera, std::make_shared<Dss::Acquisition::CommandOnlyCameraController>(
+                                Dss::Core::Config::instance().commNet().cameraPort));
     auto localImageStorage = std::make_shared<Dss::Storage::LocalImageStorageBackend>(
         Dss::Core::Config::instance().paths().dataRoot);
     auto trackDataStorage = std::make_shared<Dss::Storage::TrackDataStorageBackend>(
@@ -98,10 +101,10 @@ void ApplicationContext::registerCommunicationServices() {
         Dss::Acquisition::SaperaConfig{
             .ccfPath = Dss::Core::Config::instance().paths().ccfFile.string(),
         },
-        nullptr,
-        &m_bus);
+        nullptr, &m_bus);
     (void)frameSource->registerSource(Dss::Acquisition::FrameSourceMode::Live, liveSource);
-    m_registry.registerService<Dss::Acquisition::IFrameSource>("sapera_source", liveSource);
+    m_registry.registerService<Dss::Acquisition::IFrameSource>(ServiceKey::saperaSource,
+                                                               liveSource);
 #endif
     frameSource->setFrameCallback(
         [imageProcessor, localImageStorage](Dss::Processing::FramePacket packet) {
@@ -140,22 +143,25 @@ void ApplicationContext::registerCommunicationServices() {
             .trackDroppedRequests =
                 [trackDataStorage] { return trackDataStorage->droppedRequests(); },
         });
-    m_registry.registerService<Dss::App::RuntimeDiagnostics>("runtime_diagnostics",
+    m_registry.registerService<Dss::App::RuntimeDiagnostics>(ServiceKey::runtimeDiagnostics,
                                                              runtimeDiagnostics);
-    m_registry.registerService<Dss::Processing::ImageProcessor>("image_processor", imageProcessor);
-    m_registry.registerService<Dss::Acquisition::FrameSourceCoordinator>("frame_source",
+    m_registry.registerService<Dss::Processing::ImageProcessor>(ServiceKey::imageProcessor,
+                                                                imageProcessor);
+    m_registry.registerService<Dss::Acquisition::FrameSourceCoordinator>(ServiceKey::frameSource,
                                                                          frameSource);
-    m_registry.registerService<Dss::Acquisition::IFrameSource>("frame_source", frameSource);
-    m_registry.registerService<Dss::Acquisition::ImageSequenceFrameSource>("replay_source",
+    m_registry.registerService<Dss::Acquisition::IFrameSource>(ServiceKey::frameSource,
+                                                               frameSource);
+    m_registry.registerService<Dss::Acquisition::ImageSequenceFrameSource>(ServiceKey::replaySource,
                                                                            replaySource);
-    m_registry.registerService<Dss::Acquisition::IFrameSource>("replay_source", replaySource);
-    m_registry.registerService<Dss::Storage::LocalImageStorageBackend>("image_storage",
+    m_registry.registerService<Dss::Acquisition::IFrameSource>(ServiceKey::replaySource,
+                                                               replaySource);
+    m_registry.registerService<Dss::Storage::LocalImageStorageBackend>(ServiceKey::imageStorage,
                                                                        localImageStorage);
-    m_registry.registerService<Dss::Storage::IStorageBackend>("image_storage",
+    m_registry.registerService<Dss::Storage::IStorageBackend>(ServiceKey::imageStorage,
                                                               std::move(localImageStorage));
-    m_registry.registerService<Dss::Storage::TrackDataStorageBackend>("track_data_storage",
+    m_registry.registerService<Dss::Storage::TrackDataStorageBackend>(ServiceKey::trackDataStorage,
                                                                       trackDataStorage);
-    m_registry.registerService<Dss::Storage::IStorageBackend>("track_data_storage",
+    m_registry.registerService<Dss::Storage::IStorageBackend>(ServiceKey::trackDataStorage,
                                                               std::move(trackDataStorage));
 #endif
 }

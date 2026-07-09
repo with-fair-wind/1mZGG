@@ -5,7 +5,7 @@
 #include <functional>
 #include <vector>
 
-#include "dss/core/event_bus.h"
+#include "dss/core/message_bus.h"
 
 namespace Dss::App {
 
@@ -41,8 +41,7 @@ struct RuntimeDiagnosticsSources {
  */
 class RuntimeDiagnostics {
 public:
-    using MessageBus =
-        Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;  ///< 跨线程消息总线类型
+    using MessageBus = Dss::Core::MessageBus;  ///< 跨线程消息总线类型
 
     /**
      * @brief 创建诊断汇总器并订阅错误事件。

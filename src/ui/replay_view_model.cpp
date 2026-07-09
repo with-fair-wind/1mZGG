@@ -1,7 +1,5 @@
 #include "dss/ui/replay_view_model.h"
 
-#include <QMetaObject>
-#include <QThread>
 #include <QTimer>
 #include <exception>
 #include <filesystem>
@@ -12,7 +10,9 @@
 #include "dss/acquisition/i_frame_source.h"
 #include "dss/acquisition/image_sequence_frame_source.h"
 #include "dss/app/runtime_diagnostics.h"
+#include "dss/app/service_keys.h"
 #include "dss/processing/image_processor.h"
+#include "dss/ui/qt_thread_utils.h"
 
 namespace Dss::Ui {
 namespace {
@@ -68,8 +68,8 @@ bool ReplayViewModel::selectReplayFiles(const QStringList& files) {
         stopGrab();
     }
 
-    auto replaySource =
-        m_registry.tryGet<Dss::Acquisition::ImageSequenceFrameSource>("replay_source");
+    auto replaySource = m_registry.tryGet<Dss::Acquisition::ImageSequenceFrameSource>(
+        Dss::App::ServiceKey::replaySource);
     if (!replaySource) {
         Q_EMIT statusTextChanged("Replay source is not registered");
         return false;
@@ -87,7 +87,8 @@ bool ReplayViewModel::selectReplayFiles(const QStringList& files) {
         return false;
     }
 
-    auto coordinator = m_registry.tryGet<Dss::Acquisition::FrameSourceCoordinator>("frame_source");
+    auto coordinator = m_registry.tryGet<Dss::Acquisition::FrameSourceCoordinator>(
+        Dss::App::ServiceKey::frameSource);
     return startReplayTask("Replay: Loading", [replaySource, coordinator, paths = std::move(paths)](
                                                   std::stop_token token) mutable {
         ReplayTaskResult result{};
@@ -142,10 +143,13 @@ void ReplayViewModel::startGrab() {
         return;
     }
 
-    auto processor = m_registry.tryGet<Dss::Processing::ImageProcessor>("image_processor");
-    auto frameSource = m_registry.tryGet<Dss::Acquisition::IFrameSource>("frame_source");
+    auto processor =
+        m_registry.tryGet<Dss::Processing::ImageProcessor>(Dss::App::ServiceKey::imageProcessor);
+    auto frameSource =
+        m_registry.tryGet<Dss::Acquisition::IFrameSource>(Dss::App::ServiceKey::frameSource);
     if (!frameSource) {
-        frameSource = m_registry.tryGet<Dss::Acquisition::IFrameSource>("replay_source");
+        frameSource =
+            m_registry.tryGet<Dss::Acquisition::IFrameSource>(Dss::App::ServiceKey::replaySource);
     }
     if (!processor || !frameSource) {
         Q_EMIT statusTextChanged("Replay services are not registered");
@@ -161,8 +165,8 @@ void ReplayViewModel::startGrab() {
         setReplayCurrentFrame(0);
     }
 
-    if (auto replaySource =
-            m_registry.tryGet<Dss::Acquisition::ImageSequenceFrameSource>("replay_source");
+    if (auto replaySource = m_registry.tryGet<Dss::Acquisition::ImageSequenceFrameSource>(
+            Dss::App::ServiceKey::replaySource);
         replaySource && replaySource->nextFrameIndex() >= replaySource->frameCount()) {
         (void)replaySource->seek(0);
         setReplayCurrentFrame(0);
@@ -175,15 +179,18 @@ void ReplayViewModel::startGrab() {
 }
 
 void ReplayViewModel::stopGrab() {
-    auto frameSource = m_registry.tryGet<Dss::Acquisition::IFrameSource>("frame_source");
+    auto frameSource =
+        m_registry.tryGet<Dss::Acquisition::IFrameSource>(Dss::App::ServiceKey::frameSource);
     if (!frameSource) {
-        frameSource = m_registry.tryGet<Dss::Acquisition::IFrameSource>("replay_source");
+        frameSource =
+            m_registry.tryGet<Dss::Acquisition::IFrameSource>(Dss::App::ServiceKey::replaySource);
     }
     if (frameSource) {
         frameSource->stop();
     }
 
-    auto processor = m_registry.tryGet<Dss::Processing::ImageProcessor>("image_processor");
+    auto processor =
+        m_registry.tryGet<Dss::Processing::ImageProcessor>(Dss::App::ServiceKey::imageProcessor);
     if (processor) {
         processor->stop();
     }
@@ -198,8 +205,8 @@ bool ReplayViewModel::stepReplayForward() {
         stopGrab();
     }
 
-    auto replaySource =
-        m_registry.tryGet<Dss::Acquisition::ImageSequenceFrameSource>("replay_source");
+    auto replaySource = m_registry.tryGet<Dss::Acquisition::ImageSequenceFrameSource>(
+        Dss::App::ServiceKey::replaySource);
     if (!replaySource) {
         Q_EMIT statusTextChanged("Replay source is not registered");
         return false;
@@ -225,8 +232,8 @@ bool ReplayViewModel::stepReplayForward() {
 }
 
 bool ReplayViewModel::stepReplayBackward() {
-    auto replaySource =
-        m_registry.tryGet<Dss::Acquisition::ImageSequenceFrameSource>("replay_source");
+    auto replaySource = m_registry.tryGet<Dss::Acquisition::ImageSequenceFrameSource>(
+        Dss::App::ServiceKey::replaySource);
     if (!replaySource) {
         Q_EMIT statusTextChanged("Replay source is not registered");
         return false;
@@ -273,8 +280,8 @@ bool ReplayViewModel::seekReplayFrame(int index) {
         return false;
     }
 
-    auto replaySource =
-        m_registry.tryGet<Dss::Acquisition::ImageSequenceFrameSource>("replay_source");
+    auto replaySource = m_registry.tryGet<Dss::Acquisition::ImageSequenceFrameSource>(
+        Dss::App::ServiceKey::replaySource);
     if (!replaySource || index < 0) {
         Q_EMIT statusTextChanged("Replay frame index is invalid");
         return false;
@@ -290,7 +297,8 @@ bool ReplayViewModel::seekReplayFrame(int index) {
 }
 
 void ReplayViewModel::refreshRuntimeDiagnostics() {
-    auto diagnostics = m_registry.tryGet<Dss::App::RuntimeDiagnostics>("runtime_diagnostics");
+    auto diagnostics =
+        m_registry.tryGet<Dss::App::RuntimeDiagnostics>(Dss::App::ServiceKey::runtimeDiagnostics);
     if (!diagnostics) {
         return;
     }
@@ -342,8 +350,7 @@ bool ReplayViewModel::startReplayTask(const QString& loadingText, ReplayTask tas
                 result.statusText = "Replay task failed";
             }
 
-            QMetaObject::invokeMethod(
-                this, [this, result] { finishReplayTask(result); }, Qt::QueuedConnection);
+            invokeOnObjectThread(this, [this, result] { finishReplayTask(result); });
         });
     return true;
 }
@@ -368,12 +375,7 @@ void ReplayViewModel::setupSubscriptions() {
 
 void ReplayViewModel::onDisplayRefresh(const Dss::Core::DisplayRefreshEvent& event) {
     const auto frame = static_cast<int>(event.frameSeq) + 1;
-    if (QThread::currentThread() != thread()) {
-        QMetaObject::invokeMethod(
-            this, [this, frame] { setReplayCurrentFrame(frame); }, Qt::QueuedConnection);
-        return;
-    }
-    setReplayCurrentFrame(frame);
+    invokeOnObjectThread(this, [this, frame] { setReplayCurrentFrame(frame); });
 }
 
 void ReplayViewModel::setReplayCurrentFrame(int frame) {

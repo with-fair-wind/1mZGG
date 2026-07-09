@@ -5,7 +5,7 @@
 #include <mutex>
 #include <thread>
 
-#include "dss/core/event_bus.h"
+#include "dss/core/message_bus.h"
 #include "dss/processing/bounded_channel.h"
 #include "dss/processing/display_stretch.h"
 #include "dss/processing/frame_packet.h"
@@ -19,7 +19,7 @@ namespace Dss::Processing {
 class ImageProcessor {
 public:
     /// 消息总线类型别名
-    using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;
+    using MessageBus = Dss::Core::MessageBus;
 
     /**
      * @brief 构造图像处理器

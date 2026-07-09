@@ -119,6 +119,10 @@ if(TARGET dss_acquisition_qt)
 endif()
 
 if(TARGET dss_ui_qt)
+    dss_add_qt_test(test_image_viewport
+        test_image_viewport.cpp
+        dss_ui_qt
+    )
     dss_add_qt_test(test_image_display
         test_image_display.cpp
         dss_ui_qt

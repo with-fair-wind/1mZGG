@@ -5,7 +5,7 @@
 #include <span>
 #include <string>
 
-#include "dss/core/event_bus.h"
+#include "dss/core/message_bus.h"
 #include "dss/network/i_network_channel.h"
 #include "dss/network/udp_channel.h"
 
@@ -14,7 +14,7 @@ namespace Dss::Network {
 /// 气象数据 UDP 接收服务，解码报文并通过事件总线发布大气采样事件
 class AtmosReceiver : public INetworkChannel {
 public:
-    using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;  ///< 事件总线类型别名
+    using MessageBus = Dss::Core::MessageBus;  ///< 事件总线类型别名
 
     /**
      * @brief 构造气象接收服务

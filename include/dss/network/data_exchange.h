@@ -6,7 +6,7 @@
 #include <string>
 #include <string_view>
 
-#include "dss/core/event_bus.h"
+#include "dss/core/message_bus.h"
 #include "dss/network/data_exchange_protocol.h"
 #include "dss/network/udp_channel.h"
 
@@ -15,7 +15,7 @@ namespace Dss::Network {
 /// 数据交换服务，通过双 UDP 通道分别发送 GXTC 与 GDCL 协议报文
 class DataExchange {
 public:
-    using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;  ///< 事件总线类型别名
+    using MessageBus = Dss::Core::MessageBus;  ///< 事件总线类型别名
 
     /**
      * @brief 构造数据交换服务

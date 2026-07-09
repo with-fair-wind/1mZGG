@@ -1,8 +1,13 @@
 #include <QCoreApplication>
+#include <QEventLoop>
 #include <QString>
+#include <QThread>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <memory>
+#include <thread>
 
 #include <gtest/gtest.h>
 
@@ -12,6 +17,8 @@
 #include "dss/ui/main_view_model.h"
 
 namespace {
+
+using namespace std::chrono_literals;
 
 /// @brief 创建或复用测试进程中的 QCoreApplication 实例。
 auto ensureQCoreApplication() -> QCoreApplication& {
@@ -24,6 +31,20 @@ auto ensureQCoreApplication() -> QCoreApplication& {
         app = std::make_unique<QCoreApplication>(argc, argv);
     }
     return *QCoreApplication::instance();
+}
+
+template <typename T>
+auto waitForReady(QCoreApplication& app, std::future<T>& future,
+                  std::chrono::milliseconds timeout = 2s) -> bool {
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline) {
+        if (future.wait_for(0ms) == std::future_status::ready) {
+            return true;
+        }
+        app.processEvents(QEventLoop::AllEvents, 10);
+        std::this_thread::sleep_for(5ms);
+    }
+    return future.wait_for(0ms) == std::future_status::ready;
 }
 
 }  // namespace
@@ -66,6 +87,36 @@ TEST(MainViewModel, MasterControlCoordinatesExposureAndTrackingMode) {
     EXPECT_DOUBLE_EQ(viewModel.exposure(), 12.5);
     EXPECT_EQ(exposureChanges, 1);
     EXPECT_EQ(viewModel.tracking().trackMode(), static_cast<int>(Dss::Core::TrackMode::Geo));
+}
+
+TEST(MainViewModel, MasterControlEventFromWorkerThreadUpdatesOnObjectThread) {
+    auto& app = ensureQCoreApplication();
+
+    Dss::Ui::MainViewModel::MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    Dss::Ui::MainViewModel viewModel(bus, registry);
+
+    std::promise<QThread*> signalThreadPromise;
+    auto signalThreadFuture = signalThreadPromise.get_future();
+    QObject::connect(&viewModel, &Dss::Ui::MainViewModel::exposureChanged,
+                     [&signalThreadPromise](double) {
+                         signalThreadPromise.set_value(QThread::currentThread());
+                     });
+
+    std::jthread worker([&bus] {
+        bus.emit(Dss::Core::MasterControlEvent{
+            .exposure = 22.5,
+            .trackMode = static_cast<int>(Dss::Core::TrackMode::Leo),
+            .save = false,
+            .grab = false,
+        });
+    });
+    worker.join();
+
+    ASSERT_TRUE(waitForReady(app, signalThreadFuture));
+    EXPECT_EQ(signalThreadFuture.get(), viewModel.thread());
+    EXPECT_DOUBLE_EQ(viewModel.exposure(), 22.5);
+    EXPECT_EQ(viewModel.tracking().trackMode(), static_cast<int>(Dss::Core::TrackMode::Leo));
 }
 TEST(MainViewModel, MasterControlCreatesTaskSpecificStorageSession) {
     auto& app = ensureQCoreApplication();

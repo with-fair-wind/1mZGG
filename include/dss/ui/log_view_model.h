@@ -1,14 +1,13 @@
 #pragma once
 
-#include <cstddef>
-#include <vector>
-
 #include <QObject>
 #include <QString>
 #include <QStringList>
+#include <cstddef>
+#include <vector>
 
-#include "dss/core/events.h"
 #include "dss/core/event_bus.h"
+#include "dss/core/events.h"
 #include "dss/ui/view_model_context.h"
 
 namespace Dss::Ui {
@@ -119,6 +118,12 @@ private:
     void onLogMessage(const Dss::Core::LogMessageEvent& event);
 
     /**
+     * @brief 将存储写入失败事件转发到 UI 日志页。
+     * @param event 存储写入失败事件。
+     */
+    void onStorageWriteError(const Dss::Core::StorageWriteErrorEvent& event);
+
+    /**
      * @brief 追加一条 UI 日志并维护缓存容量。
      * @param level 日志级别。
      * @param text 日志展示文本。
@@ -132,11 +137,10 @@ private:
      */
     [[nodiscard]] bool isLogLevelVisible(Dss::Core::LogLevel level) const;
 
-    UiServiceContext::MessageBus& m_bus;  ///< 应用事件总线。
-    Dss::Core::LogLevel m_logMinimumLevel =
-        Dss::Core::LogLevel::Info;                 ///< 日志页最小显示级别。
-    std::vector<UiLogEntry> m_logEntries;          ///< UI 日志缓存。
-    std::vector<Dss::Evt::ScopedConnection> m_connections;  ///< 事件订阅连接列表。
+    UiServiceContext::MessageBus& m_bus;                                ///< 应用事件总线。
+    Dss::Core::LogLevel m_logMinimumLevel = Dss::Core::LogLevel::Info;  ///< 日志页最小显示级别。
+    std::vector<UiLogEntry> m_logEntries;                               ///< UI 日志缓存。
+    std::vector<Dss::Evt::ScopedConnection> m_connections;              ///< 事件订阅连接列表。
 };
 
 }  // namespace Dss::Ui

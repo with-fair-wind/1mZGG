@@ -1,5 +1,6 @@
 #include "dss/ui/data_exchange_view_model.h"
 
+#include "dss/app/service_keys.h"
 #include "dss/core/config.h"
 #include "dss/network/data_exchange.h"
 #include "dss/ui/network_endpoint_helpers.h"
@@ -48,7 +49,8 @@ int DataExchangeViewModel::dataExchangeGdclRemotePort() const {
 }
 
 void DataExchangeViewModel::closeForEndpointReconfigure() {
-    if (auto dataExchange = m_registry.tryGet<Dss::Network::DataExchange>("data_exchange");
+    if (auto dataExchange =
+            m_registry.tryGet<Dss::Network::DataExchange>(Dss::App::ServiceKey::dataExchange);
         dataExchange && dataExchange->isOpen()) {
         dataExchange->close();
     }
@@ -83,7 +85,8 @@ bool DataExchangeViewModel::applyDataExchangeEndpoints(
 }
 
 bool DataExchangeViewModel::openDataExchange() {
-    auto dataExchange = m_registry.tryGet<Dss::Network::DataExchange>("data_exchange");
+    auto dataExchange =
+        m_registry.tryGet<Dss::Network::DataExchange>(Dss::App::ServiceKey::dataExchange);
     if (!dataExchange) {
         setDataExchangeOpen(false);
         Q_EMIT statusTextChanged("Data exchange service is not registered");
@@ -111,7 +114,8 @@ bool DataExchangeViewModel::openDataExchange() {
 }
 
 void DataExchangeViewModel::closeDataExchange() {
-    auto dataExchange = m_registry.tryGet<Dss::Network::DataExchange>("data_exchange");
+    auto dataExchange =
+        m_registry.tryGet<Dss::Network::DataExchange>(Dss::App::ServiceKey::dataExchange);
     if (dataExchange) {
         dataExchange->close();
     }

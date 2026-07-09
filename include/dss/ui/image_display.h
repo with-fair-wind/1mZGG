@@ -6,6 +6,8 @@
 #include <QWheelEvent>
 #include <QWidget>
 
+#include "dss/ui/image_viewport.h"
+
 namespace Dss::Ui {
 
 /// 可缩放、平移的灰度图像显示控件
@@ -72,24 +74,8 @@ protected:
     void wheelEvent(QWheelEvent* event) override;
 
 private:
-    /**
-     * @brief 计算整幅图像适应控件的缩放比例。
-     * @return 保持纵横比并完整显示图像的最小比例。
-     */
-    [[nodiscard]] auto fitScale() const -> double;
-    /**
-     * @brief 将图像坐标转换为控件坐标。
-     * @param imagePos 图像坐标。
-     * @return 应用当前缩放和偏移后的控件坐标。
-     */
-    [[nodiscard]] auto imageToWidget(const QPointF& imagePos) const -> QPointF;
-
-    /// 限制偏移量与缩放比例在有效范围内
-    void clampOffset();
-
     QImage m_currentImage;        ///< 当前显示图像
-    double m_scaleFactor = 1.0;   ///< 当前缩放比例
-    QPointF m_offset{};           ///< 图像左上角在控件中的偏移
+    ImageViewport m_viewport;     ///< 当前图像视口状态
     bool m_isPanning = false;     ///< 是否正在使用中键拖动图像
     QPointF m_lastPanPosition{};  ///< 上一次拖动位置（控件坐标）
 };

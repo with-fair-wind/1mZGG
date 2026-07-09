@@ -2,6 +2,7 @@
 
 #include <memory>
 
+#include "dss/app/service_keys.h"
 #include "dss/core/config.h"
 #include "dss/processing/diff_processing_strategy.h"
 #include "dss/processing/image_processor.h"
@@ -29,7 +30,8 @@ void ProcessingViewModel::setProcessingMode(int mode) {
 }
 
 void ProcessingViewModel::configureProcessingStrategy() {
-    auto processor = m_registry.tryGet<Dss::Processing::ImageProcessor>("image_processor");
+    auto processor =
+        m_registry.tryGet<Dss::Processing::ImageProcessor>(Dss::App::ServiceKey::imageProcessor);
     if (!processor) {
         Q_EMIT statusTextChanged("Image processor is not registered");
         return;

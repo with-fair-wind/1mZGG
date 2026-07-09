@@ -15,7 +15,7 @@
 #include "dss/comm/frame_codec.h"
 #include "dss/comm/i_serial_channel.h"
 #include "dss/core/constants.h"
-#include "dss/core/event_bus.h"
+#include "dss/core/message_bus.h"
 
 class QSerialPort;
 
@@ -24,7 +24,7 @@ namespace Dss::Comm {
 /// 串口工作线程基类，在独立线程中完成帧收发与编解码
 class SerialWorkerBase : public ISerialChannel {
 public:
-    using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;  ///< 事件总线类型别名
+    using MessageBus = Dss::Core::MessageBus;  ///< 事件总线类型别名
 
     /**
      * @brief 构造串口工作线程基类

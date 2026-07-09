@@ -13,9 +13,6 @@
 namespace Dss::Ui {
 namespace {
 
-constexpr auto kWheelZoomStep = 1.25;
-constexpr auto kMaxImageScaleFactor = 32.0;
-
 constexpr auto kVertexShader = R"(
 attribute vec2 position;
 attribute vec2 texCoord;
@@ -82,7 +79,7 @@ bool GpuImageDisplay::isSupported() {
 }
 
 void GpuImageDisplay::setImage(const QImage& image) {
-    const auto keepViewport = imageSize() == image.size() && !image.isNull();
+    const auto keepViewport = m_viewport.imageSize() == image.size() && !image.isNull();
     m_rawImage.reset();
     m_contiguousRawImage.clear();
     m_rawWidth = 0;
@@ -90,14 +87,8 @@ void GpuImageDisplay::setImage(const QImage& image) {
     m_rawStride = 0;
     m_rawTextureDirty = false;
     m_fallbackImage = image;
-    if (m_fallbackImage.isNull()) {
-        m_scaleFactor = 1.0;
-        m_offset = {};
-    } else if (keepViewport) {
-        clampOffset();
-    } else {
-        resetView();
-    }
+    m_viewport.setViewportSize(size());
+    m_viewport.setImageSize(m_fallbackImage.size(), keepViewport);
     update();
 }
 
@@ -108,7 +99,7 @@ void GpuImageDisplay::setRawFrame(std::shared_ptr<const std::vector<std::uint16_
     m_stretchHigh = std::max(high, low + 1);
     const QSize nextSize{static_cast<int>(width), static_cast<int>(height)};
     const auto keepViewport =
-        imageSize() == nextSize && rawFramePayloadFits(rawImage, width, height, stride);
+        m_viewport.imageSize() == nextSize && rawFramePayloadFits(rawImage, width, height, stride);
     m_fallbackImage = {};
     m_contiguousRawImage.clear();
 
@@ -118,8 +109,7 @@ void GpuImageDisplay::setRawFrame(std::shared_ptr<const std::vector<std::uint16_
         m_rawHeight = 0;
         m_rawStride = 0;
         m_rawTextureDirty = false;
-        m_scaleFactor = 1.0;
-        m_offset = {};
+        m_viewport.clear();
         update();
         return;
     }
@@ -141,11 +131,8 @@ void GpuImageDisplay::setRawFrame(std::shared_ptr<const std::vector<std::uint16_
         }
     }
     m_rawTextureDirty = true;
-    if (keepViewport) {
-        clampOffset();
-    } else {
-        resetView();
-    }
+    m_viewport.setViewportSize(size());
+    m_viewport.setImageSize(nextSize, keepViewport);
     update();
 }
 
@@ -156,30 +143,21 @@ void GpuImageDisplay::setDisplayStretch(bool, int low, int high) {
 }
 
 void GpuImageDisplay::resetView() {
-    m_scaleFactor = fitScale();
-    const auto size = imageSize();
-    const auto scaledWidth = static_cast<double>(size.width()) * m_scaleFactor;
-    const auto scaledHeight = static_cast<double>(size.height()) * m_scaleFactor;
-    m_offset = QPointF((static_cast<double>(width()) - scaledWidth) / 2.0,
-                       (static_cast<double>(height()) - scaledHeight) / 2.0);
-    clampOffset();
+    m_viewport.setViewportSize(size());
+    m_viewport.reset();
     update();
 }
 
 auto GpuImageDisplay::imagePositionAt(const QPointF& widgetPos) const -> QPointF {
-    if (m_scaleFactor <= 0.0) {
-        return {};
-    }
-    return {(widgetPos.x() - m_offset.x()) / m_scaleFactor,
-            (widgetPos.y() - m_offset.y()) / m_scaleFactor};
+    return m_viewport.widgetToImage(widgetPos);
 }
 
 auto GpuImageDisplay::imageScaleFactor() const -> double {
-    return m_scaleFactor;
+    return m_viewport.scaleFactor();
 }
 
 auto GpuImageDisplay::imageOffset() const -> QPointF {
-    return m_offset;
+    return m_viewport.offset();
 }
 
 void GpuImageDisplay::initializeGL() {
@@ -206,17 +184,13 @@ void GpuImageDisplay::paintGL() {
     }
 
     const QRectF imageBounds(QPointF(0.0, 0.0), QSizeF(imageSize()));
-    const auto sourceRect =
-        QRectF(
-            imagePositionAt(QPointF(0.0, 0.0)),
-            imagePositionAt(QPointF(static_cast<double>(width()), static_cast<double>(height()))))
-            .normalized()
-            .intersected(imageBounds);
+    const auto sourceRect = m_viewport.visibleImageRect();
     if (sourceRect.isEmpty()) {
         return;
     }
 
-    const QRectF targetRect(imageToWidget(sourceRect.topLeft()), sourceRect.size() * m_scaleFactor);
+    const QRectF targetRect(m_viewport.imageToWidget(sourceRect.topLeft()),
+                            sourceRect.size() * m_viewport.scaleFactor());
     const auto left = static_cast<float>((targetRect.left() / width()) * 2.0 - 1.0);
     const auto right = static_cast<float>((targetRect.right() / width()) * 2.0 - 1.0);
     const auto top = static_cast<float>(1.0 - (targetRect.top() / height()) * 2.0);
@@ -268,8 +242,7 @@ void GpuImageDisplay::mouseMoveEvent(QMouseEvent* event) {
     if (isMiddleDrag) {
         const auto delta = event->position() - m_lastPanPosition;
         m_lastPanPosition = event->position();
-        m_offset += delta;
-        clampOffset();
+        m_viewport.panBy(delta);
         update();
     }
 
@@ -291,22 +264,9 @@ void GpuImageDisplay::mouseReleaseEvent(QMouseEvent* event) {
 }
 
 void GpuImageDisplay::resizeEvent(QResizeEvent* event) {
-    const auto oldSize = event->oldSize();
-    const auto hadOldSize = oldSize.isValid() && oldSize.width() > 0 && oldSize.height() > 0;
-    const auto currentSize = imageSize();
-    const auto oldCenter =
-        hadOldSize ? imagePositionAt(QPointF(static_cast<double>(oldSize.width()) / 2.0,
-                                             static_cast<double>(oldSize.height()) / 2.0))
-                   : QPointF(static_cast<double>(currentSize.width()) / 2.0,
-                             static_cast<double>(currentSize.height()) / 2.0);
-
     QOpenGLWidget::resizeEvent(event);
-    if (!currentSize.isEmpty()) {
-        const auto minScale = fitScale();
-        m_scaleFactor = std::max(m_scaleFactor, minScale);
-        m_offset = QPointF(static_cast<double>(width()) / 2.0 - oldCenter.x() * m_scaleFactor,
-                           static_cast<double>(height()) / 2.0 - oldCenter.y() * m_scaleFactor);
-        clampOffset();
+    if (!imageSize().isEmpty()) {
+        m_viewport.resizeKeepingCenter(event->oldSize(), event->size());
         update();
     }
 }
@@ -317,22 +277,8 @@ void GpuImageDisplay::wheelEvent(QWheelEvent* event) {
         return;
     }
 
-    const auto anchor = imagePositionAt(event->position());
-    const auto multiplier =
-        std::pow(kWheelZoomStep, static_cast<double>(event->angleDelta().y()) / 120.0);
-    const auto minScale = fitScale();
-    const auto maxScale = std::max(kMaxImageScaleFactor, minScale);
-    const auto nextScale = std::clamp(m_scaleFactor * multiplier, minScale, maxScale);
-
-    if (std::abs(nextScale - m_scaleFactor) <= 1.0e-12) {
-        event->accept();
-        return;
-    }
-
-    m_scaleFactor = nextScale;
-    m_offset = QPointF(event->position().x() - anchor.x() * m_scaleFactor,
-                       event->position().y() - anchor.y() * m_scaleFactor);
-    clampOffset();
+    m_viewport.setViewportSize(size());
+    (void)m_viewport.zoomAt(event->position(), event->angleDelta().y());
     update();
     event->accept();
 }
@@ -342,49 +288,6 @@ auto GpuImageDisplay::imageSize() const -> QSize {
         return {static_cast<int>(m_rawWidth), static_cast<int>(m_rawHeight)};
     }
     return m_fallbackImage.size();
-}
-
-auto GpuImageDisplay::fitScale() const -> double {
-    const auto size = imageSize();
-    if (size.isEmpty() || width() <= 0 || height() <= 0) {
-        return 1.0;
-    }
-    const auto scaleX = static_cast<double>(width()) / static_cast<double>(size.width());
-    const auto scaleY = static_cast<double>(height()) / static_cast<double>(size.height());
-    return std::min(scaleX, scaleY);
-}
-
-auto GpuImageDisplay::imageToWidget(const QPointF& imagePos) const -> QPointF {
-    return {imagePos.x() * m_scaleFactor + m_offset.x(),
-            imagePos.y() * m_scaleFactor + m_offset.y()};
-}
-
-void GpuImageDisplay::clampOffset() {
-    const auto size = imageSize();
-    if (size.isEmpty()) {
-        return;
-    }
-
-    const auto minScale = fitScale();
-    const auto maxScale = std::max(kMaxImageScaleFactor, minScale);
-    m_scaleFactor = std::clamp(m_scaleFactor, minScale, maxScale);
-
-    const auto scaledWidth = static_cast<double>(size.width()) * m_scaleFactor;
-    const auto scaledHeight = static_cast<double>(size.height()) * m_scaleFactor;
-    const auto viewportWidth = static_cast<double>(width());
-    const auto viewportHeight = static_cast<double>(height());
-
-    if (scaledWidth <= viewportWidth) {
-        m_offset.setX((viewportWidth - scaledWidth) / 2.0);
-    } else {
-        m_offset.setX(std::clamp(m_offset.x(), viewportWidth - scaledWidth, 0.0));
-    }
-
-    if (scaledHeight <= viewportHeight) {
-        m_offset.setY((viewportHeight - scaledHeight) / 2.0);
-    } else {
-        m_offset.setY(std::clamp(m_offset.y(), viewportHeight - scaledHeight, 0.0));
-    }
 }
 
 void GpuImageDisplay::uploadRawTextureIfNeeded() {
@@ -414,17 +317,11 @@ void GpuImageDisplay::drawFallbackImage() {
     }
     QPainter painter(this);
     painter.fillRect(rect(), Qt::black);
-    painter.setRenderHint(QPainter::SmoothPixmapTransform, m_scaleFactor < 1.0);
-    const QRectF imageBounds(QPointF(0.0, 0.0), QSizeF(m_fallbackImage.size()));
-    const auto sourceRect =
-        QRectF(
-            imagePositionAt(QPointF(0.0, 0.0)),
-            imagePositionAt(QPointF(static_cast<double>(width()), static_cast<double>(height()))))
-            .normalized()
-            .intersected(imageBounds);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, m_viewport.scaleFactor() < 1.0);
+    const auto sourceRect = m_viewport.visibleImageRect();
     if (!sourceRect.isEmpty()) {
-        const QRectF targetRect(imageToWidget(sourceRect.topLeft()),
-                                sourceRect.size() * m_scaleFactor);
+        const QRectF targetRect(m_viewport.imageToWidget(sourceRect.topLeft()),
+                                sourceRect.size() * m_viewport.scaleFactor());
         painter.drawImage(targetRect, m_fallbackImage, sourceRect);
     }
 }

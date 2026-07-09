@@ -11,6 +11,8 @@
 #include <memory>
 #include <vector>
 
+#include "dss/ui/image_viewport.h"
+
 namespace Dss::Ui {
 
 /**
@@ -141,22 +143,6 @@ private:
      */
     [[nodiscard]] auto imageSize() const -> QSize;
 
-    /**
-     * @brief 计算完整图像适配控件区域所需的缩放倍率。
-     * @return 适配缩放倍率。
-     */
-    [[nodiscard]] auto fitScale() const -> double;
-
-    /**
-     * @brief 将图像坐标转换为控件坐标。
-     * @param imagePos 图像坐标。
-     * @return 控件局部坐标。
-     */
-    [[nodiscard]] auto imageToWidget(const QPointF& imagePos) const -> QPointF;
-
-    /** @brief 将当前偏移和缩放约束在可显示范围内。 */
-    void clampOffset();
-
     /** @brief 在需要时上传或更新 RAW OpenGL texture。 */
     void uploadRawTextureIfNeeded();
 
@@ -184,8 +170,7 @@ private:
     QOpenGLShaderProgram m_program;                   ///< 执行显示拉伸的 shader program。
     int m_stretchLow = 1000;                          ///< 手动显示拉伸低阈值。
     int m_stretchHigh = 5000;                         ///< 手动显示拉伸高阈值。
-    double m_scaleFactor = 1.0;                       ///< 当前显示缩放倍率。
-    QPointF m_offset{};                               ///< 图像左上角在控件坐标中的偏移。
+    ImageViewport m_viewport;                         ///< 当前图像视口状态。
     bool m_isPanning = false;                         ///< 当前是否处于中键平移状态。
     QPointF m_lastPanPosition{};                      ///< 上一次平移鼠标位置。
 };

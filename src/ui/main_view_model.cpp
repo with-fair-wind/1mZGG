@@ -5,6 +5,7 @@
 
 #include "dss/app/observation_session.h"
 #include "dss/core/config.h"
+#include "dss/ui/qt_thread_utils.h"
 
 namespace Dss::Ui {
 
@@ -143,7 +144,11 @@ void MainViewModel::connectChildViewModels() {
 
 void MainViewModel::setupSubscriptions() {
     m_connections.push_back(m_bus.subscribe<Dss::Core::MasterControlEvent>(
-        [this](const Dss::Core::MasterControlEvent& event) { onMasterControl(event); }));
+        [this](const Dss::Core::MasterControlEvent& event) {
+            auto eventCopy = event;
+            invokeOnObjectThread(
+                this, [this, eventCopy = std::move(eventCopy)] { onMasterControl(eventCopy); });
+        }));
 }
 
 void MainViewModel::onMasterControl(const Dss::Core::MasterControlEvent& event) {

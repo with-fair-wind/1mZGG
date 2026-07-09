@@ -5,11 +5,11 @@
 #include <gtest/gtest.h>
 
 #include "dss/app/track_result_data_exchange_bridge.h"
-#include "dss/core/event_bus.h"
+#include "dss/core/message_bus.h"
 
 namespace {
 
-using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;
+using MessageBus = Dss::Core::MessageBus;
 
 struct CapturedExchange {
     std::vector<Dss::Network::GxtcMetadata> gxtcMetadata;

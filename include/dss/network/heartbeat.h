@@ -6,7 +6,7 @@
 #include <stop_token>
 #include <thread>
 
-#include "dss/core/event_bus.h"
+#include "dss/core/message_bus.h"
 #include "dss/network/i_network_channel.h"
 #include "dss/network/udp_channel.h"
 
@@ -15,7 +15,7 @@ namespace Dss::Network {
 /// 心跳服务，周期性通过 UDP 发送固定格式心跳帧以维持链路存活
 class Heartbeat : public INetworkChannel {
 public:
-    using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;  ///< 事件总线类型别名
+    using MessageBus = Dss::Core::MessageBus;  ///< 事件总线类型别名
 
     /**
      * @brief 构造心跳服务

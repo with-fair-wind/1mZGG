@@ -1,8 +1,11 @@
 #include <QCoreApplication>
+#include <QEventLoop>
 #include <QPointF>
+#include <QThread>
 #include <chrono>
 #include <future>
 #include <memory>
+#include <thread>
 
 #include <gtest/gtest.h>
 
@@ -27,6 +30,20 @@ auto ensureApplication() -> QCoreApplication& {
     return *QCoreApplication::instance();
 }
 
+template <typename T>
+auto waitForReady(QCoreApplication& app, std::future<T>& future,
+                  std::chrono::milliseconds timeout = 2s) -> bool {
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline) {
+        if (future.wait_for(0ms) == std::future_status::ready) {
+            return true;
+        }
+        app.processEvents(QEventLoop::AllEvents, 10);
+        std::this_thread::sleep_for(5ms);
+    }
+    return future.wait_for(0ms) == std::future_status::ready;
+}
+
 }  // namespace
 
 TEST(TrackingViewModel, SelectTargetEnablesManualTrackingOnImageProcessor) {
@@ -37,8 +54,8 @@ TEST(TrackingViewModel, SelectTargetEnablesManualTrackingOnImageProcessor) {
     Dss::Core::ServiceRegistry registry;
     auto processor = std::make_shared<Dss::Processing::ImageProcessor>(bus);
     registry.registerService<Dss::Processing::ImageProcessor>("image_processor", processor);
-    Dss::Ui::TrackingViewModel tracking(Dss::Ui::UiServiceContext{.bus = bus,
-                                                                  .registry = registry});
+    Dss::Ui::TrackingViewModel tracking(
+        Dss::Ui::UiServiceContext{.bus = bus, .registry = registry});
 
     std::promise<Dss::Core::TrackResultEvent> trackPromise;
     auto trackFuture = trackPromise.get_future();
@@ -82,8 +99,8 @@ TEST(TrackingViewModel, SetTrackModeConfiguresNonManualTrackingStrategies) {
     Dss::Core::ServiceRegistry registry;
     auto processor = std::make_shared<Dss::Processing::ImageProcessor>(bus);
     registry.registerService<Dss::Processing::ImageProcessor>("image_processor", processor);
-    Dss::Ui::TrackingViewModel tracking(Dss::Ui::UiServiceContext{.bus = bus,
-                                                                  .registry = registry});
+    Dss::Ui::TrackingViewModel tracking(
+        Dss::Ui::UiServiceContext{.bus = bus, .registry = registry});
 
     tracking.setTrackMode(static_cast<int>(Dss::Core::TrackMode::Geo));
     EXPECT_EQ(processor->currentTrackMode(), Dss::Core::TrackMode::Geo);
@@ -96,4 +113,29 @@ TEST(TrackingViewModel, SetTrackModeConfiguresNonManualTrackingStrategies) {
 
     tracking.setTrackMode(static_cast<int>(Dss::Core::TrackMode::Init));
     EXPECT_EQ(processor->currentTrackMode(), Dss::Core::TrackMode::Init);
+}
+
+TEST(TrackingViewModel, TrackResultFromWorkerThreadUpdatesOnObjectThread) {
+    auto& app = ensureApplication();
+
+    Dss::Processing::ImageProcessor::MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    Dss::Ui::TrackingViewModel tracking(
+        Dss::Ui::UiServiceContext{.bus = bus, .registry = registry});
+
+    std::promise<QThread*> signalThreadPromise;
+    auto signalThreadFuture = signalThreadPromise.get_future();
+    QObject::connect(
+        &tracking, &Dss::Ui::TrackingViewModel::targetListUpdated,
+        [&signalThreadPromise](int) { signalThreadPromise.set_value(QThread::currentThread()); });
+
+    Dss::Core::TargetInfo target{};
+    target.targetId = "worker";
+    std::jthread worker([&bus, target] {
+        bus.emit(Dss::Core::TrackResultEvent{.frameSeq = 3, .targets = {target}});
+    });
+    worker.join();
+
+    ASSERT_TRUE(waitForReady(app, signalThreadFuture));
+    EXPECT_EQ(signalThreadFuture.get(), tracking.thread());
 }

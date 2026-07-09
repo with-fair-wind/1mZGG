@@ -2,10 +2,12 @@
 
 #include <utility>
 
+#include "dss/app/service_keys.h"
 #include "dss/core/config.h"
 #include "dss/processing/image_processor.h"
 #include "dss/tracking/manual_tracker.h"
 #include "dss/tracking/track_manager.h"
+#include "dss/ui/qt_thread_utils.h"
 
 namespace Dss::Ui {
 
@@ -47,6 +49,13 @@ void TrackingViewModel::setupSubscriptions() {
 }
 
 void TrackingViewModel::onTrackResult(const Dss::Core::TrackResultEvent& event) {
+    if (!isObjectThread(this)) {
+        auto eventCopy = event;
+        invokeOnObjectThread(
+            this, [this, eventCopy = std::move(eventCopy)] { onTrackResult(eventCopy); });
+        return;
+    }
+
     Q_EMIT targetListUpdated(static_cast<int>(event.targets.size()));
 
     if (!event.targets.empty()) {
@@ -60,7 +69,8 @@ void TrackingViewModel::onTrackResult(const Dss::Core::TrackResultEvent& event) 
 }
 
 void TrackingViewModel::configureTrackingStrategy() {
-    auto processor = m_registry.tryGet<Dss::Processing::ImageProcessor>("image_processor");
+    auto processor =
+        m_registry.tryGet<Dss::Processing::ImageProcessor>(Dss::App::ServiceKey::imageProcessor);
     if (!processor) {
         Q_EMIT statusTextChanged("Image processor is not registered");
         return;

@@ -1,17 +1,24 @@
 #include <QCoreApplication>
+#include <QEventLoop>
 #include <QStringList>
+#include <QThread>
+#include <chrono>
+#include <future>
 #include <memory>
+#include <thread>
 #include <vector>
 
 #include <gtest/gtest.h>
 
-#include "dss/core/event_bus.h"
 #include "dss/core/events.h"
+#include "dss/core/message_bus.h"
 #include "dss/core/service_registry.h"
 #include "dss/ui/log_view_model.h"
 #include "dss/ui/view_model_context.h"
 
 namespace {
+
+using namespace std::chrono_literals;
 
 class QCoreApplicationFixture {
 public:
@@ -28,7 +35,23 @@ private:
     std::unique_ptr<QCoreApplication> m_app;
 };
 
-using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;
+using MessageBus = Dss::Core::MessageBus;
+
+template <typename T>
+auto waitForReady(std::future<T>& future, std::chrono::milliseconds timeout = 2s) -> bool {
+    auto* app = QCoreApplication::instance();
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline) {
+        if (future.wait_for(0ms) == std::future_status::ready) {
+            return true;
+        }
+        if (app != nullptr) {
+            app->processEvents(QEventLoop::AllEvents, 10);
+        }
+        std::this_thread::sleep_for(5ms);
+    }
+    return future.wait_for(0ms) == std::future_status::ready;
+}
 
 }  // namespace
 
@@ -94,4 +117,28 @@ TEST(LogViewModel, ConvertsNetworkAndSerialErrorsToUiLogs) {
     EXPECT_TRUE(appended[1].contains("Serial frame dropped"));
     EXPECT_TRUE(appended[2].contains("Serial decode failed"));
     EXPECT_TRUE(appended[3].contains("Storage write failed"));
+}
+
+TEST(LogViewModel, ErrorEventFromWorkerThreadUpdatesOnObjectThread) {
+    QCoreApplicationFixture app;
+    MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    Dss::Ui::UiServiceContext context{.bus = bus, .registry = registry};
+    Dss::Ui::LogViewModel logs(context);
+
+    std::promise<QThread*> signalThreadPromise;
+    auto signalThreadFuture = signalThreadPromise.get_future();
+    QObject::connect(&logs, &Dss::Ui::LogViewModel::logEntryAppended,
+                     [&signalThreadPromise](const QString&) {
+                         signalThreadPromise.set_value(QThread::currentThread());
+                     });
+
+    std::jthread worker([&bus] {
+        bus.emit(Dss::Core::StorageWriteErrorEvent{
+            .backend = "image_storage", .path = "frame.raw", .message = "disk full"});
+    });
+    worker.join();
+
+    ASSERT_TRUE(waitForReady(signalThreadFuture));
+    EXPECT_EQ(signalThreadFuture.get(), logs.thread());
 }

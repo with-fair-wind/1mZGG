@@ -5,6 +5,7 @@
 #include <memory>
 #include <string_view>
 
+#include "dss/app/service_keys.h"
 #include "dss/core/config.h"
 #include "dss/network/i_network_channel.h"
 #include "dss/ui/network_endpoint_helpers.h"
@@ -46,13 +47,13 @@ constexpr std::array kNetworkEndpointDescriptors{
 
 /// 可由 UI 显式打开/关闭的网络服务描述表。
 constexpr std::array kNetworkServiceDescriptors{
-    NetworkServiceDescriptor{"image_sender", "image_sender", "Image Sender",
+    NetworkServiceDescriptor{"image_sender", Dss::App::ServiceKey::imageSender, "Image Sender",
                              &Dss::Core::CommNetConfig::imageSender},
-    NetworkServiceDescriptor{"error_diag", "error_diagnostics", "Error Diagnostics",
-                             &Dss::Core::CommNetConfig::errorDiag},
-    NetworkServiceDescriptor{"atmos", "atmos_receiver", "Atmos Receiver",
+    NetworkServiceDescriptor{"error_diag", Dss::App::ServiceKey::errorDiagnostics,
+                             "Error Diagnostics", &Dss::Core::CommNetConfig::errorDiag},
+    NetworkServiceDescriptor{"atmos", Dss::App::ServiceKey::atmosReceiver, "Atmos Receiver",
                              &Dss::Core::CommNetConfig::atmos},
-    NetworkServiceDescriptor{"heartbeat", "heartbeat", "Heartbeat",
+    NetworkServiceDescriptor{"heartbeat", Dss::App::ServiceKey::heartbeat, "Heartbeat",
                              &Dss::Core::CommNetConfig::heartbeat},
 };
 

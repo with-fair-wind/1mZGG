@@ -6,8 +6,8 @@
 #include <span>
 #include <vector>
 
-#include "dss/core/event_bus.h"
 #include "dss/core/events.h"
+#include "dss/core/message_bus.h"
 #include "dss/network/data_exchange_protocol.h"
 
 namespace Dss::App {
@@ -23,7 +23,7 @@ struct TrackResultDataExchangeBridgeOptions {
 class TrackResultDataExchangeBridge {
 public:
     /// 应用内消息总线类型。
-    using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;
+    using MessageBus = Dss::Core::MessageBus;
     /// GXTC 发送回调类型。
     using GxtcSender = std::function<void(const Dss::Network::GxtcMetadata&,
                                           std::span<const Dss::Network::GxtcTarget>)>;

@@ -13,8 +13,8 @@
 #include <gtest/gtest.h>
 
 #include "dss/acquisition/image_sequence_frame_source.h"
-#include "dss/core/event_bus.h"
 #include "dss/core/events.h"
+#include "dss/core/message_bus.h"
 #include "dss/core/service_registry.h"
 #include "dss/ui/replay_view_model.h"
 #include "dss/ui/view_model_context.h"
@@ -36,7 +36,7 @@ private:
     std::unique_ptr<QCoreApplication> m_app;
 };
 
-using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;
+using MessageBus = Dss::Core::MessageBus;
 
 [[nodiscard]] auto tempReplayViewModelDir() -> std::filesystem::path {
     auto dir = std::filesystem::temp_directory_path() / "dss_replay_view_model_test";

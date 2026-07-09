@@ -7,8 +7,8 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/core/event_bus.h"
 #include "dss/core/events.h"
+#include "dss/core/message_bus.h"
 #include "dss/core/service_registry.h"
 #include "dss/processing/display_stretch.h"
 #include "dss/processing/image_processor.h"
@@ -32,7 +32,7 @@ private:
     std::unique_ptr<QCoreApplication> m_app;
 };
 
-using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;
+using MessageBus = Dss::Core::MessageBus;
 
 [[nodiscard]] auto grayPixel(const QImage& image, int x, int y) -> std::uint8_t {
     return static_cast<std::uint8_t>(image.constScanLine(y)[x]);

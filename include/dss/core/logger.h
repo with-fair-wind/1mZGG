@@ -10,8 +10,8 @@
 #include <string_view>
 #include <utility>
 
-#include "dss/core/event_bus.h"
 #include "dss/core/events.h"
+#include "dss/core/message_bus.h"
 
 namespace spdlog {
 class logger;
@@ -25,7 +25,7 @@ namespace Dss::Core {
 /// 全局日志门面，通过 spdlog 写入后端并向事件总线发布 LogMessageEvent
 class Logger {
 public:
-    using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;  ///< 消息总线类型
+    using MessageBus = Dss::Core::MessageBus;  ///< 消息总线类型
 
     /**
      * @brief 获取全局唯一日志实例。

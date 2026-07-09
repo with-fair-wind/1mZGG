@@ -7,8 +7,8 @@
 #include <thread>
 #include <vector>
 
-#include "dss/core/event_bus.h"
 #include "dss/core/events.h"
+#include "dss/core/message_bus.h"
 #include "dss/network/diagnostic_protocol.h"
 #include "dss/network/i_network_channel.h"
 #include "dss/network/udp_channel.h"
@@ -18,7 +18,7 @@ namespace Dss::Network {
 /// 错误诊断服务，周期性通过 UDP 发送各子系统状态的 JSON 报文
 class ErrorDiagnostics : public INetworkChannel {
 public:
-    using MessageBus = Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;  ///< 事件总线类型别名
+    using MessageBus = Dss::Core::MessageBus;  ///< 事件总线类型别名
 
     /**
      * @brief 构造错误诊断服务

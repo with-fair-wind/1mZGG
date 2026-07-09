@@ -1,13 +1,13 @@
 #include "dss/ui/display_view_model.h"
 
-#include <QMetaObject>
-#include <QThread>
 #include <algorithm>
 #include <cstddef>
 #include <utility>
 
+#include "dss/app/service_keys.h"
 #include "dss/processing/display_stretch.h"
 #include "dss/processing/image_processor.h"
+#include "dss/ui/qt_thread_utils.h"
 
 namespace Dss::Ui {
 namespace {
@@ -150,11 +150,10 @@ void DisplayViewModel::setupSubscriptions() {
 }
 
 void DisplayViewModel::onDisplayRefresh(const Dss::Core::DisplayRefreshEvent& event) {
-    if (QThread::currentThread() != thread()) {
+    if (!isObjectThread(this)) {
         auto eventCopy = event;
-        QMetaObject::invokeMethod(
-            this, [this, eventCopy = std::move(eventCopy)] { onDisplayRefresh(eventCopy); },
-            Qt::QueuedConnection);
+        invokeOnObjectThread(
+            this, [this, eventCopy = std::move(eventCopy)] { onDisplayRefresh(eventCopy); });
         return;
     }
 
@@ -180,14 +179,10 @@ void DisplayViewModel::onDisplayRefresh(const Dss::Core::DisplayRefreshEvent& ev
 }
 
 void DisplayViewModel::onProcessingComplete(const Dss::Core::ProcessingCompleteEvent& event) {
-    if (QThread::currentThread() != thread()) {
-        const auto stats = event.stats;
-        QMetaObject::invokeMethod(
-            this,
-            [this, stats] {
-                Q_EMIT imageStatsUpdated(stats.minVal, stats.maxVal, stats.avg, stats.stdDev);
-            },
-            Qt::QueuedConnection);
+    if (!isObjectThread(this)) {
+        auto eventCopy = event;
+        invokeOnObjectThread(
+            this, [this, eventCopy = std::move(eventCopy)] { onProcessingComplete(eventCopy); });
         return;
     }
 
@@ -288,7 +283,8 @@ bool DisplayViewModel::refreshCurrentDisplayFromStretch() {
 }
 
 bool DisplayViewModel::syncDisplayStretchToProcessor() {
-    auto processor = m_registry.tryGet<Dss::Processing::ImageProcessor>("image_processor");
+    auto processor =
+        m_registry.tryGet<Dss::Processing::ImageProcessor>(Dss::App::ServiceKey::imageProcessor);
     if (!processor) {
         Q_EMIT statusTextChanged("Image processor is not registered");
         return false;

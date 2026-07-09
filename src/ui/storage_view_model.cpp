@@ -2,6 +2,7 @@
 
 #include <QDateTime>
 
+#include "dss/app/service_keys.h"
 #include "dss/core/config.h"
 #include "dss/storage/local_image_storage_backend.h"
 #include "dss/storage/track_data_storage_backend.h"
@@ -30,7 +31,8 @@ void StorageViewModel::startSaving() {
 }
 
 void StorageViewModel::startSaving(const Dss::Storage::ImageStorageNaming& naming) {
-    auto storage = m_registry.tryGet<Dss::Storage::LocalImageStorageBackend>("image_storage");
+    auto storage = m_registry.tryGet<Dss::Storage::LocalImageStorageBackend>(
+        Dss::App::ServiceKey::imageStorage);
     if (!storage) {
         Q_EMIT statusTextChanged("Image storage is not registered");
         return;
@@ -43,8 +45,8 @@ void StorageViewModel::startSaving(const Dss::Storage::ImageStorageNaming& namin
         }
     }
 
-    auto trackStorage =
-        m_registry.tryGet<Dss::Storage::TrackDataStorageBackend>("track_data_storage");
+    auto trackStorage = m_registry.tryGet<Dss::Storage::TrackDataStorageBackend>(
+        Dss::App::ServiceKey::trackDataStorage);
     if (trackStorage && !trackStorage->isReady()) {
         auto initTrackResult = trackStorage->init(trackStorage->baseDir());
         if (!initTrackResult.has_value()) {
@@ -85,12 +87,13 @@ void StorageViewModel::startSaving(const Dss::Storage::ImageStorageNaming& namin
 }
 
 void StorageViewModel::stopSaving() {
-    auto storage = m_registry.tryGet<Dss::Storage::LocalImageStorageBackend>("image_storage");
+    auto storage = m_registry.tryGet<Dss::Storage::LocalImageStorageBackend>(
+        Dss::App::ServiceKey::imageStorage);
     if (storage) {
         storage->stop();
     }
-    auto trackStorage =
-        m_registry.tryGet<Dss::Storage::TrackDataStorageBackend>("track_data_storage");
+    auto trackStorage = m_registry.tryGet<Dss::Storage::TrackDataStorageBackend>(
+        Dss::App::ServiceKey::trackDataStorage);
     if (trackStorage) {
         trackStorage->stop();
     }

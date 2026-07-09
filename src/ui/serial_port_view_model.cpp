@@ -7,6 +7,7 @@
 #include <memory>
 #include <string_view>
 
+#include "dss/app/service_keys.h"
 #include "dss/comm/i_serial_channel.h"
 #include "dss/comm/serial_command_interfaces.h"
 #include "dss/core/config.h"
@@ -37,13 +38,14 @@ struct SerialChannelDescriptor {
 
 /// 可由 UI 显式打开/关闭的串口通道描述表。
 constexpr std::array kSerialChannelDescriptors{
-    SerialChannelDescriptor{"display", "display", "Display",
+    SerialChannelDescriptor{"display", Dss::App::ServiceKey::display, "Display",
                             &Dss::Core::CommNetConfig::displayPort},
-    SerialChannelDescriptor{"exposure", "exposure", "Exposure",
+    SerialChannelDescriptor{"exposure", Dss::App::ServiceKey::exposure, "Exposure",
                             &Dss::Core::CommNetConfig::exposurePort},
-    SerialChannelDescriptor{"master_control", "master_control", "Master Control",
+    SerialChannelDescriptor{"master_control", Dss::App::ServiceKey::masterControl, "Master Control",
                             &Dss::Core::CommNetConfig::masterControlPort},
-    SerialChannelDescriptor{"servo", "servo", "Servo", &Dss::Core::CommNetConfig::servoPort},
+    SerialChannelDescriptor{"servo", Dss::App::ServiceKey::servo, "Servo",
+                            &Dss::Core::CommNetConfig::servoPort},
 };
 
 /// @brief 查找可控串口通道描述。
@@ -246,7 +248,8 @@ bool SerialPortViewModel::openSerialChannel(const QString& key) {
     const auto displayName = descriptorText(descriptor->displayName);
     if (!result.has_value()) {
         if (result.error() == "service is not registered") {
-            Q_EMIT statusTextChanged(QString("Serial channel is not registered: %1").arg(displayName));
+            Q_EMIT statusTextChanged(
+                QString("Serial channel is not registered: %1").arg(displayName));
         } else {
             Q_EMIT statusTextChanged(QString::fromStdString(result.error()));
         }
@@ -322,7 +325,8 @@ bool SerialPortViewModel::applySerialChannelConfig(const QString& key, const QSt
 
 bool SerialPortViewModel::sendExposureCommand(bool freeRun, int frameFrequencyCode,
                                               int exposureDelayTicks) {
-    const auto unavailable = serialCommandUnavailableMessage(m_registry, "exposure", "Exposure");
+    const auto unavailable =
+        serialCommandUnavailableMessage(m_registry, Dss::App::ServiceKey::exposure, "Exposure");
     if (!unavailable.isEmpty()) {
         Q_EMIT statusTextChanged(unavailable);
         return false;
@@ -336,7 +340,8 @@ bool SerialPortViewModel::sendExposureCommand(bool freeRun, int frameFrequencyCo
         return false;
     }
 
-    auto commandPort = m_registry.tryGet<Dss::Comm::IExposureCommandPort>("exposure");
+    auto commandPort =
+        m_registry.tryGet<Dss::Comm::IExposureCommandPort>(Dss::App::ServiceKey::exposure);
     if (!commandPort) {
         Q_EMIT statusTextChanged("Exposure command service is not registered");
         return false;
@@ -354,9 +359,10 @@ bool SerialPortViewModel::sendExposureCommand(bool freeRun, int frameFrequencyCo
 
 bool SerialPortViewModel::sendServoCorrection(bool distanceValid, bool speedValid,
                                               double distanceXArcsec, double distanceYArcsec,
-                                              double speedXArcsecPerSec,
-                                              double speedYArcsecPerSec, int mode) {
-    const auto unavailable = serialCommandUnavailableMessage(m_registry, "servo", "Servo");
+                                              double speedXArcsecPerSec, double speedYArcsecPerSec,
+                                              int mode) {
+    const auto unavailable =
+        serialCommandUnavailableMessage(m_registry, Dss::App::ServiceKey::servo, "Servo");
     if (!unavailable.isEmpty()) {
         Q_EMIT statusTextChanged(unavailable);
         return false;
@@ -371,7 +377,8 @@ bool SerialPortViewModel::sendServoCorrection(bool distanceValid, bool speedVali
         return false;
     }
 
-    auto correctionPort = m_registry.tryGet<Dss::Comm::IServoCorrectionPort>("servo");
+    auto correctionPort =
+        m_registry.tryGet<Dss::Comm::IServoCorrectionPort>(Dss::App::ServiceKey::servo);
     if (!correctionPort) {
         Q_EMIT statusTextChanged("Servo correction service is not registered");
         return false;
@@ -384,13 +391,15 @@ bool SerialPortViewModel::sendServoCorrection(bool distanceValid, bool speedVali
     return true;
 }
 
-bool SerialPortViewModel::sendMasterControlStatus(
-    int year, int month, int day, int hour, int minute, int second, int millisecond,
-    double azimuthDegrees, double elevationDegrees, bool distanceValid, bool speedValid,
-    double distanceXArcsec, double distanceYArcsec, double speedXArcsecPerSec,
-    double speedYArcsecPerSec, int servoMode) {
-    const auto unavailable =
-        serialCommandUnavailableMessage(m_registry, "master_control", "Master Control");
+bool SerialPortViewModel::sendMasterControlStatus(int year, int month, int day, int hour,
+                                                  int minute, int second, int millisecond,
+                                                  double azimuthDegrees, double elevationDegrees,
+                                                  bool distanceValid, bool speedValid,
+                                                  double distanceXArcsec, double distanceYArcsec,
+                                                  double speedXArcsecPerSec,
+                                                  double speedYArcsecPerSec, int servoMode) {
+    const auto unavailable = serialCommandUnavailableMessage(
+        m_registry, Dss::App::ServiceKey::masterControl, "Master Control");
     if (!unavailable.isEmpty()) {
         Q_EMIT statusTextChanged(unavailable);
         return false;
@@ -417,7 +426,8 @@ bool SerialPortViewModel::sendMasterControlStatus(
         return false;
     }
 
-    auto statusPort = m_registry.tryGet<Dss::Comm::IMasterControlStatusPort>("master_control");
+    auto statusPort =
+        m_registry.tryGet<Dss::Comm::IMasterControlStatusPort>(Dss::App::ServiceKey::masterControl);
     if (!statusPort) {
         Q_EMIT statusTextChanged("Master control status service is not registered");
         return false;

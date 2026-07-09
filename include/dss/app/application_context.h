@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "dss/core/config.h"
-#include "dss/core/event_bus.h"
+#include "dss/core/message_bus.h"
 #include "dss/core/service_host.h"
 #include "dss/core/service_registry.h"
 
@@ -15,8 +15,7 @@ namespace Dss::App {
 /// 应用程序上下文，管理服务注册、事件总线和生命周期
 class ApplicationContext {
 public:
-    using MessageBus =
-        Dss::Evt::BasicMessageBus<Dss::Evt::SharedMutexLock>;  ///< 跨线程应用消息总线类型
+    using MessageBus = Dss::Core::MessageBus;  ///< 跨线程应用消息总线类型
 
     /// 构造应用程序上下文
     ApplicationContext();
