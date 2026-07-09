@@ -4,7 +4,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/processing/bounded_channel.h"
+#include "dss/processing/detail/bounded_channel.h"
 
 using namespace std::chrono_literals;
 

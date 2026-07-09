@@ -1,4 +1,4 @@
-#include "dss/processing/display_stretch.h"
+#include "dss/processing/frame/display_stretch.h"
 
 #include <algorithm>
 #include <array>

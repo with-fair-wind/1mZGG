@@ -8,7 +8,7 @@
 
 #include "dss/core/config.h"
 #include "dss/network/i_network_channel.h"
-#include "dss/ui/network_view_model.h"
+#include "dss/ui/view_model/network_view_model.h"
 
 namespace {
 

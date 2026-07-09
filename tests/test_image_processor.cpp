@@ -4,7 +4,7 @@
 #include <gtest/gtest.h>
 
 #include "dss/core/events.h"
-#include "dss/processing/image_processor.h"
+#include "dss/processing/pipeline/image_processor.h"
 #include "dss/tracking/i_tracking_strategy.h"
 #include "dss/tracking/manual_tracker.h"
 

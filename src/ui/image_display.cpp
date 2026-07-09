@@ -1,4 +1,4 @@
-#include "dss/ui/image_display.h"
+#include "dss/ui/display/image_display.h"
 
 #include <QPainter>
 

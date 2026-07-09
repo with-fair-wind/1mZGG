@@ -4,7 +4,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/processing/opencv_processing_strategy.h"
+#include "dss/processing/strategy/opencv_processing_strategy.h"
 
 TEST(OpenCvProcessingStrategyTest, ComputesStatsAndExtractsBrightBlob) {
     Dss::Processing::FramePacket packet{};

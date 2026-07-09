@@ -1,13 +1,13 @@
-#include "dss/ui/tracking_view_model.h"
+#include "dss/ui/view_model/tracking_view_model.h"
 
 #include <utility>
 
 #include "dss/app/service_keys.h"
 #include "dss/core/config.h"
-#include "dss/processing/image_processor.h"
+#include "dss/processing/pipeline/image_processor.h"
 #include "dss/tracking/manual_tracker.h"
 #include "dss/tracking/track_manager.h"
-#include "dss/ui/qt_thread_utils.h"
+#include "dss/ui/support/qt_thread_utils.h"
 
 namespace Dss::Ui {
 

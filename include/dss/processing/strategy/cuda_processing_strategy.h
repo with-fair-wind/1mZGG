@@ -4,7 +4,7 @@
 #include <memory>
 #include <string>
 
-#include "dss/processing/i_processing_strategy.h"
+#include "dss/processing/strategy/i_processing_strategy.h"
 
 namespace Dss::Processing {
 

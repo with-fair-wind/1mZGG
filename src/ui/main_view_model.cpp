@@ -1,11 +1,11 @@
-#include "dss/ui/main_view_model.h"
+#include "dss/ui/view_model/main_view_model.h"
 
 #include <chrono>
 #include <utility>
 
 #include "dss/app/observation_session.h"
 #include "dss/core/config.h"
-#include "dss/ui/qt_thread_utils.h"
+#include "dss/ui/support/qt_thread_utils.h"
 
 namespace Dss::Ui {
 

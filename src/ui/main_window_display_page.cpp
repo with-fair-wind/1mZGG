@@ -12,13 +12,13 @@
 #include <functional>
 #include <memory>
 
-#include "dss/ui/app_event.h"
-#include "dss/ui/image_display.h"
+#include "dss/ui/support/app_event.h"
+#include "dss/ui/display/image_display.h"
 #ifdef DSS_HAS_OPENGL_WIDGETS
-#include "dss/ui/gpu_image_display.h"
+#include "dss/ui/display/gpu_image_display.h"
 #endif
-#include "dss/ui/main_window.h"
-#include "dss/ui/wheel_guarded_spin_box.h"
+#include "dss/ui/widget/main_window.h"
+#include "dss/ui/widget/wheel_guarded_spin_box.h"
 
 #ifdef DSS_HAS_ELA
 #include <ElaCheckBox.h>

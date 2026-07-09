@@ -17,9 +17,9 @@
 #include <QVBoxLayout>
 #include <memory>
 
-#include "dss/ui/log_palette.h"
-#include "dss/ui/main_window.h"
-#include "dss/ui/wheel_guarded_spin_box.h"
+#include "dss/ui/support/log_palette.h"
+#include "dss/ui/widget/main_window.h"
+#include "dss/ui/widget/wheel_guarded_spin_box.h"
 
 #ifdef DSS_HAS_ELA
 #include <ElaComboBox.h>

@@ -1,13 +1,13 @@
-#include "dss/ui/display_view_model.h"
+#include "dss/ui/view_model/display_view_model.h"
 
 #include <algorithm>
 #include <cstddef>
 #include <utility>
 
 #include "dss/app/service_keys.h"
-#include "dss/processing/display_stretch.h"
-#include "dss/processing/image_processor.h"
-#include "dss/ui/qt_thread_utils.h"
+#include "dss/processing/frame/display_stretch.h"
+#include "dss/processing/pipeline/image_processor.h"
+#include "dss/ui/support/qt_thread_utils.h"
 
 namespace Dss::Ui {
 namespace {

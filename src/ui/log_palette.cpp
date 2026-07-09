@@ -1,4 +1,4 @@
-#include "dss/ui/log_palette.h"
+#include "dss/ui/support/log_palette.h"
 
 namespace Dss::Ui {
 

@@ -11,10 +11,10 @@
 #include <memory>
 #include <vector>
 
-#include "dss/ui/communication_panels.h"
-#include "dss/ui/data_exchange_view_model.h"
-#include "dss/ui/network_view_model.h"
-#include "dss/ui/wheel_guarded_spin_box.h"
+#include "dss/ui/widget/communication_panels.h"
+#include "dss/ui/view_model/data_exchange_view_model.h"
+#include "dss/ui/view_model/network_view_model.h"
+#include "dss/ui/widget/wheel_guarded_spin_box.h"
 
 #ifdef DSS_HAS_ELA
 #include <ElaPushButton.h>

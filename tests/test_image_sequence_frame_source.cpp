@@ -11,7 +11,7 @@
 #include <gtest/gtest.h>
 
 #include "dss/acquisition/image_sequence_frame_source.h"
-#include "dss/storage/bmp_image_format.h"
+#include "dss/storage/format/bmp_image_format.h"
 
 namespace {
 

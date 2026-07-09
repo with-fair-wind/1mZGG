@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dss/ui/main_view_model.h"
+#include "dss/ui/view_model/main_view_model.h"
 
 #ifdef DSS_HAS_ELA
 #include <ElaWindow.h>

@@ -1,4 +1,4 @@
-#include "dss/processing/opencv_processing_strategy.h"
+#include "dss/processing/strategy/opencv_processing_strategy.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -7,7 +7,7 @@
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
 
-#include "dss/processing/display_stretch.h"
+#include "dss/processing/frame/display_stretch.h"
 
 namespace Dss::Processing {
 

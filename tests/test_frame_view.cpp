@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "dss/processing/frame_view.h"
+#include "dss/processing/frame/frame_view.h"
 
 TEST(FrameView, ExposesNonOwningImageSpans) {
     Dss::Processing::FramePacket packet;

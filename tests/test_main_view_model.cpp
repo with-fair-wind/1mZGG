@@ -12,9 +12,9 @@
 #include <gtest/gtest.h>
 
 #include "dss/core/events.h"
-#include "dss/storage/local_image_storage_backend.h"
-#include "dss/storage/track_data_storage_backend.h"
-#include "dss/ui/main_view_model.h"
+#include "dss/storage/backend/local_image_storage_backend.h"
+#include "dss/storage/backend/track_data_storage_backend.h"
+#include "dss/ui/view_model/main_view_model.h"
 
 namespace {
 

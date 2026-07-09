@@ -1,10 +1,10 @@
-#include "dss/processing/diff_processing_strategy.h"
+#include "dss/processing/strategy/diff_processing_strategy.h"
 
 #include <algorithm>
 #include <cstddef>
 #include <cstdlib>
 
-#include "dss/processing/display_stretch.h"
+#include "dss/processing/frame/display_stretch.h"
 
 namespace Dss::Processing {
 

@@ -1,8 +1,8 @@
-#include "dss/ui/log_view_model.h"
+#include "dss/ui/view_model/log_view_model.h"
 
 #include <utility>
 
-#include "dss/ui/qt_thread_utils.h"
+#include "dss/ui/support/qt_thread_utils.h"
 
 namespace Dss::Ui {
 namespace {

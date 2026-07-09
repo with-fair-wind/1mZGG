@@ -1,4 +1,4 @@
-#include "dss/ui/replay_view_model.h"
+#include "dss/ui/view_model/replay_view_model.h"
 
 #include <QTimer>
 #include <exception>
@@ -11,8 +11,8 @@
 #include "dss/acquisition/image_sequence_frame_source.h"
 #include "dss/app/runtime_diagnostics.h"
 #include "dss/app/service_keys.h"
-#include "dss/processing/image_processor.h"
-#include "dss/ui/qt_thread_utils.h"
+#include "dss/processing/pipeline/image_processor.h"
+#include "dss/ui/support/qt_thread_utils.h"
 
 namespace Dss::Ui {
 namespace {

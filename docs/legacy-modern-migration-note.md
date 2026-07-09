@@ -26,10 +26,10 @@
 
 - `include/dss/core/event_bus.h`
 - `include/dss/core/events.h`
-- `include/dss/ui/main_view_model.h`
-- `include/dss/ui/view_model_context.h`
+- `include/dss/ui/view_model/main_view_model.h`
+- `include/dss/ui/view_model/view_model_context.h`
 - `src/ui/main_view_model.cpp`
-- `include/dss/ui/app_event.h`
+- `include/dss/ui/support/app_event.h`
 
 ## 3. 从大 ViewModel 到子模块
 

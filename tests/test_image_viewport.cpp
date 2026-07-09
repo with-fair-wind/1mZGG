@@ -3,7 +3,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/ui/image_viewport.h"
+#include "dss/ui/display/image_viewport.h"
 
 TEST(ImageViewport, ResetFitsImageAndConvertsCoordinates) {
     Dss::Ui::ImageViewport viewport;

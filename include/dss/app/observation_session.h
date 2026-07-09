@@ -6,7 +6,7 @@
 #include <string_view>
 
 #include "dss/core/events.h"
-#include "dss/storage/image_storage_format.h"
+#include "dss/storage/format/image_storage_format.h"
 
 namespace Dss::App {
 

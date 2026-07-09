@@ -1,8 +1,8 @@
 #include <QLabel>
 #include <QVBoxLayout>
 
-#include "dss/ui/communication_panels.h"
-#include "dss/ui/main_window.h"
+#include "dss/ui/widget/communication_panels.h"
+#include "dss/ui/widget/main_window.h"
 
 namespace Dss::Ui {
 

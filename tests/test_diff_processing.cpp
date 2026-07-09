@@ -4,7 +4,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/processing/diff_processing_strategy.h"
+#include "dss/processing/strategy/diff_processing_strategy.h"
 
 namespace {
 

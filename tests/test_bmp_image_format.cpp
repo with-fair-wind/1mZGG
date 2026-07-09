@@ -4,7 +4,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/storage/bmp_image_format.h"
+#include "dss/storage/format/bmp_image_format.h"
 
 namespace {
 

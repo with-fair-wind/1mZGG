@@ -16,8 +16,8 @@
 #include "dss/core/events.h"
 #include "dss/core/message_bus.h"
 #include "dss/core/service_registry.h"
-#include "dss/ui/replay_view_model.h"
-#include "dss/ui/view_model_context.h"
+#include "dss/ui/view_model/replay_view_model.h"
+#include "dss/ui/view_model/view_model_context.h"
 
 namespace {
 

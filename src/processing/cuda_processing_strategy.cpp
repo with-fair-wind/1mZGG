@@ -1,4 +1,4 @@
-#include "dss/processing/cuda_processing_strategy.h"
+#include "dss/processing/strategy/cuda_processing_strategy.h"
 
 #ifdef DSS_HAS_CUDA
 
@@ -16,8 +16,8 @@
 #include "dss/gpu/cuda_device_manager.h"
 #include "dss/gpu/cuda_kernels.h"
 #include "dss/gpu/gpu_buffer.h"
-#include "dss/processing/display_stretch.h"
-#include "dss/processing/labeler.h"
+#include "dss/processing/frame/display_stretch.h"
+#include "dss/processing/detail/labeler.h"
 
 namespace Dss::Processing {
 namespace {

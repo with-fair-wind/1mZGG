@@ -1,4 +1,4 @@
-#include "dss/processing/processing_pipeline.h"
+#include "dss/processing/pipeline/processing_pipeline.h"
 
 namespace Dss::Processing {
 

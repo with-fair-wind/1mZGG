@@ -3,8 +3,8 @@
 #include <cstdint>
 #include <vector>
 
-#include "dss/processing/i_processing_strategy.h"
-#include "dss/processing/labeler.h"
+#include "dss/processing/strategy/i_processing_strategy.h"
+#include "dss/processing/detail/labeler.h"
 
 namespace Dss::Processing {
 

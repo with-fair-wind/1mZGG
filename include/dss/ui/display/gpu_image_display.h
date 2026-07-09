@@ -11,7 +11,7 @@
 #include <memory>
 #include <vector>
 
-#include "dss/ui/image_viewport.h"
+#include "dss/ui/display/image_viewport.h"
 
 namespace Dss::Ui {
 

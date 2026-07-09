@@ -1,4 +1,4 @@
-#include "dss/processing/image_processor.h"
+#include "dss/processing/pipeline/image_processor.h"
 
 #include "dss/core/events.h"
 

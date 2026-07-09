@@ -1,4 +1,4 @@
-#include "dss/ui/init_dialog.h"
+#include "dss/ui/widget/init_dialog.h"
 
 #ifdef DSS_HAS_ELA
 #include <ElaProgressBar.h>

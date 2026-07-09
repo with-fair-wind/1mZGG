@@ -4,7 +4,7 @@
 #include <QString>
 #include <vector>
 
-#include "dss/ui/view_model_context.h"
+#include "dss/ui/view_model/view_model_context.h"
 
 namespace Dss::Ui {
 

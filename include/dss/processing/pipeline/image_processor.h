@@ -6,11 +6,11 @@
 #include <thread>
 
 #include "dss/core/message_bus.h"
-#include "dss/processing/bounded_channel.h"
-#include "dss/processing/display_stretch.h"
-#include "dss/processing/frame_packet.h"
-#include "dss/processing/i_processing_strategy.h"
-#include "dss/processing/processing_pipeline.h"
+#include "dss/processing/detail/bounded_channel.h"
+#include "dss/processing/frame/display_stretch.h"
+#include "dss/processing/frame/frame_packet.h"
+#include "dss/processing/strategy/i_processing_strategy.h"
+#include "dss/processing/pipeline/processing_pipeline.h"
 #include "dss/tracking/i_tracking_strategy.h"
 
 namespace Dss::Processing {

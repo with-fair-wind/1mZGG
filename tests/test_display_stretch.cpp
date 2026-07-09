@@ -3,7 +3,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/processing/display_stretch.h"
+#include "dss/processing/frame/display_stretch.h"
 
 TEST(DisplayStretch, ManualWindowUsesLegacyClampAndLinearMapping) {
     const std::vector<std::uint16_t> raw{500, 1000, 3000, 5000, 6000};

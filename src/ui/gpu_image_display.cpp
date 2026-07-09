@@ -1,4 +1,4 @@
-#include "dss/ui/gpu_image_display.h"
+#include "dss/ui/display/gpu_image_display.h"
 
 #include <QOffscreenSurface>
 #include <QOpenGLContext>

@@ -4,10 +4,10 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/storage/local_image_storage_backend.h"
-#include "dss/storage/track_data_storage_backend.h"
-#include "dss/ui/storage_view_model.h"
-#include "dss/ui/view_model_context.h"
+#include "dss/storage/backend/local_image_storage_backend.h"
+#include "dss/storage/backend/track_data_storage_backend.h"
+#include "dss/ui/view_model/storage_view_model.h"
+#include "dss/ui/view_model/view_model_context.h"
 
 namespace {
 

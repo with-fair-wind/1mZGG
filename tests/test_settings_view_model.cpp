@@ -4,7 +4,7 @@
 #include <gtest/gtest.h>
 
 #include "dss/core/config.h"
-#include "dss/ui/settings_view_model.h"
+#include "dss/ui/view_model/settings_view_model.h"
 
 TEST(SettingsViewModel, ValidatesAndPersistsProductionSettings) {
     const auto path = std::filesystem::temp_directory_path() / "dss_settings_view_model.json";

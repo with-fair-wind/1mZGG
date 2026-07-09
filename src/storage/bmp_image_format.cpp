@@ -1,4 +1,4 @@
-#include "dss/storage/bmp_image_format.h"
+#include "dss/storage/format/bmp_image_format.h"
 
 #include <bit>
 #include <cstddef>

@@ -1,11 +1,11 @@
-#include "dss/ui/storage_view_model.h"
+#include "dss/ui/view_model/storage_view_model.h"
 
 #include <QDateTime>
 
 #include "dss/app/service_keys.h"
 #include "dss/core/config.h"
-#include "dss/storage/local_image_storage_backend.h"
-#include "dss/storage/track_data_storage_backend.h"
+#include "dss/storage/backend/local_image_storage_backend.h"
+#include "dss/storage/backend/track_data_storage_backend.h"
 
 namespace Dss::Ui {
 

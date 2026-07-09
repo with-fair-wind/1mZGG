@@ -1,4 +1,4 @@
-#include "dss/ui/network_view_model.h"
+#include "dss/ui/view_model/network_view_model.h"
 
 #include <array>
 #include <expected>
@@ -8,7 +8,7 @@
 #include "dss/app/service_keys.h"
 #include "dss/core/config.h"
 #include "dss/network/i_network_channel.h"
-#include "dss/ui/network_endpoint_helpers.h"
+#include "dss/ui/support/network_endpoint_helpers.h"
 
 namespace Dss::Ui {
 namespace {

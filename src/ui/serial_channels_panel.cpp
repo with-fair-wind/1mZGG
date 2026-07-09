@@ -11,9 +11,9 @@
 #include <memory>
 #include <vector>
 
-#include "dss/ui/communication_panels.h"
-#include "dss/ui/serial_port_view_model.h"
-#include "dss/ui/wheel_guarded_spin_box.h"
+#include "dss/ui/widget/communication_panels.h"
+#include "dss/ui/view_model/serial_port_view_model.h"
+#include "dss/ui/widget/wheel_guarded_spin_box.h"
 
 #ifdef DSS_HAS_ELA
 #include <ElaPushButton.h>

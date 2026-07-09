@@ -4,9 +4,9 @@
 #include <iostream>
 #include <string_view>
 
-#include "dss/processing/cuda_processing_strategy.h"
+#include "dss/processing/strategy/cuda_processing_strategy.h"
 #ifdef DSS_HAS_OPENCV
-#include "dss/processing/opencv_processing_strategy.h"
+#include "dss/processing/strategy/opencv_processing_strategy.h"
 #endif
 
 namespace {

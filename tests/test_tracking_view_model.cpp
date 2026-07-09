@@ -10,9 +10,9 @@
 #include <gtest/gtest.h>
 
 #include "dss/core/events.h"
-#include "dss/processing/image_processor.h"
-#include "dss/ui/tracking_view_model.h"
-#include "dss/ui/view_model_context.h"
+#include "dss/processing/pipeline/image_processor.h"
+#include "dss/ui/view_model/tracking_view_model.h"
+#include "dss/ui/view_model/view_model_context.h"
 
 using namespace std::chrono_literals;
 

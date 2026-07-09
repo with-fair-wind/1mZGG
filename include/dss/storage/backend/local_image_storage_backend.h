@@ -14,10 +14,10 @@
 
 #include "dss/core/events.h"
 #include "dss/core/message_bus.h"
-#include "dss/storage/async_write_queue.h"
-#include "dss/storage/bmp_image_format.h"
-#include "dss/storage/i_storage_backend.h"
-#include "dss/storage/image_storage_format.h"
+#include "dss/storage/detail/async_write_queue.h"
+#include "dss/storage/format/bmp_image_format.h"
+#include "dss/storage/backend/i_storage_backend.h"
+#include "dss/storage/format/image_storage_format.h"
 
 namespace Dss::Storage {
 

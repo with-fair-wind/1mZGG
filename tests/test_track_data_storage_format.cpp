@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "dss/storage/track_data_storage_format.h"
+#include "dss/storage/format/track_data_storage_format.h"
 
 TEST(TrackDataStorageFormat, BuildsLegacyTrackDataLine) {
     Dss::Storage::TrackDataRecord record{};

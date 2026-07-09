@@ -4,9 +4,9 @@
 #include "dss/app/application_context.h"
 #include "dss/core/config.h"
 #include "dss/core/events.h"
-#include "dss/ui/init_dialog.h"
-#include "dss/ui/main_view_model.h"
-#include "dss/ui/main_window.h"
+#include "dss/ui/widget/init_dialog.h"
+#include "dss/ui/view_model/main_view_model.h"
+#include "dss/ui/widget/main_window.h"
 
 #ifdef DSS_HAS_ELA
 #include <ElaApplication.h>

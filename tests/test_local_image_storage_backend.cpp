@@ -6,7 +6,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/storage/local_image_storage_backend.h"
+#include "dss/storage/backend/local_image_storage_backend.h"
 
 namespace {
 

@@ -6,7 +6,7 @@
 #include <QWheelEvent>
 #include <QWidget>
 
-#include "dss/ui/image_viewport.h"
+#include "dss/ui/display/image_viewport.h"
 
 namespace Dss::Ui {
 

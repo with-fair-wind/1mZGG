@@ -1,4 +1,4 @@
-#include "dss/processing/labeler.h"
+#include "dss/processing/detail/labeler.h"
 
 #include <algorithm>
 #include <numeric>

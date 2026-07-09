@@ -1,4 +1,4 @@
-#include "dss/ui/network_endpoint_helpers.h"
+#include "dss/ui/support/network_endpoint_helpers.h"
 
 #include <cstdint>
 

@@ -4,7 +4,7 @@
 #include <gtest/gtest.h>
 
 #include "dss/core/events.h"
-#include "dss/ui/log_palette.h"
+#include "dss/ui/support/log_palette.h"
 
 TEST(LogPaletteTest, MapsLogLevelsToDistinctUiColors) {
     const auto infoColor = Dss::Ui::logTextColor(Dss::Core::LogLevel::Info);

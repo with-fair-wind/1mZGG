@@ -3,9 +3,9 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/processing/cuda_processing_strategy.h"
+#include "dss/processing/strategy/cuda_processing_strategy.h"
 #if defined(DSS_HAS_CUDA) && defined(DSS_HAS_OPENCV)
-#include "dss/processing/opencv_processing_strategy.h"
+#include "dss/processing/strategy/opencv_processing_strategy.h"
 #endif
 
 TEST(CudaProcessingContract, UnavailableBuildReturnsErrorWithoutThrowing) {

@@ -8,7 +8,7 @@
 #include <QVBoxLayout>
 #include <algorithm>
 
-#include "dss/ui/main_window.h"
+#include "dss/ui/widget/main_window.h"
 
 #ifdef DSS_HAS_ELA
 #include <ElaCheckBox.h>

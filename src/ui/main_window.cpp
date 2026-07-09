@@ -1,11 +1,11 @@
-#include "dss/ui/main_window.h"
+#include "dss/ui/widget/main_window.h"
 
 #include <QFrame>
 #include <QScrollArea>
 #include <QStatusBar>
 #include <QTabWidget>
 
-#include "dss/ui/app_event.h"
+#include "dss/ui/support/app_event.h"
 
 #ifdef DSS_HAS_ELA
 #include <ElaMessageBar.h>

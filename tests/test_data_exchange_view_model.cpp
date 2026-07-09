@@ -6,7 +6,7 @@
 
 #include "dss/core/config.h"
 #include "dss/network/data_exchange.h"
-#include "dss/ui/data_exchange_view_model.h"
+#include "dss/ui/view_model/data_exchange_view_model.h"
 
 namespace {
 

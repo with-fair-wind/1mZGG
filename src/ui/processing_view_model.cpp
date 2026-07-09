@@ -1,13 +1,13 @@
-#include "dss/ui/processing_view_model.h"
+#include "dss/ui/view_model/processing_view_model.h"
 
 #include <memory>
 
 #include "dss/app/service_keys.h"
 #include "dss/core/config.h"
-#include "dss/processing/diff_processing_strategy.h"
-#include "dss/processing/image_processor.h"
+#include "dss/processing/strategy/diff_processing_strategy.h"
+#include "dss/processing/pipeline/image_processor.h"
 #ifdef DSS_HAS_OPENCV
-#include "dss/processing/opencv_processing_strategy.h"
+#include "dss/processing/strategy/opencv_processing_strategy.h"
 #endif
 
 namespace Dss::Ui {

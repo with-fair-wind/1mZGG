@@ -6,7 +6,7 @@
 #include <string>
 
 #include "dss/core/types.h"
-#include "dss/processing/frame_packet.h"
+#include "dss/processing/frame/frame_packet.h"
 
 namespace Dss::Acquisition {
 

@@ -22,10 +22,10 @@
 #include "dss/network/heartbeat.h"
 #include "dss/network/i_network_channel.h"
 #include "dss/network/image_sender.h"
-#include "dss/processing/image_processor.h"
-#include "dss/storage/i_storage_backend.h"
-#include "dss/storage/local_image_storage_backend.h"
-#include "dss/storage/track_data_storage_backend.h"
+#include "dss/processing/pipeline/image_processor.h"
+#include "dss/storage/backend/i_storage_backend.h"
+#include "dss/storage/backend/local_image_storage_backend.h"
+#include "dss/storage/backend/track_data_storage_backend.h"
 
 namespace {
 

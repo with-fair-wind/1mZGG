@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "dss/processing/processing_pipeline.h"
+#include "dss/processing/pipeline/processing_pipeline.h"
 
 namespace {
 

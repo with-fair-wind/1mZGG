@@ -7,9 +7,9 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/ui/image_display.h"
+#include "dss/ui/display/image_display.h"
 #ifdef DSS_HAS_OPENGL_WIDGETS
-#include "dss/ui/gpu_image_display.h"
+#include "dss/ui/display/gpu_image_display.h"
 #endif
 
 namespace {

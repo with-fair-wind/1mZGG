@@ -1,9 +1,9 @@
-#include "dss/ui/data_exchange_view_model.h"
+#include "dss/ui/view_model/data_exchange_view_model.h"
 
 #include "dss/app/service_keys.h"
 #include "dss/core/config.h"
 #include "dss/network/data_exchange.h"
-#include "dss/ui/network_endpoint_helpers.h"
+#include "dss/ui/support/network_endpoint_helpers.h"
 
 namespace Dss::Ui {
 

@@ -8,8 +8,8 @@
 #include <span>
 #include <utility>
 
-#include "dss/storage/bmp_image_format.h"
-#include "dss/storage/image_storage_format.h"
+#include "dss/storage/format/bmp_image_format.h"
+#include "dss/storage/format/image_storage_format.h"
 
 namespace Dss::Acquisition {
 namespace {

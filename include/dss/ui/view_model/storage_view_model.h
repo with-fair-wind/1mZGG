@@ -3,8 +3,8 @@
 #include <QObject>
 #include <QString>
 
-#include "dss/storage/image_storage_format.h"
-#include "dss/ui/view_model_context.h"
+#include "dss/storage/format/image_storage_format.h"
+#include "dss/ui/view_model/view_model_context.h"
 
 namespace Dss::Ui {
 

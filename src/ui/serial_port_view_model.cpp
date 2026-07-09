@@ -1,4 +1,4 @@
-#include "dss/ui/serial_port_view_model.h"
+#include "dss/ui/view_model/serial_port_view_model.h"
 
 #include <array>
 #include <cmath>

@@ -1,4 +1,4 @@
-#include "dss/ui/wheel_guarded_spin_box.h"
+#include "dss/ui/widget/wheel_guarded_spin_box.h"
 
 #include <QWheelEvent>
 

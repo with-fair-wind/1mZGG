@@ -1,4 +1,4 @@
-#include "dss/ui/settings_view_model.h"
+#include "dss/ui/view_model/settings_view_model.h"
 
 #include <filesystem>
 
