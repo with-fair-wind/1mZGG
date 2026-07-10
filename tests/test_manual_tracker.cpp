@@ -3,7 +3,7 @@
 #include <gtest/gtest.h>
 
 #include "dss/core/constants.h"
-#include "dss/tracking/manual_tracker.h"
+#include "dss/tracking/strategy/manual_tracker.h"
 
 namespace {
 

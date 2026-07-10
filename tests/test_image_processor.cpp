@@ -5,8 +5,8 @@
 
 #include "dss/core/events.h"
 #include "dss/processing/pipeline/image_processor.h"
-#include "dss/tracking/i_tracking_strategy.h"
-#include "dss/tracking/manual_tracker.h"
+#include "dss/tracking/strategy/i_tracking_strategy.h"
+#include "dss/tracking/strategy/manual_tracker.h"
 
 using namespace std::chrono_literals;
 

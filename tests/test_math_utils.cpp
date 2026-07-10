@@ -2,7 +2,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/tracking/math_utils.h"
+#include "dss/tracking/support/math_utils.h"
 
 namespace {
 

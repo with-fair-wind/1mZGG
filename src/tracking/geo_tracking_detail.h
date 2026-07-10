@@ -8,8 +8,8 @@
 #include <string>
 #include <vector>
 
-#include "dss/tracking/candidate_utils.h"
-#include "dss/tracking/geo_tracker.h"
+#include "dss/tracking/support/candidate_utils.h"
+#include "dss/tracking/strategy/geo_tracker.h"
 
 namespace Dss::Tracking::GeoDetail {
 

@@ -1,12 +1,12 @@
-#include "dss/tracking/geo_tracker.h"
+#include "dss/tracking/strategy/geo_tracker.h"
 
 #include <algorithm>
 #include <string>
 #include <utility>
 
-#include "dss/tracking/candidate_utils.h"
-#include "dss/tracking/lifecycle_utils.h"
-#include "dss/tracking/prediction_utils.h"
+#include "dss/tracking/support/candidate_utils.h"
+#include "dss/tracking/support/lifecycle_utils.h"
+#include "dss/tracking/support/prediction_utils.h"
 #include "geo_tracking_detail.h"
 
 namespace Dss::Tracking {

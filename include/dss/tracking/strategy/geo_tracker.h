@@ -4,7 +4,7 @@
 #include <span>
 #include <vector>
 
-#include "dss/tracking/i_tracking_strategy.h"
+#include "dss/tracking/strategy/i_tracking_strategy.h"
 
 namespace Dss::Tracking {
 

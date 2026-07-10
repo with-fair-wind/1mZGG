@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "dss/tracking/leo_tracker.h"
+#include "dss/tracking/strategy/leo_tracker.h"
 
 namespace {
 

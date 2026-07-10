@@ -1,4 +1,4 @@
-#include "dss/tracking/sc_tracker.h"
+#include "dss/tracking/strategy/sc_tracker.h"
 
 #include <cmath>
 #include <cstddef>
@@ -8,9 +8,9 @@
 #include <utility>
 #include <vector>
 
-#include "dss/tracking/candidate_utils.h"
-#include "dss/tracking/lifecycle_utils.h"
-#include "dss/tracking/prediction_utils.h"
+#include "dss/tracking/support/candidate_utils.h"
+#include "dss/tracking/support/lifecycle_utils.h"
+#include "dss/tracking/support/prediction_utils.h"
 
 namespace {
 

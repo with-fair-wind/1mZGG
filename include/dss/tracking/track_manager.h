@@ -5,7 +5,7 @@
 
 #include "dss/core/constants.h"
 #include "dss/core/types.h"
-#include "dss/tracking/i_tracking_strategy.h"
+#include "dss/tracking/strategy/i_tracking_strategy.h"
 
 namespace Dss::Tracking {
 

@@ -1,31 +1,35 @@
 #pragma once
 
 #include <deque>
+#include <vector>
 
-#include "dss/tracking/i_tracking_strategy.h"
+#include "dss/tracking/strategy/i_tracking_strategy.h"
 
 namespace Dss::Tracking {
 
-/// 低轨（LEO）目标跟踪器，基于三帧方位-俯仰运动关联
-class LeoTracker final : public ITrackingStrategy {
+/// 恒星校准（Space Catalog）跟踪器，基于三帧像面运动关联与视场中心约束
+class ScTracker final : public ITrackingStrategy {
 public:
     /**
-     * @brief 创建低轨目标跟踪器。
+     * @brief 创建恒星校准跟踪器。
      * @param settings 跟踪门限、光学参数和生命周期配置。
      */
-    explicit LeoTracker(const Dss::Core::TrackingSettings& settings);
+    explicit ScTracker(const Dss::Core::TrackingSettings& settings);
 
     /**
      * @brief 处理单帧测量，执行三帧关联、验证与跟踪
      * @param measurements 当前帧测量数据
-     * @return 当前活跃目标列表（验证前返回候选，验证后返回选定目标）
+     * @return 当前活跃目标列表（验证前返回候选，验证后返回面积最大的目标）
      */
     auto track(const Dss::Core::FrameMeasurements& measurements)
         -> std::vector<Dss::Core::TargetInfo> override;
 
-    /** @brief 获取策略模式。 @return 固定返回 TrackMode::Leo。 */
+    /**
+     * @brief 获取策略模式。
+     * @return 固定返回 TrackMode::SpaceCatalog。
+     */
     [[nodiscard]] auto mode() const -> Dss::Core::TrackMode override {
-        return Dss::Core::TrackMode::Leo;
+        return Dss::Core::TrackMode::SpaceCatalog;
     }
 
     /// 重置 FIFO 缓存与目标状态

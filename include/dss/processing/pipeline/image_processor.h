@@ -11,7 +11,7 @@
 #include "dss/processing/frame/frame_packet.h"
 #include "dss/processing/strategy/i_processing_strategy.h"
 #include "dss/processing/pipeline/processing_pipeline.h"
-#include "dss/tracking/i_tracking_strategy.h"
+#include "dss/tracking/strategy/i_tracking_strategy.h"
 
 namespace Dss::Processing {
 

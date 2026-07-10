@@ -5,7 +5,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/tracking/candidate_utils.h"
+#include "dss/tracking/support/candidate_utils.h"
 
 namespace {
 

@@ -6,7 +6,7 @@
 #include <gtest/gtest.h>
 
 #include "dss/core/constants.h"
-#include "dss/tracking/geo_tracker.h"
+#include "dss/tracking/strategy/geo_tracker.h"
 
 namespace {
 

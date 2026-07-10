@@ -1,4 +1,4 @@
-#include "dss/tracking/manual_tracker.h"
+#include "dss/tracking/strategy/manual_tracker.h"
 
 #include <cmath>
 #include <optional>

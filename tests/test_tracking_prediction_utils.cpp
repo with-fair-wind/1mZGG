@@ -3,7 +3,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/tracking/prediction_utils.h"
+#include "dss/tracking/support/prediction_utils.h"
 
 namespace {
 

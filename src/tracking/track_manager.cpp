@@ -2,10 +2,10 @@
 
 #include <memory>
 
-#include "dss/tracking/geo_tracker.h"
-#include "dss/tracking/leo_tracker.h"
-#include "dss/tracking/manual_tracker.h"
-#include "dss/tracking/sc_tracker.h"
+#include "dss/tracking/strategy/geo_tracker.h"
+#include "dss/tracking/strategy/leo_tracker.h"
+#include "dss/tracking/strategy/manual_tracker.h"
+#include "dss/tracking/strategy/sc_tracker.h"
 
 namespace Dss::Tracking {
 

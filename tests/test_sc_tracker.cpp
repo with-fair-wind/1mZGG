@@ -3,7 +3,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/tracking/sc_tracker.h"
+#include "dss/tracking/strategy/sc_tracker.h"
 
 namespace {
 
