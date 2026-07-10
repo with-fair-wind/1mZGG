@@ -6,7 +6,7 @@
 #include <utility>
 #include <vector>
 
-#include "dss/acquisition/camera_control_protocol.h"
+#include "dss/acquisition/camera/camera_control_protocol.h"
 
 namespace Dss::Acquisition {
 

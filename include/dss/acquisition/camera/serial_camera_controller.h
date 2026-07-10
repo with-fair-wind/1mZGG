@@ -6,7 +6,7 @@
 #include <string>
 #include <string_view>
 
-#include "dss/acquisition/i_camera_controller.h"
+#include "dss/acquisition/camera/i_camera_controller.h"
 
 namespace Dss::Acquisition {
 

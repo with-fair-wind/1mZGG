@@ -10,7 +10,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/acquisition/image_sequence_frame_source.h"
+#include "dss/acquisition/source/image_sequence_frame_source.h"
 #include "dss/storage/format/bmp_image_format.h"
 
 namespace {

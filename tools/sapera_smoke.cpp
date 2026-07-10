@@ -6,7 +6,7 @@
 #include <mutex>
 #include <string>
 
-#include "dss/acquisition/sapera_frame_source.h"
+#include "dss/acquisition/source/sapera_frame_source.h"
 
 int main(int argc, char** argv) {
     if (argc < 2) {

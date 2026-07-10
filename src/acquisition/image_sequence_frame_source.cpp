@@ -1,4 +1,4 @@
-#include "dss/acquisition/image_sequence_frame_source.h"
+#include "dss/acquisition/source/image_sequence_frame_source.h"
 
 #include <QImage>
 #include <QString>

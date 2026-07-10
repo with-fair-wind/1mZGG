@@ -4,7 +4,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/acquisition/camera_control_protocol.h"
+#include "dss/acquisition/camera/camera_control_protocol.h"
 
 namespace {
 

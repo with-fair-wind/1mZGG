@@ -6,7 +6,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/acquisition/sapera_frame_source.h"
+#include "dss/acquisition/source/sapera_frame_source.h"
 #include "dss/core/event/events.h"
 #include "dss/core/event/message_bus.h"
 

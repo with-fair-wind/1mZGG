@@ -6,10 +6,10 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/acquisition/frame_source_coordinator.h"
-#include "dss/acquisition/i_camera_controller.h"
-#include "dss/acquisition/i_frame_source.h"
-#include "dss/acquisition/image_sequence_frame_source.h"
+#include "dss/acquisition/source/frame_source_coordinator.h"
+#include "dss/acquisition/camera/i_camera_controller.h"
+#include "dss/acquisition/source/i_frame_source.h"
+#include "dss/acquisition/source/image_sequence_frame_source.h"
 #include "dss/app/application_context.h"
 #include "dss/app/track_result_data_exchange_bridge.h"
 #include "dss/comm/port/i_serial_channel.h"

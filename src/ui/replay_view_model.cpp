@@ -6,9 +6,9 @@
 #include <limits>
 #include <utility>
 
-#include "dss/acquisition/frame_source_coordinator.h"
-#include "dss/acquisition/i_frame_source.h"
-#include "dss/acquisition/image_sequence_frame_source.h"
+#include "dss/acquisition/source/frame_source_coordinator.h"
+#include "dss/acquisition/source/i_frame_source.h"
+#include "dss/acquisition/source/image_sequence_frame_source.h"
 #include "dss/app/runtime_diagnostics.h"
 #include "dss/app/service_keys.h"
 #include "dss/processing/pipeline/image_processor.h"

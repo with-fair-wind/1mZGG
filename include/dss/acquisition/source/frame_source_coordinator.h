@@ -5,7 +5,7 @@
 #include <mutex>
 #include <optional>
 
-#include "dss/acquisition/i_frame_source.h"
+#include "dss/acquisition/source/i_frame_source.h"
 
 namespace Dss::Acquisition {
 

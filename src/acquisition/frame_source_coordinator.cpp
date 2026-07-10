@@ -1,4 +1,4 @@
-#include "dss/acquisition/frame_source_coordinator.h"
+#include "dss/acquisition/source/frame_source_coordinator.h"
 
 #include <utility>
 

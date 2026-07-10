@@ -64,7 +64,7 @@ ImageProcessor ──► ProcessingPipeline
 
 重点阅读：
 
-- `include/dss/acquisition/i_frame_source.h`
+- `include/dss/acquisition/source/i_frame_source.h`
 - `src/acquisition/image_sequence_frame_source.cpp`
 - `src/acquisition/frame_source_coordinator.cpp`
 - `src/processing/image_processor.cpp`

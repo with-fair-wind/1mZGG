@@ -12,7 +12,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/acquisition/image_sequence_frame_source.h"
+#include "dss/acquisition/source/image_sequence_frame_source.h"
 #include "dss/core/event/events.h"
 #include "dss/core/event/message_bus.h"
 #include "dss/core/service/service_registry.h"

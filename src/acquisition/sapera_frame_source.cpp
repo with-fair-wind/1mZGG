@@ -1,4 +1,4 @@
-#include "dss/acquisition/sapera_frame_source.h"
+#include "dss/acquisition/source/sapera_frame_source.h"
 
 #include <limits>
 #include <utility>

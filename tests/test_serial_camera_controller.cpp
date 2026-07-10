@@ -7,7 +7,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/acquisition/serial_camera_controller.h"
+#include "dss/acquisition/camera/serial_camera_controller.h"
 
 namespace {
 

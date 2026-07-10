@@ -3,12 +3,12 @@
 #ifdef DSS_BUILD_APP
 #include <memory>
 
-#include "dss/acquisition/frame_source_coordinator.h"
-#include "dss/acquisition/i_camera_controller.h"
-#include "dss/acquisition/i_frame_source.h"
-#include "dss/acquisition/image_sequence_frame_source.h"
+#include "dss/acquisition/source/frame_source_coordinator.h"
+#include "dss/acquisition/camera/i_camera_controller.h"
+#include "dss/acquisition/source/i_frame_source.h"
+#include "dss/acquisition/source/image_sequence_frame_source.h"
 #ifdef DSS_HAS_SAPERA
-#include "dss/acquisition/sapera_frame_source.h"
+#include "dss/acquisition/source/sapera_frame_source.h"
 #endif
 #include "dss/app/runtime_diagnostics.h"
 #include "dss/app/service_keys.h"
