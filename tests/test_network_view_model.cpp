@@ -6,7 +6,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/core/config.h"
+#include "dss/core/config/config.h"
 #include "dss/network/transport/i_network_channel.h"
 #include "dss/ui/view_model/network_view_model.h"
 

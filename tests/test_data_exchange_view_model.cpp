@@ -4,7 +4,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/core/config.h"
+#include "dss/core/config/config.h"
 #include "dss/network/endpoint/data_exchange.h"
 #include "dss/ui/view_model/data_exchange_view_model.h"
 

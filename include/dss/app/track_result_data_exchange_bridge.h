@@ -6,8 +6,8 @@
 #include <span>
 #include <vector>
 
-#include "dss/core/events.h"
-#include "dss/core/message_bus.h"
+#include "dss/core/event/events.h"
+#include "dss/core/event/message_bus.h"
 #include "dss/network/protocol/data_exchange_protocol.h"
 
 namespace Dss::App {

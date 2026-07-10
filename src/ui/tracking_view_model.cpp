@@ -3,7 +3,7 @@
 #include <utility>
 
 #include "dss/app/service_keys.h"
-#include "dss/core/config.h"
+#include "dss/core/config/config.h"
 #include "dss/processing/pipeline/image_processor.h"
 #include "dss/tracking/strategy/manual_tracker.h"
 #include "dss/tracking/track_manager.h"

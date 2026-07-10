@@ -1,6 +1,6 @@
 #include "dss/comm/channel/display_channel.h"
 
-#include "dss/core/events.h"
+#include "dss/core/event/events.h"
 
 namespace Dss::Comm {
 

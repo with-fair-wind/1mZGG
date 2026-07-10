@@ -5,7 +5,7 @@
 #include <functional>
 #include <vector>
 
-#include "dss/core/message_bus.h"
+#include "dss/core/event/message_bus.h"
 
 namespace Dss::App {
 

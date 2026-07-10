@@ -6,7 +6,7 @@
 #include <string>
 #include <string_view>
 
-#include "dss/core/message_bus.h"
+#include "dss/core/event/message_bus.h"
 #include "dss/network/protocol/data_exchange_protocol.h"
 #include "dss/network/transport/udp_channel.h"
 

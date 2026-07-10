@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "dss/core/events.h"
+#include "dss/core/event/events.h"
 #include "dss/network/endpoint/error_diagnostics.h"
 
 TEST(ErrorDiagnostics, AggregatesCommunicationAndStorageFailures) {

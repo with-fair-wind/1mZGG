@@ -12,7 +12,7 @@
 #include <utility>
 
 #include "dss/comm/protocol/frame_codec.h"
-#include "dss/core/events.h"
+#include "dss/core/event/events.h"
 #include "dss/core/types.h"
 
 namespace Dss::Comm {

@@ -5,7 +5,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/core/service_registry.h"
+#include "dss/core/service/service_registry.h"
 
 namespace {
 

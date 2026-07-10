@@ -6,8 +6,8 @@
 #include <cstddef>
 #include <vector>
 
-#include "dss/core/event_bus.h"
-#include "dss/core/events.h"
+#include "dss/core/event/event_bus.h"
+#include "dss/core/event/events.h"
 #include "dss/ui/view_model/view_model_context.h"
 
 namespace Dss::Ui {

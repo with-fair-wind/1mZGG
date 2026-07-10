@@ -1,4 +1,4 @@
-#include "dss/core/detail/event_bus_primitives.h"
+#include "dss/core/event/detail/event_bus_primitives.h"
 
 namespace {
 

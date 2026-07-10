@@ -10,9 +10,9 @@
 #include <utility>
 #include <vector>
 
-#include "dss/core/events.h"
-#include "dss/core/message_bus.h"
-#include "dss/core/result_packet_utils.h"
+#include "dss/core/event/events.h"
+#include "dss/core/event/message_bus.h"
+#include "dss/core/result/result_packet_utils.h"
 #include "dss/storage/detail/async_write_queue.h"
 #include "dss/storage/backend/i_storage_backend.h"
 #include "dss/storage/format/image_storage_format.h"

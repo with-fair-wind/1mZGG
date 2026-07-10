@@ -6,7 +6,7 @@
 #include <string_view>
 
 #include "dss/app/service_keys.h"
-#include "dss/core/config.h"
+#include "dss/core/config/config.h"
 #include "dss/network/transport/i_network_channel.h"
 #include "dss/ui/support/network_endpoint_helpers.h"
 

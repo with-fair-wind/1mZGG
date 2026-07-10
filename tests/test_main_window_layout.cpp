@@ -12,7 +12,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/core/service_registry.h"
+#include "dss/core/service/service_registry.h"
 #include "dss/processing/pipeline/image_processor.h"
 #include "dss/ui/widget/main_window.h"
 

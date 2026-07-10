@@ -6,7 +6,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/core/service_host.h"
+#include "dss/core/service/service_host.h"
 
 namespace {
 

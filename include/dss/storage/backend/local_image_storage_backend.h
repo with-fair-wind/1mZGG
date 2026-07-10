@@ -12,8 +12,8 @@
 #include <utility>
 #include <vector>
 
-#include "dss/core/events.h"
-#include "dss/core/message_bus.h"
+#include "dss/core/event/events.h"
+#include "dss/core/event/message_bus.h"
 #include "dss/storage/detail/async_write_queue.h"
 #include "dss/storage/format/bmp_image_format.h"
 #include "dss/storage/backend/i_storage_backend.h"

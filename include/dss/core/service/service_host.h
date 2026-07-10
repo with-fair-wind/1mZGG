@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "dss/core/i_service.h"
+#include "dss/core/service/i_service.h"
 
 namespace Dss::Core {
 

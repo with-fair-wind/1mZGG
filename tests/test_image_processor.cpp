@@ -3,7 +3,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/core/events.h"
+#include "dss/core/event/events.h"
 #include "dss/processing/pipeline/image_processor.h"
 #include "dss/tracking/strategy/i_tracking_strategy.h"
 #include "dss/tracking/strategy/manual_tracker.h"

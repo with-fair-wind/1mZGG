@@ -4,7 +4,7 @@
 #include <utility>
 
 #include "dss/app/observation_session.h"
-#include "dss/core/config.h"
+#include "dss/core/config/config.h"
 #include "dss/ui/support/qt_thread_utils.h"
 
 namespace Dss::Ui {

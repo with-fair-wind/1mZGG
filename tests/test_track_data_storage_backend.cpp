@@ -5,7 +5,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/core/events.h"
+#include "dss/core/event/events.h"
 #include "dss/storage/backend/track_data_storage_backend.h"
 #include "dss/storage/format/track_data_storage_format.h"
 

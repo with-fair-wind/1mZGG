@@ -13,9 +13,9 @@
 #include <gtest/gtest.h>
 
 #include "dss/acquisition/image_sequence_frame_source.h"
-#include "dss/core/events.h"
-#include "dss/core/message_bus.h"
-#include "dss/core/service_registry.h"
+#include "dss/core/event/events.h"
+#include "dss/core/event/message_bus.h"
+#include "dss/core/service/service_registry.h"
 #include "dss/ui/view_model/replay_view_model.h"
 #include "dss/ui/view_model/view_model_context.h"
 

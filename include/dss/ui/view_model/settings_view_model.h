@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <expected>
 
-#include "dss/core/config.h"
+#include "dss/core/config/config.h"
 
 namespace Dss::Ui {
 

@@ -6,7 +6,7 @@
 #include <QString>
 #include <chrono>
 
-#include "dss/core/events.h"
+#include "dss/core/event/events.h"
 
 namespace Dss::Comm {
 

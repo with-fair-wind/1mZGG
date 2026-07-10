@@ -5,7 +5,7 @@
 #include <mutex>
 #include <thread>
 
-#include "dss/core/message_bus.h"
+#include "dss/core/event/message_bus.h"
 #include "dss/processing/detail/bounded_channel.h"
 #include "dss/processing/frame/display_stretch.h"
 #include "dss/processing/frame/frame_packet.h"

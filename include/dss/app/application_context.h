@@ -5,10 +5,10 @@
 #include <string>
 #include <vector>
 
-#include "dss/core/config.h"
-#include "dss/core/message_bus.h"
-#include "dss/core/service_host.h"
-#include "dss/core/service_registry.h"
+#include "dss/core/config/config.h"
+#include "dss/core/event/message_bus.h"
+#include "dss/core/service/service_host.h"
+#include "dss/core/service/service_registry.h"
 
 namespace Dss::App {
 

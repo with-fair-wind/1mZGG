@@ -1,4 +1,4 @@
-#include "dss/core/config.h"
+#include "dss/core/config/config.h"
 
 #include <algorithm>
 #include <cctype>

@@ -5,9 +5,9 @@
 #include <string>
 #include <vector>
 
-#include "dss/core/events.h"
-#include "dss/core/message_bus.h"
-#include "dss/core/service_registry.h"
+#include "dss/core/event/events.h"
+#include "dss/core/event/message_bus.h"
+#include "dss/core/service/service_registry.h"
 #include "dss/ui/view_model/data_exchange_view_model.h"
 #include "dss/ui/view_model/display_view_model.h"
 #include "dss/ui/view_model/log_view_model.h"

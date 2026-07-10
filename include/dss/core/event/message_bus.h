@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dss/core/event_bus.h"
+#include "dss/core/event/event_bus.h"
 
 namespace Dss::Core {
 

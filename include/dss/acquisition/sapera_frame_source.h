@@ -9,7 +9,7 @@
 #include <string>
 
 #include "dss/acquisition/i_frame_source.h"
-#include "dss/core/message_bus.h"
+#include "dss/core/event/message_bus.h"
 
 namespace Dss::Acquisition {
 

@@ -5,7 +5,7 @@
 #include <filesystem>
 #include <string>
 
-#include "dss/core/config_types.h"
+#include "dss/core/config/config_types.h"
 #include "dss/core/constants.h"
 #include "dss/core/types.h"
 

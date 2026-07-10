@@ -4,7 +4,7 @@
 #include <utility>
 #include <vector>
 
-#include "dss/core/events.h"
+#include "dss/core/event/events.h"
 
 #ifdef DSS_HAS_SAPERA
 #include <SapClassBasic.h>

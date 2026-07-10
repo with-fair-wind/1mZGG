@@ -3,8 +3,8 @@
 #include <gtest/gtest.h>
 
 #include "dss/app/runtime_diagnostics.h"
-#include "dss/core/event_bus.h"
-#include "dss/core/events.h"
+#include "dss/core/event/event_bus.h"
+#include "dss/core/event/events.h"
 
 TEST(RuntimeDiagnostics, AggregatesBackendCountersAndErrorEvents) {
     Dss::App::RuntimeDiagnostics::MessageBus bus;

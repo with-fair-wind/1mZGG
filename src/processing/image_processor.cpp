@@ -1,6 +1,6 @@
 #include "dss/processing/pipeline/image_processor.h"
 
-#include "dss/core/events.h"
+#include "dss/core/event/events.h"
 
 namespace Dss::Processing {
 

@@ -5,7 +5,7 @@
 #include <span>
 #include <string>
 
-#include "dss/core/message_bus.h"
+#include "dss/core/event/message_bus.h"
 #include "dss/network/transport/i_network_channel.h"
 #include "dss/network/transport/udp_channel.h"
 

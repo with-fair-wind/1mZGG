@@ -11,7 +11,7 @@
 - `include/dss/app/application_context.h`
 - `src/app/application_context.cpp`
 - `src/app/communication_services.cpp`
-- `include/dss/core/service_registry.h`
+- `include/dss/core/service/service_registry.h`
 - `src/main.cpp`
 
 `ApplicationContext::registerCommunicationServices()` 集中注册串口、网络、处理、回放、存储、诊断和可选 Sapera 服务。默认注册不会打开硬件；相机服务当前使用 `CommandOnlyCameraController`。
@@ -24,8 +24,8 @@
 
 重点阅读：
 
-- `include/dss/core/event_bus.h`
-- `include/dss/core/events.h`
+- `include/dss/core/event/event_bus.h`
+- `include/dss/core/event/events.h`
 - `include/dss/ui/view_model/main_view_model.h`
 - `include/dss/ui/view_model/view_model_context.h`
 - `src/ui/main_view_model.cpp`

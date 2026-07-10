@@ -10,7 +10,7 @@
 #include "dss/app/service_keys.h"
 #include "dss/comm/port/i_serial_channel.h"
 #include "dss/comm/port/serial_command_interfaces.h"
-#include "dss/core/config.h"
+#include "dss/core/config/config.h"
 #include "dss/core/types.h"
 
 namespace Dss::Ui {

@@ -3,7 +3,7 @@
 #include <memory>
 
 #include "dss/app/service_keys.h"
-#include "dss/core/config.h"
+#include "dss/core/config/config.h"
 #include "dss/processing/strategy/diff_processing_strategy.h"
 #include "dss/processing/pipeline/image_processor.h"
 #ifdef DSS_HAS_OPENCV

@@ -7,8 +7,8 @@
 #include <gtest/gtest.h>
 
 #include "dss/acquisition/sapera_frame_source.h"
-#include "dss/core/events.h"
-#include "dss/core/message_bus.h"
+#include "dss/core/event/events.h"
+#include "dss/core/event/message_bus.h"
 
 namespace {
 

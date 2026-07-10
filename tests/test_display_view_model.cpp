@@ -7,9 +7,9 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/core/events.h"
-#include "dss/core/message_bus.h"
-#include "dss/core/service_registry.h"
+#include "dss/core/event/events.h"
+#include "dss/core/event/message_bus.h"
+#include "dss/core/service/service_registry.h"
 #include "dss/processing/frame/display_stretch.h"
 #include "dss/processing/pipeline/image_processor.h"
 #include "dss/ui/view_model/display_view_model.h"

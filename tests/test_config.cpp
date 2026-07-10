@@ -4,7 +4,7 @@
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
 
-#include "dss/core/config.h"
+#include "dss/core/config/config.h"
 
 TEST(ConfigTest, LoadsJsonWithoutQt) {
     const auto path = std::filesystem::current_path() / "dss_config_test.json";

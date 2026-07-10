@@ -15,7 +15,7 @@
 #include "dss/comm/protocol/frame_codec.h"
 #include "dss/comm/port/i_serial_channel.h"
 #include "dss/core/constants.h"
-#include "dss/core/message_bus.h"
+#include "dss/core/event/message_bus.h"
 
 class QSerialPort;
 

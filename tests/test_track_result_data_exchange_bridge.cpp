@@ -5,7 +5,7 @@
 #include <gtest/gtest.h>
 
 #include "dss/app/track_result_data_exchange_bridge.h"
-#include "dss/core/message_bus.h"
+#include "dss/core/event/message_bus.h"
 
 namespace {
 

@@ -27,8 +27,8 @@
 #define DSS_EVT_RESTORE_EMIT
 #endif
 
-#include "dss/core/detail/event.h"
-#include "dss/core/detail/event_bus_primitives.h"
+#include "dss/core/event/detail/event.h"
+#include "dss/core/event/detail/event_bus_primitives.h"
 
 namespace Dss::Evt {
 /**

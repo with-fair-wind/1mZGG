@@ -3,7 +3,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/core/config.h"
+#include "dss/core/config/config.h"
 #include "dss/ui/view_model/settings_view_model.h"
 
 TEST(SettingsViewModel, ValidatesAndPersistsProductionSettings) {

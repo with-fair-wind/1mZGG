@@ -3,7 +3,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/core/events.h"
+#include "dss/core/event/events.h"
 #include "dss/ui/support/log_palette.h"
 
 TEST(LogPaletteTest, MapsLogLevelsToDistinctUiColors) {

@@ -1,6 +1,6 @@
 #include "dss/network/endpoint/atmos_receiver.h"
 
-#include "dss/core/events.h"
+#include "dss/core/event/events.h"
 #include "dss/network/protocol/atmos_protocol.h"
 
 namespace Dss::Network {

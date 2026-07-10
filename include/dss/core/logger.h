@@ -10,8 +10,8 @@
 #include <string_view>
 #include <utility>
 
-#include "dss/core/events.h"
-#include "dss/core/message_bus.h"
+#include "dss/core/event/events.h"
+#include "dss/core/event/message_bus.h"
 
 namespace spdlog {
 class logger;

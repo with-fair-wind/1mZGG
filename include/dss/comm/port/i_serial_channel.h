@@ -4,7 +4,7 @@
 #include <expected>
 #include <string>
 
-#include "dss/core/config_types.h"
+#include "dss/core/config/config_types.h"
 #include "dss/core/constants.h"
 
 namespace Dss::Comm {

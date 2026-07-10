@@ -3,7 +3,7 @@
 #include <QDateTime>
 
 #include "dss/app/service_keys.h"
-#include "dss/core/config.h"
+#include "dss/core/config/config.h"
 #include "dss/storage/backend/local_image_storage_backend.h"
 #include "dss/storage/backend/track_data_storage_backend.h"
 

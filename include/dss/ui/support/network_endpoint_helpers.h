@@ -2,7 +2,7 @@
 
 #include <QString>
 
-#include "dss/core/config_types.h"
+#include "dss/core/config/config_types.h"
 
 namespace Dss::Ui {
 

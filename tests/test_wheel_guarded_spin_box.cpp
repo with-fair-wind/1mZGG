@@ -11,7 +11,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/core/service_registry.h"
+#include "dss/core/service/service_registry.h"
 #include "dss/ui/widget/main_window.h"
 #include "dss/ui/widget/wheel_guarded_spin_box.h"
 
