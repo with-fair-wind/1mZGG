@@ -1,4 +1,4 @@
-#include "dss/comm/master_control_channel.h"
+#include "dss/comm/channel/master_control_channel.h"
 
 #include "dss/core/events.h"
 

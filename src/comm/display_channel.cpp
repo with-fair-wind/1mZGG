@@ -1,4 +1,4 @@
-#include "dss/comm/display_channel.h"
+#include "dss/comm/channel/display_channel.h"
 
 #include "dss/core/events.h"
 

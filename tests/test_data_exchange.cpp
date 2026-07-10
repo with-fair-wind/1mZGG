@@ -5,7 +5,7 @@
 #include <gtest/gtest.h>
 
 #include "dss/core/events.h"
-#include "dss/network/data_exchange.h"
+#include "dss/network/endpoint/data_exchange.h"
 
 namespace {
 

@@ -1,4 +1,4 @@
-#include "dss/network/udp_channel.h"
+#include "dss/network/transport/udp_channel.h"
 
 #include <QAbstractSocket>
 #include <QHostAddress>

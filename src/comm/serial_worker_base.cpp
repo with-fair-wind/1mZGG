@@ -1,4 +1,4 @@
-#include "dss/comm/serial_worker_base.h"
+#include "dss/comm/channel/serial_worker_base.h"
 
 #include <QByteArray>
 #include <QIODevice>

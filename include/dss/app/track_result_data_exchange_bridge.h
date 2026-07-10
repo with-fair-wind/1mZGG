@@ -8,7 +8,7 @@
 
 #include "dss/core/events.h"
 #include "dss/core/message_bus.h"
-#include "dss/network/data_exchange_protocol.h"
+#include "dss/network/protocol/data_exchange_protocol.h"
 
 namespace Dss::App {
 

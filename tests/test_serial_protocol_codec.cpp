@@ -5,7 +5,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/comm/serial_protocol_codec.h"
+#include "dss/comm/protocol/serial_protocol_codec.h"
 
 namespace {
 

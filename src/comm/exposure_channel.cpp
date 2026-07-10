@@ -1,4 +1,4 @@
-#include "dss/comm/exposure_channel.h"
+#include "dss/comm/channel/exposure_channel.h"
 
 #include "dss/core/events.h"
 

@@ -11,7 +11,7 @@
 #include <string_view>
 #include <utility>
 
-#include "dss/comm/frame_codec.h"
+#include "dss/comm/protocol/frame_codec.h"
 #include "dss/core/events.h"
 #include "dss/core/types.h"
 

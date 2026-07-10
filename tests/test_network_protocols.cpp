@@ -8,8 +8,8 @@
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
 
-#include "dss/network/atmos_protocol.h"
-#include "dss/network/diagnostic_protocol.h"
+#include "dss/network/protocol/atmos_protocol.h"
+#include "dss/network/protocol/diagnostic_protocol.h"
 
 namespace {
 

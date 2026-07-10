@@ -7,7 +7,7 @@
 
 #include "dss/app/service_keys.h"
 #include "dss/core/config.h"
-#include "dss/network/i_network_channel.h"
+#include "dss/network/transport/i_network_channel.h"
 #include "dss/ui/support/network_endpoint_helpers.h"
 
 namespace Dss::Ui {

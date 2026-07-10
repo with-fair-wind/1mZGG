@@ -1,4 +1,4 @@
-#include "dss/network/heartbeat.h"
+#include "dss/network/endpoint/heartbeat.h"
 
 #include <chrono>
 #include <thread>

@@ -1,4 +1,4 @@
-#include "dss/network/error_diagnostics.h"
+#include "dss/network/endpoint/error_diagnostics.h"
 
 #include <chrono>
 #include <thread>

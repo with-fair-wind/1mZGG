@@ -1,4 +1,4 @@
-#include "dss/comm/servo_channel.h"
+#include "dss/comm/channel/servo_channel.h"
 
 namespace Dss::Comm {
 

@@ -12,8 +12,8 @@
 #include <thread>
 #include <vector>
 
-#include "dss/comm/frame_codec.h"
-#include "dss/comm/i_serial_channel.h"
+#include "dss/comm/protocol/frame_codec.h"
+#include "dss/comm/port/i_serial_channel.h"
 #include "dss/core/constants.h"
 #include "dss/core/message_bus.h"
 

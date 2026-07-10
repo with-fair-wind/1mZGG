@@ -6,7 +6,7 @@
 #include <gtest/gtest.h>
 
 #include "dss/core/types.h"
-#include "dss/network/data_exchange_protocol.h"
+#include "dss/network/protocol/data_exchange_protocol.h"
 
 namespace {
 

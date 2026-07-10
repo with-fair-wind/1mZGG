@@ -3,7 +3,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dss/comm/frame_codec.h"
+#include "dss/comm/protocol/frame_codec.h"
 
 TEST(FrameCodecTest, WrapsAndValidatesFrame) {
     std::vector<uint8_t> frame(4, 0);

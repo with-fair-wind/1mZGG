@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "dss/core/constants.h"
-#include "dss/network/heartbeat.h"
+#include "dss/network/endpoint/heartbeat.h"
 
 TEST(Heartbeat, BuildsHeartbeatFrame) {
     const auto frame = Dss::Network::Heartbeat::buildFrame();

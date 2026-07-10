@@ -1,4 +1,4 @@
-#include "dss/network/data_exchange.h"
+#include "dss/network/endpoint/data_exchange.h"
 
 #include <utility>
 

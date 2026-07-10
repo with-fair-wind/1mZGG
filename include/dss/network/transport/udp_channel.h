@@ -7,7 +7,7 @@
 #include <mutex>
 #include <span>
 
-#include "dss/network/i_network_channel.h"
+#include "dss/network/transport/i_network_channel.h"
 
 class QUdpSocket;
 

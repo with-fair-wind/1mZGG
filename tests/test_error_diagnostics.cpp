@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "dss/core/events.h"
-#include "dss/network/error_diagnostics.h"
+#include "dss/network/endpoint/error_diagnostics.h"
 
 TEST(ErrorDiagnostics, AggregatesCommunicationAndStorageFailures) {
     Dss::Network::ErrorDiagnostics::MessageBus bus;

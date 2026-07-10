@@ -1,4 +1,4 @@
-#include "dss/network/image_sender.h"
+#include "dss/network/endpoint/image_sender.h"
 
 #include <algorithm>
 #include <limits>
