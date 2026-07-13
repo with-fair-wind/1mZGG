@@ -3,8 +3,8 @@
 #ifdef DSS_BUILD_APP
 #include <memory>
 
-#include "dss/acquisition/source/frame_source_coordinator.h"
 #include "dss/acquisition/camera/i_camera_controller.h"
+#include "dss/acquisition/source/frame_source_coordinator.h"
 #include "dss/acquisition/source/i_frame_source.h"
 #include "dss/acquisition/source/image_sequence_frame_source.h"
 #ifdef DSS_HAS_SAPERA
@@ -15,16 +15,16 @@
 #include "dss/app/track_result_data_exchange_bridge.h"
 #include "dss/comm/channel/display_channel.h"
 #include "dss/comm/channel/exposure_channel.h"
-#include "dss/comm/port/i_serial_channel.h"
 #include "dss/comm/channel/master_control_channel.h"
-#include "dss/comm/port/serial_command_interfaces.h"
 #include "dss/comm/channel/servo_channel.h"
+#include "dss/comm/port/i_serial_channel.h"
+#include "dss/comm/port/serial_command_interfaces.h"
 #include "dss/network/endpoint/atmos_receiver.h"
 #include "dss/network/endpoint/data_exchange.h"
 #include "dss/network/endpoint/error_diagnostics.h"
 #include "dss/network/endpoint/heartbeat.h"
-#include "dss/network/transport/i_network_channel.h"
 #include "dss/network/endpoint/image_sender.h"
+#include "dss/network/transport/i_network_channel.h"
 #include "dss/processing/pipeline/image_processor.h"
 #include "dss/storage/backend/local_image_storage_backend.h"
 #include "dss/storage/backend/track_data_storage_backend.h"
@@ -55,6 +55,19 @@ void ApplicationContext::registerCommunicationServices() {
 
     m_registry.registerService<Dss::Network::ImageSender>(ServiceKey::imageSender, imageSender);
     m_registry.registerService<Dss::Network::INetworkChannel>(ServiceKey::imageSender, imageSender);
+    m_connections.push_back(m_bus.subscribe<Dss::Core::ImageReadyForSendEvent>(
+        [imageSender](const Dss::Core::ImageReadyForSendEvent& event) {
+            if (!imageSender->isOpen()) {
+                return;
+            }
+            auto image = event.image;
+            if ((!image || image->empty()) && event.imageFactory) {
+                image = event.imageFactory();
+            }
+            if (image && !image->empty()) {
+                imageSender->sendImage(event.frameSeq, std::move(image), event.width, event.height);
+            }
+        }));
     m_registry.registerService<Dss::Network::Heartbeat>(ServiceKey::heartbeat, heartbeat);
     m_registry.registerService<Dss::Network::INetworkChannel>(ServiceKey::heartbeat, heartbeat);
     m_registry.registerService<Dss::Network::ErrorDiagnostics>(ServiceKey::errorDiagnostics,
@@ -108,7 +121,7 @@ void ApplicationContext::registerCommunicationServices() {
 #endif
     frameSource->setFrameCallback(
         [imageProcessor, localImageStorage](Dss::Processing::FramePacket packet) {
-            if (localImageStorage->isRunning() && !packet.rawImage.empty()) {
+            if (localImageStorage->isRunning() && packet.rawImage && !packet.rawImage->empty()) {
                 Dss::Storage::RawImageMetadata metadata{};
                 metadata.width = packet.width;
                 metadata.height = packet.height;

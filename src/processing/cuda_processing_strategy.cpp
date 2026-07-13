@@ -16,8 +16,8 @@
 #include "dss/gpu/cuda_device_manager.h"
 #include "dss/gpu/cuda_kernels.h"
 #include "dss/gpu/gpu_buffer.h"
-#include "dss/processing/frame/display_stretch.h"
 #include "dss/processing/detail/labeler.h"
+#include "dss/processing/frame/display_stretch.h"
 
 namespace Dss::Processing {
 namespace {
@@ -33,30 +33,30 @@ public:
     auto process(const FramePacket& input) -> ProcessingResult override {
         ProcessingResult result{};
         const auto pixelCount = static_cast<std::size_t>(input.width) * input.height;
-        if (input.width == 0 || input.height == 0 || input.rawImage.size() != pixelCount ||
+        if (input.width == 0 || input.height == 0 || !input.rawImage ||
+            input.rawImage->size() != pixelCount ||
             pixelCount > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
             return result;
         }
 
         try {
             ensureCapacity(pixelCount);
-            result.stats = computeImageStats(input.rawImage);
+            result.stats = computeImageStats(*input.rawImage);
             result.displayImage.resize(pixelCount);
             std::vector<uint8_t> binary(pixelCount);
 
             const auto stream = m_device->stream();
-            m_input.upload(input.rawImage, stream);
+            m_input.upload(*input.rawImage, stream);
             const auto stretchRange =
                 std::max(1, static_cast<int>(m_options.displayHigh) - m_options.displayLow);
             Dss::Gpu::short_to_byte(m_input.devicePtr(), m_display.devicePtr(),
                                     m_options.displayLow, m_options.displayHigh,
-                                    static_cast<float>(stretchRange),
-                                    static_cast<int>(pixelCount), stream);
+                                    static_cast<float>(stretchRange), static_cast<int>(pixelCount),
+                                    stream);
 
-            const auto thresholdValue = std::clamp(
-                result.stats.avg + m_options.thresholdSigma * result.stats.stdDev,
-                0.0,
-                static_cast<double>(std::numeric_limits<uint16_t>::max()));
+            const auto thresholdValue =
+                std::clamp(result.stats.avg + m_options.thresholdSigma * result.stats.stdDev, 0.0,
+                           static_cast<double>(std::numeric_limits<uint16_t>::max()));
             Dss::Gpu::binary16(m_input.devicePtr(), m_binary.devicePtr(),
                                static_cast<uint16_t>(std::lround(thresholdValue)),
                                static_cast<int>(pixelCount), stream);

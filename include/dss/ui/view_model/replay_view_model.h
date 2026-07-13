@@ -72,14 +72,14 @@ public:
 
 public Q_SLOTS:
     /**
-     * @brief 提交选择回放图像序列文件的后台任务。
+     * @brief 登记回放图像序列路径并立即更新回放计数，不读取图像内容。
      * @param files 图像文件路径列表。
-     * @return 任务成功提交时返回 true；服务缺失、路径无效或已有任务运行时返回 false。
+     * @return 路径成功登记时返回 true；服务缺失、路径为空或已有任务运行时返回 false。
      */
     Q_INVOKABLE bool selectReplayFiles(const QStringList& files);
 
     /**
-     * @brief 开始连续采集或回放。
+     * @brief 提交回放源初始化任务，成功后开始连续回放。
      */
     Q_INVOKABLE void startGrab();
 
@@ -149,10 +149,11 @@ private:
      * @brief 回放后台任务完成后回到 UI 线程应用的结果。
      */
     struct ReplayTaskResult {
-        bool success = false;             ///< 任务是否成功完成。
-        std::optional<int> frameCount;    ///< 需要更新的序列总帧数。
-        std::optional<int> currentFrame;  ///< 需要更新的当前帧号。
-        QString statusText;               ///< 任务完成后展示的状态文本。
+        bool success = false;                     ///< 任务是否成功完成。
+        bool startReplayAfterCompletion = false;  ///< 完成后是否在 UI 线程启动连续回放。
+        std::optional<int> frameCount;            ///< 需要更新的序列总帧数。
+        std::optional<int> currentFrame;          ///< 需要更新的当前帧号。
+        QString statusText;                       ///< 任务完成后展示的状态文本。
     };
 
     using ReplayTask = std::function<ReplayTaskResult(std::stop_token)>;  ///< 后台回放任务类型。
@@ -170,6 +171,9 @@ private:
      * @param result 后台任务产生的结果。
      */
     void finishReplayTask(const ReplayTaskResult& result);
+
+    /** @brief 在回放源完成后台初始化后启动处理器和连续回放。 */
+    void startInitializedReplay();
 
     /**
      * @brief 订阅显示刷新事件，用于同步当前帧进度。

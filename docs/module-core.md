@@ -77,7 +77,8 @@ Core 模块是整个系统的基础层，提供所有其他模块共享的类型
 | `ProcessingCompleteEvent` | `ImageProcessor` | `DisplayViewModel` |
 | `RotatedFrameReadyEvent` | `ImageProcessor` | 存储/扩展订阅者 |
 | `TrackResultEvent` | `ImageProcessor` | `TrackingViewModel`、Storage、DataExchange bridge |
-| `ImageSendEvent` | `ImageProcessor` / `ImageSender` | 图像发送状态订阅者 |
+| `ImageReadyForSendEvent` | `ImageProcessor` | ApplicationContext 图像发送桥 |
+| `ImageSendCompletedEvent` | `ImageSender` | 图像发送状态订阅者 |
 | `NetworkTransmissionErrorEvent` | `DataExchange` | `LogViewModel` / Logger |
 | `SerialFrameErrorEvent` | `SerialWorkerBase` | `LogViewModel` |
 | `SerialDecodeErrorEvent` | Serial Channel | `LogViewModel` |
@@ -128,19 +129,9 @@ Core 模块是整个系统的基础层，提供所有其他模块共享的类型
 - `UdpEndpointConfig` — UDP 端点配置 (地址、端口)
 - `CommNetConfig::exchangeGxtc/exchangeGdcl` — GXTC/GDCL 独立数据交换端点；旧 `exchange` 配置仍会兼容推导
 
-### 6. 服务基础设施
+### 6. 服务注册基础设施
 
-**`IService`** (`i_service.h`) — 服务生命周期接口:
-- `name()` → 服务名称
-- `start()` → 启动
-- `stop()` → 停止
-
-**`ServiceHost`** (`service_host.h`) — 有序服务启停:
-- `add(service)` — 注册服务
-- `startAll()` — 按注册顺序启动
-- `stopAll()` — 按逆序停止
-
-**`ServiceRegistry`** (`service_registry.h`) — 按类型索引的服务查找:
+**`ServiceRegistry`** (`service_registry.h`) — 按类型与名称索引共享服务实例:
 - `registerService<T>(name, instance)` — 注册
 - `get<T>(name)` — 获取（不存在则抛异常）
 - `tryGet<T>(name)` — 获取（不存在返回 nullptr）
@@ -210,17 +201,6 @@ classDiagram
         +has~T~(name) bool
         +clear()
     }
-    class IService {
-        <<interface>>
-        +name() string_view
-        +start() expected
-        +stop()
-    }
-    class ServiceHost {
-        +add(shared_ptr~IService~)
-        +startAll() expected
-        +stopAll()
-    }
     class Config {
         +instance() Config
         +load(path) expected
@@ -239,13 +219,12 @@ classDiagram
     }
 
     BasicMessageBus --> ScopedConnection : 创建
-    ServiceHost o-- IService : 持有并编排
-    ServiceRegistry o-- IService : 可按接口注册同一实例
+    ServiceRegistry o-- Service : 按类型和名称持有共享实例
     Logger --> BasicMessageBus : 发布 LogMessageEvent
     Config ..> ServiceRegistry : 为组合根提供配置
 ```
 
-`ServiceRegistry` 与 `ServiceHost` 解决不同问题：前者按“类型 + 名称”查找共享实例，后者按顺序拥有 `IService` 并负责启停回滚。把对象放进 Registry 不会自动启动它，也不会自动进入 Host。
+`ServiceRegistry` 只负责按“类型 + 名称”查找共享实例，不自动启动对象。具体生命周期由拥有业务命令的 ViewModel 显式驱动，服务析构函数负责兜底停止。
 
 ### 事件分发调用栈
 
@@ -299,30 +278,6 @@ flowchart LR
 
 `ExposureSyncEvent`、`Sync25HzEvent`、`ManualTargetSelectEvent`、`ZoomChangeEvent` 已有发布点，但不要仅凭事件名称假设存在后端订阅。当前手动目标的真正配置路径是 `TrackingViewModel::selectTarget() → configureTrackingStrategy() → ManualTracker::setManualTarget()`；图像缩放由 `ImageDisplay::wheelEvent()` 直接处理。
 
-### ServiceHost 启停与回滚
-
-```mermaid
-sequenceDiagram
-    participant Caller as 调用方
-    participant Host as ServiceHost
-    participant A as Service A
-    participant B as Service B
-    participant C as Service C
-
-    Caller->>Host: startAll()
-    Host->>A: start()
-    A-->>Host: 成功
-    Host->>B: start()
-    B-->>Host: 成功
-    Host->>C: start()
-    C-->>Host: 失败
-    Host->>B: stop()
-    Host->>A: stop()
-    Host-->>Caller: unexpected(error)
-```
-
-`stopAll()` 始终按注册逆序停止。Host 已进入启动/运行状态后不应再随意追加服务；这样可以保证依赖服务晚启动、早停止。
-
 ### 配置加载链
 
 ```mermaid
@@ -343,7 +298,6 @@ flowchart TD
 |---|---|---|
 | App 中的 `BasicMessageBus<SharedMutexLock>` | `ApplicationContext` 独占 | 通道表与处理器列表使用共享互斥/COW；处理器内容不自动受保护 |
 | `ServiceRegistry` | `ApplicationContext` 独占，内部持有 `shared_ptr` | `shared_mutex` 保护注册和查询 |
-| `ServiceHost` | `ApplicationContext` 独占 | 生命周期操作应由单一编排线程执行 |
 | `Config` / `Logger` | 静态单例 | 启动期配置；并发变更要额外审查 |
 | 领域 DTO | 值对象或智能指针只读快照 | 跨线程优先移动值或传 `shared_ptr<const T>` |
 
@@ -352,17 +306,18 @@ flowchart TD
 - 配置、服务启动使用 `std::expected<..., std::string>`，调用方必须检查，不能只依赖日志。
 - 运行期串口、网络、存储错误通过类型化事件扇出到诊断与日志。
 - Registry 的 `get()` 是强约束查询，缺失会抛异常；UI 的可选功能通常使用 `tryGet()` 并转换成状态提示。
-- Logger 在 `wireLogger()` 后才会把日志发布到总线；`ApplicationContext` 析构时先停止服务，再断开 Logger 的总线指针。
+- Logger 在 `wireLogger()` 后才会把日志发布到总线；`ApplicationContext` 析构时断开 Logger 的总线指针。
+- 消息总线隔离订阅者异常并继续派发；后台线程顶层异常转换为 `BackgroundTaskErrorEvent`。
 
 ### 扩展、测试与阅读顺序
 
-新增跨模块数据时，优先在 `types.h` 定义稳定 DTO；只用于通知的载荷放进 `events.h`。新增服务接口时，先判断是否真的需要统一 `IService` 生命周期，避免把 Registry 当作服务定位器滥用。
+新增跨模块数据时，优先在 `types.h` 定义稳定 DTO；只用于通知的载荷放进 `events.h`。新增服务时必须明确生命周期入口与析构兜底，避免把 Registry 当作服务定位器滥用。
 
 重点测试：
 
 - `test_event_bus_primitives_header.cpp`、`test_event_header.cpp`
-- `test_service_registry.cpp`、`test_service_host.cpp`
+- `test_service_registry.cpp`
 - `test_config.cpp`、`test_logger.cpp`
 - `test_result_packet_utils.cpp`
 
-推荐源码顺序：`types.h` → `events.h` → `event_bus.h` → `service_registry.h` → `i_service.h` / `service_host.*` → `config_types.h` / `config.*` → `logger.*` → `result_packet_utils.*`。
+推荐源码顺序：`types.h` → `events.h` → `event_bus.h` → `service_registry.h` → `config_types.h` / `config.*` → `logger.*` → `result_packet_utils.*`。

@@ -17,44 +17,45 @@ SerialWorkerBase::~SerialWorkerBase() {
 }
 
 auto SerialWorkerBase::open(const SerialConfig& config) -> std::expected<void, std::string> {
+    std::lock_guard lifecycleLock(m_lifecycleMutex);
+    closeLocked();
     m_config = config;
+    std::promise<std::expected<void, std::string>> initPromise;
+    auto initFuture = initPromise.get_future();
+    m_workerThread =
+        std::jthread([this, promise = std::move(initPromise)](std::stop_token token) mutable {
+            workerLoop(token, std::move(promise));
+        });
 
-    m_serialPort = std::make_unique<QSerialPort>();
-    m_serialPort->setPortName(QString::fromStdString(m_config.portName));
-    m_serialPort->setBaudRate(m_config.baudRate);
-    m_serialPort->setDataBits(static_cast<QSerialPort::DataBits>(m_config.dataBits));
-    m_serialPort->setStopBits(QSerialPort::OneStop);
-    m_serialPort->setParity(QSerialPort::NoParity);
-    m_serialPort->setFlowControl(QSerialPort::NoFlowControl);
-
-    if (!m_serialPort->open(QIODevice::ReadWrite)) {
-        m_status.store(Dss::Core::Status::Error);
-        return std::unexpected("Failed to open port: " + m_config.portName + " - " +
-                               m_serialPort->errorString().toStdString());
+    auto result = initFuture.get();
+    if (!result && m_workerThread.joinable()) {
+        m_workerThread.request_stop();
+        m_workerThread.join();
     }
-
-    m_status.store(Dss::Core::Status::Ok);
-
-    m_workerThread = std::jthread([this](std::stop_token token) { workerLoop(token); });
-
-    return {};
+    return result;
 }
 
 void SerialWorkerBase::close() {
+    std::lock_guard lifecycleLock(m_lifecycleMutex);
+    closeLocked();
+}
+
+void SerialWorkerBase::closeLocked() {
     if (m_workerThread.joinable()) {
         m_workerThread.request_stop();
         m_workerThread.join();
     }
 
-    if (m_serialPort && m_serialPort->isOpen()) {
-        m_serialPort->close();
+    {
+        std::lock_guard lock(m_sendMutex);
+        m_sendRequested = false;
     }
-    m_serialPort.reset();
+    m_open.store(false);
     m_status.store(Dss::Core::Status::Init);
 }
 
 bool SerialWorkerBase::isOpen() const {
-    return m_serialPort && m_serialPort->isOpen();
+    return m_open.load();
 }
 
 auto SerialWorkerBase::status() const -> Dss::Core::Status {
@@ -77,20 +78,39 @@ void SerialWorkerBase::publishDecodeError(std::string_view field, std::string_vi
     });
 }
 
-void SerialWorkerBase::workerLoop(std::stop_token token) {
+void SerialWorkerBase::workerLoop(std::stop_token token,
+                                  std::promise<std::expected<void, std::string>> initPromise) {
+    QSerialPort serialPort;
+    serialPort.setPortName(QString::fromStdString(m_config.portName));
+    serialPort.setBaudRate(m_config.baudRate);
+    serialPort.setDataBits(static_cast<QSerialPort::DataBits>(m_config.dataBits));
+    serialPort.setStopBits(QSerialPort::OneStop);
+    serialPort.setParity(QSerialPort::NoParity);
+    serialPort.setFlowControl(QSerialPort::NoFlowControl);
+    if (!serialPort.open(QIODevice::ReadWrite)) {
+        m_status.store(Dss::Core::Status::Error);
+        initPromise.set_value(std::unexpected("Failed to open port: " + m_config.portName + " - " +
+                                              serialPort.errorString().toStdString()));
+        return;
+    }
+
+    m_open.store(true);
+    m_status.store(Dss::Core::Status::Ok);
+    initPromise.set_value({});
+
     using namespace std::chrono;
     auto lastFpsTime = steady_clock::now();
 
     while (!token.stop_requested()) {
-        if (m_serialPort && m_serialPort->waitForReadyRead(20)) {
-            onDataReceived();
+        if (serialPort.waitForReadyRead(20)) {
+            onDataReceived(serialPort);
         }
 
         {
             std::lock_guard lock(m_sendMutex);
             if (m_sendRequested) {
                 m_sendRequested = false;
-                sendFrameInternal();
+                sendFrameInternal(serialPort);
             }
         }
 
@@ -101,15 +121,17 @@ void SerialWorkerBase::workerLoop(std::stop_token token) {
             lastFpsTime = now;
         }
     }
+    serialPort.close();
+    m_open.store(false);
 }
 
-void SerialWorkerBase::onDataReceived() {
+void SerialWorkerBase::onDataReceived(QSerialPort& serialPort) {
     const auto expected = recvFrameSize();
     if (expected == 0U) {
         return;
     }
-    while (m_serialPort->bytesAvailable() >= static_cast<qint64>(expected)) {
-        QByteArray raw = m_serialPort->read(static_cast<qint64>(expected));
+    while (serialPort.bytesAvailable() >= static_cast<qint64>(expected)) {
+        QByteArray raw = serialPort.read(static_cast<qint64>(expected));
         const auto actual = static_cast<std::size_t>(raw.size());
         auto data =
             std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(raw.constData()), actual);
@@ -131,16 +153,16 @@ void SerialWorkerBase::onDataReceived() {
     }
 }
 
-void SerialWorkerBase::sendFrameInternal() {
+void SerialWorkerBase::sendFrameInternal(QSerialPort& serialPort) {
     const auto frameSize = sendFrameSize();
     std::vector<uint8_t> buffer(frameSize, 0);
     encodeFrame(buffer);
     FrameCodec::wrap(buffer);
 
-    if (m_serialPort && m_serialPort->isOpen()) {
-        m_serialPort->write(reinterpret_cast<const char*>(buffer.data()),
-                            static_cast<qint64>(buffer.size()));
-        m_serialPort->flush();
+    if (serialPort.isOpen()) {
+        serialPort.write(reinterpret_cast<const char*>(buffer.data()),
+                         static_cast<qint64>(buffer.size()));
+        serialPort.flush();
         m_sendCount.fetch_add(1);
     }
 }

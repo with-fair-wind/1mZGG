@@ -7,7 +7,6 @@
 
 #include "dss/core/config/config.h"
 #include "dss/core/event/message_bus.h"
-#include "dss/core/service/service_host.h"
 #include "dss/core/service/service_registry.h"
 
 namespace Dss::App {
@@ -19,7 +18,7 @@ public:
 
     /// 构造应用程序上下文
     ApplicationContext();
-    /// 析构时停止全部服务并解除日志与事件总线的绑定
+    /// 析构时解除日志与事件总线的绑定
     ~ApplicationContext();
 
     ApplicationContext(const ApplicationContext&) = delete;
@@ -31,9 +30,6 @@ public:
     [[nodiscard]] auto bus() -> MessageBus&;
     /** @brief 获取服务注册表。 @return 服务注册表的引用。 */
     [[nodiscard]] auto registry() -> Dss::Core::ServiceRegistry&;
-    /** @brief 获取服务生命周期管理器。 @return 服务宿主的引用。 */
-    [[nodiscard]] auto services() -> Dss::Core::ServiceHost&;
-
     /// 将全局日志实例绑定到本上下文的事件总线
     void wireLogger();
 
@@ -50,19 +46,9 @@ public:
      */
     void registerCommunicationServices();
 
-    /**
-     * @brief 启动已注册的全部服务
-     * @return 失败时返回包含错误信息的 std::expected
-     */
-    auto startServices() -> std::expected<void, std::string>;
-
-    /// 停止全部服务（不抛出异常）
-    void stopServices() noexcept;
-
 private:
     MessageBus m_bus;                                       ///< 应用内消息总线
     Dss::Core::ServiceRegistry m_registry;                  ///< 服务注册表
-    Dss::Core::ServiceHost m_services;                      ///< 服务生命周期管理器
     std::vector<Dss::Evt::ScopedConnection> m_connections;  ///< 事件订阅连接，随上下文析构自动取消
 };
 

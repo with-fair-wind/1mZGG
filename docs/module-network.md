@@ -29,13 +29,14 @@ class INetworkChannel {
 
 ### 2. UdpChannel (`udp_channel.h`)
 
-Qt `QUdpSocket` 封装（pimpl 隐藏 Qt 依赖）：
+Qt `QUdpSocket` 封装。每个通道使用独立 `std::jthread`，socket 在该线程内完成构造、绑定、收发、关闭和销毁：
 
 | 方法 | 说明 |
 |------|------|
 | `bind(config)` | 绑定本地端点；本地端口为 0 时由系统分配临时端口 |
 | `send(data)` | 发送到预设目标 |
 | `sendTo(data, host, port)` | 发送到指定目标 |
+| `localPort()` | 获取实际绑定端口，支持测试和端口 0 场景 |
 | `setReceiveCallback(fn)` | 设置接收回调 |
 
 ### 3. ImageSender (`image_sender.h`)
@@ -144,10 +145,12 @@ classDiagram
         +status() Status
     }
     class UdpChannel {
-        -unique_ptr~QUdpSocket~ socket
+        -jthread ioWorker
+        -deque~SendRequest~ sendQueue
         +bind(config)
         +send(data)
         +sendTo(data,host,port)
+        +localPort()
         +setReceiveCallback(cb)
     }
     class ImageSender {
@@ -196,19 +199,23 @@ classDiagram
 sequenceDiagram
     participant Caller as 服务/ViewModel
     participant Channel as UdpChannel
+    participant Worker as std::jthread
     participant Socket as QUdpSocket
     participant Callback as ReceiveCallback
 
     Caller->>Channel: bind(config)
-    Channel->>Socket: 构造并 bind(localIp,localPort)
-    Channel->>Socket: connect(readyRead)
-    Socket-->>Channel: readyRead
+    Channel->>Worker: 启动 I/O 循环 + init promise
+    Worker->>Socket: 构造并 bind(localIp,localPort)
+    Worker-->>Channel: 绑定结果
+    Worker->>Socket: waitForReadyRead()
     loop hasPendingDatagrams
-        Channel->>Socket: receiveDatagram()
-        Channel->>Callback: callback(span,sender,port)
+        Worker->>Socket: receiveDatagram()
+        Worker->>Callback: callback(span,sender,port)
     end
     Caller->>Channel: send(data)
-    Channel->>Socket: writeDatagram(remoteIp,remotePort)
+    Channel->>Worker: 入队 SendRequest + future
+    Worker->>Socket: writeDatagram(remoteIp,remotePort)
+    Worker-->>Caller: 实际发送字节数
 ```
 
 接收 callback 的 `span` 只在本次调用内有效，订阅者若异步保存必须复制。callback 在 mutex 下取快照后执行，避免业务处理时长期持锁。
@@ -223,10 +230,10 @@ flowchart TD
     ENCODE --> SPLIT["按 MaxUdpPayload 分片"]
     SPLIT --> HEADER["每片添加序号/总片数与 padding"]
     HEADER --> SEND["UdpChannel::send 每个分片"]
-    SEND --> EVENT["ImageSendEvent{0}"]
+    SEND --> EVENT["ImageSendCompletedEvent{frameSeq}"]
 ```
 
-ImageSender 只保留最新 pending 图像，不是无界队列；处理速度跟不上时旧待发图会被覆盖。当前主帧流水线只发布 `ImageSendEvent`，没有自动从 `DisplayRefreshEvent` 提取缓冲调用 `sendImage()`。此外 Processor 和 ImageSender 都会发布同名事件，后者序号固定为 0，订阅者不能把该事件当作唯一发送确认。
+ImageSender 只保留最新 pending 图像，不是无界队列；处理速度跟不上时旧待发图会被覆盖。`ImageProcessor` 发布 `ImageReadyForSendEvent`：无 RAW 时直接携带共享 8 位缓冲，有 RAW 时携带延迟图像工厂。`ApplicationContext` 仅在发送服务已打开时执行工厂并调用 `sendImage()`；全部分片成功提交后才发布对应帧序号的 `ImageSendCompletedEvent`。
 
 ### 跟踪结果到 GXTC/GDCL
 
@@ -258,9 +265,9 @@ sequenceDiagram
 |---|---|---|---|
 | `Heartbeat` | 周期发送固定 10 字节帧 | `std::jthread` | 无；可显式发送 close-guard |
 | `ErrorDiagnostics` | 周期发送诊断 JSON | `std::jthread`，状态用 mutex | 订阅串口/存储/网络错误 |
-| `AtmosReceiver` | 接收并解码气象报文 | `QUdpSocket::readyRead` | 成功发布 `AtmosphereDataEvent` |
-| `ImageSender` | 异步发送图像分片 | `std::jthread` + 最新帧缓冲 | 完成循环后发布 `ImageSendEvent` |
-| `DataExchange` | 同步发送结果报文 | 调用者线程 | 失败发布网络错误 |
+| `AtmosReceiver` | 接收并解码气象报文 | `UdpChannel` I/O worker | 成功发布 `AtmosphereDataEvent` |
+| `ImageSender` | 异步发送图像分片 | 图像 worker + `UdpChannel` I/O worker | 成功后发布 `ImageSendCompletedEvent` |
+| `DataExchange` | 同步提交结果报文 | 调用者入队，`UdpChannel` I/O worker 写 socket | 失败发布网络错误 |
 
 ```mermaid
 flowchart LR
@@ -275,21 +282,21 @@ flowchart LR
 
 ### 生命周期与线程边界
 
-`NetworkViewModel` 和 `DataExchangeViewModel` 通过 Registry 获取服务，应用端点配置后显式 `open()`，重配前先关闭。Heartbeat、ErrorDiagnostics、ImageSender 在打开成功后创建工作线程；AtmosReceiver 和 DataExchange 不额外创建线程。
+`NetworkViewModel` 和 `DataExchangeViewModel` 通过 Registry 获取服务，应用端点配置后显式 `open()`，重配前先关闭。Heartbeat、ErrorDiagnostics、ImageSender 保留各自业务工作线程；所有服务持有的 `UdpChannel` 均有独立 I/O worker。
 
-与 Comm 类似，发送型服务的 `QUdpSocket` 在 `bind()` 调用线程创建，而 `std::jthread` 可能从另一线程调用 `send()`。当前实现需要真实网络压力测试验证 Qt socket 线程亲和；更稳妥的演进方向是在拥有事件循环的专用 QThread 内创建、使用和销毁 socket，或让 worker 只生成数据并排队回 socket 所属线程发送。
+`QUdpSocket` 只在所属 I/O worker 内访问。`bind()` 用 promise 返回初始化结果；跨线程 `send()` 复制报文字节后入队，并用 future 返回 `writeDatagram()` 结果。接收回调也在 I/O worker 执行，订阅者触碰 Qt UI 时仍必须切回对象所属线程。
 
 ### 错误与可观测性
 
 - bind 失败通过 `expected<string>` 返回，UI 显示错误。
 - `UdpChannel::send()` 在未绑定或写失败时返回 -1；`DataExchange` 将其升级为 `NetworkTransmissionErrorEvent`。
-- ImageSender、Heartbeat、ErrorDiagnostics 当前未逐包检查并发布发送失败事件；端到端可靠性不能只看 `isOpen()`。
+- ImageSender 逐分片检查发送结果并发布 `NetworkTransmissionErrorEvent`；Heartbeat、ErrorDiagnostics 仍未把周期发送失败升级为事件。
 - Atmos 解码失败直接丢弃，不发布错误事件；若现场需要区分链路静默与坏包，应增加计数或专用事件。
 - UDP 本身无到达/顺序保证，图像接收端必须按分片头重组并处理丢片。
 
 ### 配置、扩展与测试
 
-端点配置来自 `Config::comm()`，普通网络服务与 GXTC/GDCL 双端点分别由两个 ViewModel 管理。新增 UDP 服务时优先复用 `UdpChannel`，明确是同步发送、周期 worker 还是 readyRead 接收，并定义失败事件和关闭回滚。
+端点配置来自 `Config::comm()`，普通网络服务与 GXTC/GDCL 双端点分别由两个 ViewModel 管理。新增 UDP 服务时优先复用 `UdpChannel`，明确是同步发送、周期业务 worker 还是接收回调，并定义失败事件和关闭回滚。
 
 重点测试：`test_network_protocols.cpp`、`test_data_exchange_protocol.cpp`、`test_data_exchange.cpp`、`test_image_sender.cpp`、`test_heartbeat.cpp`、`test_error_diagnostics.cpp`、`test_network_view_model.cpp`、`test_data_exchange_view_model.cpp`。
 

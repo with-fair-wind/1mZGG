@@ -1,27 +1,31 @@
+#include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <iterator>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include <gtest/gtest.h>
 
-#include "dss/acquisition/source/frame_source_coordinator.h"
 #include "dss/acquisition/camera/i_camera_controller.h"
+#include "dss/acquisition/source/frame_source_coordinator.h"
 #include "dss/acquisition/source/i_frame_source.h"
 #include "dss/acquisition/source/image_sequence_frame_source.h"
 #include "dss/app/application_context.h"
 #include "dss/app/track_result_data_exchange_bridge.h"
+#include "dss/comm/channel/serial_worker_base.h"
 #include "dss/comm/port/i_serial_channel.h"
 #include "dss/comm/port/serial_command_interfaces.h"
-#include "dss/comm/channel/serial_worker_base.h"
+#include "dss/core/event/events.h"
 #include "dss/core/logger.h"
 #include "dss/network/endpoint/atmos_receiver.h"
 #include "dss/network/endpoint/data_exchange.h"
 #include "dss/network/endpoint/error_diagnostics.h"
 #include "dss/network/endpoint/heartbeat.h"
-#include "dss/network/transport/i_network_channel.h"
 #include "dss/network/endpoint/image_sender.h"
+#include "dss/network/transport/i_network_channel.h"
 #include "dss/processing/pipeline/image_processor.h"
 #include "dss/storage/backend/i_storage_backend.h"
 #include "dss/storage/backend/local_image_storage_backend.h"
@@ -240,6 +244,24 @@ TEST(ApplicationContextServices, SerialChannelPublishesDecodeErrorForInvalidFiel
     EXPECT_EQ(errors.front().message, "timestamp.month has invalid BCD value 0x1A");
 }
 
+TEST(ApplicationContextServices, SerialWorkerReportsBackgroundOpenFailure) {
+    Dss::App::ApplicationContext::MessageBus bus;
+    DecodeErrorPublishingSerialWorker worker(bus);
+    Dss::Core::SerialConfig config{};
+    config.portName = "DSS_NON_EXISTENT_SERIAL_PORT";
+    config.baudRate = 115200;
+    config.dataBits = 8;
+
+    const auto result = worker.open(config);
+
+    ASSERT_FALSE(result.has_value());
+    EXPECT_FALSE(worker.isOpen());
+    EXPECT_EQ(worker.status(), Dss::Core::Status::Error);
+    EXPECT_NE(result.error().find(config.portName), std::string::npos);
+    worker.close();
+    EXPECT_EQ(worker.status(), Dss::Core::Status::Init);
+}
+
 TEST(ApplicationContextServices, RoutesTrackResultsToTrackDataStorage) {
     Dss::App::ApplicationContext context;
     context.registerCommunicationServices();
@@ -256,6 +278,35 @@ TEST(ApplicationContextServices, RoutesTrackResultsToTrackDataStorage) {
 
     ASSERT_TRUE(std::filesystem::exists(trackDataStorage->outputPath()));
     EXPECT_FALSE(readAllText(trackDataStorage->outputPath()).empty());
+}
+
+TEST(ApplicationContextServices, RoutesReadyImagesToImageSender) {
+    Dss::App::ApplicationContext context;
+    context.registerCommunicationServices();
+    const auto imageSender = context.registry().get<Dss::Network::ImageSender>("image_sender");
+    ASSERT_NE(imageSender, nullptr);
+    ASSERT_TRUE(
+        imageSender
+            ->open(
+                {.localIp = "127.0.0.1", .localPort = 0, .remoteIp = "127.0.0.1", .remotePort = 9})
+            .has_value());
+
+    std::promise<Dss::Core::ImageSendCompletedEvent> completedPromise;
+    auto completedFuture = completedPromise.get_future();
+    auto connection = context.bus().subscribe<Dss::Core::ImageSendCompletedEvent>(
+        [&completedPromise](const auto& event) { completedPromise.set_value(event); });
+    auto image = std::make_shared<const std::vector<uint8_t>>(std::vector<uint8_t>{1, 2, 3, 4});
+
+    context.bus().emit(Dss::Core::ImageReadyForSendEvent{
+        .frameSeq = 88U,
+        .width = 2U,
+        .height = 2U,
+        .image = std::move(image),
+    });
+
+    ASSERT_EQ(completedFuture.wait_for(std::chrono::seconds{2}), std::future_status::ready);
+    EXPECT_EQ(completedFuture.get().frameSeq, 88U);
+    imageSender->close();
 }
 TEST(ApplicationContextServices, ConfiguresRotatingLoggerAfterLoadingConfig) {
     const auto dir = std::filesystem::temp_directory_path() / "dss_context_logger_test";

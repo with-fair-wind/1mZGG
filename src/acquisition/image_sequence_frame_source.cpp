@@ -89,7 +89,8 @@ namespace {
     packet.metadata.exposureTime =
         static_cast<float>(decoded->metadata.exposureTimeMilliseconds / 1000.0);
     packet.metadata.frameFrequency = static_cast<float>(decoded->metadata.frameFrequency);
-    packet.rawImage = std::move(decoded->pixels);
+    packet.rawImage =
+        std::make_shared<const Dss::Processing::RawImageBuffer>(std::move(decoded->pixels));
     return packet;
 }
 
@@ -121,7 +122,8 @@ namespace {
     packet.metadata.temperature = decoded->metadata.temperature;
     packet.metadata.atmosPressure = decoded->metadata.atmosPressure;
     packet.metadata.humidity = decoded->metadata.humidity;
-    packet.rawImage = std::move(decoded->pixels);
+    packet.rawImage =
+        std::make_shared<const Dss::Processing::RawImageBuffer>(std::move(decoded->pixels));
     return packet;
 }
 
@@ -147,16 +149,17 @@ namespace {
     const auto width = static_cast<std::size_t>(gray.width());
     const auto height = static_cast<std::size_t>(gray.height());
     packet.displayImage.resize(width * height);
-    packet.rawImage.resize(width * height);
+    auto rawImage = std::make_shared<Dss::Processing::RawImageBuffer>(width * height);
     for (std::size_t y = 0; y < height; ++y) {
         const auto* src = gray.constScanLine(static_cast<int>(y));
         auto* displayRow = packet.displayImage.data() + y * width;
-        auto* rawRow = packet.rawImage.data() + y * width;
+        auto* rawRow = rawImage->data() + y * width;
         for (std::size_t x = 0; x < width; ++x) {
             displayRow[x] = src[x];
             rawRow[x] = static_cast<std::uint16_t>(static_cast<std::uint16_t>(src[x]) << 8U);
         }
     }
+    packet.rawImage = std::move(rawImage);
     return packet;
 }
 
@@ -321,6 +324,7 @@ auto ImageSequenceFrameSource::init() -> std::expected<void, std::string> {
  * @brief 在后台线程中从当前索引连续回放至序列末尾
  */
 void ImageSequenceFrameSource::start() {
+    std::lock_guard lifecycleLock(m_lifecycleMutex);
     if (m_running.exchange(true)) {
         return;
     }
@@ -359,7 +363,9 @@ void ImageSequenceFrameSource::start() {
             }
 
             if (interval.count() > 0 && index + 1U < files.size()) {
-                std::this_thread::sleep_for(interval);
+                if (m_wait.waitFor(token, interval)) {
+                    break;
+                }
             }
         }
         m_running.store(false);
@@ -367,6 +373,7 @@ void ImageSequenceFrameSource::start() {
 }
 
 void ImageSequenceFrameSource::stop() {
+    std::lock_guard lifecycleLock(m_lifecycleMutex);
     if (m_worker.joinable()) {
         m_worker.request_stop();
         m_worker.join();

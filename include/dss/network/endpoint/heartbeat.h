@@ -3,9 +3,11 @@
 #include <array>
 #include <cstdint>
 #include <expected>
+#include <mutex>
 #include <stop_token>
 #include <thread>
 
+#include "dss/core/concurrency/interruptible_wait.h"
 #include "dss/core/event/message_bus.h"
 #include "dss/network/transport/i_network_channel.h"
 #include "dss/network/transport/udp_channel.h"
@@ -64,9 +66,14 @@ private:
      */
     void workerLoop(std::stop_token token);
 
-    [[maybe_unused]] MessageBus& m_bus;  ///< 事件总线引用（预留扩展）
-    UdpChannel m_channel;                ///< 心跳 UDP 通道
-    std::jthread m_workerThread;         ///< 周期性发送工作线程
+    /// @brief 在持有生命周期互斥锁时停止线程并关闭通道。
+    void closeLocked();
+
+    MessageBus& m_bus;                    ///< 事件总线引用
+    UdpChannel m_channel;                 ///< 心跳 UDP 通道
+    std::jthread m_workerThread;          ///< 周期性发送工作线程
+    mutable std::mutex m_lifecycleMutex;  ///< 串行化通道启停操作
+    Dss::Core::InterruptibleWait m_wait;  ///< 可由停止令牌中断的周期等待
 };
 
 }  // namespace Dss::Network

@@ -21,8 +21,8 @@ int main(int argc, char** argv) {
     int receivedFrames = 0;
     Dss::Acquisition::SaperaFrameSource source({.ccfPath = argv[1]});
     source.setFrameCallback([&](Dss::Processing::FramePacket packet) {
-        if (packet.rawImage.size() !=
-            static_cast<std::size_t>(packet.width) * packet.height) {
+        if (!packet.rawImage ||
+            packet.rawImage->size() != static_cast<std::size_t>(packet.width) * packet.height) {
             return;
         }
         std::scoped_lock lock(mutex);
@@ -40,18 +40,17 @@ int main(int argc, char** argv) {
     }
 
     std::unique_lock lock(mutex);
-    const auto completed = ready.wait_for(
-        lock, std::chrono::seconds(timeoutSeconds),
-        [&] { return receivedFrames >= requiredFrames; });
+    const auto completed = ready.wait_for(lock, std::chrono::seconds(timeoutSeconds),
+                                          [&] { return receivedFrames >= requiredFrames; });
     lock.unlock();
     source.stop();
 
     if (!completed) {
-        std::cerr << "Sapera timeout: received " << receivedFrames << "/"
-                  << requiredFrames << " frames\n";
+        std::cerr << "Sapera timeout: received " << receivedFrames << "/" << requiredFrames
+                  << " frames\n";
         return 4;
     }
-    std::cout << "Sapera smoke passed: " << receivedFrames << " frames, "
-              << source.frameWidth() << 'x' << source.frameHeight() << '\n';
+    std::cout << "Sapera smoke passed: " << receivedFrames << " frames, " << source.frameWidth()
+              << 'x' << source.frameHeight() << '\n';
     return 0;
 }

@@ -74,7 +74,8 @@ TEST(SaperaFrameSourceContract, CopiesSdkBufferBeforeCallbackReturns) {
     EXPECT_EQ(packets[0].frameSeq, 0U);
     EXPECT_EQ(packets[0].width, 3U);
     EXPECT_EQ(packets[0].height, 2U);
-    EXPECT_EQ(packets[0].rawImage, (std::vector<uint16_t>{1, 2, 3, 4, 5, 6}));
+    ASSERT_TRUE(packets[0].rawImage);
+    EXPECT_EQ(*packets[0].rawImage, (std::vector<uint16_t>{1, 2, 3, 4, 5, 6}));
 }
 
 TEST(SaperaFrameSourceContract, ConvertsBackendErrorsAndPublishesAcquisitionEvent) {

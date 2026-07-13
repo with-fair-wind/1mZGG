@@ -29,13 +29,13 @@ public:
         if (m_config.ccfPath.empty()) {
             return std::unexpected("Sapera CCF path is empty");
         }
-        if (SapManager::GetResourceCount(m_config.serverName.c_str(), SapManager::ResourceAcq) <= 0) {
+        if (SapManager::GetResourceCount(m_config.serverName.c_str(), SapManager::ResourceAcq) <=
+            0) {
             return std::unexpected("Sapera acquisition device is unavailable");
         }
 
         const SapLocation location(m_config.serverName.c_str(), m_config.deviceNumber);
-        m_acquisition =
-            std::make_unique<SapAcquisition>(location, m_config.ccfPath.c_str());
+        m_acquisition = std::make_unique<SapAcquisition>(location, m_config.ccfPath.c_str());
         m_buffers = std::make_unique<SapBufferWithTrash>(1, m_acquisition.get());
         m_transfer = std::make_unique<SapAcqToBuf>(
             m_acquisition.get(), m_buffers.get(), &SaperaSdkCaptureSession::transferCallback, this);
@@ -50,8 +50,8 @@ public:
         int pixelDepth = 0;
         if (!m_acquisition->GetParameter(CORACQ_PRM_CROP_WIDTH, &width) ||
             !m_acquisition->GetParameter(CORACQ_PRM_CROP_HEIGHT, &height) ||
-            !m_acquisition->GetParameter(CORACQ_PRM_PIXEL_DEPTH, &pixelDepth) ||
-            width <= 0 || height <= 0 || pixelDepth != 16) {
+            !m_acquisition->GetParameter(CORACQ_PRM_PIXEL_DEPTH, &pixelDepth) || width <= 0 ||
+            height <= 0 || pixelDepth != 16) {
             destroy();
             return std::unexpected("Sapera source must provide a valid 16-bit frame");
         }
@@ -125,8 +125,7 @@ private:
 };
 #endif
 
-auto makeDefaultSession(const SaperaConfig& config)
-    -> std::unique_ptr<ISaperaCaptureSession> {
+auto makeDefaultSession(const SaperaConfig& config) -> std::unique_ptr<ISaperaCaptureSession> {
 #ifdef DSS_HAS_SAPERA
     return std::make_unique<SaperaSdkCaptureSession>(config);
 #else
@@ -156,8 +155,8 @@ auto SaperaFrameSource::init() -> std::expected<void, std::string> {
         return std::unexpected(message);
     }
 
-    auto geometry = m_session->initialize(
-        [this](std::span<const uint16_t> pixels) { acceptFrame(pixels); });
+    auto geometry =
+        m_session->initialize([this](std::span<const uint16_t> pixels) { acceptFrame(pixels); });
     if (!geometry) {
         reportError(geometry.error());
         return std::unexpected(geometry.error());
@@ -234,15 +233,15 @@ void SaperaFrameSource::acceptFrame(std::span<const uint16_t> pixels) {
         const auto expectedCount =
             static_cast<std::size_t>(m_width) * static_cast<std::size_t>(m_height);
         if (pixels.size() != expectedCount) {
-            error = "Sapera pixel count mismatch: expected " +
-                    std::to_string(expectedCount) + ", got " +
-                    std::to_string(pixels.size());
+            error = "Sapera pixel count mismatch: expected " + std::to_string(expectedCount) +
+                    ", got " + std::to_string(pixels.size());
         } else {
             callback = m_callback;
             packet.frameSeq = m_frameSeq++;
             packet.width = m_width;
             packet.height = m_height;
-            packet.rawImage.assign(pixels.begin(), pixels.end());
+            packet.rawImage = std::make_shared<const Dss::Processing::RawImageBuffer>(
+                pixels.begin(), pixels.end());
         }
     }
     if (!error.empty()) {

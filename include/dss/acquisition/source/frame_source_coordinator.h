@@ -1,5 +1,6 @@
 #pragma once
 
+#include <condition_variable>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -56,13 +57,38 @@ public:
     [[nodiscard]] auto frameHeight() const -> uint32_t override;
 
 private:
+    /// @brief 串行化生命周期操作，但不在调用帧源时持有状态互斥锁。
+    class LifecycleOperation {
+    public:
+        /**
+         * @brief 等待并取得一次生命周期操作权。
+         * @param owner 待串行化生命周期操作的协调器。
+         */
+        explicit LifecycleOperation(FrameSourceCoordinator& owner);
+        /// @brief 释放生命周期操作权并唤醒等待者。
+        ~LifecycleOperation();
+
+        LifecycleOperation(const LifecycleOperation&) = delete;
+        auto operator=(const LifecycleOperation&) -> LifecycleOperation& = delete;
+
+    private:
+        FrameSourceCoordinator& m_owner;  ///< 协调器引用
+    };
+
     /**
      * @brief 在持有 m_mutex 时查找活动帧源。
      * @return 活动帧源共享指针；没有可用帧源时返回空指针。
      */
     [[nodiscard]] auto activeSourceLocked() const -> std::shared_ptr<IFrameSource>;
 
-    mutable std::mutex m_mutex;  ///< 保护帧源表、活动模式和回调
+    /// @brief 等待前一生命周期操作完成并标记当前操作开始。
+    void beginLifecycleOperation();
+    /// @brief 标记生命周期操作完成并唤醒一个等待者。
+    void endLifecycleOperation() noexcept;
+
+    mutable std::mutex m_mutex;             ///< 保护帧源表、活动模式和回调
+    std::condition_variable m_operationCv;  ///< 等待生命周期操作完成
+    bool m_operationInProgress = false;     ///< 是否存在锁外执行的生命周期操作
     std::map<FrameSourceMode, std::shared_ptr<IFrameSource>> m_sources;  ///< 模式到帧源的映射
     std::optional<FrameSourceMode> m_activeMode;                         ///< 当前活动模式
     FrameCallback m_callback;                                            ///< 传播给各帧源的统一回调

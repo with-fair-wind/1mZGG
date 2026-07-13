@@ -1,10 +1,10 @@
 #pragma once
 
-#include <atomic>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <memory>
 #include <mutex>
 #include <span>
 #include <stop_token>
@@ -29,7 +29,7 @@ public:
 
     /**
      * @brief 构造图像发送服务
-     * @param bus 事件总线引用，发送完成后发布 ImageSendEvent
+     * @param bus 事件总线引用，发送完成后发布 ImageSendCompletedEvent
      */
     explicit ImageSender(MessageBus& bus);
 
@@ -61,6 +61,16 @@ public:
     void sendImage(std::span<const uint8_t> imageData, uint32_t width, uint32_t height);
 
     /**
+     * @brief 提交带帧序号的共享图像缓冲（不复制像素数据）。
+     * @param frameSeq 图像帧序号。
+     * @param imageData 不可变 8 位灰度图像共享缓冲。
+     * @param width 图像宽度（像素）。
+     * @param height 图像高度（像素）。
+     */
+    void sendImage(uint64_t frameSeq, std::shared_ptr<const std::vector<uint8_t>> imageData,
+                   uint32_t width, uint32_t height);
+
+    /**
      * @brief 将图像编码并拆分为 UDP 分片列表
      * @param imageData 原始像素数据
      * @param width 图像宽度（像素）
@@ -77,16 +87,22 @@ private:
      */
     void workerLoop(std::stop_token token);
 
+    /// @brief 在持有生命周期互斥锁时停止线程并关闭通道。
+    void closeLocked();
+
     MessageBus& m_bus;            ///< 事件总线引用
     UdpChannel m_channel;         ///< 图像 UDP 通道
     std::jthread m_workerThread;  ///< 异步发送工作线程
+    std::mutex m_lifecycleMutex;  ///< 串行化通道启停操作
 
-    std::mutex m_bufferMutex;                ///< 保护待发送缓冲区的互斥锁
-    std::condition_variable_any m_bufferCv;  ///< 待发送图像就绪条件变量
-    std::vector<uint8_t> m_pendingImage;     ///< 待发送像素数据
-    uint32_t m_pendingWidth = 0;             ///< 待发送图像宽度
-    uint32_t m_pendingHeight = 0;            ///< 待发送图像高度
-    bool m_hasPending = false;               ///< 是否有待发送图像
+    std::mutex m_bufferMutex;                                    ///< 保护待发送缓冲区的互斥锁
+    std::condition_variable_any m_bufferCv;                      ///< 待发送图像就绪条件变量
+    std::shared_ptr<const std::vector<uint8_t>> m_pendingImage;  ///< 待发送共享像素数据
+    uint64_t m_pendingFrameSeq = 0;                              ///< 待发送帧序号
+    uint32_t m_pendingWidth = 0;                                 ///< 待发送图像宽度
+    uint32_t m_pendingHeight = 0;                                ///< 待发送图像高度
+    bool m_hasPending = false;                                   ///< 是否有待发送图像
+    bool m_accepting = false;                                    ///< 是否接受新的发送请求
 };
 
 }  // namespace Dss::Network

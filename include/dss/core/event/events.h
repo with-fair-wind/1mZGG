@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <span>
 #include <string>
@@ -15,6 +16,12 @@ namespace Dss::Core {
 struct AcquisitionErrorEvent {
     std::string source;   ///< 报告错误的采集源名称
     std::string message;  ///< 错误描述
+};
+
+/// 系统事件：后台任务的未处理异常已被线程边界拦截。
+struct BackgroundTaskErrorEvent {
+    std::string component;  ///< 后台组件稳定名称
+    std::string message;    ///< 异常描述
 };
 
 /// 采集事件：一帧图像已就绪。
@@ -39,7 +46,7 @@ struct DisplayRefreshEvent {
     uint64_t frameSeq = 0;                                     ///< 帧序号
     uint32_t width = 0;                                        ///< 图像宽度（像素）
     uint32_t height = 0;                                       ///< 图像高度（像素）
-    uint32_t stride = 0;                                       ///< 行跨度（字节）
+    uint32_t stride = 0;                                       ///< 行跨度（像素）
     std::shared_ptr<const std::vector<uint8_t>> displayImage;  ///< 显示用图像数据
     std::shared_ptr<const std::vector<uint16_t>> rawImage;     ///< 可用于实时重拉伸的 16 位原始图像
     ImageStats stats{};                                        ///< 当前 RAW 图像统计量
@@ -65,9 +72,21 @@ struct TrackResultEvent {
     std::vector<TargetInfo> targets;  ///< 当前跟踪目标列表
 };
 
-/// 网络事件：请求发送图像
-struct ImageSendEvent {
-    uint64_t frameSeq = 0;  ///< 帧序号
+/// 网络事件：处理完成的显示图像已可提交发送
+struct ImageReadyForSendEvent {
+    using ImageFactory =
+        std::function<std::shared_ptr<const std::vector<uint8_t>>()>;  ///< 延迟 8 位图生成器
+
+    uint64_t frameSeq = 0;                              ///< 帧序号
+    uint32_t width = 0;                                 ///< 图像宽度（像素）
+    uint32_t height = 0;                                ///< 图像高度（像素）
+    std::shared_ptr<const std::vector<uint8_t>> image;  ///< 不可变 8 位灰度图像
+    ImageFactory imageFactory;                          ///< 仅在消费者确实需要时执行的图像生成器
+};
+
+/// 网络事件：图像的全部 UDP 分片已提交给套接字
+struct ImageSendCompletedEvent {
+    uint64_t frameSeq = 0;  ///< 已发送图像的帧序号
 };
 
 /// 网络事件：报文发送失败

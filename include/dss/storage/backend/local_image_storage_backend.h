@@ -6,6 +6,7 @@
 #include <expected>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -14,9 +15,9 @@
 
 #include "dss/core/event/events.h"
 #include "dss/core/event/message_bus.h"
+#include "dss/storage/backend/i_storage_backend.h"
 #include "dss/storage/detail/async_write_queue.h"
 #include "dss/storage/format/bmp_image_format.h"
-#include "dss/storage/backend/i_storage_backend.h"
 #include "dss/storage/format/image_storage_format.h"
 
 namespace Dss::Storage {
@@ -179,11 +180,26 @@ public:
     auto enqueueSessionFrame(std::uint64_t sequence, RawImageMetadata metadata,
                              std::span<const std::uint16_t> pixels)
         -> std::expected<void, std::string> {
+        return enqueueSessionFrame(
+            sequence, std::move(metadata),
+            std::make_shared<const std::vector<std::uint16_t>>(pixels.begin(), pixels.end()));
+    }
+
+    /**
+     * @brief 按当前会话命名提交一份不可变共享 RAW 帧。
+     * @param sequence 会话内帧序号。
+     * @param metadata RAW 图像元数据。
+     * @param pixels 由写入请求共享持有的 16 位像素缓冲。
+     * @return 入队成功时为空；缓冲无效、会话未配置或队列不可用时返回错误描述。
+     */
+    auto enqueueSessionFrame(std::uint64_t sequence, RawImageMetadata metadata,
+                             std::shared_ptr<const std::vector<std::uint16_t>> pixels)
+        -> std::expected<void, std::string> {
         if (!m_sessionNaming.has_value()) {
             return std::unexpected("image storage session is not configured");
         }
         return enqueueRawFrame(buildImageFilePath(*m_sessionNaming, metadata, sequence),
-                               std::move(metadata), pixels);
+                               std::move(metadata), std::move(pixels));
     }
 
     /**
@@ -196,17 +212,35 @@ public:
     auto enqueueRawFrame(std::filesystem::path relativePath, RawImageMetadata metadata,
                          std::span<const std::uint16_t> pixels)
         -> std::expected<void, std::string> {
+        return enqueueRawFrame(
+            std::move(relativePath), std::move(metadata),
+            std::make_shared<const std::vector<std::uint16_t>>(pixels.begin(), pixels.end()));
+    }
+
+    /**
+     * @brief 将不可变共享 RAW 帧加入异步写入队列。
+     * @param relativePath 相对或绝对文件路径。
+     * @param metadata 帧元数据。
+     * @param pixels 由写入请求共享持有的 16 位像素缓冲。
+     * @return 成功时返回空值；缓冲无效、未初始化或未运行时返回错误描述。
+     */
+    auto enqueueRawFrame(std::filesystem::path relativePath, RawImageMetadata metadata,
+                         std::shared_ptr<const std::vector<std::uint16_t>> pixels)
+        -> std::expected<void, std::string> {
         if (!m_ready.load()) {
             return std::unexpected("storage backend is not initialized");
         }
         if (!isRunning()) {
             return std::unexpected("storage worker is not running");
         }
+        if (!pixels || pixels->empty()) {
+            return std::unexpected("raw image buffer is empty");
+        }
 
         SaveRawFrameRequest request{};
         request.path = resolvePath(std::move(relativePath));
         request.metadata = std::move(metadata);
-        request.pixels.assign(pixels.begin(), pixels.end());
+        request.pixels = std::move(pixels);
         auto result = m_writeQueue.enqueue(std::move(request));
         if (!result.has_value() && result.error() == "async write queue is full") {
             return std::unexpected("storage queue is full");
@@ -217,9 +251,9 @@ public:
 private:
     /// 待写入的 RAW 帧请求
     struct SaveRawFrameRequest {
-        std::filesystem::path path;         ///< 目标文件路径
-        RawImageMetadata metadata{};        ///< 帧元数据
-        std::vector<std::uint16_t> pixels;  ///< 16 位像素数据
+        std::filesystem::path path;                                ///< 目标文件路径
+        RawImageMetadata metadata{};                               ///< 帧元数据
+        std::shared_ptr<const std::vector<std::uint16_t>> pixels;  ///< 共享 16 位像素数据
     };
 
     /**
@@ -260,15 +294,15 @@ private:
             bmpMetadata.humidity = request.metadata.exposure.humidity;
             bmpMetadata.atmosPressure = request.metadata.exposure.atmosPressure;
             const auto pixelBytes = std::span<const std::uint8_t>(
-                reinterpret_cast<const std::uint8_t*>(request.pixels.data()),
-                request.pixels.size() * sizeof(std::uint16_t));
+                reinterpret_cast<const std::uint8_t*>(request.pixels->data()),
+                request.pixels->size() * sizeof(std::uint16_t));
             auto encoded = buildLegacyBmpFile(bmpMetadata, pixelBytes);
             if (!encoded.has_value()) {
                 return std::unexpected("failed to encode legacy bmp image");
             }
             bytes = std::move(*encoded);
         } else {
-            bytes = buildRawImageFile(request.metadata, request.pixels);
+            bytes = buildRawImageFile(request.metadata, *request.pixels);
         }
 
         std::ofstream output(request.path, std::ios::binary | std::ios::trunc);

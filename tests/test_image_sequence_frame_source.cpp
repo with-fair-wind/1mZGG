@@ -118,7 +118,8 @@ TEST(ImageSequenceFrameSource, ReplaysSelectedImageFilesAsFramePackets) {
     EXPECT_EQ(frames[0].width, 3U);
     EXPECT_EQ(frames[0].height, 2U);
     EXPECT_EQ(frames[0].displayImage.size(), 6U);
-    EXPECT_EQ(frames[0].rawImage.size(), 6U);
+    ASSERT_TRUE(frames[0].rawImage);
+    EXPECT_EQ(frames[0].rawImage->size(), 6U);
     EXPECT_EQ(frames[0].displayImage[0], 10U);
     EXPECT_EQ(frames[1].displayImage[0], 40U);
 }
@@ -219,7 +220,8 @@ TEST(ImageSequenceFrameSource, ReplaysLegacyBmpWithCustomHeaderAsSixteenBitPixel
     const std::vector<std::uint16_t> expectedRaw{1000, 1000, 1500, 2000};
     EXPECT_EQ(frames.front().width, 2U);
     EXPECT_EQ(frames.front().height, 2U);
-    EXPECT_EQ(frames.front().rawImage, expectedRaw);
+    ASSERT_TRUE(frames.front().rawImage);
+    EXPECT_EQ(*frames.front().rawImage, expectedRaw);
     EXPECT_TRUE(frames.front().displayImage.empty());
     EXPECT_DOUBLE_EQ(frames.front().stats.minVal, 0.0);
     EXPECT_DOUBLE_EQ(frames.front().stats.maxVal, 0.0);

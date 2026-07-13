@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <limits>
 
+#include "dss/core/concurrency/background_task.h"
 #include "dss/core/event/events.h"
 
 namespace Dss::Network {
@@ -64,16 +65,37 @@ ImageSender::~ImageSender() {
 }
 
 auto ImageSender::open(const UdpEndpointConfig& config) -> std::expected<void, std::string> {
+    std::lock_guard lifecycleLock(m_lifecycleMutex);
+    closeLocked();
     auto result = m_channel.bind(config);
     if (!result) {
         return result;
     }
 
-    m_workerThread = std::jthread([this](std::stop_token token) { workerLoop(token); });
+    {
+        std::lock_guard lock(m_bufferMutex);
+        m_accepting = true;
+        m_hasPending = false;
+        m_pendingImage.reset();
+    }
+    m_workerThread = std::jthread([this](std::stop_token token) {
+        Dss::Core::runBackgroundTask(m_bus, "image_sender", [this, token] { workerLoop(token); });
+    });
     return {};
 }
 
 void ImageSender::close() {
+    std::lock_guard lifecycleLock(m_lifecycleMutex);
+    closeLocked();
+}
+
+void ImageSender::closeLocked() {
+    {
+        std::lock_guard lock(m_bufferMutex);
+        m_accepting = false;
+        m_hasPending = false;
+        m_pendingImage.reset();
+    }
     if (m_workerThread.joinable()) {
         m_workerThread.request_stop();
         m_bufferCv.notify_all();
@@ -91,9 +113,24 @@ auto ImageSender::status() const -> Dss::Core::Status {
 }
 
 void ImageSender::sendImage(std::span<const uint8_t> imageData, uint32_t width, uint32_t height) {
+    auto sharedImage =
+        std::make_shared<const std::vector<uint8_t>>(imageData.begin(), imageData.end());
+    sendImage(0U, std::move(sharedImage), width, height);
+}
+
+void ImageSender::sendImage(uint64_t frameSeq,
+                            std::shared_ptr<const std::vector<uint8_t>> imageData, uint32_t width,
+                            uint32_t height) {
+    if (!imageData || imageData->empty()) {
+        return;
+    }
     {
         std::lock_guard lock(m_bufferMutex);
-        m_pendingImage.assign(imageData.begin(), imageData.end());
+        if (!m_accepting) {
+            return;
+        }
+        m_pendingImage = std::move(imageData);
+        m_pendingFrameSeq = frameSeq;
         m_pendingWidth = width;
         m_pendingHeight = height;
         m_hasPending = true;
@@ -137,7 +174,8 @@ auto ImageSender::buildPackets(std::span<const uint8_t> imageData, uint32_t widt
 
 void ImageSender::workerLoop(std::stop_token token) {
     while (!token.stop_requested()) {
-        std::vector<uint8_t> image;
+        std::shared_ptr<const std::vector<uint8_t>> image;
+        uint64_t frameSeq = 0;
         uint32_t w = 0;
         uint32_t h = 0;
 
@@ -150,21 +188,33 @@ void ImageSender::workerLoop(std::stop_token token) {
             }
 
             image = std::move(m_pendingImage);
+            frameSeq = m_pendingFrameSeq;
             w = m_pendingWidth;
             h = m_pendingHeight;
             m_hasPending = false;
         }
 
-        if (image.empty()) {
+        if (!image || image->empty()) {
             continue;
         }
 
-        const auto packets = buildPackets(image, w, h);
+        const auto packets = buildPackets(*image, w, h);
+        bool sentAllPackets = !packets.empty();
         for (const auto& packet : packets) {
-            m_channel.send(packet);
+            if (m_channel.send(packet) != static_cast<int64_t>(packet.size())) {
+                sentAllPackets = false;
+                m_bus.emit(Dss::Core::NetworkTransmissionErrorEvent{
+                    .channel = "image_sender",
+                    .message = "failed to send image UDP fragment",
+                    .attemptedBytes = static_cast<uint64_t>(packet.size()),
+                });
+                break;
+            }
         }
 
-        m_bus.emit(Dss::Core::ImageSendEvent{0});
+        if (sentAllPackets) {
+            m_bus.emit(Dss::Core::ImageSendCompletedEvent{frameSeq});
+        }
     }
 }
 

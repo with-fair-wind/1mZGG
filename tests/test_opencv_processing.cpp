@@ -10,12 +10,14 @@ TEST(OpenCvProcessingStrategyTest, ComputesStatsAndExtractsBrightBlob) {
     Dss::Processing::FramePacket packet{};
     packet.width = 8;
     packet.height = 8;
-    packet.rawImage.assign(static_cast<std::size_t>(packet.width) * packet.height, 10);
+    auto rawImage =
+        Dss::Processing::RawImageBuffer(static_cast<std::size_t>(packet.width) * packet.height, 10);
 
-    packet.rawImage[2 * packet.width + 2] = 1000;
-    packet.rawImage[2 * packet.width + 3] = 1000;
-    packet.rawImage[3 * packet.width + 2] = 1000;
-    packet.rawImage[3 * packet.width + 3] = 1000;
+    rawImage[2 * packet.width + 2] = 1000;
+    rawImage[2 * packet.width + 3] = 1000;
+    rawImage[3 * packet.width + 2] = 1000;
+    rawImage[3 * packet.width + 3] = 1000;
+    packet.rawImage = Dss::Processing::makeSharedRawImage(std::move(rawImage));
 
     Dss::Processing::OpenCvProcessingStrategy strategy({
         .thresholdSigma = 1.0,
@@ -26,7 +28,7 @@ TEST(OpenCvProcessingStrategyTest, ComputesStatsAndExtractsBrightBlob) {
     const auto result = strategy.process(packet);
 
     ASSERT_TRUE(result.success);
-    EXPECT_EQ(result.displayImage.size(), packet.rawImage.size());
+    EXPECT_EQ(result.displayImage.size(), packet.rawImage->size());
     EXPECT_DOUBLE_EQ(result.stats.minVal, 10.0);
     EXPECT_DOUBLE_EQ(result.stats.maxVal, 1000.0);
     ASSERT_EQ(result.targetBlobs.size(), 1U);

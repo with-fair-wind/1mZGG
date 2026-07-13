@@ -29,7 +29,7 @@ DSS_QT 是一套用于天文观测的实时图像采集、处理、跟踪与通�
 2. **Qt 仅在边界** — UI、串口、UDP 适配层使用 Qt，核心逻辑 Qt-free
 3. **策略模式** — 图像处理 (`IProcessingStrategy`) 和跟踪 (`ITrackingStrategy`) 通过接口解耦
 4. **事件驱动解耦** — `BasicMessageBus`（后端）+ `AppEvent`（跨 UI 页面 Qt 信号）
-5. **依赖注入** — `ServiceRegistry` + `ServiceHost` 管理服务生命周期
+5. **依赖注入** — `ServiceRegistry` 保存共享服务实例，各业务入口显式管理生命周期
 6. **旧代码仅参考** — `oldsrc/` 不参与构建，不被 clangd 索引
 
 ## 模块依赖图
@@ -181,7 +181,7 @@ sequenceDiagram
     Main->>Qt: exec()
 ```
 
-当前事实：`main()` 没有调用 `ApplicationContext::startServices()`，`registerCommunicationServices()` 也没有把这些对象加入 `ServiceHost`。因此“已注册”只表示对象可通过 `ServiceRegistry` 获取；采集处理由 `ReplayViewModel::startGrab()` 启动，串口/网络由通信页 ViewModel 的 `open...` 操作启动，存储由 `StorageViewModel::startSaving()` 启动。
+“已注册”只表示对象可通过 `ServiceRegistry` 获取；采集处理由 `ReplayViewModel::startGrab()` 启动，串口/网络由通信页 ViewModel 的 `open...` 操作启动，存储由 `StorageViewModel::startSaving()` 启动。各服务析构时仍以 `close()` / `stop()` 兜底。
 
 ### 一帧数据的完整调用栈
 
@@ -222,7 +222,9 @@ sequenceDiagram
         Bus->>Bridge: onTrackResult()
     end
     Processor->>Bus: emit(RotatedFrameReadyEvent)
-    Processor->>Bus: emit(ImageSendEvent)
+    Processor->>Bus: emit(ImageReadyForSendEvent)
+    Bus->>ImageSender: sendImage(frameSeq, shared image)
+    ImageSender->>Bus: emit(ImageSendCompletedEvent)
 ```
 
 `BasicMessageBus::emit()` 是同步调用：订阅者在哪个线程触发，就在哪个线程执行。主帧事件由 `ImageProcessor` 工作线程发出，因此订阅者如果触碰 Qt 控件，必须先转到 Qt 对象所属线程；当前 ViewModel 多数只生成值或发 Qt 信号，阅读和扩展时仍要逐个检查线程亲和性。
@@ -291,19 +293,20 @@ flowchart TB
 
 | 对象 | 主要所有者 | 执行线程 | 启动入口 | 停止/析构 |
 |---|---|---|---|---|
-| `ApplicationContext` | `main` 栈对象 | Qt 主线程 | 构造/注册 | 析构调用 `stopServices()` |
+| `ApplicationContext` | `main` 栈对象 | Qt 主线程 | 构造/注册 | 析构断开 Logger，总线与 Registry 随后释放 |
 | 注册服务 | `ServiceRegistry` 中的 `shared_ptr` | 依服务而异 | UI 显式打开或启动 | ViewModel 关闭、服务析构兜底 |
 | `ImageSequenceFrameSource` | Registry/Coordinator 共享所有权 | `std::jthread` | `start()` | `stop()` 请求停止并 join |
 | `ImageProcessor` | Registry | `std::jthread` | `ReplayViewModel::startGrab()` | 先停帧源，再停处理器 |
 | 两个 Storage backend | Registry | 各自 `std::jthread` | `StorageViewModel::startSaving()` | `stop()` 唤醒队列并 join |
 | `SerialWorkerBase` 派生类 | Registry | 每通道 `std::jthread` | `SerialPortViewModel::open...` | `close()` 后析构兜底 |
 | Heartbeat/ErrorDiagnostics/ImageSender | Registry | 各自 `std::jthread` | `NetworkViewModel::open...` | `close()` 后析构兜底 |
-| `UdpChannel` / Qt ViewModel / Widget | Registry 或 QObject 父子树 | Qt 对象所属线程 | 构造、bind 或 show | close、父对象析构 |
+| `UdpChannel` | 所属网络服务 | 每通道 `std::jthread` | `bind()` | `close()` 请求停止并 join |
+| Qt ViewModel / Widget | QObject 父子树 | Qt 对象所属线程 | 构造或 show | 父对象析构 |
 
 ### 当前实现边界
 
-- `ServiceHost` 的顺序启动和失败回滚能力存在，但当前桌面启动链没有使用它统一管理已注册服务。
-- `ImageSendEvent` 已发布，但“从当前显示帧取数据并调用 `ImageSender::sendImage()`”不是自动主链的一部分。
+- 生命周期由对应 ViewModel 显式驱动，并由服务内部的标准库生命周期锁串行化启停。
+- RAW 帧从采集起使用 `shared_ptr<const vector<uint16_t>>` 跨处理、显示和存储共享；GPU 显示只接收 RAW 与 low/high，8 位网络图通过 `ImageReadyForSendEvent::imageFactory` 按需生成。
 - `ServoChannel::setTrackResult()` 可把目标换算成伺服修正量，但当前没有 `TrackResultEvent` 到该方法的自动桥接。
 - CUDA、OpenCV、Sapera 都是构建期开关；阅读某条调用链前先确认对应宏和 target 是否存在。
 - Storage 是逻辑模块但编译进 `dss_core`，不能按独立动态服务理解。

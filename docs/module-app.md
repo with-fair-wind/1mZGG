@@ -16,13 +16,12 @@ App 模块是系统的**组合根 (Composition Root)**，负责组装所有子�
 
 ### ApplicationContext
 
-应用上下文，拥有并管理系统的三大基础设施：
+应用上下文，拥有并管理系统的两项基础设施：
 
 | 成员 | 类型 | 职责 |
 |------|------|------|
 | `m_bus` | `BasicMessageBus<SharedMutexLock>` | 全局事件总线 |
 | `m_registry` | `ServiceRegistry` | 服务注册中心 |
-| `m_services` | `ServiceHost` | 服务启停编排器 |
 
 **公共 API:**
 
@@ -30,12 +29,9 @@ App 模块是系统的**组合根 (Composition Root)**，负责组装所有子�
 |------|------|
 | `bus()` | 获取消息总线引用 |
 | `registry()` | 获取服务注册中心引用 |
-| `services()` | 获取服务主机引用 |
 | `wireLogger()` | 连接 spdlog 日志门面与事件总线 |
 | `loadConfig(path)` | 加载 JSON 配置文件，返回 `std::expected` |
 | `registerCommunicationServices()` | 注册所有串口/网络/存储/相机服务 |
-| `startServices()` | 按序启动所有已注册服务 |
-| `stopServices()` | 按逆序停止所有服务 |
 
 ### 通信服务注册 (`communication_services.cpp`)
 
@@ -127,13 +123,10 @@ classDiagram
     class ApplicationContext {
         -MessageBus m_bus
         -ServiceRegistry m_registry
-        -ServiceHost m_services
         -vector~ScopedConnection~ m_connections
         +wireLogger()
         +loadConfig(path)
         +registerCommunicationServices()
-        +startServices()
-        +stopServices()
     }
     class TrackResultDataExchangeBridge {
         -MasterControlState m_masterControl
@@ -152,12 +145,10 @@ classDiagram
         +makeObservationSession(command, observatory, date)
     }
     class ServiceRegistry
-    class ServiceHost
     class BasicMessageBus
 
     ApplicationContext *-- BasicMessageBus
     ApplicationContext *-- ServiceRegistry
-    ApplicationContext *-- ServiceHost
     ApplicationContext o-- TrackResultDataExchangeBridge
     ApplicationContext o-- RuntimeDiagnostics
     TrackResultDataExchangeBridge --> BasicMessageBus
@@ -279,10 +270,8 @@ stateDiagram-v2
     Destroyed --> [*]
 ```
 
-- `ApplicationContext::startServices()` 只会启动加入 `m_services` 的 `IService`；当前注册函数没有调用 `m_services.add()`。
-- `main()` 也没有调用 `startServices()`，所以实际生命周期是 ViewModel 驱动。
-- 析构时 `stopServices()` 对当前 Host 基本为空操作，但 Registry 中对象随后析构，各具体服务仍以 `close()/stop()` 兜底。
-- 如果未来改为 Host 统一管理，必须避免同时保留 ViewModel 的重复启动，并明确串口/网络接口如何适配 `IService`。
+- 实际生命周期由 ViewModel 的业务命令驱动；Registry 中对象析构时，各具体服务仍以 `close()` / `stop()` 兜底。
+- `open/close` 与 `start/stop` 由服务内部生命周期锁串行化，周期线程使用可由 `stop_token` 中断的等待。
 
 ### 线程、错误与诊断
 

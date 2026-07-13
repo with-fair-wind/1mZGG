@@ -33,11 +33,13 @@ TEST(CudaProcessingContract, MatchesOpenCvBlobGeometryOnFixedFrame) {
     Dss::Processing::FramePacket packet{};
     packet.width = 8;
     packet.height = 8;
-    packet.rawImage.assign(static_cast<std::size_t>(packet.width) * packet.height, uint16_t{10});
-    packet.rawImage[2 * packet.width + 2] = 1000;
-    packet.rawImage[2 * packet.width + 3] = 1000;
-    packet.rawImage[3 * packet.width + 2] = 1000;
-    packet.rawImage[3 * packet.width + 3] = 1000;
+    auto rawImage = Dss::Processing::RawImageBuffer(
+        static_cast<std::size_t>(packet.width) * packet.height, uint16_t{10});
+    rawImage[2 * packet.width + 2] = 1000;
+    rawImage[2 * packet.width + 3] = 1000;
+    rawImage[3 * packet.width + 2] = 1000;
+    rawImage[3 * packet.width + 3] = 1000;
+    packet.rawImage = Dss::Processing::makeSharedRawImage(std::move(rawImage));
 
     Dss::Processing::OpenCvProcessingStrategy cpu({
         .thresholdSigma = 1.0,

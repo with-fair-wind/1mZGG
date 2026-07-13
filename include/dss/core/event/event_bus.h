@@ -38,7 +38,20 @@ namespace Dss::Evt {
 template <typename LockPolicy = NoLock>
 class BasicMessageBus : private detail::MovePolicy<std::is_same_v<LockPolicy, NoLock>> {
 public:
+    /// 订阅者异常的集中报告回调。
+    using ExceptionHandler = std::function<void(std::exception_ptr)>;
+
     BasicMessageBus() = default;
+
+    /**
+     * @brief 设置订阅者异常处理器。
+     * @param handler 接收异常指针的回调；空回调表示仅隔离异常。
+     * @note 处理器自身抛出的异常会被消息总线隔离，递归报告也会被抑制。
+     */
+    void setExceptionHandler(ExceptionHandler handler) {
+        detail::UniqueLockGuard<LockPolicy> guard(m_lock);
+        m_exceptionHandler = std::move(handler);
+    }
 
     /**
      * @brief 订阅指定消息类型
@@ -74,7 +87,11 @@ public:
     void emit(const Message& message) const {
         static_assert(std::is_same_v<Message, std::decay_t<Message>>);
         if (auto* ch = findChannel<Message>()) {
-            ch->m_event.emit(message);
+            try {
+                ch->m_event.emit(message);
+            } catch (...) {
+                reportException(std::current_exception());
+            }
         }
     }
 
@@ -99,7 +116,13 @@ public:
                 ptrs.push_back(ch.get());
             }
         }
-        detail::forEachSafe(ptrs.begin(), ptrs.end(), [](auto* ch) { ch->flush(); });
+        for (auto* ch : ptrs) {
+            try {
+                ch->flush();
+            } catch (...) {
+                reportException(std::current_exception());
+            }
+        }
     }
 
     /**
@@ -177,8 +200,38 @@ private:
                                       : nullptr;
     }
 
+    /**
+     * @brief 隔离并报告一次订阅者异常。
+     * @param error 捕获到的订阅者异常。
+     */
+    void reportException(std::exception_ptr error) const noexcept {
+        static thread_local bool reporting = false;
+        if (reporting) {
+            return;
+        }
+
+        ExceptionHandler handler;
+        try {
+            detail::SharedLockGuard<LockPolicy> guard(m_lock);
+            handler = m_exceptionHandler;
+        } catch (...) {
+            return;
+        }
+        if (!handler) {
+            return;
+        }
+
+        reporting = true;
+        try {
+            handler(std::move(error));
+        } catch (...) {
+        }
+        reporting = false;
+    }
+
     mutable LockPolicy m_lock;                                                  ///< 锁策略
     std::unordered_map<std::type_index, std::unique_ptr<IChannel>> m_channels;  ///< 消息通道表
+    ExceptionHandler m_exceptionHandler;                                        ///< 异常报告回调
 };
 
 }  // namespace Dss::Evt

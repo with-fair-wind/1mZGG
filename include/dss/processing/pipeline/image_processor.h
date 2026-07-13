@@ -9,8 +9,8 @@
 #include "dss/processing/detail/bounded_channel.h"
 #include "dss/processing/frame/display_stretch.h"
 #include "dss/processing/frame/frame_packet.h"
-#include "dss/processing/strategy/i_processing_strategy.h"
 #include "dss/processing/pipeline/processing_pipeline.h"
+#include "dss/processing/strategy/i_processing_strategy.h"
 #include "dss/tracking/strategy/i_tracking_strategy.h"
 
 namespace Dss::Processing {
@@ -32,13 +32,13 @@ public:
     /// 启动后台处理线程
     void start();
 
-    /// 停止后台处理线程并等待其退出
+    /// 停止接收新帧，等待后台处理线程退出并清空尚未处理的帧
     void stop();
 
     /**
      * @brief 提交帧到处理队列
      * @param packet 待处理帧数据包
-     * @return 队列已满时丢弃帧并返回 false
+     * @return 处理器未运行、正在停止或队列已满时返回 false
      */
     [[nodiscard]] bool submitFrame(FramePacket packet);
 
@@ -81,6 +81,12 @@ public:
      */
     [[nodiscard]] auto displayStretchSettings() const -> DisplayStretchSettings;
 
+    /**
+     * @brief 设置是否为无 GPU 显示路径生成 8 位 CPU 图像。
+     * @param required 无 RAW shader 支持时传入 true。
+     */
+    void setCpuDisplayImageRequired(bool required);
+
 private:
     /**
      * @brief 后台工作循环，从通道取帧并执行处理与跟踪
@@ -97,6 +103,7 @@ private:
     MessageBus& m_bus;                              ///< 事件消息总线
     BoundedChannel<FramePacket, 4> m_frameChannel;  ///< 帧输入有界通道
     std::jthread m_workerThread;                    ///< 后台处理线程
+    std::mutex m_lifecycleMutex;                    ///< 串行化启动与停止操作
     std::atomic<bool> m_running{false};             ///< 运行状态标志
     std::atomic<uint64_t> m_droppedFrames{0};       ///< 丢弃帧计数
 
@@ -105,6 +112,7 @@ private:
     std::unique_ptr<Dss::Tracking::ITrackingStrategy> m_trackStrategy;  ///< 跟踪策略
     mutable std::mutex m_displayStretchMutex;                           ///< 保护显示拉伸设置
     DisplayStretchSettings m_displayStretchSettings{};                  ///< 当前显示拉伸设置
+    std::atomic<bool> m_cpuDisplayImageRequired{true};  ///< 是否生成 CPU 显示回退图像
 };
 
 }  // namespace Dss::Processing

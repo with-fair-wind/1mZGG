@@ -1,5 +1,14 @@
+#include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <future>
+#include <latch>
+#include <memory>
+#include <mutex>
+#include <stdexcept>
+#include <string_view>
+#include <thread>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -30,6 +39,51 @@ public:
     [[nodiscard]] auto mode() const -> Dss::Core::ProcessingMode override {
         return Dss::Core::ProcessingMode::Direct;
     }
+};
+
+class ThrowingStrategy final : public Dss::Processing::IProcessingStrategy {
+public:
+    [[nodiscard]] auto process(const Dss::Processing::FramePacket&)
+        -> Dss::Processing::ProcessingResult override {
+        throw std::runtime_error("processing failed");
+    }
+
+    [[nodiscard]] auto name() const -> std::string_view override {
+        return "throwing";
+    }
+
+    [[nodiscard]] auto mode() const -> Dss::Core::ProcessingMode override {
+        return Dss::Core::ProcessingMode::Direct;
+    }
+};
+
+class BlockingDisplayStrategy final : public Dss::Processing::IProcessingStrategy {
+public:
+    BlockingDisplayStrategy(std::latch& entered, std::latch& release)
+        : m_entered(entered), m_release(release) {}
+
+    [[nodiscard]] auto process(const Dss::Processing::FramePacket& input)
+        -> Dss::Processing::ProcessingResult override {
+        if (!m_blocked.exchange(true)) {
+            m_entered.count_down();
+            m_release.wait();
+        }
+        DisplayStrategy delegate;
+        return delegate.process(input);
+    }
+
+    [[nodiscard]] auto mode() const -> Dss::Core::ProcessingMode override {
+        return Dss::Core::ProcessingMode::Direct;
+    }
+
+    [[nodiscard]] auto name() const -> std::string_view override {
+        return "blocking-display";
+    }
+
+private:
+    std::latch& m_entered;
+    std::latch& m_release;
+    std::atomic<bool> m_blocked{false};
 };
 
 class CapturingTrackStrategy final : public Dss::Tracking::ITrackingStrategy {
@@ -66,6 +120,10 @@ TEST(ImageProcessor, PublishesDisplayFramePayload) {
         [&displayPromise](const Dss::Core::DisplayRefreshEvent& event) {
             displayPromise.set_value(event);
         });
+    std::promise<Dss::Core::ImageReadyForSendEvent> sendPromise;
+    auto sendFuture = sendPromise.get_future();
+    auto sendConnection = bus.subscribe<Dss::Core::ImageReadyForSendEvent>(
+        [&sendPromise](const auto& event) { sendPromise.set_value(event); });
 
     Dss::Processing::FramePacket packet;
     packet.frameSeq = 42;
@@ -76,6 +134,7 @@ TEST(ImageProcessor, PublishesDisplayFramePayload) {
     ASSERT_TRUE(processor.submitFrame(std::move(packet)));
 
     ASSERT_EQ(displayFuture.wait_for(2s), std::future_status::ready);
+    ASSERT_EQ(sendFuture.wait_for(2s), std::future_status::ready);
     processor.stop();
 
     const auto event = displayFuture.get();
@@ -84,6 +143,84 @@ TEST(ImageProcessor, PublishesDisplayFramePayload) {
     EXPECT_EQ(event.width, 2U);
     EXPECT_EQ(event.height, 2U);
     EXPECT_EQ(*event.displayImage, (std::vector<uint8_t>{1, 2, 3, 4}));
+
+    const auto sendEvent = sendFuture.get();
+    EXPECT_EQ(sendEvent.frameSeq, 42U);
+    EXPECT_EQ(sendEvent.width, 2U);
+    EXPECT_EQ(sendEvent.height, 2U);
+    ASSERT_TRUE(sendEvent.image);
+    EXPECT_EQ(*sendEvent.image, (std::vector<uint8_t>{1, 2, 3, 4}));
+}
+
+TEST(ImageProcessor, RejectsFramesWhileStopped) {
+    Dss::Processing::ImageProcessor::MessageBus bus;
+    Dss::Processing::ImageProcessor processor(bus);
+
+    Dss::Processing::FramePacket beforeStart;
+    beforeStart.frameSeq = 1U;
+    EXPECT_FALSE(processor.submitFrame(std::move(beforeStart)));
+    processor.start();
+    processor.stop();
+    Dss::Processing::FramePacket afterStop;
+    afterStop.frameSeq = 2U;
+    EXPECT_FALSE(processor.submitFrame(std::move(afterStop)));
+}
+
+TEST(ImageProcessor, ClearsQueuedFramesBeforeRestart) {
+    Dss::Processing::ImageProcessor::MessageBus bus;
+    Dss::Processing::ImageProcessor processor(bus);
+    std::latch entered{1};
+    std::latch release{1};
+    processor.setProcessingStrategy(std::make_unique<BlockingDisplayStrategy>(entered, release));
+
+    std::mutex completedMutex;
+    std::vector<uint64_t> completedFrames;
+    auto connection = bus.subscribe<Dss::Core::ProcessingCompleteEvent>(
+        [&completedMutex, &completedFrames](const auto& event) {
+            std::lock_guard lock(completedMutex);
+            completedFrames.push_back(event.frameSeq);
+        });
+
+    processor.start();
+    Dss::Processing::FramePacket first;
+    first.frameSeq = 1U;
+    Dss::Processing::FramePacket queued;
+    queued.frameSeq = 2U;
+    ASSERT_TRUE(processor.submitFrame(std::move(first)));
+    ASSERT_TRUE(processor.submitFrame(std::move(queued)));
+    entered.wait();
+
+    std::jthread stopper([&processor] { processor.stop(); });
+    auto deadline = std::chrono::steady_clock::now() + 2s;
+    while (processor.isRunning() && std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::yield();
+    }
+    const auto stoppedAccepting = !processor.isRunning();
+    release.count_down();
+    stopper.join();
+    ASSERT_TRUE(stoppedAccepting);
+
+    processor.start();
+    Dss::Processing::FramePacket restarted;
+    restarted.frameSeq = 3U;
+    ASSERT_TRUE(processor.submitFrame(std::move(restarted)));
+
+    deadline = std::chrono::steady_clock::now() + 2s;
+    while (std::chrono::steady_clock::now() < deadline) {
+        {
+            std::lock_guard lock(completedMutex);
+            if (std::find(completedFrames.begin(), completedFrames.end(), 3U) !=
+                completedFrames.end()) {
+                break;
+            }
+        }
+        std::this_thread::yield();
+    }
+    processor.stop();
+
+    std::lock_guard lock(completedMutex);
+    EXPECT_EQ(std::count(completedFrames.begin(), completedFrames.end(), 2U), 0);
+    EXPECT_EQ(std::count(completedFrames.begin(), completedFrames.end(), 3U), 1);
 }
 
 TEST(ImageProcessor, AppliesManualDisplayStretchToRawFrames) {
@@ -106,7 +243,7 @@ TEST(ImageProcessor, AppliesManualDisplayStretchToRawFrames) {
     packet.frameSeq = 7;
     packet.width = 2;
     packet.height = 2;
-    packet.rawImage = {500, 1000, 3000, 5000};
+    packet.rawImage = Dss::Processing::makeSharedRawImage({500, 1000, 3000, 5000});
     packet.displayImage = {9, 9, 9, 9};
 
     processor.start();
@@ -121,6 +258,72 @@ TEST(ImageProcessor, AppliesManualDisplayStretchToRawFrames) {
     EXPECT_TRUE(event.displayStretchWindowValid);
     EXPECT_EQ(event.displayStretchLow, 1000U);
     EXPECT_EQ(event.displayStretchHigh, 5000U);
+}
+
+TEST(ImageProcessor, ConvertsUnhandledWorkerExceptionToDiagnosticEvent) {
+    Dss::Processing::ImageProcessor::MessageBus bus;
+    Dss::Processing::ImageProcessor processor(bus);
+    processor.setProcessingStrategy(std::make_unique<ThrowingStrategy>());
+    std::promise<Dss::Core::BackgroundTaskErrorEvent> errorPromise;
+    auto errorFuture = errorPromise.get_future();
+    auto connection = bus.subscribe<Dss::Core::BackgroundTaskErrorEvent>(
+        [&errorPromise](const auto& event) { errorPromise.set_value(event); });
+
+    processor.start();
+    ASSERT_TRUE(processor.submitFrame({}));
+
+    ASSERT_EQ(errorFuture.wait_for(2s), std::future_status::ready);
+    processor.stop();
+    const auto error = errorFuture.get();
+    EXPECT_EQ(error.component, "image_processor");
+    EXPECT_EQ(error.message, "processing failed");
+    EXPECT_FALSE(processor.isRunning());
+}
+
+TEST(ImageProcessor, ReusesRawBufferAndDefersCpuDisplayImage) {
+    Dss::Processing::ImageProcessor::MessageBus bus;
+    Dss::Processing::ImageProcessor processor(bus);
+    processor.setCpuDisplayImageRequired(false);
+    Dss::Processing::DisplayStretchSettings settings{};
+    settings.mode = Dss::Processing::DisplayStretchMode::Manual;
+    settings.low = 1000;
+    settings.high = 5000;
+    processor.setDisplayStretchSettings(settings);
+
+    std::promise<Dss::Core::DisplayRefreshEvent> displayPromise;
+    auto displayFuture = displayPromise.get_future();
+    auto displayConnection = bus.subscribe<Dss::Core::DisplayRefreshEvent>(
+        [&displayPromise](const auto& event) { displayPromise.set_value(event); });
+    std::promise<Dss::Core::ImageReadyForSendEvent> sendPromise;
+    auto sendFuture = sendPromise.get_future();
+    auto sendConnection = bus.subscribe<Dss::Core::ImageReadyForSendEvent>(
+        [&sendPromise](const auto& event) { sendPromise.set_value(event); });
+
+    auto rawImage = Dss::Processing::makeSharedRawImage({500, 1000, 3000, 5000});
+    Dss::Processing::FramePacket packet;
+    packet.frameSeq = 8;
+    packet.width = 2;
+    packet.height = 2;
+    packet.rawImage = rawImage;
+
+    processor.start();
+    ASSERT_TRUE(processor.submitFrame(std::move(packet)));
+    ASSERT_EQ(displayFuture.wait_for(2s), std::future_status::ready);
+    ASSERT_EQ(sendFuture.wait_for(2s), std::future_status::ready);
+    processor.stop();
+
+    const auto displayEvent = displayFuture.get();
+    EXPECT_EQ(displayEvent.rawImage, rawImage);
+    ASSERT_TRUE(displayEvent.displayImage);
+    EXPECT_TRUE(displayEvent.displayImage->empty());
+    EXPECT_TRUE(displayEvent.displayStretchWindowValid);
+
+    const auto sendEvent = sendFuture.get();
+    EXPECT_EQ(sendEvent.frameSeq, 8U);
+    ASSERT_TRUE(sendEvent.imageFactory);
+    const auto generatedImage = sendEvent.imageFactory();
+    ASSERT_TRUE(generatedImage);
+    EXPECT_EQ(*generatedImage, (std::vector<uint8_t>{0, 0, 127, 255}));
 }
 
 TEST(ImageProcessor, PublishesManualTrackResultsWithoutProcessingBackend) {

@@ -17,8 +17,9 @@ Storage 模块定义图像和轨迹数据的存储格式、本地异步后端与
 存储后端抽象接口：
 
 ```cpp
-class IStorageBackend : public IService {
-    virtual auto init(basePath) -> bool = 0;
+class IStorageBackend {
+    virtual auto init(basePath) -> expected = 0;
+    virtual auto isReady() const -> bool = 0;
 };
 ```
 
@@ -30,7 +31,7 @@ class IStorageBackend : public IService {
 |------|------|
 | `init(baseDir)` | 创建/设置存储根目录 |
 | `start()` / `stop()` | 启动/停止后台写入线程，停止时 drain 队列 |
-| `enqueueRawFrame(path, metadata, pixels)` | 入队 legacy RAW 帧写入 |
+| `enqueueRawFrame(path, metadata, pixels)` | 入队 RAW 帧；共享指针重载不复制像素 |
 | `isRunning()` | 查询 worker 状态 |
 
 ### 3. TrackDataStorageBackend (`track_data_storage_backend.h`)
@@ -237,18 +238,18 @@ stateDiagram-v2
     NotReady --> Ready: init
     Ready --> Configured: configureSession
     Configured --> Running: start
-    Running --> Draining: stop / request_stop / notify_all
+    Running --> Draining: stop / 先拒绝新请求 / request_stop
     Draining --> Stopped: 队列排空后 join
     Stopped --> Configured: start
     Stopped --> [*]: 析构
 ```
 
-worker 的退出判断允许收到停止请求后继续处理队列中已有请求；因此 `stop()` 是同步排空点，可能受磁盘速度影响。析构再次调用 `stop()` 是幂等兜底。
+`stop()` 在队列互斥锁内先关闭接收入口，再请求 worker 停止；已经接受的请求仍会全部处理，因此不会出现 worker 已退出但新请求滞留队列的窗口。`stop()` 是同步排空点，可能受磁盘速度影响；析构再次调用 `stop()` 是幂等兜底。
 
 | 状态 | 保护方式 |
 |---|---|
-| ready/running 与统计计数 | atomic |
-| 请求队列 | mutex + condition_variable_any |
+| ready/accepting 与统计计数 | atomic；accepting 同时受队列 mutex 约束 |
+| 请求队列 | mutex + condition_variable_any；stop 与 enqueue 共用同一互斥边界 |
 | session 命名/输出路径 | 启动前配置，运行时不允许修改 |
 | 事件总线指针 | 非拥有指针，必须短于 `ApplicationContext` |
 

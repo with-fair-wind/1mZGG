@@ -1,11 +1,19 @@
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <future>
+#include <memory>
+#include <thread>
 #include <vector>
 
 #include <gtest/gtest.h>
 
+#include "dss/core/event/events.h"
 #include "dss/network/endpoint/image_sender.h"
+#include "dss/network/transport/udp_channel.h"
+
+using namespace std::chrono_literals;
 
 namespace {
 
@@ -76,4 +84,60 @@ TEST(ImageSender, BuildPacketsFragmentsLargeImages) {
     EXPECT_EQ(readU32Le(packets[1], 16), Dss::Network::ImageSender::ImageHeaderSize + 3U);
     EXPECT_EQ(packets[1][Dss::Network::ImageSender::PacketHeaderSize],
               image[chunkSize - Dss::Network::ImageSender::ImageHeaderSize]);
+}
+
+TEST(UdpChannel, SendsAndReceivesAcrossCallerThreads) {
+    Dss::Network::UdpChannel receiver;
+    std::promise<std::vector<uint8_t>> receivedPromise;
+    auto receivedFuture = receivedPromise.get_future();
+    receiver.setReceiveCallback(
+        [&receivedPromise](std::span<const uint8_t> data, const std::string&, uint16_t) {
+            receivedPromise.set_value({data.begin(), data.end()});
+        });
+
+    ASSERT_TRUE(
+        receiver.bind({.localIp = "127.0.0.1", .localPort = 0, .remoteIp = {}, .remotePort = 0})
+            .has_value());
+    ASSERT_NE(receiver.localPort(), 0U);
+
+    Dss::Network::UdpChannel sender;
+    ASSERT_TRUE(sender
+                    .bind({.localIp = "127.0.0.1",
+                           .localPort = 0,
+                           .remoteIp = "127.0.0.1",
+                           .remotePort = receiver.localPort()})
+                    .has_value());
+
+    const std::vector<uint8_t> payload{4, 3, 2, 1};
+    std::promise<int64_t> sentPromise;
+    auto sentFuture = sentPromise.get_future();
+    std::jthread caller(
+        [&sender, &payload, &sentPromise] { sentPromise.set_value(sender.send(payload)); });
+
+    ASSERT_EQ(sentFuture.wait_for(2s), std::future_status::ready);
+    EXPECT_EQ(sentFuture.get(), static_cast<int64_t>(payload.size()));
+    ASSERT_EQ(receivedFuture.wait_for(2s), std::future_status::ready);
+    EXPECT_EQ(receivedFuture.get(), payload);
+}
+
+TEST(ImageSender, PublishesCompletedEventWithSubmittedFrameSequence) {
+    Dss::Network::ImageSender::MessageBus bus;
+    Dss::Network::ImageSender sender(bus);
+    std::promise<Dss::Core::ImageSendCompletedEvent> completedPromise;
+    auto completedFuture = completedPromise.get_future();
+    auto connection = bus.subscribe<Dss::Core::ImageSendCompletedEvent>(
+        [&completedPromise](const auto& event) { completedPromise.set_value(event); });
+
+    ASSERT_TRUE(
+        sender
+            .open(
+                {.localIp = "127.0.0.1", .localPort = 0, .remoteIp = "127.0.0.1", .remotePort = 9})
+            .has_value());
+    auto image = std::make_shared<const std::vector<uint8_t>>(std::vector<uint8_t>{1, 2, 3, 4});
+
+    sender.sendImage(77U, image, 2U, 2U);
+
+    ASSERT_EQ(completedFuture.wait_for(2s), std::future_status::ready);
+    EXPECT_EQ(completedFuture.get().frameSeq, 77U);
+    sender.close();
 }

@@ -1,3 +1,4 @@
+#include <functional>
 #include <memory>
 #include <string>
 #include <utility>
@@ -12,6 +13,9 @@ class FakeFrameSource final : public Dss::Acquisition::IFrameSource {
 public:
     auto init() -> std::expected<void, std::string> override {
         ++initCount;
+        if (onInit) {
+            onInit();
+        }
         if (!initError.empty()) {
             return std::unexpected(initError);
         }
@@ -21,11 +25,17 @@ public:
 
     void start() override {
         ++startCount;
+        if (onStart) {
+            onStart();
+        }
         running = true;
     }
 
     void stop() override {
         ++stopCount;
+        if (onStop) {
+            onStop();
+        }
         running = false;
     }
 
@@ -54,6 +64,9 @@ public:
     uint32_t width = 640;
     uint32_t height = 480;
     FrameCallback frameCallback;
+    std::function<void()> onInit;
+    std::function<void()> onStart;
+    std::function<void()> onStop;
 };
 
 }  // namespace
@@ -108,4 +121,21 @@ TEST(FrameSourceCoordinator, DoesNotStartRegisteredSourcesByDefault) {
     EXPECT_FALSE(replay->running);
     EXPECT_EQ(replay->initCount, 0);
     EXPECT_EQ(replay->startCount, 0);
+}
+
+TEST(FrameSourceCoordinator, DoesNotHoldStateMutexWhileCallingSources) {
+    auto replay = std::make_shared<FakeFrameSource>();
+    auto live = std::make_shared<FakeFrameSource>();
+    Dss::Acquisition::FrameSourceCoordinator coordinator;
+    ASSERT_TRUE(coordinator.registerSource(Dss::Acquisition::FrameSourceMode::Replay, replay));
+    ASSERT_TRUE(coordinator.registerSource(Dss::Acquisition::FrameSourceMode::Live, live));
+
+    replay->onStart = [&coordinator] { EXPECT_TRUE(coordinator.activeMode().has_value()); };
+    replay->onStop = [&coordinator] { EXPECT_TRUE(coordinator.activeMode().has_value()); };
+    live->onInit = [&coordinator] { EXPECT_TRUE(coordinator.activeMode().has_value()); };
+
+    coordinator.start();
+    const auto switched = coordinator.selectSource(Dss::Acquisition::FrameSourceMode::Live);
+
+    ASSERT_TRUE(switched.has_value()) << switched.error();
 }

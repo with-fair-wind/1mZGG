@@ -1,13 +1,26 @@
 #include "dss/app/application_context.h"
 
+#include <exception>
+#include <string>
+
 #include "dss/core/logger.h"
 
 namespace Dss::App {
 
-ApplicationContext::ApplicationContext() = default;
+ApplicationContext::ApplicationContext() {
+    m_bus.setExceptionHandler([](std::exception_ptr error) {
+        std::string message = "unknown exception";
+        try {
+            std::rethrow_exception(std::move(error));
+        } catch (const std::exception& exception) {
+            message = exception.what();
+        } catch (...) {
+        }
+        Dss::Core::Logger::instance().error("Event subscriber failed: {}", message);
+    });
+}
 
 ApplicationContext::~ApplicationContext() {
-    stopServices();
     Dss::Core::Logger::instance().setBus(nullptr);
 }
 
@@ -17,10 +30,6 @@ auto ApplicationContext::bus() -> MessageBus& {
 
 auto ApplicationContext::registry() -> Dss::Core::ServiceRegistry& {
     return m_registry;
-}
-
-auto ApplicationContext::services() -> Dss::Core::ServiceHost& {
-    return m_services;
 }
 
 void ApplicationContext::wireLogger() {
@@ -43,14 +52,6 @@ auto ApplicationContext::loadConfig(const std::filesystem::path& configPath)
         }
     }
     return {};
-}
-
-auto ApplicationContext::startServices() -> std::expected<void, std::string> {
-    return m_services.startAll();
-}
-
-void ApplicationContext::stopServices() noexcept {
-    m_services.stopAll();
 }
 
 }  // namespace Dss::App

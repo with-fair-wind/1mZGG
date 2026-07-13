@@ -16,6 +16,7 @@
 #include "dss/core/event/events.h"
 #include "dss/core/event/message_bus.h"
 #include "dss/core/service/service_registry.h"
+#include "dss/processing/pipeline/image_processor.h"
 #include "dss/ui/view_model/replay_view_model.h"
 #include "dss/ui/view_model/view_model_context.h"
 
@@ -98,7 +99,7 @@ TEST(ReplayViewModel, SelectsSequenceAndStepsForward) {
     replaySource->setFrameCallback([&bus](Dss::Processing::FramePacket packet) {
         auto image =
             std::make_shared<const std::vector<std::uint8_t>>(std::move(packet.displayImage));
-        auto raw = std::make_shared<const std::vector<std::uint16_t>>(std::move(packet.rawImage));
+        auto raw = packet.rawImage;
         bus.emit(Dss::Core::DisplayRefreshEvent{packet.frameSeq, packet.width, packet.height,
                                                 packet.width, std::move(image), std::move(raw)});
     });
@@ -113,18 +114,19 @@ TEST(ReplayViewModel, SelectsSequenceAndStepsForward) {
 
     ASSERT_TRUE(replay.selectReplayFiles(QStringList{QString::fromStdWString(first.wstring()),
                                                      QString::fromStdWString(second.wstring())}));
-    EXPECT_TRUE(replay.replayBusy());
-    ASSERT_TRUE(waitForQt([&] { return !replay.replayBusy(); }));
+    EXPECT_FALSE(replay.replayBusy());
     EXPECT_EQ(replay.replayFrameCount(), 2);
     EXPECT_EQ(replay.replayCurrentFrame(), 0);
-    EXPECT_GE(busyStates.size(), 2U);
-    EXPECT_TRUE(busyStates.front());
-    EXPECT_FALSE(busyStates.back());
+    EXPECT_EQ(replaySource->frameWidth(), 0U);
+    EXPECT_EQ(replaySource->frameHeight(), 0U);
+    EXPECT_TRUE(busyStates.empty());
 
     EXPECT_TRUE(replay.stepReplayForward());
     EXPECT_TRUE(replay.replayBusy());
     ASSERT_TRUE(waitForQt([&] { return !replay.replayBusy(); }));
     EXPECT_EQ(replay.replayCurrentFrame(), 1);
+    EXPECT_EQ(replaySource->frameWidth(), 2U);
+    EXPECT_EQ(replaySource->frameHeight(), 2U);
 
     EXPECT_TRUE(replay.stepReplayForward());
     ASSERT_TRUE(waitForQt([&] { return !replay.replayBusy(); }));
@@ -144,4 +146,96 @@ TEST(ReplayViewModel, SelectsSequenceAndStepsForward) {
     EXPECT_EQ(replay.replayCurrentFrame(), 2);
 
     QObject::disconnect(busyConnection);
+}
+
+TEST(ReplayViewModel, DefersMissingReplayFileErrorUntilStep) {
+    QCoreApplicationFixture app;
+    const auto missing = tempReplayViewModelDir() / "missing_replay_frame.bmp";
+    std::error_code removeError;
+    std::filesystem::remove(missing, removeError);
+
+    MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    auto replaySource = std::make_shared<Dss::Acquisition::ImageSequenceFrameSource>();
+    replaySource->setFrameCallback([](Dss::Processing::FramePacket) {});
+    registry.registerService<Dss::Acquisition::ImageSequenceFrameSource>("replay_source",
+                                                                         replaySource);
+
+    Dss::Ui::ReplayViewModel replay({.bus = bus, .registry = registry});
+    QString statusText;
+    QObject::connect(&replay, &Dss::Ui::ReplayViewModel::statusTextChanged,
+                     [&statusText](const QString& text) { statusText = text; });
+
+    EXPECT_TRUE(replay.selectReplayFiles({QString::fromStdWString(missing.wstring())}));
+    EXPECT_FALSE(replay.replayBusy());
+    EXPECT_EQ(replay.replayFrameCount(), 1);
+    EXPECT_TRUE(statusText.startsWith("Sequence selected:"));
+
+    ASSERT_TRUE(replay.stepReplayForward());
+    ASSERT_TRUE(waitForQt([&] { return !replay.replayBusy(); }));
+    EXPECT_TRUE(statusText.startsWith("failed to"));
+    EXPECT_EQ(replay.replayCurrentFrame(), 0);
+}
+
+TEST(ReplayViewModel, StartsReplayInitializationAsBackgroundTask) {
+    QCoreApplicationFixture app;
+    const auto missing = tempReplayViewModelDir() / "missing_start_frame.bmp";
+    std::error_code removeError;
+    std::filesystem::remove(missing, removeError);
+
+    MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    auto replaySource = std::make_shared<Dss::Acquisition::ImageSequenceFrameSource>();
+    replaySource->setFrameCallback([](Dss::Processing::FramePacket) {});
+    auto processor = std::make_shared<Dss::Processing::ImageProcessor>(bus);
+    registry.registerService<Dss::Acquisition::ImageSequenceFrameSource>("replay_source",
+                                                                         replaySource);
+    registry.registerService<Dss::Acquisition::IFrameSource>("frame_source", replaySource);
+    registry.registerService<Dss::Processing::ImageProcessor>("image_processor", processor);
+
+    Dss::Ui::ReplayViewModel replay({.bus = bus, .registry = registry});
+    QString statusText;
+    QObject::connect(&replay, &Dss::Ui::ReplayViewModel::statusTextChanged,
+                     [&statusText](const QString& text) { statusText = text; });
+    ASSERT_TRUE(replay.selectReplayFiles({QString::fromStdWString(missing.wstring())}));
+
+    replay.startGrab();
+
+    EXPECT_TRUE(replay.replayBusy());
+    EXPECT_FALSE(replay.isGrabbing());
+    ASSERT_TRUE(waitForQt([&] { return !replay.replayBusy(); }));
+    EXPECT_FALSE(replay.isGrabbing());
+    EXPECT_TRUE(statusText.startsWith("failed to"));
+}
+
+TEST(ReplayViewModel, StartsReplayAfterBackgroundInitializationSucceeds) {
+    QCoreApplicationFixture app;
+    const auto frame = tempReplayViewModelDir() / "start_replay_frame.bmp";
+    ASSERT_TRUE(writeGrayBmp(frame, 20));
+
+    MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    auto replaySource = std::make_shared<Dss::Acquisition::ImageSequenceFrameSource>();
+    replaySource->setFrameCallback([](Dss::Processing::FramePacket) {});
+    auto processor = std::make_shared<Dss::Processing::ImageProcessor>(bus);
+    registry.registerService<Dss::Acquisition::ImageSequenceFrameSource>("replay_source",
+                                                                         replaySource);
+    registry.registerService<Dss::Acquisition::IFrameSource>("frame_source", replaySource);
+    registry.registerService<Dss::Processing::ImageProcessor>("image_processor", processor);
+
+    Dss::Ui::ReplayViewModel replay({.bus = bus, .registry = registry});
+    QString statusText;
+    QObject::connect(&replay, &Dss::Ui::ReplayViewModel::statusTextChanged,
+                     [&statusText](const QString& text) { statusText = text; });
+    ASSERT_TRUE(replay.selectReplayFiles({QString::fromStdWString(frame.wstring())}));
+
+    replay.startGrab();
+
+    EXPECT_TRUE(replay.replayBusy());
+    ASSERT_TRUE(waitForQt([&] { return !replay.replayBusy(); }));
+    EXPECT_TRUE(replay.isGrabbing());
+    EXPECT_EQ(replaySource->frameWidth(), 2U);
+    EXPECT_EQ(replaySource->frameHeight(), 2U);
+    EXPECT_EQ(statusText, "Replaying...");
+    replay.stopGrab();
 }

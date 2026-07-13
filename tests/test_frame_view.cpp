@@ -7,7 +7,7 @@ TEST(FrameView, ExposesNonOwningImageSpans) {
     packet.frameSeq = 42;
     packet.width = 2;
     packet.height = 2;
-    packet.rawImage = {1, 2, 3, 4};
+    packet.rawImage = Dss::Processing::makeSharedRawImage({1, 2, 3, 4});
     packet.displayImage = {10, 20, 30, 40};
 
     const auto view = Dss::Processing::makeFrameView(packet);
@@ -20,12 +20,14 @@ TEST(FrameView, ExposesNonOwningImageSpans) {
     EXPECT_EQ(view.displayImage[3], 40U);
 }
 
-TEST(FrameView, ExposesMutableImageSpans) {
+TEST(FrameView, KeepsRawImageImmutableInMutableView) {
     Dss::Processing::FramePacket packet;
-    packet.rawImage = {1, 2, 3};
+    packet.rawImage = Dss::Processing::makeSharedRawImage({1, 2, 3});
+    packet.displayImage = {10, 20, 30};
 
     auto view = Dss::Processing::makeMutableFrameView(packet);
-    view.rawImage[1] = 99;
+    view.displayImage[1] = 99;
 
-    EXPECT_EQ(packet.rawImage[1], 99U);
+    EXPECT_EQ(view.rawImage[1], 2U);
+    EXPECT_EQ(packet.displayImage[1], 99U);
 }

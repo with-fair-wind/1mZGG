@@ -10,7 +10,7 @@
 
 ## 模块职责
 
-Comm 模块封装四路串口通信通道，负责与天文设备的低层协议交互。每路串口有独立的帧格式（收/发字节数不同），通过统一的 `SerialWorkerBase` 基类管理 Qt 串口线程。
+Comm 模块封装四路串口通信通道，负责与天文设备的低层协议交互。每路串口有独立的帧格式（收/发字节数不同），通过统一的 `SerialWorkerBase` 基类和 `std::jthread` 管理 Qt 串口 I/O。
 
 ## 协议帧格式
 
@@ -88,7 +88,7 @@ class ISerialChannel {
 
 ### 5. SerialWorkerBase (`serial_worker_base.h`)
 
-Qt `QSerialPort` 工作线程基类（pimpl 隐藏 Qt 依赖）：
+Qt `QSerialPort` 工作线程基类（公开头只保留前置声明）：
 
 - 内部线程持有 `QSerialPort` 实例
 - `open()` — 配置并打开串口
@@ -186,7 +186,6 @@ classDiagram
         +sendFrameSize() size_t
     }
     class SerialWorkerBase {
-        -unique_ptr~QSerialPort~ serialPort
         -jthread workerThread
         +open(config)
         +close()
@@ -231,22 +230,23 @@ classDiagram
 sequenceDiagram
     participant UI as SerialPortViewModel
     participant Base as SerialWorkerBase
-    participant Port as QSerialPort
     participant Worker as std::jthread
+    participant Port as QSerialPort
 
     UI->>Base: open(SerialConfig)
-    Base->>Port: 构造并设置端口/波特率/8N1/无流控
-    Base->>Port: open(ReadWrite)
+    Base->>Worker: 启动 workerLoop + init promise
+    Worker->>Port: 在线程内构造并设置端口/波特率/8N1/无流控
+    Worker->>Port: open(ReadWrite)
     alt 打开失败
+        Worker-->>Base: unexpected(errorString)
         Base-->>UI: unexpected(errorString)
     else 成功
-        Base->>Base: status=Ok
-        Base->>Worker: 启动 workerLoop
+        Worker->>Base: status=Ok + promise success
         Base-->>UI: success
     end
 ```
 
-当前 `QSerialPort` 在调用 `open()` 的线程创建，随后在 `std::jthread` 中调用阻塞读写，没有使用 `QThread::moveToThread()`。这是必须通过真实硬件验收的线程亲和性边界；若重构，应在工作线程内创建/销毁端口，或统一改为 Qt 线程事件循环模型。
+`QSerialPort` 在 `std::jthread` 内构造、打开、阻塞读写、关闭并销毁，完整生命周期保持同一线程亲和性。`open()` 仅通过 `std::promise/std::future` 同步取得初始化结果，不引入 `QThread`。
 
 ### 接收调用栈
 
@@ -321,10 +321,10 @@ flowchart LR
 | status、收发计数/FPS | atomic |
 | `sendRequested` | send mutex |
 | 各通道 pending 命令与 latest data | 各自 mutex |
-| QSerialPort | 当前由 worker 执行 I/O；线程亲和需硬件验证 |
+| QSerialPort | 只在所属 `std::jthread` 内构造、访问和销毁 |
 | 总线事件 | 在串口 worker 线程同步发布 |
 
-`close()` 请求停止并 join，然后关闭/释放串口，状态回到 Init。帧结构错误和字段解码错误分别发布不同事件，`ErrorDiagnostics` 会把 Display/Exposure 错误标记为通信失败，`RuntimeDiagnostics` 统一累计串口错误数。
+`close()` 请求停止并 join；工作线程退出前关闭/释放串口，调用线程只重置状态。帧结构错误和字段解码错误分别发布不同事件，`ErrorDiagnostics` 会把 Display/Exposure 错误标记为通信失败，`RuntimeDiagnostics` 统一累计串口错误数。
 
 ### 配置、扩展与测试
 

@@ -13,7 +13,7 @@ auto makeFrame(std::vector<std::uint16_t> pixels, std::uint32_t width, std::uint
     Dss::Processing::FramePacket frame{};
     frame.width = width;
     frame.height = height;
-    frame.rawImage = std::move(pixels);
+    frame.rawImage = Dss::Processing::makeSharedRawImage(std::move(pixels));
     return frame;
 }
 

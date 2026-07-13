@@ -195,7 +195,7 @@ classDiagram
         +width uint32
         +height uint32
         +metadata ExposureDisplayData
-        +rawImage vector~uint16~
+        +rawImage shared_ptr~const vector uint16~
         +displayImage vector~uint8~
         +targetBlobs vector~MeasuredBlob~
     }
@@ -283,17 +283,20 @@ sequenceDiagram
         Processor->>Tracker: track(measurements)
         Tracker-->>Processor: TargetInfo 列表
     end
-    Processor->>Processor: 从 rawImage 重新生成当前拉伸显示图
+    Processor->>Processor: 计算 RAW 统计量与 low/high
+    opt 无 GPU 的 CPU 显示回退
+        Processor->>Processor: 从 RAW 生成 8 位显示图
+    end
     Processor->>Bus: DisplayRefreshEvent
     Processor->>Bus: ProcessingCompleteEvent
     opt 结果非空
         Processor->>Bus: TrackResultEvent
     end
     Processor->>Bus: RotatedFrameReadyEvent
-    Processor->>Bus: ImageSendEvent
+    Processor->>Bus: ImageReadyForSendEvent(image 或延迟工厂)
 ```
 
-显示缓冲的优先级很重要：尺寸合法且有 `rawImage` 时，总是根据当前 `DisplayStretchSettings` 重新构造 8 位图；否则退回策略的 `displayImage`，再退回输入包已有显示图。原始像素以 `shared_ptr<const vector<uint16_t>>` 放进 `DisplayRefreshEvent`，让 UI 可在不复制业务状态的情况下重新拉伸。
+尺寸合法且有 `rawImage` 时，处理器计算统计量和显示窗口，并把同一 `shared_ptr<const vector<uint16_t>>` 放进 `DisplayRefreshEvent`。GPU 可用时不构造 8 位 CPU 图；无 GPU 时由 `setCpuDisplayImageRequired(true)` 启用回退。网络事件携带捕获 RAW 与窗口的延迟工厂，只有 `ImageSender` 已打开时才生成 8 位图。没有 RAW 时，显示缓冲仍按“策略输出 → 输入包已有图”回退。
 
 ### 处理策略行为
 

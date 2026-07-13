@@ -3,7 +3,7 @@
 #include <atomic>
 #include <cstdint>
 #include <expected>
-#include <memory>
+#include <future>
 #include <mutex>
 #include <span>
 #include <stop_token>
@@ -12,8 +12,8 @@
 #include <thread>
 #include <vector>
 
-#include "dss/comm/protocol/frame_codec.h"
 #include "dss/comm/port/i_serial_channel.h"
+#include "dss/comm/protocol/frame_codec.h"
 #include "dss/core/constants.h"
 #include "dss/core/event/message_bus.h"
 
@@ -118,19 +118,31 @@ private:
     /**
      * @brief 工作线程主循环：轮询接收、处理发送请求并统计帧速率
      * @param token 线程停止令牌
+     * @param initPromise 串口打开结果回传通道
      */
-    void workerLoop(std::stop_token token);
+    void workerLoop(std::stop_token token,
+                    std::promise<std::expected<void, std::string>> initPromise);
 
-    /// 从串口读取完整帧，校验后调用 decodeFrame
-    void onDataReceived();
+    /**
+     * @brief 从串口读取完整帧，校验后调用 decodeFrame。
+     * @param serialPort 当前工作线程独占的已打开串口。
+     */
+    void onDataReceived(QSerialPort& serialPort);
 
-    /// 编码一帧并通过串口发送
-    void sendFrameInternal();
+    /**
+     * @brief 编码一帧并通过串口发送。
+     * @param serialPort 当前工作线程独占的已打开串口。
+     */
+    void sendFrameInternal(QSerialPort& serialPort);
 
-    MessageBus& m_bus;                          ///< 事件总线引用
-    SerialConfig m_config{};                    ///< 当前串口配置
-    std::unique_ptr<QSerialPort> m_serialPort;  ///< Qt 串口对象
-    std::jthread m_workerThread;                ///< 收发工作线程
+    /// @brief 在持有生命周期互斥锁时停止工作线程并复位状态。
+    void closeLocked();
+
+    MessageBus& m_bus;                ///< 事件总线引用
+    SerialConfig m_config{};          ///< 当前串口配置
+    std::jthread m_workerThread;      ///< 收发工作线程；串口对象在该线程内创建和销毁
+    std::atomic<bool> m_open{false};  ///< 串口是否已由工作线程成功打开
+    std::mutex m_lifecycleMutex;      ///< 串行化串口启停操作
 
     std::mutex m_sendMutex;        ///< 发送请求互斥锁
     bool m_sendRequested = false;  ///< 是否有待发送帧

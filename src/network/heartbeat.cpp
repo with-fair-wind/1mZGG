@@ -1,8 +1,8 @@
 #include "dss/network/endpoint/heartbeat.h"
 
 #include <chrono>
-#include <thread>
 
+#include "dss/core/concurrency/background_task.h"
 #include "dss/core/constants.h"
 
 namespace Dss::Network {
@@ -14,16 +14,25 @@ Heartbeat::~Heartbeat() {
 }
 
 auto Heartbeat::open(const UdpEndpointConfig& config) -> std::expected<void, std::string> {
+    std::lock_guard lock(m_lifecycleMutex);
+    closeLocked();
     auto result = m_channel.bind(config);
     if (!result) {
         return result;
     }
 
-    m_workerThread = std::jthread([this](std::stop_token token) { workerLoop(token); });
+    m_workerThread = std::jthread([this](std::stop_token token) {
+        Dss::Core::runBackgroundTask(m_bus, "heartbeat", [this, token] { workerLoop(token); });
+    });
     return {};
 }
 
 void Heartbeat::close() {
+    std::lock_guard lock(m_lifecycleMutex);
+    closeLocked();
+}
+
+void Heartbeat::closeLocked() {
     if (m_workerThread.joinable()) {
         m_workerThread.request_stop();
         m_workerThread.join();
@@ -64,7 +73,9 @@ void Heartbeat::workerLoop(std::stop_token token) {
         const auto frame = buildFrame();
         m_channel.send(frame);
 
-        std::this_thread::sleep_for(100ms);
+        if (m_wait.waitFor(token, 100ms)) {
+            break;
+        }
     }
 }
 

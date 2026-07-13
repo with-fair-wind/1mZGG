@@ -7,6 +7,7 @@
 #include <thread>
 #include <vector>
 
+#include "dss/core/concurrency/interruptible_wait.h"
 #include "dss/core/event/events.h"
 #include "dss/core/event/message_bus.h"
 #include "dss/network/protocol/diagnostic_protocol.h"
@@ -64,9 +65,14 @@ private:
      */
     void workerLoop(std::stop_token token);
 
+    /// @brief 在持有生命周期互斥锁时停止线程并关闭通道。
+    void closeLocked();
+
     MessageBus& m_bus;                                      ///< 事件总线引用
     UdpChannel m_channel;                                   ///< 诊断报文 UDP 通道
     std::jthread m_workerThread;                            ///< 周期性发送工作线程
+    mutable std::mutex m_lifecycleMutex;                    ///< 串行化通道启停操作
+    Dss::Core::InterruptibleWait m_wait;                    ///< 可由停止令牌中断的周期等待
     mutable std::mutex m_statusMutex;                       ///< 保护诊断状态的互斥锁
     DiagnosticStatus m_status{};                            ///< 最近一次设置的诊断状态
     std::vector<Dss::Evt::ScopedConnection> m_connections;  ///< 事件订阅连接

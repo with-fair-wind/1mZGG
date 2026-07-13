@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "dss/acquisition/source/i_frame_source.h"
+#include "dss/core/concurrency/interruptible_wait.h"
 
 namespace Dss::Acquisition {
 
@@ -95,8 +96,10 @@ private:
     std::size_t m_nextFrameIndex = 0;                                          ///< 下一帧待播放索引
     bool m_initialized = false;                                                ///< 是否已完成初始化
 
-    std::jthread m_worker;               ///< 后台回放工作线程
-    std::atomic<bool> m_running{false};  ///< 是否正在连续回放
+    std::jthread m_worker;                ///< 后台回放工作线程
+    std::atomic<bool> m_running{false};   ///< 是否正在连续回放
+    std::mutex m_lifecycleMutex;          ///< 串行化回放启停操作
+    Dss::Core::InterruptibleWait m_wait;  ///< 可由停止令牌中断的帧间等待
 };
 
 }  // namespace Dss::Acquisition

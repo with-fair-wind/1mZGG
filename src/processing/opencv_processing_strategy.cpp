@@ -57,13 +57,14 @@ OpenCvProcessingStrategy::OpenCvProcessingStrategy(OpenCvProcessingOptions optio
 auto OpenCvProcessingStrategy::process(const FramePacket& input) -> ProcessingResult {
     ProcessingResult result{};
     const auto pixelCount = expectedPixelCount(input);
-    if (input.width == 0 || input.height == 0 || input.rawImage.size() != pixelCount) {
+    if (input.width == 0 || input.height == 0 || !input.rawImage ||
+        input.rawImage->size() != pixelCount) {
         return result;
     }
 
     const auto rows = static_cast<int>(input.height);
     const auto cols = static_cast<int>(input.width);
-    const cv::Mat raw16(rows, cols, CV_16UC1, const_cast<uint16_t*>(input.rawImage.data()));
+    const cv::Mat raw16(rows, cols, CV_16UC1, const_cast<uint16_t*>(input.rawImage->data()));
 
     double minValue = 0.0;
     double maxValue = 0.0;
@@ -79,7 +80,7 @@ auto OpenCvProcessingStrategy::process(const FramePacket& input) -> ProcessingRe
     result.stats.stdDev = stddev[0];
 
     result.displayImage = stretchDisplayImage(
-        input.rawImage,
+        *input.rawImage,
         DisplayStretchWindow{.low = m_options.displayLow, .high = m_options.displayHigh});
 
     const auto threshold = std::clamp(mean[0] + (m_options.thresholdSigma * stddev[0]), 0.0,

@@ -122,6 +122,10 @@ void DisplayViewModel::setRawDisplayEnabled(bool enabled) {
         return;
     }
     m_rawDisplayEnabled = enabled;
+    if (auto processor = m_registry.tryGet<Dss::Processing::ImageProcessor>(
+            Dss::App::ServiceKey::imageProcessor)) {
+        processor->setCpuDisplayImageRequired(!enabled);
+    }
     if (m_rawDisplayEnabled) {
         (void)emitCurrentRawDisplayFrame();
     } else {

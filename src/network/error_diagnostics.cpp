@@ -1,8 +1,8 @@
 #include "dss/network/endpoint/error_diagnostics.h"
 
 #include <chrono>
-#include <thread>
 
+#include "dss/core/concurrency/background_task.h"
 namespace Dss::Network {
 
 ErrorDiagnostics::ErrorDiagnostics(MessageBus& bus) : m_bus(bus) {
@@ -34,16 +34,26 @@ ErrorDiagnostics::~ErrorDiagnostics() {
 }
 
 auto ErrorDiagnostics::open(const UdpEndpointConfig& config) -> std::expected<void, std::string> {
+    std::lock_guard lock(m_lifecycleMutex);
+    closeLocked();
     auto result = m_channel.bind(config);
     if (!result) {
         return result;
     }
 
-    m_workerThread = std::jthread([this](std::stop_token token) { workerLoop(token); });
+    m_workerThread = std::jthread([this](std::stop_token token) {
+        Dss::Core::runBackgroundTask(m_bus, "error_diagnostics",
+                                     [this, token] { workerLoop(token); });
+    });
     return {};
 }
 
 void ErrorDiagnostics::close() {
+    std::lock_guard lock(m_lifecycleMutex);
+    closeLocked();
+}
+
+void ErrorDiagnostics::closeLocked() {
     if (m_workerThread.joinable()) {
         m_workerThread.request_stop();
         m_workerThread.join();
@@ -78,7 +88,9 @@ void ErrorDiagnostics::workerLoop(std::stop_token token) {
             std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(json.data()), json.size());
         m_channel.send(data);
 
-        std::this_thread::sleep_for(1s);
+        if (m_wait.waitFor(token, 1s)) {
+            break;
+        }
     }
 }
 

@@ -26,8 +26,10 @@ namespace Dss::Storage {
 template <typename Request>
 class AsyncWriteQueue {
 public:
-    using Writer = std::function<std::expected<void, std::string>(const Request&)>;
-    using FailureHandler = std::function<void(const Request&, const std::string&)>;
+    using Writer =
+        std::function<std::expected<void, std::string>(const Request&)>;  ///< 单请求写入函数。
+    using FailureHandler =
+        std::function<void(const Request&, const std::string&)>;  ///< 写入失败通知函数。
 
     /**
      * @brief 构造异步写入队列。
@@ -54,6 +56,7 @@ public:
      */
     auto start(Writer writer, FailureHandler failureHandler = {})
         -> std::expected<void, std::string> {
+        std::lock_guard lifecycleLock(m_lifecycleMutex);
         if (!writer) {
             return std::unexpected("async write queue writer is not configured");
         }
@@ -63,6 +66,10 @@ public:
 
         m_writer = std::move(writer);
         m_failureHandler = std::move(failureHandler);
+        {
+            std::lock_guard queueLock(m_queueMutex);
+            m_accepting = true;
+        }
         m_running.store(true);
         m_worker = std::jthread([this](std::stop_token token) { workerLoop(token); });
         return {};
@@ -70,15 +77,20 @@ public:
 
     /** @brief 请求后台线程停止，并等待队列排空后退出。 */
     void stop() {
+        std::lock_guard lifecycleLock(m_lifecycleMutex);
+        {
+            std::lock_guard queueLock(m_queueMutex);
+            m_accepting = false;
+        }
+        m_running.store(false);
         if (m_worker.joinable()) {
             m_worker.request_stop();
             m_queueCv.notify_all();
             m_worker.join();
         }
-        m_running.store(false);
     }
 
-    /** @brief 查询后台线程是否运行。 @return 线程运行时返回 true。 */
+    /** @brief 查询队列是否接受新请求。 @return start 成功且尚未开始 stop 时返回 true。 */
     [[nodiscard]] auto isRunning() const -> bool {
         return m_running.load();
     }
@@ -89,12 +101,11 @@ public:
      * @return 入队成功时返回空；线程未运行或队列已满时返回错误描述。
      */
     auto enqueue(Request request) -> std::expected<void, std::string> {
-        if (!m_running.load()) {
-            return std::unexpected("async write queue is not running");
-        }
-
         {
             std::lock_guard lock(m_queueMutex);
+            if (!m_accepting) {
+                return std::unexpected("async write queue is not running");
+            }
             if (m_queue.size() >= m_maxPendingRequests) {
                 m_droppedRequests.fetch_add(1, std::memory_order_relaxed);
                 return std::unexpected("async write queue is full");
@@ -160,9 +171,11 @@ private:
     Writer m_writer;                                   ///< 单个请求写入函数。
     FailureHandler m_failureHandler;                   ///< 写入失败通知函数。
     std::jthread m_worker;                             ///< 后台写入工作线程。
+    std::mutex m_lifecycleMutex;                       ///< 串行化启动与停止操作。
     std::mutex m_queueMutex;                           ///< 保护写入队列的互斥锁。
     std::condition_variable_any m_queueCv;             ///< 写入队列条件变量。
     std::deque<Request> m_queue;                       ///< 待写入请求队列。
+    bool m_accepting = false;                          ///< 是否接受新的写入请求。
 };
 
 }  // namespace Dss::Storage

@@ -1,11 +1,17 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
+#include <deque>
 #include <expected>
 #include <functional>
-#include <memory>
+#include <future>
 #include <mutex>
 #include <span>
+#include <stop_token>
+#include <string>
+#include <thread>
+#include <vector>
 
 #include "dss/network/transport/i_network_channel.h"
 
@@ -13,7 +19,7 @@ class QUdpSocket;
 
 namespace Dss::Network {
 
-/// UDP 通道实现，基于 Qt QUdpSocket 完成绑定、发送与异步接收
+/// UDP 通道实现；使用 std::jthread 串行执行 QUdpSocket 的绑定、收发与销毁
 class UdpChannel {
 public:
     /// 构造 UDP 通道（套接字在 bind 时创建）
@@ -54,6 +60,12 @@ public:
     [[nodiscard]] bool isBound() const;
 
     /**
+     * @brief 获取实际绑定的本地端口。
+     * @return 绑定成功后的端口；未绑定时返回 0。使用配置端口 0 时可获取系统分配端口。
+     */
+    [[nodiscard]] auto localPort() const -> uint16_t;
+
+    /**
      * @brief 设置数据报接收回调
      * @param cb 回调函数，参数为载荷数据、发送方 IP 与端口
      */
@@ -61,14 +73,52 @@ public:
         std::function<void(std::span<const uint8_t>, const std::string&, uint16_t)> cb);
 
 private:
-    /// Qt 套接字可读信号的处理函数
-    void onReadyRead();
+    /// 跨线程发送命令及其同步完成通知。
+    struct SendRequest {
+        std::vector<uint8_t> data;     ///< 独立拥有的待发送字节。
+        std::string host;              ///< 目标主机。
+        uint16_t port = 0;             ///< 目标端口。
+        std::promise<int64_t> result;  ///< 实际发送字节数。
+    };
 
-    std::unique_ptr<QUdpSocket> m_socket;  ///< Qt UDP 套接字对象
-    UdpEndpointConfig m_config{};          ///< 当前端点配置
+    /**
+     * @brief I/O 工作循环，在单一线程内管理 QUdpSocket 完整生命周期。
+     * @param token 停止令牌。
+     * @param config 线程启动时的端点配置快照。
+     * @param initPromise 绑定结果回传通道。
+     */
+    void workerLoop(std::stop_token token, UdpEndpointConfig config,
+                    std::promise<std::expected<void, std::string>> initPromise);
+
+    /**
+     * @brief 处理已排队的全部发送命令。
+     * @param socket 当前 I/O 工作线程独占的已绑定套接字。
+     */
+    void processPendingSends(QUdpSocket& socket);
+    /**
+     * @brief 读取全部待处理数据报并在无锁状态下调用接收回调。
+     * @param socket 当前 I/O 工作线程独占的已绑定套接字。
+     */
+    void onReadyRead(QUdpSocket& socket);
+    /// 在已持有生命周期锁时停止工作线程。
+    void closeLocked();
+    /// 让尚未执行的发送请求以失败结果结束。
+    void failPendingSends();
+
+    std::jthread m_workerThread;                       ///< 独占 QUdpSocket 的 I/O 工作线程。
+    mutable std::mutex m_lifecycleMutex;               ///< 串行化 bind/close。
+    std::mutex m_sendMutex;                            ///< 保护发送队列与默认远端配置。
+    std::deque<SendRequest> m_sendQueue;               ///< 待执行发送命令。
+    std::string m_remoteIp;                            ///< 默认远端 IP。
+    uint16_t m_remotePort = 0;                         ///< 默认远端端口。
+    bool m_acceptingSends = false;                     ///< 是否接受新的发送命令。
+    std::atomic<bool> m_bound{false};                  ///< 套接字绑定状态。
+    std::atomic<uint16_t> m_localPort{0};              ///< 实际绑定的本地端口。
+    std::atomic<QUdpSocket*> m_workerSocket{nullptr};  ///< 仅供 I/O 线程重入发送的观察指针。
+
     std::function<void(std::span<const uint8_t>, const std::string&, uint16_t)>
-        m_recvCallback;  ///< 数据报接收回调
-    std::mutex m_mutex;  ///< 保护接收回调的互斥锁
+        m_recvCallback;          ///< 数据报接收回调
+    std::mutex m_callbackMutex;  ///< 保护接收回调的互斥锁
 };
 
 }  // namespace Dss::Network

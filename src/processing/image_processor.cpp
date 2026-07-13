@@ -1,5 +1,6 @@
 #include "dss/processing/pipeline/image_processor.h"
 
+#include "dss/core/concurrency/background_task.h"
 #include "dss/core/event/events.h"
 
 namespace Dss::Processing {
@@ -11,23 +12,33 @@ ImageProcessor::~ImageProcessor() {
 }
 
 void ImageProcessor::start() {
+    std::lock_guard lifecycleLock(m_lifecycleMutex);
     if (m_running.exchange(true)) {
         return;
     }
     m_frameChannel.open();
-    m_workerThread = std::jthread([this](std::stop_token token) { workerLoop(token); });
+    m_workerThread = std::jthread([this](std::stop_token token) {
+        Dss::Core::runBackgroundTask(m_bus, "image_processor",
+                                     [this, token] { workerLoop(token); });
+        m_running.store(false);
+    });
 }
 
 void ImageProcessor::stop() {
+    std::lock_guard lifecycleLock(m_lifecycleMutex);
+    m_running.store(false);
+    m_frameChannel.close();
     if (m_workerThread.joinable()) {
         m_workerThread.request_stop();
-        m_frameChannel.close();
         m_workerThread.join();
     }
-    m_running.store(false);
+    m_frameChannel.clear();
 }
 
 bool ImageProcessor::submitFrame(FramePacket packet) {
+    if (!m_running.load()) {
+        return false;
+    }
     if (!m_frameChannel.tryPush(std::move(packet))) {
         m_droppedFrames.fetch_add(1, std::memory_order_relaxed);
         return false;
@@ -71,6 +82,10 @@ void ImageProcessor::setDisplayStretchSettings(DisplayStretchSettings settings) 
 
 auto ImageProcessor::displayStretchSettings() const -> DisplayStretchSettings {
     return currentDisplayStretchSettings();
+}
+
+void ImageProcessor::setCpuDisplayImageRequired(bool required) {
+    m_cpuDisplayImageRequired.store(required);
 }
 
 auto ImageProcessor::currentDisplayStretchSettings() const -> DisplayStretchSettings {
@@ -122,12 +137,16 @@ void ImageProcessor::workerLoop(std::stop_token token) {
         std::vector<std::uint8_t> displayBuffer;
         const auto expectedPixelCount =
             static_cast<std::size_t>(packet.width) * static_cast<std::size_t>(packet.height);
-        if (expectedPixelCount > 0U && packet.rawImage.size() == expectedPixelCount) {
-            auto display = buildDisplayImage(packet.rawImage, currentDisplayStretchSettings());
-            displayStats = display.stats;
-            displayWindow = display.window;
+        const auto rawImageValid = packet.rawImage && expectedPixelCount > 0U &&
+                                   packet.rawImage->size() == expectedPixelCount;
+        if (rawImageValid) {
+            const auto settings = currentDisplayStretchSettings();
+            displayStats = computeImageStats(*packet.rawImage);
+            displayWindow = resolveDisplayStretchWindow(displayStats, settings);
             displayWindowValid = true;
-            displayBuffer = std::move(display.displayImage);
+            if (m_cpuDisplayImageRequired.load()) {
+                displayBuffer = stretchDisplayImage(*packet.rawImage, displayWindow);
+            }
         } else if (!procResult.displayImage.empty()) {
             displayBuffer = std::move(procResult.displayImage);
         } else {
@@ -136,19 +155,15 @@ void ImageProcessor::workerLoop(std::stop_token token) {
 
         auto displayImage =
             std::make_shared<const std::vector<std::uint8_t>>(std::move(displayBuffer));
-        std::shared_ptr<const std::vector<std::uint16_t>> rawImage;
-        if (expectedPixelCount > 0U && packet.rawImage.size() == expectedPixelCount) {
-            rawImage =
-                std::make_shared<const std::vector<std::uint16_t>>(std::move(packet.rawImage));
-        }
+        auto rawImage = rawImageValid ? packet.rawImage : SharedRawImage{};
 
         Dss::Core::DisplayRefreshEvent refreshEvent{};
         refreshEvent.frameSeq = packet.frameSeq;
         refreshEvent.width = packet.width;
         refreshEvent.height = packet.height;
         refreshEvent.stride = packet.width;
-        refreshEvent.displayImage = std::move(displayImage);
-        refreshEvent.rawImage = std::move(rawImage);
+        refreshEvent.displayImage = displayImage;
+        refreshEvent.rawImage = rawImage;
         refreshEvent.stats = displayStats;
         refreshEvent.displayStretchLow = displayWindow.low;
         refreshEvent.displayStretchHigh = displayWindow.high;
@@ -161,7 +176,22 @@ void ImageProcessor::workerLoop(std::stop_token token) {
         }
 
         m_bus.emit(Dss::Core::RotatedFrameReadyEvent{packet.frameSeq});
-        m_bus.emit(Dss::Core::ImageSendEvent{packet.frameSeq});
+        if ((rawImage && !rawImage->empty()) || (displayImage && !displayImage->empty())) {
+            Dss::Core::ImageReadyForSendEvent::ImageFactory imageFactory;
+            if (rawImage && !rawImage->empty()) {
+                imageFactory = [rawImage, displayWindow] {
+                    return std::make_shared<const std::vector<std::uint8_t>>(
+                        stretchDisplayImage(*rawImage, displayWindow));
+                };
+            }
+            m_bus.emit(Dss::Core::ImageReadyForSendEvent{
+                .frameSeq = packet.frameSeq,
+                .width = packet.width,
+                .height = packet.height,
+                .image = displayImage,
+                .imageFactory = std::move(imageFactory),
+            });
+        }
     }
     m_running.store(false);
 }

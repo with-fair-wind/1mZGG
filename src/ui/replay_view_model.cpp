@@ -24,6 +24,20 @@ namespace {
     return static_cast<int>(count);
 }
 
+[[nodiscard]] auto prepareReplaySource(
+    const std::shared_ptr<Dss::Acquisition::ImageSequenceFrameSource>& replaySource,
+    const std::shared_ptr<Dss::Acquisition::FrameSourceCoordinator>& coordinator)
+    -> std::expected<void, std::string> {
+    auto initialized = replaySource->init();
+    if (!initialized.has_value()) {
+        return initialized;
+    }
+    if (!coordinator) {
+        return {};
+    }
+    return coordinator->selectSource(Dss::Acquisition::FrameSourceMode::Replay);
+}
+
 }  // namespace
 
 ReplayViewModel::ReplayViewModel(UiServiceContext context, QObject* parent)
@@ -64,6 +78,10 @@ auto ReplayViewModel::runtimeDiagnosticsText() const -> QString {
 }
 
 bool ReplayViewModel::selectReplayFiles(const QStringList& files) {
+    if (m_replayBusy) {
+        Q_EMIT statusTextChanged("Replay is loading");
+        return false;
+    }
     if (m_grabbing) {
         stopGrab();
     }
@@ -87,51 +105,17 @@ bool ReplayViewModel::selectReplayFiles(const QStringList& files) {
         return false;
     }
 
-    auto coordinator = m_registry.tryGet<Dss::Acquisition::FrameSourceCoordinator>(
-        Dss::App::ServiceKey::frameSource);
-    return startReplayTask("Replay: Loading", [replaySource, coordinator, paths = std::move(paths)](
-                                                  std::stop_token token) mutable {
-        ReplayTaskResult result{};
-        result.frameCount = 0;
-        result.currentFrame = 0;
+    auto setFilesResult = replaySource->setFiles(std::move(paths));
+    if (!setFilesResult.has_value()) {
+        Q_EMIT statusTextChanged(QString::fromStdString(setFilesResult.error()));
+        return false;
+    }
 
-        if (token.stop_requested()) {
-            result.statusText = "Replay task canceled";
-            return result;
-        }
-
-        auto setFilesResult = replaySource->setFiles(std::move(paths));
-        if (!setFilesResult.has_value()) {
-            result.statusText = QString::fromStdString(setFilesResult.error());
-            return result;
-        }
-
-        if (token.stop_requested()) {
-            result.statusText = "Replay task canceled";
-            return result;
-        }
-
-        auto initResult = replaySource->init();
-        if (!initResult.has_value()) {
-            result.statusText = QString::fromStdString(initResult.error());
-            return result;
-        }
-
-        if (coordinator) {
-            const auto selected =
-                coordinator->selectSource(Dss::Acquisition::FrameSourceMode::Replay);
-            if (!selected.has_value()) {
-                result.statusText = QString::fromStdString(selected.error());
-                return result;
-            }
-        }
-
-        result.success = true;
-        result.frameCount = boundedFrameCount(replaySource->frameCount());
-        result.currentFrame = 0;
-        result.statusText = QString("Sequence selected: %1 frames").arg(*result.frameCount);
-        return result;
-    });
+    const auto frameCount = boundedFrameCount(replaySource->frameCount());
+    setReplayFrameCount(frameCount);
+    setReplayCurrentFrame(0);
+    Q_EMIT statusTextChanged(QString("Sequence selected: %1 frames").arg(frameCount));
+    return true;
 }
 
 void ReplayViewModel::startGrab() {
@@ -145,24 +129,52 @@ void ReplayViewModel::startGrab() {
 
     auto processor =
         m_registry.tryGet<Dss::Processing::ImageProcessor>(Dss::App::ServiceKey::imageProcessor);
+    auto replaySource = m_registry.tryGet<Dss::Acquisition::ImageSequenceFrameSource>(
+        Dss::App::ServiceKey::replaySource);
+    auto frameSource =
+        m_registry.tryGet<Dss::Acquisition::IFrameSource>(Dss::App::ServiceKey::frameSource);
+    if (!frameSource) {
+        frameSource = replaySource;
+    }
+    if (!processor || !replaySource || !frameSource) {
+        Q_EMIT statusTextChanged("Replay services are not registered");
+        return;
+    }
+
+    auto coordinator = m_registry.tryGet<Dss::Acquisition::FrameSourceCoordinator>(
+        Dss::App::ServiceKey::frameSource);
+    (void)startReplayTask("Replay: Loading", [replaySource, coordinator](std::stop_token token) {
+        ReplayTaskResult result{};
+        if (token.stop_requested()) {
+            result.statusText = "Replay task canceled";
+            return result;
+        }
+
+        auto prepared = prepareReplaySource(replaySource, coordinator);
+        if (!prepared.has_value()) {
+            result.statusText = QString::fromStdString(prepared.error());
+            return result;
+        }
+
+        result.success = true;
+        result.startReplayAfterCompletion = true;
+        return result;
+    });
+}
+
+void ReplayViewModel::startInitializedReplay() {
+    auto processor =
+        m_registry.tryGet<Dss::Processing::ImageProcessor>(Dss::App::ServiceKey::imageProcessor);
     auto frameSource =
         m_registry.tryGet<Dss::Acquisition::IFrameSource>(Dss::App::ServiceKey::frameSource);
     if (!frameSource) {
         frameSource =
             m_registry.tryGet<Dss::Acquisition::IFrameSource>(Dss::App::ServiceKey::replaySource);
     }
-    if (!processor || !frameSource) {
-        Q_EMIT statusTextChanged("Replay services are not registered");
+    if (!processor || !frameSource || frameSource->frameWidth() == 0U ||
+        frameSource->frameHeight() == 0U) {
+        Q_EMIT statusTextChanged("Replay services are not ready");
         return;
-    }
-
-    if (frameSource->frameWidth() == 0U || frameSource->frameHeight() == 0U) {
-        auto initResult = frameSource->init();
-        if (!initResult.has_value()) {
-            Q_EMIT statusTextChanged(QString::fromStdString(initResult.error()));
-            return;
-        }
-        setReplayCurrentFrame(0);
     }
 
     if (auto replaySource = m_registry.tryGet<Dss::Acquisition::ImageSequenceFrameSource>(
@@ -212,10 +224,19 @@ bool ReplayViewModel::stepReplayForward() {
         return false;
     }
 
-    return startReplayTask("Replay: Loading", [replaySource](std::stop_token token) {
+    auto coordinator = m_registry.tryGet<Dss::Acquisition::FrameSourceCoordinator>(
+        Dss::App::ServiceKey::frameSource);
+
+    return startReplayTask("Replay: Loading", [replaySource, coordinator](std::stop_token token) {
         ReplayTaskResult result{};
         if (token.stop_requested()) {
             result.statusText = "Replay task canceled";
+            return result;
+        }
+
+        auto prepared = prepareReplaySource(replaySource, coordinator);
+        if (!prepared.has_value()) {
+            result.statusText = QString::fromStdString(prepared.error());
             return result;
         }
 
@@ -242,10 +263,19 @@ bool ReplayViewModel::stepReplayBackward() {
         stopGrab();
     }
 
-    return startReplayTask("Replay: Loading", [replaySource](std::stop_token token) {
+    auto coordinator = m_registry.tryGet<Dss::Acquisition::FrameSourceCoordinator>(
+        Dss::App::ServiceKey::frameSource);
+
+    return startReplayTask("Replay: Loading", [replaySource, coordinator](std::stop_token token) {
         ReplayTaskResult result{};
         if (token.stop_requested()) {
             result.statusText = "Replay task canceled";
+            return result;
+        }
+
+        auto prepared = prepareReplaySource(replaySource, coordinator);
+        if (!prepared.has_value()) {
+            result.statusText = QString::fromStdString(prepared.error());
             return result;
         }
 
@@ -363,6 +393,9 @@ void ReplayViewModel::finishReplayTask(const ReplayTaskResult& result) {
         setReplayCurrentFrame(*result.currentFrame);
     }
     setReplayBusy(false);
+    if (result.success && result.startReplayAfterCompletion) {
+        startInitializedReplay();
+    }
     if (!result.statusText.isEmpty()) {
         Q_EMIT statusTextChanged(result.statusText);
     }
