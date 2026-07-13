@@ -4,8 +4,8 @@
 #include "dss/app/application_context.h"
 #include "dss/core/config/config.h"
 #include "dss/core/event/events.h"
-#include "dss/ui/widget/init_dialog.h"
 #include "dss/ui/view_model/main_view_model.h"
+#include "dss/ui/widget/init_dialog.h"
 #include "dss/ui/widget/main_window.h"
 
 #ifdef DSS_HAS_ELA
@@ -20,6 +20,8 @@
  * @return 应用退出码
  */
 int main(int argc, char* argv[]) {
+    // Display 页面可跨顶层窗口移动，提前共享 OpenGL 上下文以保留纹理资源。
+    QApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 #ifdef DSS_HAS_ELA
     ElaApplication::getInstance()->init();
 #endif

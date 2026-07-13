@@ -201,11 +201,15 @@ sequenceDiagram
 
     UI->>Processor: start()
     UI->>Source: start()
-    Source->>Callback: FrameCallback(FramePacket)
+    Source->>Callback: FrameCallback(FramePacket, FrameDeliveryContext)
     opt 图像存储正在运行且 rawImage 非空
         Callback->>RawStore: enqueueSessionFrame()
     end
-    Callback->>Processor: submitFrame(packet)
+    alt 离线回放 Lossless
+        Callback->>Processor: submitFrameBlocking(packet, stop_token)
+    else 实时采集 DropIfBusy
+        Callback->>Processor: submitFrame(packet)
+    end
     Processor->>Processor: BoundedChannel.pop()
     Processor->>Pipeline: process(packet)
     Pipeline-->>Processor: ProcessingResult

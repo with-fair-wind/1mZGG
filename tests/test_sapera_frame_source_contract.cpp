@@ -1,4 +1,5 @@
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <utility>
@@ -61,8 +62,13 @@ TEST(SaperaFrameSourceContract, CopiesSdkBufferBeforeCallbackReturns) {
     auto* sessionView = session.get();
     Dss::Acquisition::SaperaFrameSource source({}, std::move(session));
     std::vector<Dss::Processing::FramePacket> packets;
+    std::optional<Dss::Acquisition::FrameDeliveryPolicy> deliveryPolicy;
     source.setFrameCallback(
-        [&](Dss::Processing::FramePacket packet) { packets.push_back(std::move(packet)); });
+        [&](Dss::Processing::FramePacket packet, Dss::Acquisition::FrameDeliveryContext context) {
+            packets.push_back(std::move(packet));
+            deliveryPolicy = context.policy;
+            return true;
+        });
 
     ASSERT_TRUE(source.init().has_value());
     ASSERT_TRUE(source.startCapture().has_value());
@@ -71,6 +77,7 @@ TEST(SaperaFrameSourceContract, CopiesSdkBufferBeforeCallbackReturns) {
     sdkBuffer.assign(sdkBuffer.size(), 99U);
 
     ASSERT_EQ(packets.size(), 1U);
+    EXPECT_EQ(deliveryPolicy, Dss::Acquisition::FrameDeliveryPolicy::DropIfBusy);
     EXPECT_EQ(packets[0].frameSeq, 0U);
     EXPECT_EQ(packets[0].width, 3U);
     EXPECT_EQ(packets[0].height, 2U);

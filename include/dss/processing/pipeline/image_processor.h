@@ -3,6 +3,7 @@
 #include <atomic>
 #include <memory>
 #include <mutex>
+#include <stop_token>
 #include <thread>
 
 #include "dss/core/event/message_bus.h"
@@ -41,6 +42,14 @@ public:
      * @return 处理器未运行、正在停止或队列已满时返回 false
      */
     [[nodiscard]] bool submitFrame(FramePacket packet);
+
+    /**
+     * @brief 无损提交帧，队列已满时等待直至出现空位或操作被取消。
+     * @param packet 待处理帧数据包。
+     * @param token 用于取消队列等待的停止令牌。
+     * @return 成功入队返回 true；处理器未运行、正在停止或等待被取消时返回 false。
+     */
+    [[nodiscard]] bool submitFrameBlocking(FramePacket packet, std::stop_token token);
 
     /** @brief 获取累计丢帧数。 @return 因输入队列已满而丢弃的帧数。 */
     [[nodiscard]] auto droppedFrames() const -> uint64_t;

@@ -120,7 +120,8 @@ void ApplicationContext::registerCommunicationServices() {
                                                                liveSource);
 #endif
     frameSource->setFrameCallback(
-        [imageProcessor, localImageStorage](Dss::Processing::FramePacket packet) {
+        [imageProcessor, localImageStorage](Dss::Processing::FramePacket packet,
+                                            Dss::Acquisition::FrameDeliveryContext context) {
             if (localImageStorage->isRunning() && packet.rawImage && !packet.rawImage->empty()) {
                 Dss::Storage::RawImageMetadata metadata{};
                 metadata.width = packet.width;
@@ -132,7 +133,10 @@ void ApplicationContext::registerCommunicationServices() {
                 (void)localImageStorage->enqueueSessionFrame(packet.frameSeq, metadata,
                                                              packet.rawImage);
             }
-            (void)imageProcessor->submitFrame(std::move(packet));
+            if (context.policy == Dss::Acquisition::FrameDeliveryPolicy::Lossless) {
+                return imageProcessor->submitFrameBlocking(std::move(packet), context.stopToken);
+            }
+            return imageProcessor->submitFrame(std::move(packet));
         });
     m_connections.push_back(m_bus.subscribe<Dss::Core::TrackResultEvent>(
         [trackDataStorage](const Dss::Core::TrackResultEvent& event) {

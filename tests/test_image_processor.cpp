@@ -166,6 +166,67 @@ TEST(ImageProcessor, RejectsFramesWhileStopped) {
     EXPECT_FALSE(processor.submitFrame(std::move(afterStop)));
 }
 
+TEST(ImageProcessor, LosslessSubmissionWaitsForCapacityWithoutCountingDrop) {
+    Dss::Processing::ImageProcessor::MessageBus bus;
+    Dss::Processing::ImageProcessor processor(bus);
+    std::latch entered{1};
+    std::latch release{1};
+    processor.setProcessingStrategy(std::make_unique<BlockingDisplayStrategy>(entered, release));
+    processor.start();
+
+    Dss::Processing::FramePacket first;
+    first.frameSeq = 1U;
+    ASSERT_TRUE(processor.submitFrame(std::move(first)));
+    entered.wait();
+    for (std::uint64_t frameSeq = 2U; frameSeq <= 5U; ++frameSeq) {
+        Dss::Processing::FramePacket queued;
+        queued.frameSeq = frameSeq;
+        ASSERT_TRUE(processor.submitFrame(std::move(queued)));
+    }
+
+    std::stop_source stopSource;
+    auto pending = std::async(std::launch::async, [&processor, token = stopSource.get_token()] {
+        Dss::Processing::FramePacket packet;
+        packet.frameSeq = 6U;
+        return processor.submitFrameBlocking(std::move(packet), token);
+    });
+    ASSERT_EQ(pending.wait_for(50ms), std::future_status::timeout);
+    EXPECT_EQ(processor.droppedFrames(), 0U);
+
+    release.count_down();
+    EXPECT_TRUE(pending.get());
+    processor.stop();
+    EXPECT_EQ(processor.droppedFrames(), 0U);
+}
+
+TEST(ImageProcessor, LosslessSubmissionCanBeCanceledWhileWaitingForCapacity) {
+    Dss::Processing::ImageProcessor::MessageBus bus;
+    Dss::Processing::ImageProcessor processor(bus);
+    std::latch entered{1};
+    std::latch release{1};
+    processor.setProcessingStrategy(std::make_unique<BlockingDisplayStrategy>(entered, release));
+    processor.start();
+
+    Dss::Processing::FramePacket first;
+    ASSERT_TRUE(processor.submitFrame(std::move(first)));
+    entered.wait();
+    for (int index = 0; index < 4; ++index) {
+        ASSERT_TRUE(processor.submitFrame({}));
+    }
+
+    std::stop_source stopSource;
+    auto pending = std::async(std::launch::async, [&processor, token = stopSource.get_token()] {
+        return processor.submitFrameBlocking({}, token);
+    });
+    ASSERT_EQ(pending.wait_for(50ms), std::future_status::timeout);
+
+    stopSource.request_stop();
+    EXPECT_FALSE(pending.get());
+    EXPECT_EQ(processor.droppedFrames(), 0U);
+    release.count_down();
+    processor.stop();
+}
+
 TEST(ImageProcessor, ClearsQueuedFramesBeforeRestart) {
     Dss::Processing::ImageProcessor::MessageBus bus;
     Dss::Processing::ImageProcessor processor(bus);

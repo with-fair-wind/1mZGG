@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <expected>
 #include <functional>
+#include <stop_token>
 #include <string>
 
 #include "dss/core/types.h"
@@ -10,11 +11,23 @@
 
 namespace Dss::Acquisition {
 
+/// @brief 帧源向处理管线提交帧时采用的背压策略。
+enum class FrameDeliveryPolicy {
+    DropIfBusy,  ///< 实时采集：处理队列繁忙时允许丢弃当前帧。
+    Lossless,    ///< 离线回放：处理队列繁忙时等待，保证帧按序入队。
+};
+
+/// @brief 单次帧提交所需的策略和取消上下文。
+struct FrameDeliveryContext {
+    FrameDeliveryPolicy policy = FrameDeliveryPolicy::DropIfBusy;  ///< 当前帧提交策略。
+    std::stop_token stopToken;  ///< 用于取消无损提交等待的停止令牌。
+};
+
 /// 帧源接口，定义图像采集的抽象层
 class IFrameSource {
 public:
-    /// 帧到达时的回调函数类型
-    using FrameCallback = std::function<void(Dss::Processing::FramePacket)>;
+    /// 帧到达时的回调函数类型；返回 true 表示帧已被下游接收。
+    using FrameCallback = std::function<bool(Dss::Processing::FramePacket, FrameDeliveryContext)>;
 
     virtual ~IFrameSource() = default;
 

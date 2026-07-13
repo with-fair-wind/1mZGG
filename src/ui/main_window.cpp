@@ -49,7 +49,9 @@ MainWindow::MainWindow(MainViewModel& mainViewModel, QWidget* parent)
 }
 #endif
 
-MainWindow::~MainWindow() = default;
+MainWindow::~MainWindow() {
+    attachDisplayPage();
+}
 
 /// 创建各功能页并注册到导航（Ela 侧栏或 QTabWidget）
 void MainWindow::setupNavigation() {

@@ -23,7 +23,7 @@ Acquisition 模块定义相机采集、回放帧源与控制接口。当前支�
 - `init()` — 初始化帧源
 - `start()` — 开始采集
 - `stop()` — 停止采集
-- `setFrameCallback()` — 设置 `FramePacket` 输出回调
+- `setFrameCallback()` — 设置带 `FrameDeliveryContext` 的 `FramePacket` 输出回调
 - `frameWidth()` / `frameHeight()` — 图像尺寸
 
 ### 2. ImageSequenceFrameSource (`image_sequence_frame_source.h`)
@@ -35,7 +35,7 @@ Acquisition 模块定义相机采集、回放帧源与控制接口。当前支�
 | 选择文件序列 | 已实现，UI 可传入 `QStringList` |
 | 常规图像解码 | 已实现，使用 Qt `QImage` 读取 BMP/PNG/JPEG/TIFF 等 |
 | legacy RAW 解码 | 已实现，复用 `decodeRawImageFile()` |
-| 后台回放线程 | 已实现，按帧调用 `IFrameSource::FrameCallback` |
+| 后台回放线程 | 已实现，按帧以 `Lossless` 策略调用 `IFrameSource::FrameCallback` |
 | UI 当前帧进度 | 已实现，`ReplayViewModel` 根据显示事件维护当前帧、总帧数和进度快照 |
 | 暂停续播/单帧前进 | 已实现暂停续播、单帧前进/后退、`seek(index)` 随机定位和进度快照 |
 
@@ -217,11 +217,12 @@ flowchart TD
     COPY --> THREAD["创建 std::jthread"]
     THREAD --> LOAD["loadRawFrame / 图像加载"]
     LOAD --> PACKET["构造 FramePacket"]
-    PACKET --> CALLBACK["FrameCallback(move(packet))"]
-    CALLBACK --> NEXT["更新下一帧索引并等待帧间隔"]
+    PACKET --> CALLBACK["FrameCallback(move(packet), Lossless)"]
+    CALLBACK --> WAIT["处理队列满时等待可用槽位"]
+    WAIT --> NEXT["成功入队后更新下一帧索引并等待帧间隔"]
 ```
 
-`stepForward()` 不启动连续线程，而是在调用线程读取一帧并立即执行 callback；UI 在步进前先停止连续回放。到达序列末尾后再次开始会先 `seek(0)`。停止顺序是先停帧源，再停处理器，避免停掉消费者后生产者仍提交帧。
+`stepForward()` 不启动连续线程，而是在调用线程读取一帧并立即执行 callback；UI 在步进前先停止连续回放并确保处理器已启动。连续回放和单帧回放都使用 `Lossless` 提交，只有成功入队后才推进索引。到达序列末尾后再次开始会先 `seek(0)`。停止顺序是先停帧源，再停处理器；帧源的 `stop_token` 会取消正在等待队列空位的提交。
 
 ### Sapera 实时采集链
 
@@ -270,15 +271,15 @@ flowchart LR
 | 对象 | 线程 | 共享状态保护 | 输出 |
 |---|---|---|---|
 | `FrameSourceCoordinator` | 调用者线程 | 单个 mutex 保护源表、活动模式、callback | 转发活动源 callback |
-| `ImageSequenceFrameSource` | UI 配置 + 回放 `jthread` | mutex；启动时复制运行快照 | 拥有像素的 `FramePacket` |
-| `SaperaFrameSource` | 控制线程 + SDK 回调线程 | mutex 保护尺寸、序号、callback | 拥有像素的 `FramePacket` |
+| `ImageSequenceFrameSource` | UI 配置 + 回放 `jthread` | mutex；启动时复制运行快照 | `Lossless` 上下文和拥有像素的 `FramePacket` |
+| `SaperaFrameSource` | 控制线程 + SDK 回调线程 | mutex 保护尺寸、序号、callback | `DropIfBusy` 上下文和拥有像素的 `FramePacket` |
 | `SerialCameraController` | 调用者线程 | 依赖注入端口自行保证线程安全 | `expected` 错误 |
 
-Acquisition 自身没有有界帧队列；背压发生在 `ImageProcessor::submitFrame()`。回调返回慢会直接拖慢回放或 SDK 回调，因此回调中只应做快速入队。
+Acquisition 自身没有有界帧队列，背压发生在 `ImageProcessor`。离线序列以 `Lossless` 策略调用 `submitFrameBlocking()`：队列满时回放线程等待，不丢帧，停止令牌可取消等待。Sapera 实时采集以 `DropIfBusy` 策略调用非阻塞 `submitFrame()`：队列满时丢弃新帧并累计 `Drop P`，避免阻塞 SDK 回调线程。
 
 ### 错误、配置与扩展
 
-- 回放的文件为空、索引越界、解码失败、未设置 callback 均返回 `unexpected`。
+- 单步回放遇到文件为空、索引越界、解码失败或未设置 callback 时返回 `unexpected`；连续回放遇到解码失败时停在失败索引，不跳过该帧继续处理后续文件。
 - Sapera 初始化/启动/像素尺寸错误发布 `AcquisitionErrorEvent`，同时启动 API 返回错误。
 - FrameSourceCoordinator 对空源、重复模式、未注册模式返回错误。
 - 配置来源主要是 `Config::paths()`、相机 CCF 路径和 UI 选择的文件列表。

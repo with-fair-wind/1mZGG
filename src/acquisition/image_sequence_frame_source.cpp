@@ -253,7 +253,8 @@ void ImageSequenceFrameSource::setFrameInterval(std::chrono::milliseconds interv
  * @brief 同步加载当前索引帧并触发回调，随后推进索引
  * @return 序列为空、未设置回调、已到末尾或加载失败时返回错误
  */
-auto ImageSequenceFrameSource::stepForward() -> std::expected<void, std::string> {
+auto ImageSequenceFrameSource::stepForward(std::stop_token token)
+    -> std::expected<void, std::string> {
     std::filesystem::path file;
     std::size_t index = 0;
     FrameCallback callback;
@@ -278,7 +279,9 @@ auto ImageSequenceFrameSource::stepForward() -> std::expected<void, std::string>
         return std::unexpected(packet.error());
     }
 
-    callback(std::move(*packet));
+    if (!callback(std::move(*packet), FrameDeliveryContext{FrameDeliveryPolicy::Lossless, token})) {
+        return std::unexpected("frame submission was canceled");
+    }
     {
         std::lock_guard lock(m_mutex);
         if (m_nextFrameIndex == index) {
@@ -354,12 +357,16 @@ void ImageSequenceFrameSource::start() {
             }
 
             auto packet = loadFrame(files[index], static_cast<std::uint64_t>(index));
-            if (packet.has_value()) {
-                callback(std::move(*packet));
-                std::lock_guard lock(m_mutex);
-                if (m_nextFrameIndex <= index) {
-                    m_nextFrameIndex = index + 1U;
-                }
+            if (!packet.has_value()) {
+                break;
+            }
+            if (!callback(std::move(*packet),
+                          FrameDeliveryContext{FrameDeliveryPolicy::Lossless, token})) {
+                break;
+            }
+            std::lock_guard lock(m_mutex);
+            if (m_nextFrameIndex <= index) {
+                m_nextFrameIndex = index + 1U;
             }
 
             if (interval.count() > 0 && index + 1U < files.size()) {

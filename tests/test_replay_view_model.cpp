@@ -96,15 +96,19 @@ TEST(ReplayViewModel, SelectsSequenceAndStepsForward) {
     MessageBus bus;
     Dss::Core::ServiceRegistry registry;
     auto replaySource = std::make_shared<Dss::Acquisition::ImageSequenceFrameSource>();
-    replaySource->setFrameCallback([&bus](Dss::Processing::FramePacket packet) {
+    auto processor = std::make_shared<Dss::Processing::ImageProcessor>(bus);
+    replaySource->setFrameCallback([&bus](Dss::Processing::FramePacket packet,
+                                          Dss::Acquisition::FrameDeliveryContext) {
         auto image =
             std::make_shared<const std::vector<std::uint8_t>>(std::move(packet.displayImage));
         auto raw = packet.rawImage;
         bus.emit(Dss::Core::DisplayRefreshEvent{packet.frameSeq, packet.width, packet.height,
                                                 packet.width, std::move(image), std::move(raw)});
+        return true;
     });
     registry.registerService<Dss::Acquisition::ImageSequenceFrameSource>("replay_source",
                                                                          replaySource);
+    registry.registerService<Dss::Processing::ImageProcessor>("image_processor", processor);
 
     Dss::Ui::ReplayViewModel replay({.bus = bus, .registry = registry});
     std::vector<bool> busyStates;
@@ -157,9 +161,12 @@ TEST(ReplayViewModel, DefersMissingReplayFileErrorUntilStep) {
     MessageBus bus;
     Dss::Core::ServiceRegistry registry;
     auto replaySource = std::make_shared<Dss::Acquisition::ImageSequenceFrameSource>();
-    replaySource->setFrameCallback([](Dss::Processing::FramePacket) {});
+    auto processor = std::make_shared<Dss::Processing::ImageProcessor>(bus);
+    replaySource->setFrameCallback(
+        [](Dss::Processing::FramePacket, Dss::Acquisition::FrameDeliveryContext) { return true; });
     registry.registerService<Dss::Acquisition::ImageSequenceFrameSource>("replay_source",
                                                                          replaySource);
+    registry.registerService<Dss::Processing::ImageProcessor>("image_processor", processor);
 
     Dss::Ui::ReplayViewModel replay({.bus = bus, .registry = registry});
     QString statusText;
@@ -186,7 +193,8 @@ TEST(ReplayViewModel, StartsReplayInitializationAsBackgroundTask) {
     MessageBus bus;
     Dss::Core::ServiceRegistry registry;
     auto replaySource = std::make_shared<Dss::Acquisition::ImageSequenceFrameSource>();
-    replaySource->setFrameCallback([](Dss::Processing::FramePacket) {});
+    replaySource->setFrameCallback(
+        [](Dss::Processing::FramePacket, Dss::Acquisition::FrameDeliveryContext) { return true; });
     auto processor = std::make_shared<Dss::Processing::ImageProcessor>(bus);
     registry.registerService<Dss::Acquisition::ImageSequenceFrameSource>("replay_source",
                                                                          replaySource);
@@ -216,7 +224,8 @@ TEST(ReplayViewModel, StartsReplayAfterBackgroundInitializationSucceeds) {
     MessageBus bus;
     Dss::Core::ServiceRegistry registry;
     auto replaySource = std::make_shared<Dss::Acquisition::ImageSequenceFrameSource>();
-    replaySource->setFrameCallback([](Dss::Processing::FramePacket) {});
+    replaySource->setFrameCallback(
+        [](Dss::Processing::FramePacket, Dss::Acquisition::FrameDeliveryContext) { return true; });
     auto processor = std::make_shared<Dss::Processing::ImageProcessor>(bus);
     registry.registerService<Dss::Acquisition::ImageSequenceFrameSource>("replay_source",
                                                                          replaySource);

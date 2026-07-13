@@ -247,7 +247,8 @@ void SaperaFrameSource::acceptFrame(std::span<const uint16_t> pixels) {
     if (!error.empty()) {
         reportError(error);
     } else if (callback) {
-        callback(std::move(packet));
+        (void)callback(std::move(packet),
+                       FrameDeliveryContext{FrameDeliveryPolicy::DropIfBusy, {}});
     }
 }
 

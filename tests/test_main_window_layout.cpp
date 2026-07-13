@@ -8,6 +8,7 @@
 #include <QSpinBox>
 #include <QTabWidget>
 #include <QTimer>
+#include <QToolButton>
 #include <memory>
 
 #include <gtest/gtest.h>
@@ -26,6 +27,7 @@ auto ensureApplication() -> QApplication& {
     static std::unique_ptr<QApplication> app;
 
     if (QApplication::instance() == nullptr) {
+        QApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
         app = std::make_unique<QApplication>(argc, argv);
     }
     return *qobject_cast<QApplication*>(QApplication::instance());
@@ -104,6 +106,42 @@ TEST(MainWindowLayout, DisplayPageExposesLegacyStretchControls) {
     EXPECT_NE(displayPage->findChild<QSpinBox*>("display_stretch_low_spin"), nullptr);
     EXPECT_NE(displayPage->findChild<QSpinBox*>("display_stretch_high_spin"), nullptr);
 }
+
+TEST(MainWindowLayout, DisplayPageFloatsAndReturnsAsOnePage) {
+    auto& app = ensureApplication();
+    (void)app;
+
+    Dss::Ui::MainViewModel::MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    Dss::Ui::MainViewModel mainViewModel(bus, registry);
+    Dss::Ui::MainWindow window(mainViewModel);
+    window.show();
+    QApplication::processEvents();
+
+    auto* displayPage = window.findChild<QWidget*>("display_page");
+    auto* displayContent = window.findChild<QWidget*>("display_page_content");
+    auto* floatingWindow = window.findChild<QWidget*>("display_floating_window");
+    auto* detachButton = window.findChild<QToolButton*>("display_detach_button");
+    ASSERT_NE(displayPage, nullptr);
+    ASSERT_NE(displayContent, nullptr);
+    ASSERT_NE(floatingWindow, nullptr);
+    ASSERT_NE(detachButton, nullptr);
+    EXPECT_EQ(displayContent->parentWidget(), displayPage);
+
+    detachButton->click();
+    QApplication::processEvents();
+
+    EXPECT_TRUE(floatingWindow->isVisible());
+    EXPECT_EQ(displayContent->window(), floatingWindow);
+    EXPECT_NE(displayContent->findChild<QCheckBox*>("display_stretch_auto"), nullptr);
+
+    floatingWindow->close();
+    QApplication::processEvents();
+
+    EXPECT_FALSE(floatingWindow->isVisible());
+    EXPECT_EQ(displayContent->parentWidget(), displayPage);
+}
+
 TEST(MainWindowLayout, DisplayStretchSliderThrottlesRapidPreviewUpdates) {
     auto& app = ensureApplication();
     (void)app;

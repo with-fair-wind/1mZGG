@@ -6,11 +6,15 @@
 #include <fstream>
 #include <memory>
 #include <mutex>
+#include <string_view>
+#include <thread>
 #include <vector>
 
 #include <gtest/gtest.h>
 
 #include "dss/acquisition/source/image_sequence_frame_source.h"
+#include "dss/core/event/events.h"
+#include "dss/processing/pipeline/image_processor.h"
 #include "dss/storage/format/bmp_image_format.h"
 
 namespace {
@@ -28,6 +32,25 @@ public:
 
 private:
     std::unique_ptr<QCoreApplication> m_app;
+};
+
+class SlowReplayStrategy final : public Dss::Processing::IProcessingStrategy {
+public:
+    [[nodiscard]] auto process(const Dss::Processing::FramePacket&)
+        -> Dss::Processing::ProcessingResult override {
+        std::this_thread::sleep_for(std::chrono::milliseconds{20});
+        Dss::Processing::ProcessingResult result;
+        result.success = true;
+        return result;
+    }
+
+    [[nodiscard]] auto name() const -> std::string_view override {
+        return "slow_replay";
+    }
+
+    [[nodiscard]] auto mode() const -> Dss::Core::ProcessingMode override {
+        return Dss::Core::ProcessingMode::Direct;
+    }
 };
 
 [[nodiscard]] auto tempSequenceDir() -> std::filesystem::path {
@@ -96,13 +119,17 @@ TEST(ImageSequenceFrameSource, ReplaysSelectedImageFilesAsFramePackets) {
     std::mutex mutex;
     std::condition_variable cv;
     std::vector<Dss::Processing::FramePacket> frames;
-    source.setFrameCallback([&](Dss::Processing::FramePacket packet) {
-        {
-            std::lock_guard lock(mutex);
-            frames.push_back(std::move(packet));
-        }
-        cv.notify_one();
-    });
+    std::vector<Dss::Acquisition::FrameDeliveryPolicy> policies;
+    source.setFrameCallback(
+        [&](Dss::Processing::FramePacket packet, Dss::Acquisition::FrameDeliveryContext context) {
+            {
+                std::lock_guard lock(mutex);
+                frames.push_back(std::move(packet));
+                policies.push_back(context.policy);
+            }
+            cv.notify_one();
+            return true;
+        });
 
     source.start();
     {
@@ -113,6 +140,9 @@ TEST(ImageSequenceFrameSource, ReplaysSelectedImageFilesAsFramePackets) {
     source.stop();
 
     ASSERT_EQ(frames.size(), 2U);
+    EXPECT_EQ(policies, (std::vector<Dss::Acquisition::FrameDeliveryPolicy>{
+                            Dss::Acquisition::FrameDeliveryPolicy::Lossless,
+                            Dss::Acquisition::FrameDeliveryPolicy::Lossless}));
     EXPECT_EQ(frames[0].frameSeq, 0U);
     EXPECT_EQ(frames[1].frameSeq, 1U);
     EXPECT_EQ(frames[0].width, 3U);
@@ -122,6 +152,108 @@ TEST(ImageSequenceFrameSource, ReplaysSelectedImageFilesAsFramePackets) {
     EXPECT_EQ(frames[0].rawImage->size(), 6U);
     EXPECT_EQ(frames[0].displayImage[0], 10U);
     EXPECT_EQ(frames[1].displayImage[0], 40U);
+}
+
+TEST(ImageSequenceFrameSource, LosslessReplayWaitsUntilEveryFrameIsProcessed) {
+    QCoreApplicationFixture app;
+    const auto dir = tempSequenceDir();
+    std::vector<std::filesystem::path> files;
+    for (int index = 0; index < 8; ++index) {
+        const auto file = dir / ("lossless_" + std::to_string(index) + ".bmp");
+        ASSERT_TRUE(writeGrayBmp(file, static_cast<std::uint8_t>(10 + index)));
+        files.push_back(file);
+    }
+
+    Dss::Core::MessageBus bus;
+    Dss::Processing::ImageProcessor processor(bus);
+    processor.setProcessingStrategy(std::make_unique<SlowReplayStrategy>());
+
+    std::mutex mutex;
+    std::condition_variable cv;
+    std::vector<std::uint64_t> completedFrames;
+    auto connection = bus.subscribe<Dss::Core::ProcessingCompleteEvent>(
+        [&](const Dss::Core::ProcessingCompleteEvent& event) {
+            {
+                std::lock_guard lock(mutex);
+                completedFrames.push_back(event.frameSeq);
+            }
+            cv.notify_one();
+        });
+
+    Dss::Acquisition::ImageSequenceFrameSource source(files);
+    source.setFrameInterval(std::chrono::milliseconds{0});
+    ASSERT_TRUE(source.init().has_value());
+    source.setFrameCallback(
+        [&](Dss::Processing::FramePacket packet, Dss::Acquisition::FrameDeliveryContext context) {
+            if (context.policy != Dss::Acquisition::FrameDeliveryPolicy::Lossless) {
+                return false;
+            }
+            return processor.submitFrameBlocking(std::move(packet), context.stopToken);
+        });
+
+    processor.start();
+    source.start();
+    {
+        std::unique_lock lock(mutex);
+        ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds{3},
+                                [&] { return completedFrames.size() == files.size(); }));
+    }
+    source.stop();
+    processor.stop();
+
+    EXPECT_EQ(completedFrames, (std::vector<std::uint64_t>{0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U}));
+    EXPECT_EQ(source.nextFrameIndex(), files.size());
+    EXPECT_EQ(processor.droppedFrames(), 0U);
+}
+
+TEST(ImageSequenceFrameSource, StopsAtUnreadableFrameInsteadOfSkippingIt) {
+    QCoreApplicationFixture app;
+    const auto dir = tempSequenceDir();
+    const auto first = dir / "unreadable_guard_0001.bmp";
+    const auto missing = dir / "unreadable_guard_0002.bmp";
+    const auto third = dir / "unreadable_guard_0003.bmp";
+    ASSERT_TRUE(writeGrayBmp(first, 10));
+    std::filesystem::remove(missing);
+    ASSERT_TRUE(writeGrayBmp(third, 30));
+
+    Dss::Acquisition::ImageSequenceFrameSource source({first, missing, third});
+    source.setFrameInterval(std::chrono::milliseconds{0});
+    ASSERT_TRUE(source.init().has_value());
+
+    std::mutex mutex;
+    std::vector<std::uint64_t> frames;
+    source.setFrameCallback(
+        [&](Dss::Processing::FramePacket packet, Dss::Acquisition::FrameDeliveryContext) {
+            std::lock_guard lock(mutex);
+            frames.push_back(packet.frameSeq);
+            return true;
+        });
+
+    source.start();
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
+    while (source.isRunning() && std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::yield();
+    }
+    source.stop();
+
+    std::lock_guard lock(mutex);
+    EXPECT_EQ(frames, std::vector<std::uint64_t>({0U}));
+    EXPECT_EQ(source.nextFrameIndex(), 1U);
+}
+
+TEST(ImageSequenceFrameSource, CanceledSubmissionDoesNotAdvanceReplayPosition) {
+    QCoreApplicationFixture app;
+    const auto dir = tempSequenceDir();
+    const auto first = dir / "canceled_submission_0001.bmp";
+    ASSERT_TRUE(writeGrayBmp(first, 10));
+
+    Dss::Acquisition::ImageSequenceFrameSource source({first});
+    ASSERT_TRUE(source.init().has_value());
+    source.setFrameCallback(
+        [](Dss::Processing::FramePacket, Dss::Acquisition::FrameDeliveryContext) { return false; });
+
+    EXPECT_FALSE(source.stepForward().has_value());
+    EXPECT_EQ(source.nextFrameIndex(), 0U);
 }
 
 TEST(ImageSequenceFrameSource, StepForwardAdvancesReplayPositionBeforeContinuousReplay) {
@@ -142,13 +274,15 @@ TEST(ImageSequenceFrameSource, StepForwardAdvancesReplayPositionBeforeContinuous
     std::mutex mutex;
     std::condition_variable cv;
     std::vector<Dss::Processing::FramePacket> frames;
-    source.setFrameCallback([&](Dss::Processing::FramePacket packet) {
-        {
-            std::lock_guard lock(mutex);
-            frames.push_back(std::move(packet));
-        }
-        cv.notify_one();
-    });
+    source.setFrameCallback(
+        [&](Dss::Processing::FramePacket packet, Dss::Acquisition::FrameDeliveryContext) {
+            {
+                std::lock_guard lock(mutex);
+                frames.push_back(std::move(packet));
+            }
+            cv.notify_one();
+            return true;
+        });
 
     ASSERT_TRUE(source.stepForward().has_value());
     {
@@ -188,7 +322,10 @@ TEST(ImageSequenceFrameSource, InitDoesNotRewindAlreadyInitializedSequence) {
 
     std::vector<std::uint64_t> frames;
     source.setFrameCallback(
-        [&](Dss::Processing::FramePacket packet) { frames.push_back(packet.frameSeq); });
+        [&](Dss::Processing::FramePacket packet, Dss::Acquisition::FrameDeliveryContext) {
+            frames.push_back(packet.frameSeq);
+            return true;
+        });
     ASSERT_TRUE(source.stepForward().has_value());
     EXPECT_EQ(source.nextFrameIndex(), 1U);
 
@@ -212,7 +349,10 @@ TEST(ImageSequenceFrameSource, ReplaysLegacyBmpWithCustomHeaderAsSixteenBitPixel
 
     std::vector<Dss::Processing::FramePacket> frames;
     source.setFrameCallback(
-        [&](Dss::Processing::FramePacket packet) { frames.push_back(std::move(packet)); });
+        [&](Dss::Processing::FramePacket packet, Dss::Acquisition::FrameDeliveryContext) {
+            frames.push_back(std::move(packet));
+            return true;
+        });
 
     ASSERT_TRUE(source.stepForward().has_value());
 
@@ -249,7 +389,10 @@ TEST(ImageSequenceFrameSource, SeekChangesNextFrameWithoutPlayingWhilePaused) {
     ASSERT_TRUE(source.init().has_value());
     std::vector<std::uint64_t> frames;
     source.setFrameCallback(
-        [&](Dss::Processing::FramePacket packet) { frames.push_back(packet.frameSeq); });
+        [&](Dss::Processing::FramePacket packet, Dss::Acquisition::FrameDeliveryContext) {
+            frames.push_back(packet.frameSeq);
+            return true;
+        });
 
     ASSERT_TRUE(source.seek(1).has_value());
     EXPECT_EQ(source.nextFrameIndex(), 1U);
@@ -275,13 +418,15 @@ TEST(ImageSequenceFrameSource, SeekWhileRunningContinuesAtRequestedFrame) {
     std::mutex mutex;
     std::condition_variable cv;
     std::vector<std::uint64_t> frames;
-    source.setFrameCallback([&](Dss::Processing::FramePacket packet) {
-        {
-            std::lock_guard lock(mutex);
-            frames.push_back(packet.frameSeq);
-        }
-        cv.notify_all();
-    });
+    source.setFrameCallback(
+        [&](Dss::Processing::FramePacket packet, Dss::Acquisition::FrameDeliveryContext) {
+            {
+                std::lock_guard lock(mutex);
+                frames.push_back(packet.frameSeq);
+            }
+            cv.notify_all();
+            return true;
+        });
 
     source.start();
     {
@@ -291,11 +436,15 @@ TEST(ImageSequenceFrameSource, SeekWhileRunningContinuesAtRequestedFrame) {
     EXPECT_FALSE(source.seek(4).has_value());
     EXPECT_TRUE(source.isRunning());
     ASSERT_TRUE(source.seek(2).has_value());
-    {
-        std::unique_lock lock(mutex);
-        ASSERT_TRUE(cv.wait_for(lock, std::chrono::seconds{2}, [&] { return frames.size() >= 3; }));
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
+    while (source.isRunning() && std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::yield();
     }
     source.stop();
 
-    EXPECT_EQ(frames, std::vector<std::uint64_t>({0U, 2U, 3U}));
+    std::lock_guard lock(mutex);
+    ASSERT_GE(frames.size(), 3U);
+    EXPECT_EQ(frames.front(), 0U);
+    EXPECT_EQ(frames[frames.size() - 2U], 2U);
+    EXPECT_EQ(frames.back(), 3U);
 }

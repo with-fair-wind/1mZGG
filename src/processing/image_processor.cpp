@@ -46,6 +46,13 @@ bool ImageProcessor::submitFrame(FramePacket packet) {
     return true;
 }
 
+bool ImageProcessor::submitFrameBlocking(FramePacket packet, std::stop_token token) {
+    if (!m_running.load() || token.stop_requested()) {
+        return false;
+    }
+    return m_frameChannel.push(std::move(packet), token);
+}
+
 auto ImageProcessor::droppedFrames() const -> uint64_t {
     return m_droppedFrames.load(std::memory_order_relaxed);
 }

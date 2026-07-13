@@ -44,7 +44,8 @@ Processing 模块实现图像处理管线，负责帧数据的缓冲、分发、
 BoundedChannel<FramePacket, 4>  // 容量为 4 的帧缓冲
 ```
 
-- `push(item)` — 入队，满则丢弃最老帧
+- `tryPush(item)` — 非阻塞入队，通道已满或关闭时返回 `false`
+- `push(item, stop_token)` — 阻塞入队，满时等待并支持协作式取消
 - `pop(stop_token)` — 阻塞出队，支持协作式取消
 - `close()` — 关闭通道
 
@@ -84,7 +85,8 @@ class IProcessingStrategy {
 |------|------|
 | `start()` | 启动工作线程 (`std::jthread`) |
 | `stop()` | 停止工作线程 |
-| `submitFrame(packet)` | 提交帧到处理队列 |
+| `submitFrame(packet)` | 非阻塞提交，供实时采集使用；队列满时丢弃并计数 |
+| `submitFrameBlocking(packet, token)` | 可取消的阻塞提交，供离线回放无损入队 |
 | `droppedFrames()` | 获取丢帧计数 |
 | `setProcessingStrategy()` | 切换处理后端 |
 | `setTrackingStrategy()` | 切换跟踪策略 |
@@ -213,6 +215,7 @@ classDiagram
         +start()
         +stop()
         +submitFrame(packet) bool
+        +submitFrameBlocking(packet, stop_token) bool
         +setProcessingStrategy(strategy)
         +setTrackingStrategy(strategy)
     }
@@ -263,13 +266,20 @@ sequenceDiagram
     participant Tracker as ITrackingStrategy
     participant Bus as MessageBus
 
-    Producer->>Processor: submitFrame(move(packet))
-    Processor->>Queue: tryPush(packet)
-    alt 队列满或已关闭
-        Processor->>Processor: droppedFrames++
-        Processor-->>Producer: false
-    else 入队成功
-        Processor-->>Producer: true
+    alt 实时采集 DropIfBusy
+        Producer->>Processor: submitFrame(move(packet))
+        Processor->>Queue: tryPush(packet)
+        alt 队列满或已关闭
+            Processor->>Processor: droppedFrames++
+            Processor-->>Producer: false
+        else 入队成功
+            Processor-->>Producer: true
+        end
+    else 离线回放 Lossless
+        Producer->>Processor: submitFrameBlocking(move(packet), stop_token)
+        Processor->>Queue: push(packet, stop_token)
+        Queue-->>Processor: 入队成功或等待被取消
+        Processor-->>Producer: bool
     end
     Processor->>Queue: pop(stop_token)
     Queue-->>Processor: FramePacket
@@ -335,7 +345,7 @@ stateDiagram-v2
     Stopped --> [*]: 析构
 ```
 
-- 队列容量固定为 4，生产者非阻塞；满时丢新帧并累计 `droppedFrames`。
+- 队列容量固定为 4。实时采集非阻塞，满时丢新帧并累计 `droppedFrames`；离线回放阻塞等待空位，停止时通过 `stop_token` 取消等待。
 - `m_strategyMutex` 同时保护处理策略和跟踪策略。工作线程执行整个策略期间持锁，因此 UI 切换策略会等待当前帧结束。
 - 显示拉伸设置使用独立 mutex，可在不替换策略的情况下更新。
 - `stop()` 先请求停止并关闭通道，再 join；工作线程退出后把 `m_running` 置 false。
@@ -343,14 +353,14 @@ stateDiagram-v2
 
 ### 错误与可观测性
 
-策略用 `ProcessingResult::success=false` 表示单帧处理失败，主循环仍会尝试构建显示并继续下一帧；没有异常或错误事件自动上报。队列丢帧通过 `droppedFrames()` 被 `RuntimeDiagnostics` 读取。扩展策略时应保证错误帧不破坏下一帧状态，并明确是否需要新增诊断事件。
+策略用 `ProcessingResult::success=false` 表示单帧处理失败，主循环仍会尝试构建显示并继续下一帧；没有异常或错误事件自动上报。实时采集的队列丢帧通过 `droppedFrames()` 被 `RuntimeDiagnostics` 读取；离线回放的阻塞等待与主动取消不计入丢帧。扩展策略时应保证错误帧不破坏下一帧状态，并明确是否需要新增诊断事件。
 
 ### 配置与扩展点
 
 - 处理模式由 `ProcessingViewModel` 映射为具体策略；可用性受 `DSS_HAS_OPENCV` / `DSS_HAS_CUDA` 控制。
 - 显示拉伸包含 Auto/Manual、低高阈值和信号上限；UI 修改后同步到 Processor，并可用缓存 raw 立即重绘当前帧。
 - 新策略实现 `IProcessingStrategy` 后，需要补工厂/UI 模式映射、CMake target 依赖、无效输入契约和至少一个算法测试。
-- 如果算法会长期阻塞，不应简单增大队列掩盖延迟；先用 `droppedFrames` 和基准测试定位。
+- 如果算法会长期阻塞，不应简单增大队列掩盖延迟；实时链路先用 `droppedFrames` 和基准测试定位，离线链路则以总处理时长和逐帧完成事件评估吞吐。
 
 重点测试：`test_bounded_channel.cpp`、`test_frame_view.cpp`、`test_processing_pipeline.cpp`、`test_image_processor.cpp`、`test_diff_processing.cpp`、`test_opencv_processing.cpp`、`test_display_stretch.cpp`、`test_cuda_processing_contract.cpp`。
 

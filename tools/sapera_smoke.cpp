@@ -20,15 +20,17 @@ int main(int argc, char** argv) {
     std::condition_variable ready;
     int receivedFrames = 0;
     Dss::Acquisition::SaperaFrameSource source({.ccfPath = argv[1]});
-    source.setFrameCallback([&](Dss::Processing::FramePacket packet) {
-        if (!packet.rawImage ||
-            packet.rawImage->size() != static_cast<std::size_t>(packet.width) * packet.height) {
-            return;
-        }
-        std::scoped_lock lock(mutex);
-        ++receivedFrames;
-        ready.notify_all();
-    });
+    source.setFrameCallback(
+        [&](Dss::Processing::FramePacket packet, Dss::Acquisition::FrameDeliveryContext) {
+            if (!packet.rawImage ||
+                packet.rawImage->size() != static_cast<std::size_t>(packet.width) * packet.height) {
+                return false;
+            }
+            std::scoped_lock lock(mutex);
+            ++receivedFrames;
+            ready.notify_all();
+            return true;
+        });
 
     if (auto initialized = source.init(); !initialized) {
         std::cerr << "Sapera init failed: " << initialized.error() << '\n';

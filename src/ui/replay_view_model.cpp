@@ -219,44 +219,50 @@ bool ReplayViewModel::stepReplayForward() {
 
     auto replaySource = m_registry.tryGet<Dss::Acquisition::ImageSequenceFrameSource>(
         Dss::App::ServiceKey::replaySource);
-    if (!replaySource) {
-        Q_EMIT statusTextChanged("Replay source is not registered");
+    auto processor =
+        m_registry.tryGet<Dss::Processing::ImageProcessor>(Dss::App::ServiceKey::imageProcessor);
+    if (!replaySource || !processor) {
+        Q_EMIT statusTextChanged("Replay services are not registered");
         return false;
     }
 
     auto coordinator = m_registry.tryGet<Dss::Acquisition::FrameSourceCoordinator>(
         Dss::App::ServiceKey::frameSource);
 
-    return startReplayTask("Replay: Loading", [replaySource, coordinator](std::stop_token token) {
-        ReplayTaskResult result{};
-        if (token.stop_requested()) {
-            result.statusText = "Replay task canceled";
-            return result;
-        }
+    return startReplayTask("Replay: Loading",
+                           [replaySource, coordinator, processor](std::stop_token token) {
+                               ReplayTaskResult result{};
+                               if (token.stop_requested()) {
+                                   result.statusText = "Replay task canceled";
+                                   return result;
+                               }
 
-        auto prepared = prepareReplaySource(replaySource, coordinator);
-        if (!prepared.has_value()) {
-            result.statusText = QString::fromStdString(prepared.error());
-            return result;
-        }
+                               auto prepared = prepareReplaySource(replaySource, coordinator);
+                               if (!prepared.has_value()) {
+                                   result.statusText = QString::fromStdString(prepared.error());
+                                   return result;
+                               }
 
-        auto stepResult = replaySource->stepForward();
-        if (!stepResult.has_value()) {
-            result.statusText = QString::fromStdString(stepResult.error());
-            return result;
-        }
+                               processor->start();
+                               auto stepResult = replaySource->stepForward(token);
+                               if (!stepResult.has_value()) {
+                                   result.statusText = QString::fromStdString(stepResult.error());
+                                   return result;
+                               }
 
-        result.success = true;
-        result.statusText = "Replay: Ready";
-        return result;
-    });
+                               result.success = true;
+                               result.statusText = "Replay: Ready";
+                               return result;
+                           });
 }
 
 bool ReplayViewModel::stepReplayBackward() {
     auto replaySource = m_registry.tryGet<Dss::Acquisition::ImageSequenceFrameSource>(
         Dss::App::ServiceKey::replaySource);
-    if (!replaySource) {
-        Q_EMIT statusTextChanged("Replay source is not registered");
+    auto processor =
+        m_registry.tryGet<Dss::Processing::ImageProcessor>(Dss::App::ServiceKey::imageProcessor);
+    if (!replaySource || !processor) {
+        Q_EMIT statusTextChanged("Replay services are not registered");
         return false;
     }
     if (m_grabbing) {
@@ -266,42 +272,44 @@ bool ReplayViewModel::stepReplayBackward() {
     auto coordinator = m_registry.tryGet<Dss::Acquisition::FrameSourceCoordinator>(
         Dss::App::ServiceKey::frameSource);
 
-    return startReplayTask("Replay: Loading", [replaySource, coordinator](std::stop_token token) {
-        ReplayTaskResult result{};
-        if (token.stop_requested()) {
-            result.statusText = "Replay task canceled";
-            return result;
-        }
+    return startReplayTask("Replay: Loading",
+                           [replaySource, coordinator, processor](std::stop_token token) {
+                               ReplayTaskResult result{};
+                               if (token.stop_requested()) {
+                                   result.statusText = "Replay task canceled";
+                                   return result;
+                               }
 
-        auto prepared = prepareReplaySource(replaySource, coordinator);
-        if (!prepared.has_value()) {
-            result.statusText = QString::fromStdString(prepared.error());
-            return result;
-        }
+                               auto prepared = prepareReplaySource(replaySource, coordinator);
+                               if (!prepared.has_value()) {
+                                   result.statusText = QString::fromStdString(prepared.error());
+                                   return result;
+                               }
 
-        const auto next = replaySource->nextFrameIndex();
-        const auto target = next >= 2U ? next - 2U : 0U;
-        auto seekResult = replaySource->seek(target);
-        if (!seekResult.has_value()) {
-            result.statusText = QString::fromStdString(seekResult.error());
-            return result;
-        }
+                               const auto next = replaySource->nextFrameIndex();
+                               const auto target = next >= 2U ? next - 2U : 0U;
+                               auto seekResult = replaySource->seek(target);
+                               if (!seekResult.has_value()) {
+                                   result.statusText = QString::fromStdString(seekResult.error());
+                                   return result;
+                               }
 
-        if (token.stop_requested()) {
-            result.statusText = "Replay task canceled";
-            return result;
-        }
+                               if (token.stop_requested()) {
+                                   result.statusText = "Replay task canceled";
+                                   return result;
+                               }
 
-        auto stepResult = replaySource->stepForward();
-        if (!stepResult.has_value()) {
-            result.statusText = QString::fromStdString(stepResult.error());
-            return result;
-        }
+                               processor->start();
+                               auto stepResult = replaySource->stepForward(token);
+                               if (!stepResult.has_value()) {
+                                   result.statusText = QString::fromStdString(stepResult.error());
+                                   return result;
+                               }
 
-        result.success = true;
-        result.statusText = "Replay: Ready";
-        return result;
-    });
+                               result.success = true;
+                               result.statusText = "Replay: Ready";
+                               return result;
+                           });
 }
 
 bool ReplayViewModel::seekReplayFrame(int index) {

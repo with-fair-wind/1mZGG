@@ -6,6 +6,7 @@
 #include <expected>
 #include <filesystem>
 #include <mutex>
+#include <stop_token>
 #include <string>
 #include <thread>
 #include <vector>
@@ -58,9 +59,10 @@ public:
 
     /**
      * @brief 手动前进一帧并触发回调
+     * @param token 用于取消无损提交等待的停止令牌。
      * @return 序列为空、未设置回调或已到末尾时返回错误
      */
-    auto stepForward() -> std::expected<void, std::string>;
+    auto stepForward(std::stop_token token = {}) -> std::expected<void, std::string>;
 
     /// 加载首帧确定尺寸；已初始化时保持当前播放索引并直接返回。
     auto init() -> std::expected<void, std::string> override;
