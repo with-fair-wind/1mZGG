@@ -46,6 +46,15 @@ public:
      */
     void registerCommunicationServices();
 
+    /**
+     * @brief 显式停止所有后台 worker 并清理订阅。
+     *
+     * 须在 QApplication 事件循环结束、UI 对象析构前调用。先退订组合根订阅(释放回调持有的
+     * 服务 shared_ptr),再清空服务注册表(触发服务析构 stop+join),确保工作线程不再 emit,
+     * 避免 ViewModel 析构期间因事件总线 COW 快照触发 use-after-free。幂等,可重复调用。
+     */
+    void shutdown();
+
 private:
     MessageBus m_bus;                                       ///< 应用内消息总线
     Dss::Core::ServiceRegistry m_registry;                  ///< 服务注册表

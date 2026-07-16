@@ -114,6 +114,13 @@ protected:
     void publishDecodeError(std::string_view field, std::string_view message,
                             std::size_t byteOffset, uint64_t rawValue);
 
+    /**
+     * @brief 追加接收字节到累积缓冲并解析所有完整帧。
+     * @param bytes 本次从串口读到的原始字节。
+     * @note 暴露为 protected 以便单元测试注入字节流;运行时由 onDataReceived 调用。
+     */
+    void processReceivedBytes(std::span<const uint8_t> bytes);
+
 private:
     /**
      * @brief 工作线程主循环：轮询接收、处理发送请求并统计帧速率
@@ -128,6 +135,12 @@ private:
      * @param serialPort 当前工作线程独占的已打开串口。
      */
     void onDataReceived(QSerialPort& serialPort);
+
+    /**
+     * @brief 从累积缓冲中解析所有完整帧,失步时扫描帧头重同步。
+     * @param expected 单帧固定长度。
+     */
+    void drainBufferedFrames(std::size_t expected);
 
     /**
      * @brief 编码一帧并通过串口发送。
@@ -152,6 +165,7 @@ private:
     std::atomic<int> m_sendFps{0};                                     ///< 发送帧速率（帧/秒）
     std::atomic<int> m_recvCount{0};                                   ///< 当前统计周期内接收帧计数
     std::atomic<int> m_sendCount{0};                                   ///< 当前统计周期内发送帧计数
+    std::vector<std::uint8_t> m_rxAccumulator;  ///< 跨读取边界累积的接收字节,支持流式重同步
 };
 
 }  // namespace Dss::Comm

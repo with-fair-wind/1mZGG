@@ -4,6 +4,7 @@
 #include <QIODevice>
 #include <QSerialPort>
 #include <QString>
+#include <algorithm>
 #include <chrono>
 
 #include "dss/core/event/events.h"
@@ -126,30 +127,62 @@ void SerialWorkerBase::workerLoop(std::stop_token token,
 }
 
 void SerialWorkerBase::onDataReceived(QSerialPort& serialPort) {
+    if (serialPort.bytesAvailable() <= 0) {
+        return;
+    }
+    const QByteArray chunk = serialPort.readAll();
+    processReceivedBytes(
+        {reinterpret_cast<const uint8_t*>(chunk.constData()), static_cast<std::size_t>(chunk.size())});
+}
+
+void SerialWorkerBase::processReceivedBytes(std::span<const uint8_t> bytes) {
     const auto expected = recvFrameSize();
+    if (expected == 0U || bytes.empty()) {
+        return;
+    }
+    m_rxAccumulator.insert(m_rxAccumulator.end(), bytes.begin(), bytes.end());
+    drainBufferedFrames(expected);
+}
+
+void SerialWorkerBase::drainBufferedFrames(std::size_t expected) {
     if (expected == 0U) {
         return;
     }
-    while (serialPort.bytesAvailable() >= static_cast<qint64>(expected)) {
-        QByteArray raw = serialPort.read(static_cast<qint64>(expected));
-        const auto actual = static_cast<std::size_t>(raw.size());
-        auto data =
-            std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(raw.constData()), actual);
-        const auto validation = FrameCodec::validateDetailed(data, expected);
-        if (validation.valid) {
-            decodeFrame(data);
-            m_recvCount.fetch_add(1);
-            continue;
+    while (m_rxAccumulator.size() >= expected) {
+        // 首字节非帧头:向前扫描到下一个帧头,丢弃失步前缀(静默对齐,避免错误风暴)
+        if (m_rxAccumulator.front() != FrameCodec::HEADER) {
+            const auto nextHeader = std::ranges::find(m_rxAccumulator, FrameCodec::HEADER);
+            if (nextHeader == m_rxAccumulator.end()) {
+                m_rxAccumulator.clear();
+                break;
+            }
+            m_rxAccumulator.erase(m_rxAccumulator.begin(), nextHeader);
+            if (m_rxAccumulator.size() < expected) {
+                break;
+            }
         }
 
-        m_bus.emit(Dss::Core::SerialFrameErrorEvent{
-            .channel = std::string(channelName()),
-            .message = std::string(FrameCodec::failureMessage(validation.failure)),
-            .expectedBytes = static_cast<uint64_t>(validation.expectedSize),
-            .actualBytes = static_cast<uint64_t>(validation.actualSize),
-            .observedHeader = validation.observedHeader,
-            .observedTail = validation.observedTail,
-        });
+        const std::span<const uint8_t> frame(m_rxAccumulator.data(), expected);
+        const auto validation = FrameCodec::validateDetailed(frame, expected);
+        if (validation.valid) {
+            decodeFrame(frame);
+            m_recvCount.fetch_add(1);
+            m_rxAccumulator.erase(
+                m_rxAccumulator.begin(),
+                m_rxAccumulator.begin() +
+                    static_cast<std::vector<std::uint8_t>::difference_type>(expected));
+        } else {
+            m_bus.emit(Dss::Core::SerialFrameErrorEvent{
+                .channel = std::string(channelName()),
+                .message = std::string(FrameCodec::failureMessage(validation.failure)),
+                .expectedBytes = static_cast<uint64_t>(validation.expectedSize),
+                .actualBytes = static_cast<uint64_t>(validation.actualSize),
+                .observedHeader = validation.observedHeader,
+                .observedTail = validation.observedTail,
+            });
+            // 帧头已对齐但校验仍失败:丢首字节逐步滑窗,直至重新对齐
+            m_rxAccumulator.erase(m_rxAccumulator.begin());
+        }
     }
 }
 

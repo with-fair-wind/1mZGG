@@ -1,3 +1,4 @@
+#include <array>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -96,6 +97,37 @@ protected:
     event.frameSeq = 9;
     event.targets.push_back(std::move(target));
     return event;
+}
+
+/// @brief 暴露字节注入与解码计数的测试工作线程,用于验证串口流式重同步。
+class ResyncSerialWorker final : public Dss::Comm::SerialWorkerBase {
+public:
+    using SerialWorkerBase::SerialWorkerBase;
+
+    void feedBytes(std::span<const std::uint8_t> bytes) { processReceivedBytes(bytes); }
+    [[nodiscard]] int decodedCount() const { return m_decoded; }
+
+protected:
+    [[nodiscard]] auto recvFrameSize() const -> std::size_t override { return 6U; }
+    [[nodiscard]] auto sendFrameSize() const -> std::size_t override { return 0U; }
+    [[nodiscard]] auto channelName() const -> std::string_view override { return "test"; }
+
+    void decodeFrame(std::span<const std::uint8_t> data) override {
+        ++m_decoded;
+        m_lastPayload.assign(data.begin() + 1, data.end() - 1);
+    }
+    void encodeFrame(std::span<std::uint8_t> /*buffer*/) override {}
+
+private:
+    int m_decoded = 0;
+    std::vector<std::uint8_t> m_lastPayload;
+};
+
+[[nodiscard]] auto makeTestFrame(std::array<std::uint8_t, 4> payload) -> std::vector<std::uint8_t> {
+    std::vector<std::uint8_t> frame{Dss::Comm::FrameCodec::HEADER};
+    frame.insert(frame.end(), payload.begin(), payload.end());
+    frame.push_back(Dss::Comm::FrameCodec::TAIL);
+    return frame;
 }
 
 }  // namespace
@@ -328,4 +360,84 @@ TEST(ApplicationContextServices, ConfiguresRotatingLoggerAfterLoadingConfig) {
 
     ASSERT_TRUE(std::filesystem::exists(logPath));
     EXPECT_NE(readAllText(logPath).find("context rotating logger ready"), std::string::npos);
+}
+
+TEST(ApplicationContextServices, ShutdownClearsRegistryAndIsIdempotent) {
+    Dss::App::ApplicationContext context;
+    context.registerCommunicationServices();
+    EXPECT_NE(context.registry().tryGet<Dss::Processing::ImageProcessor>("image_processor"),
+              nullptr);
+
+    context.shutdown();
+
+    EXPECT_EQ(context.registry().tryGet<Dss::Processing::ImageProcessor>("image_processor"),
+              nullptr);
+    // 幂等:重复显式调用 + 析构兜底调用均不应崩溃
+    context.shutdown();
+}
+
+TEST(ApplicationContextServices, ShutdownStopsRunningWorkersBeforeDestruction) {
+    Dss::App::ApplicationContext context;
+    context.registerCommunicationServices();
+    {
+        const auto trackDataStorage =
+            context.registry().get<Dss::Storage::TrackDataStorageBackend>("track_data_storage");
+        const auto dir = tempContextTrackStorageDir();
+        ASSERT_TRUE(trackDataStorage->init(dir).has_value());
+        ASSERT_TRUE(trackDataStorage->start().has_value());
+        ASSERT_TRUE(trackDataStorage->isRunning());
+    }  // 释放外部副本,仅 registry 持有——模拟 ViewModel 不缓存服务引用
+
+    context.shutdown();  // registry.clear 析构 trackDataStorage → stop+join worker
+    // 到达此处即证明关机路径无死锁、无崩溃
+}
+
+TEST(SerialResync, DecodesConsecutiveValidFrames) {
+    Dss::App::ApplicationContext::MessageBus bus;
+    ResyncSerialWorker worker(bus);
+    const auto frame = makeTestFrame({1, 2, 3, 4});
+    std::vector<std::uint8_t> stream;
+    stream.insert(stream.end(), frame.begin(), frame.end());
+    stream.insert(stream.end(), frame.begin(), frame.end());
+    worker.feedBytes({stream.data(), stream.size()});
+    EXPECT_EQ(worker.decodedCount(), 2);
+}
+
+TEST(SerialResync, RecoversFromGarbageByteBetweenFrames) {
+    Dss::App::ApplicationContext::MessageBus bus;
+    ResyncSerialWorker worker(bus);
+    const auto frame = makeTestFrame({1, 2, 3, 4});
+    std::vector<std::uint8_t> stream;
+    stream.insert(stream.end(), frame.begin(), frame.end());
+    stream.push_back(0xAA);  // 失步字节
+    stream.insert(stream.end(), frame.begin(), frame.end());
+    worker.feedBytes({stream.data(), stream.size()});
+    EXPECT_EQ(worker.decodedCount(), 2);  // 两帧均恢复解码
+}
+
+TEST(SerialResync, RecoversFromTailMismatchAndReportsError) {
+    Dss::App::ApplicationContext::MessageBus bus;
+    std::vector<Dss::Core::SerialFrameErrorEvent> errors;
+    [[maybe_unused]] auto connection = bus.subscribe<Dss::Core::SerialFrameErrorEvent>(
+        [&](const Dss::Core::SerialFrameErrorEvent& event) { errors.push_back(event); });
+    ResyncSerialWorker worker(bus);
+    const std::vector<std::uint8_t> badFrame{Dss::Comm::FrameCodec::HEADER, 5, 6, 7, 8, 0xBB};
+    const auto goodFrame = makeTestFrame({9, 10, 11, 12});
+    std::vector<std::uint8_t> stream;
+    stream.insert(stream.end(), badFrame.begin(), badFrame.end());
+    stream.insert(stream.end(), goodFrame.begin(), goodFrame.end());
+    worker.feedBytes({stream.data(), stream.size()});
+    EXPECT_EQ(worker.decodedCount(), 1);  // 坏帧被跳过,好帧解码
+    ASSERT_EQ(errors.size(), 1U);
+    EXPECT_EQ(errors.front().observedTail, 0xBB);
+}
+
+TEST(SerialResync, BuffersPartialFrameAcrossFeeds) {
+    Dss::App::ApplicationContext::MessageBus bus;
+    ResyncSerialWorker worker(bus);
+    const auto frame = makeTestFrame({1, 2, 3, 4});
+    worker.feedBytes({frame.data(), 3});  // 前半(不足一帧)
+    EXPECT_EQ(worker.decodedCount(), 0);
+    worker.feedBytes({frame.data() + 3, frame.size() - 3});  // 后半
+    EXPECT_EQ(worker.decodedCount(), 1);  // 拼成完整帧后解码
 }

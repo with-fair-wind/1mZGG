@@ -20,7 +20,7 @@
  * @return 应用退出码
  */
 int main(int argc, char* argv[]) {
-    // Display 页面可跨顶层窗口移动，提前共享 OpenGL 上下文以保留纹理资源。
+    // Display Dock 可浮动为顶层窗口，提前共享 OpenGL 上下文以保留纹理资源。
     QApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 #ifdef DSS_HAS_ELA
     ElaApplication::getInstance()->init();
@@ -62,5 +62,7 @@ int main(int argc, char* argv[]) {
 
     initDialog.close();
 
-    return QApplication::exec();
+    const int exitCode = QApplication::exec();
+    context.shutdown();  // 先停所有后台 worker,再让栈对象逆序析构,避免关机竞态 UAF
+    return exitCode;
 }
