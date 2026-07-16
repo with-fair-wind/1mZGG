@@ -81,7 +81,7 @@ signals:
 
 ### 3. MainWindow (`main_window.h`)
 
-多页面主窗口：
+原生 Dock 工作区主窗口：
 
 | 页面 | 旧版 | 说明 |
 |------|------|------|
@@ -92,9 +92,13 @@ signals:
 | 设置页 | — | 路径、滚动日志和光学参数校验与持久化 |
 | 日志页 | — | 分级过滤、彩色显示、搜索和导出核心日志及通信/存储错误，最多缓存最近 500 条 |
 
-支持两种窗口后端:
-- **ElaWidgetTools** — 现代风格 (`DSS_HAS_ELA=1`)
-- **QMainWindow** — Qt 原生回退
+六个页面统一由具有稳定对象名的 `QDockWidget` 承载，普通 Qt 与 Ela 窗口后端共用同一套工作区行为。默认布局把页面合并为顶部 Tab，标签化页面隐藏重复的 Dock 标题栏，只保留一层页面名称。双击标签或使用标签右键菜单可将页面浮动到独立窗口；首次浮动会按内容建议尺寸与主窗口比例计算可用大小，并在主窗口所在屏幕内居中。浮动或拆分到独立停靠区域后恢复原生标题栏，可继续拖动并重新停靠。关闭面板只隐藏页面，`View` 菜单可重新显示，并提供恢复默认布局命令。
+
+`MainWindow` 通过 `QSettings` 保存窗口几何信息和带版本号的 `saveState()` 结果。启动时只有完整恢复成功才采用已保存布局，否则回退到默认 Tab 布局。页面 Widget 始终由对应 Dock 持有，浮动和停靠不会重建 Display 渲染控件或改变 ViewModel/后端数据流。
+
+支持两种窗口外观后端：
+- **ElaWidgetTools** — 现代窗口外观 (`DSS_HAS_ELA=1`)
+- **QMainWindow** — Qt 原生窗口外观
 
 ### 4. InitDialog (`init_dialog.h`)
 
@@ -178,8 +182,14 @@ UI 不直接链接 Comm target，但 App 对象已按 `ISerialChannel` 和命令
 classDiagram
     class MainWindow {
         -MainViewModel& mainViewModel
+        -array~QDockWidget*,6~ pageDocks
         -ImageDisplay* imageDisplay
         +setupNavigation()
+        +setupDockWorkspace()
+        +setupDockTabInteractions()
+        +syncDockTitleBars()
+        +applyDefaultDockLayout()
+        +restoreWorkspaceState() bool
         +setupControlPage()
         +setupDisplayPage()
         +setupCommStatusPage()
@@ -249,6 +259,10 @@ sequenceDiagram
     Main->>Win: 构造(VM)
     Win->>Win: setupNavigation()
     Win->>Page: Control/Display/Analysis/Comm/Settings/Log
+    Win->>Win: setupDockWorkspace()
+    Win->>Win: setupViewMenu()
+    Win->>Win: restoreWorkspaceState() 或默认布局
+    Win->>Win: 注册 Dock 标签交互并同步标题栏
     Win->>Win: connectSignals()
     Main->>Win: show()
 ```

@@ -31,6 +31,7 @@ DSS_QT 是一套用于天文观测的实时图像采集、处理、跟踪与通�
 4. **事件驱动解耦** — `BasicMessageBus`（后端）+ `AppEvent`（跨 UI 页面 Qt 信号）
 5. **依赖注入** — `ServiceRegistry` 保存共享服务实例，各业务入口显式管理生命周期
 6. **旧代码仅参考** — `oldsrc/` 不参与构建，不被 clangd 索引
+7. **统一 UI 工作区** — 功能页使用原生 `QDockWidget` 统一管理浮动、停靠、隐藏恢复与布局持久化
 
 ## 模块依赖图
 
@@ -306,6 +307,8 @@ flowchart TB
 | Heartbeat/ErrorDiagnostics/ImageSender | Registry | 各自 `std::jthread` | `NetworkViewModel::open...` | `close()` 后析构兜底 |
 | `UdpChannel` | 所属网络服务 | 每通道 `std::jthread` | `bind()` | `close()` 请求停止并 join |
 | Qt ViewModel / Widget | QObject 父子树 | Qt 对象所属线程 | 构造或 show | 父对象析构 |
+
+`MainWindow` 将六个功能页作为原生 Dock 工作区管理。默认标签组只显示顶部 Tab；页面浮动或拆分停靠时恢复原生标题栏，双击标签和标签右键菜单提供浮动入口。所有布局变化只改变 `QDockWidget` 状态，不重建业务页面；窗口几何信息和 Dock 状态通过 `QSettings` 版本化保存，恢复失败时使用默认顶部 Tab 布局。
 
 ### 当前实现边界
 

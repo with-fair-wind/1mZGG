@@ -1,22 +1,16 @@
 #include <QCheckBox>
-#include <QCloseEvent>
 #include <QElapsedTimer>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
-#include <QMainWindow>
 #include <QSignalBlocker>
 #include <QSlider>
 #include <QSpinBox>
-#include <QStyle>
 #include <QTimer>
-#include <QToolButton>
-#include <QVBoxLayout>
 #include <QtGlobal>
 #include <algorithm>
 #include <functional>
 #include <memory>
-#include <utility>
 
 #include "dss/ui/display/image_display.h"
 #include "dss/ui/support/app_event.h"
@@ -33,78 +27,11 @@
 
 namespace Dss::Ui {
 
-namespace {
-
-/// @brief 将关闭操作转换为显示页还原请求的独立窗口。
-class DisplayFloatingWindow final : public QMainWindow {
-public:
-    explicit DisplayFloatingWindow(std::function<void()> restorePage, QWidget* parent)
-        : QMainWindow(parent, Qt::Window), m_restorePage(std::move(restorePage)) {}
-
-protected:
-    void closeEvent(QCloseEvent* event) override {
-        event->ignore();
-        if (m_restorePage) {
-            m_restorePage();
-        }
-    }
-
-private:
-    std::function<void()> m_restorePage;  ///< 关闭浮窗时执行的页面还原操作。
-};
-
-}  // namespace
-
 void MainWindow::setupDisplayPage() {
     m_displayPage = new QWidget;
     m_displayPage->setObjectName("display_page");
-    auto* hostLayout = new QVBoxLayout(m_displayPage);
-    hostLayout->setContentsMargins(0, 0, 0, 0);
-
-    m_displayPageContent = new QWidget(m_displayPage);
-    m_displayPageContent->setObjectName("display_page_content");
-    hostLayout->addWidget(m_displayPageContent, 1);
-
-    auto* contentLayout = new QVBoxLayout(m_displayPageContent);
-    auto* pageTools = new QHBoxLayout;
-    pageTools->addStretch();
-    m_displayDetachButton = new QToolButton(m_displayPageContent);
-    m_displayDetachButton->setObjectName("display_detach_button");
-    m_displayDetachButton->setAutoRaise(true);
-    m_displayDetachButton->setFixedSize(28, 28);
-    m_displayDetachButton->setIcon(
-        m_displayDetachButton->style()->standardIcon(QStyle::SP_TitleBarMaxButton));
-    m_displayDetachButton->setToolTip("Open Display in a separate window");
-    pageTools->addWidget(m_displayDetachButton);
-    contentLayout->addLayout(pageTools);
-
-    auto* layout = new QHBoxLayout;
+    auto* layout = new QHBoxLayout(m_displayPage);
     layout->setContentsMargins(0, 0, 0, 0);
-    contentLayout->addLayout(layout, 1);
-
-    m_displayRestoreButton = new QToolButton(m_displayPage);
-    m_displayRestoreButton->setObjectName("display_restore_button");
-    m_displayRestoreButton->setAutoRaise(true);
-    m_displayRestoreButton->setFixedSize(36, 36);
-    m_displayRestoreButton->setIcon(
-        m_displayRestoreButton->style()->standardIcon(QStyle::SP_TitleBarNormalButton));
-    m_displayRestoreButton->setToolTip("Restore Display to the main window");
-    m_displayRestoreButton->hide();
-    hostLayout->addWidget(m_displayRestoreButton, 0, Qt::AlignCenter);
-
-    m_displayFloatingWindow = new DisplayFloatingWindow([this] { attachDisplayPage(); }, this);
-    m_displayFloatingWindow->setObjectName("display_floating_window");
-    m_displayFloatingWindow->setWindowTitle("Display");
-    m_displayFloatingWindow->resize(1200, 800);
-
-    connect(m_displayDetachButton, &QToolButton::clicked, this, [this] {
-        if (m_displayFloatingWindow != nullptr && m_displayFloatingWindow->isVisible()) {
-            attachDisplayPage();
-        } else {
-            detachDisplayPage();
-        }
-    });
-    connect(m_displayRestoreButton, &QToolButton::clicked, this, &MainWindow::attachDisplayPage);
 
     auto* display = &m_mainViewModel.display();
 
@@ -112,7 +39,7 @@ void MainWindow::setupDisplayPage() {
     const auto gpuDisplayDisabled =
         qEnvironmentVariableIntValue("DSS_DISABLE_GPU_IMAGE_DISPLAY") != 0;
     if (!gpuDisplayDisabled && GpuImageDisplay::isSupported()) {
-        m_gpuImageDisplay = new GpuImageDisplay(m_displayPageContent);
+        m_gpuImageDisplay = new GpuImageDisplay(m_displayPage);
         m_gpuImageDisplay->setDisplayStretch(display->displayAutoStretch(),
                                              display->displayStretchLow(),
                                              display->displayStretchHigh());
@@ -121,14 +48,14 @@ void MainWindow::setupDisplayPage() {
     }
 #endif
     if (m_imageDisplayWidget == nullptr) {
-        m_imageDisplay = new ImageDisplay(m_displayPageContent);
+        m_imageDisplay = new ImageDisplay(m_displayPage);
         m_imageDisplayWidget = m_imageDisplay;
         display->setRawDisplayEnabled(false);
     }
     m_imageDisplayWidget->setObjectName("main_image_display");
     layout->addWidget(m_imageDisplayWidget, 4);
 
-    auto* stretchGroup = new QGroupBox("Display Stretch", m_displayPageContent);
+    auto* stretchGroup = new QGroupBox("Display Stretch", m_displayPage);
     stretchGroup->setObjectName("display_stretch_group");
     auto* stretchForm = new QFormLayout(stretchGroup);
 #ifdef DSS_HAS_ELA
@@ -189,7 +116,7 @@ void MainWindow::setupDisplayPage() {
     };
     enum class StretchEditedBound { Low, High };
     constexpr int kStretchPreviewIntervalMs = 40;
-    auto* stretchThrottleTimer = new QTimer(m_displayPageContent);
+    auto* stretchThrottleTimer = new QTimer(m_displayPage);
     stretchThrottleTimer->setSingleShot(true);
     auto lastStretchApply = std::make_shared<QElapsedTimer>();
     auto lastEditedBound = std::make_shared<StretchEditedBound>(StretchEditedBound::Low);
@@ -287,51 +214,6 @@ void MainWindow::setupDisplayPage() {
                 &AppEvent::publishTargetPositionSelected);
     }
 #endif
-}
-
-void MainWindow::detachDisplayPage() {
-    if (m_displayPage == nullptr || m_displayPageContent == nullptr ||
-        m_displayFloatingWindow == nullptr || m_displayFloatingWindow->isVisible()) {
-        return;
-    }
-
-    auto* hostLayout = qobject_cast<QVBoxLayout*>(m_displayPage->layout());
-    if (hostLayout == nullptr) {
-        return;
-    }
-
-    hostLayout->removeWidget(m_displayPageContent);
-    m_displayFloatingWindow->setCentralWidget(m_displayPageContent);
-    m_displayDetachButton->setIcon(
-        m_displayDetachButton->style()->standardIcon(QStyle::SP_TitleBarNormalButton));
-    m_displayDetachButton->setToolTip("Restore Display to the main window");
-    m_displayRestoreButton->show();
-    m_displayFloatingWindow->show();
-    m_displayFloatingWindow->raise();
-    m_displayFloatingWindow->activateWindow();
-}
-
-void MainWindow::attachDisplayPage() {
-    if (m_displayPage == nullptr || m_displayPageContent == nullptr ||
-        m_displayFloatingWindow == nullptr ||
-        m_displayFloatingWindow->centralWidget() != m_displayPageContent) {
-        return;
-    }
-
-    auto* hostLayout = qobject_cast<QVBoxLayout*>(m_displayPage->layout());
-    if (hostLayout == nullptr) {
-        return;
-    }
-
-    (void)m_displayFloatingWindow->takeCentralWidget();
-    m_displayPageContent->setParent(m_displayPage);
-    hostLayout->insertWidget(0, m_displayPageContent, 1);
-    m_displayPageContent->show();
-    m_displayDetachButton->setIcon(
-        m_displayDetachButton->style()->standardIcon(QStyle::SP_TitleBarMaxButton));
-    m_displayDetachButton->setToolTip("Open Display in a separate window");
-    m_displayRestoreButton->hide();
-    m_displayFloatingWindow->hide();
 }
 
 }  // namespace Dss::Ui
