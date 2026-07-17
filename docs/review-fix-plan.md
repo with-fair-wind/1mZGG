@@ -251,7 +251,7 @@ std::erase_if(m_targets, [](const Dss::Core::TargetInfo& t) { return !t.living; 
 ### 🟠 B10. `MessageBus` 同步 emit 拖慢主帧路径(性能)
 
 - [x] **已核实**:`ImageSender` 已有单槽 pending 队列(`image_sender.h:98-105`),无需新增
-- [ ] `ImageReadyForSendEvent` 订阅回调改为仅入队;worker 线程内调 `imageFactory`+UDP
+- [x] `ImageReadyForSendEvent` 回调改 `submitForSend`(仅入队);workerLoop 按需调 `imageFactory`,把整图拉伸移出处理线程(2026-07-17)
 - [ ] 基准对比处理线程单帧耗时
 
 **定位**:`src/app/communication_services.cpp:58-70`;`src/processing/image_processor.cpp:194`

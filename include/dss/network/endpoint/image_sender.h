@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <span>
@@ -21,6 +22,8 @@ namespace Dss::Network {
 class ImageSender : public INetworkChannel {
 public:
     using MessageBus = Dss::Core::MessageBus;  ///< 事件总线类型别名
+    using ImageFactory = std::function<std::shared_ptr<const std::vector<std::uint8_t>>()>;
+
 
     static constexpr std::size_t MaxUdpPayload = 60U * 1024U;  ///< 单个 UDP 分片最大载荷（字节）
     static constexpr std::size_t PacketHeaderSize = 20U;       ///< 分片包头长度（字节）
@@ -71,6 +74,17 @@ public:
                    uint32_t width, uint32_t height);
 
     /**
+     * @brief 提交带延迟生成器的待发送帧(仅更新单槽,由工作线程按需调用 factory)。
+     * @param frameSeq 图像帧序号。
+     * @param image 已就绪的 8 位图像;为空时由 imageFactory 在工作线程生成。
+     * @param imageFactory 延迟 8 位图生成器;image 非空时可留空。
+     * @param width 图像宽度(像素)。
+     * @param height 图像高度(像素)。
+     */
+    void submitForSend(uint64_t frameSeq, std::shared_ptr<const std::vector<uint8_t>> image,
+                       ImageFactory imageFactory, uint32_t width, uint32_t height);
+
+    /**
      * @brief 将图像编码并拆分为 UDP 分片列表
      * @param imageData 原始像素数据
      * @param width 图像宽度（像素）
@@ -98,6 +112,7 @@ private:
     std::mutex m_bufferMutex;                                    ///< 保护待发送缓冲区的互斥锁
     std::condition_variable_any m_bufferCv;                      ///< 待发送图像就绪条件变量
     std::shared_ptr<const std::vector<uint8_t>> m_pendingImage;  ///< 待发送共享像素数据
+    ImageFactory m_pendingImageFactory;                          ///< 待发送图像的延迟生成器
     uint64_t m_pendingFrameSeq = 0;                              ///< 待发送帧序号
     uint32_t m_pendingWidth = 0;                                 ///< 待发送图像宽度
     uint32_t m_pendingHeight = 0;                                ///< 待发送图像高度

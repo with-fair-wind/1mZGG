@@ -60,13 +60,10 @@ void ApplicationContext::registerCommunicationServices() {
             if (!imageSender->isOpen()) {
                 return;
             }
-            auto image = event.image;
-            if ((!image || image->empty()) && event.imageFactory) {
-                image = event.imageFactory();
-            }
-            if (image && !image->empty()) {
-                imageSender->sendImage(event.frameSeq, std::move(image), event.width, event.height);
-            }
+            // 仅更新单槽;imageFactory 由 ImageSender 工作线程按需调用,
+            // 避免在 ImageProcessor 处理线程执行整图拉伸
+            imageSender->submitForSend(event.frameSeq, event.image, event.imageFactory,
+                                       event.width, event.height);
         }));
     m_registry.registerService<Dss::Network::Heartbeat>(ServiceKey::heartbeat, heartbeat);
     m_registry.registerService<Dss::Network::INetworkChannel>(ServiceKey::heartbeat, heartbeat);

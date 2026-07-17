@@ -77,6 +77,7 @@ auto ImageSender::open(const UdpEndpointConfig& config) -> std::expected<void, s
         m_accepting = true;
         m_hasPending = false;
         m_pendingImage.reset();
+        m_pendingImageFactory = {};
     }
     m_workerThread = std::jthread([this](std::stop_token token) {
         Dss::Core::runBackgroundTask(m_bus, "image_sender", [this, token] { workerLoop(token); });
@@ -95,6 +96,7 @@ void ImageSender::closeLocked() {
         m_accepting = false;
         m_hasPending = false;
         m_pendingImage.reset();
+        m_pendingImageFactory = {};
     }
     if (m_workerThread.joinable()) {
         m_workerThread.request_stop();
@@ -130,6 +132,27 @@ void ImageSender::sendImage(uint64_t frameSeq,
             return;
         }
         m_pendingImage = std::move(imageData);
+        m_pendingFrameSeq = frameSeq;
+        m_pendingWidth = width;
+        m_pendingHeight = height;
+        m_hasPending = true;
+    }
+    m_bufferCv.notify_one();
+}
+
+void ImageSender::submitForSend(uint64_t frameSeq,
+                                std::shared_ptr<const std::vector<uint8_t>> image,
+                                ImageFactory imageFactory, uint32_t width, uint32_t height) {
+    if (!image && !imageFactory) {
+        return;
+    }
+    {
+        std::lock_guard lock(m_bufferMutex);
+        if (!m_accepting) {
+            return;
+        }
+        m_pendingImage = std::move(image);
+        m_pendingImageFactory = std::move(imageFactory);
         m_pendingFrameSeq = frameSeq;
         m_pendingWidth = width;
         m_pendingHeight = height;
@@ -175,6 +198,7 @@ auto ImageSender::buildPackets(std::span<const uint8_t> imageData, uint32_t widt
 void ImageSender::workerLoop(std::stop_token token) {
     while (!token.stop_requested()) {
         std::shared_ptr<const std::vector<uint8_t>> image;
+        ImageFactory factory;
         uint64_t frameSeq = 0;
         uint32_t w = 0;
         uint32_t h = 0;
@@ -188,12 +212,17 @@ void ImageSender::workerLoop(std::stop_token token) {
             }
 
             image = std::move(m_pendingImage);
+            factory = std::move(m_pendingImageFactory);
             frameSeq = m_pendingFrameSeq;
             w = m_pendingWidth;
             h = m_pendingHeight;
             m_hasPending = false;
         }
 
+        // image 为空时由 factory 在本工作线程生成,把整图拉伸移出 ImageProcessor 处理线程
+        if ((!image || image->empty()) && factory) {
+            image = factory();
+        }
         if (!image || image->empty()) {
             continue;
         }
