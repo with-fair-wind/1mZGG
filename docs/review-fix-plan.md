@@ -226,8 +226,7 @@ connect(display, &DisplayViewModel::imageStatsUpdated, statsLabel, [statsLabel](
 
 ### 🟠 B6. `decodeAngle` 不掩码 29 位
 
-- [ ] 解码侧 `& 0x1FFFFFFF`
-- [ ] 补高位被置用例
+- [ ] **推迟**:经核实 `AngleCodeDenominator = 2^29`(`serial_protocol_codec_detail.h:5-6`),`encodeAngle` 把 360° 编到 `2^29`。原方案「`& 0x1FFFFFFF`」会把合法 360°→0°,反而引入 bug。正确修复需 decodeAngle 范围检查 + 超界发布 `SerialDecodeErrorEvent`(改接口 + `decodePointingFrame`),或 `fmod` 归一化(但向下游隐藏畸形)。且 A3 重同步已过滤大部分失步帧,B6 触发场景(合法头尾 + payload 高位错)罕见。需重新评估修复方向。
 
 **定位**:`include/dss/comm/detail/serial_protocol_codec_detail.h:196-198`
 **方案**:

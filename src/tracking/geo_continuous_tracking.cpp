@@ -9,20 +9,22 @@ namespace Dss::Tracking::GeoDetail {
 
 inline constexpr double kGeoSameEquatorialThresholdDeg = 0.0015;
 inline constexpr double kTinyCos = 1.0e-8;
-[[nodiscard]] bool hasEquatorialCoordinates(const Dss::Core::MeasuredBlob& blob) {
-    return blob.alpha != 0.0 || blob.sigma != 0.0 || blob.ra != 0.0 || blob.dec != 0.0;
-}
-
 [[nodiscard]] bool isSameEquatorialPoint(const Dss::Core::MeasuredBlob& first,
                                          const Dss::Core::MeasuredBlob& second) {
-    if (!hasEquatorialCoordinates(first) || !hasEquatorialCoordinates(second)) {
+    // 仅当双方都有 alpha/sigma 时比较;仅有 ra/dec 的由 RaDec 跟踪链路单独处理,
+    // 不在此处用 alpha/sigma(为 0)误判为「相同点」
+    const auto hasAlphaSigma = [](const Dss::Core::MeasuredBlob& blob) {
+        return blob.alpha != 0.0 || blob.sigma != 0.0;
+    };
+    if (!hasAlphaSigma(first) || !hasAlphaSigma(second)) {
         return false;
     }
-
-    const auto threshold =
+    // 赤经阈值按 cos(dec) 放大(赤经线在高赤纬汇聚);赤纬沿经线,不缩放
+    const auto raThreshold =
         kGeoSameEquatorialThresholdDeg / (std::cos(first.sigma) + kTinyCos) * Dss::Core::DegToRad;
-    return std::abs(first.alpha - second.alpha) < threshold &&
-           std::abs(first.sigma - second.sigma) < threshold;
+    const auto decThreshold = kGeoSameEquatorialThresholdDeg * Dss::Core::DegToRad;
+    return std::abs(first.alpha - second.alpha) < raThreshold &&
+           std::abs(first.sigma - second.sigma) < decThreshold;
 }
 
 [[nodiscard]] bool hasRepeatedEquatorialPoint(
