@@ -202,8 +202,8 @@ return position.x >= 0.0F && position.x < static_cast<float>(2.0 * Dss::Core::Pi
 
 ### 🟠 B4. 串口 `write()`/`flush()` 返回值忽略
 
-- [ ] 检查 `write` 返回值,失败 emit 错误事件且不递增计数
-- [ ] (可选)配 `waitForBytesWritten`
+- [x] 循环写完整帧(部分写续写剩余);`write<=0` 发布 `SerialFrameErrorEvent` 且不递增 `m_sendCount`;`flush` 不作成败判据(2026-07-17)
+- [ ] (可选)`waitForBytesWritten` 确认落盘 / `write<0` 时上层关闭重连——未做(需与生命周期协调,推迟)
 
 **定位**:`src/comm/serial_worker_base.cpp:162-167`
 **方案(部分写入不能简单 return)**:部分写入时对端已收到截断帧,直接 `return` 丢弃剩余字节会**破坏帧对齐、触发 A3 类失步**。正确处理:

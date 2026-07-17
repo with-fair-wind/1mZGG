@@ -192,12 +192,33 @@ void SerialWorkerBase::sendFrameInternal(QSerialPort& serialPort) {
     encodeFrame(buffer);
     FrameCodec::wrap(buffer);
 
-    if (serialPort.isOpen()) {
-        serialPort.write(reinterpret_cast<const char*>(buffer.data()),
-                         static_cast<qint64>(buffer.size()));
-        serialPort.flush();
-        m_sendCount.fetch_add(1);
+    if (!serialPort.isOpen()) {
+        return;
     }
+
+    // 循环写完整帧:部分写时续写剩余字节,避免截断帧破坏对端帧对齐(触发 A3 类失步)
+    const char* cursor = reinterpret_cast<const char*>(buffer.data());
+    qint64 remaining = static_cast<qint64>(buffer.size());
+    while (remaining > 0) {
+        const auto written = serialPort.write(cursor, remaining);
+        if (written <= 0) {
+            m_bus.emit(Dss::Core::SerialFrameErrorEvent{
+                .channel = std::string(channelName()),
+                .message = "serial write failed: " +
+                           (written < 0 ? serialPort.errorString().toStdString()
+                                        : std::string("wrote zero bytes")),
+                .expectedBytes = static_cast<uint64_t>(buffer.size()),
+                .actualBytes = static_cast<uint64_t>(buffer.size() - remaining),
+                .observedHeader = buffer.front(),
+                .observedTail = buffer.back(),
+            });
+            return;
+        }
+        cursor += written;
+        remaining -= written;
+    }
+    serialPort.flush();  // flush 仅尽量刷出,返回值不作为传输成败判据
+    m_sendCount.fetch_add(1);
 }
 
 }  // namespace Dss::Comm
