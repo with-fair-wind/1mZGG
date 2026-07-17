@@ -331,6 +331,37 @@ TEST(GeoTracker, TracksNonFullLeoTargetInRaDecSpace) {
     }
 }
 
+TEST(GeoTracker, TracksNonFullLeoSouthernTargetInRaDecSpace) {
+    auto settings = makeSettings();
+    settings.geoFullLeo = false;
+    settings.geoRaSpeedThresholdArcsec = 60.0;
+    settings.geoDecSpeedThresholdArcsec = 60.0;
+    Dss::Tracking::GeoTracker tracker(settings);
+
+    for (uint64_t index = 0; index < 5; ++index) {
+        auto frame = makeFrame(index + 1, static_cast<int>(index));
+        addCenteredStars(frame, static_cast<float>(index), 0.0F);
+        if (index < 4) {
+            addGeoTargetWithRaDec(frame, 105.0F + static_cast<float>(index) * 5.0F,
+                                  100.0F + static_cast<float>(index) * 4.0F,
+                                  1.0 + static_cast<double>(index) * 0.0001,
+                                  -0.5 - static_cast<double>(index) * 0.00007);
+        } else {
+            addGeoTargetWithRaDec(frame, 900.0F, 900.0F, 1.0004, -0.50028);
+        }
+
+        const auto targets = tracker.track(frame);
+        if (index < 4) {
+            continue;
+        }
+
+        // 南天目标(dec<0):修复前 isInsideRaDecBounds 的 dec>0 会判越界终止;
+        // 修复后赤纬 [-π/2,π/2] 允许南天,目标应持续存活
+        ASSERT_EQ(targets.size(), 1U);
+        EXPECT_TRUE(targets.front().living);
+    }
+}
+
 TEST(GeoTracker, EndsNonFullLeoTargetWhenPredictedRaDecLeavesSkyBounds) {
     auto settings = makeSettings();
     settings.geoFullLeo = false;

@@ -137,8 +137,10 @@ void updatePredictionFromHistory(Dss::Core::TargetInfo& target, float frameFrequ
 }
 
 [[nodiscard]] bool isInsideRaDecBounds(const Dss::Core::Vec2f& position) {
-    return position.x > 0.0F && position.x < static_cast<float>(2.0 * Dss::Core::Pi) &&
-           position.y > 0.0F && position.y < static_cast<float>(Dss::Core::Pi / 2.0);
+    // 赤经 [0, 2π)(允许 RA=0 春分点);赤纬 [-π/2, π/2](允许南天与赤道,不再拒绝 dec<0)
+    return position.x >= 0.0F && position.x < static_cast<float>(2.0 * Dss::Core::Pi) &&
+           position.y >= static_cast<float>(-Dss::Core::Pi / 2.0) &&
+           position.y <= static_cast<float>(Dss::Core::Pi / 2.0);
 }
 
 [[nodiscard]] bool isInsideTrackingBounds(const Dss::Core::Vec2f& position,

@@ -168,9 +168,9 @@ const auto starAngle   = std::atan2(starSpeed.y, starSpeed.x);
 
 ### 🟠 B3. `ra`/`dec`(度)与 `isInsideRaDecBounds`(<2π 弧度)单位不匹配
 
-- [ ] **⚠️ 前置**:确认 RaDec 跟踪路径设计意图(度 or 弧度)
-- [ ] 统一单位:改边界 or 改字段语义
-- [ ] 补 ra=123.75(度)的 RaDec 路径用例
+- [x] **边界修复(南天+春分点)**:`isInsideRaDecBounds` 赤纬由 `>0` 改为 `[-π/2, π/2]`(允许南天 dec<0 与赤道)、赤经由 `>0` 改为 `[0, 2π)`(允许 RA=0 春分点)(2026-07-17)
+- [x] 补南天测试 `TracksNonFullLeoSouthernTargetInRaDecSpace`(dec<0 目标持续存活,test_geo_tracker 20 项通过)
+- [ ] **单位统一(types.h 注释 / prediction_utils 测试值)推迟**:`test_geo_tracker` 用弧度、`prediction_utils` 测试用度值(123.75)互相矛盾,且 grep 显示 src 仅 `prediction_utils` 回填 ra/dec、测量层不填,实际运行单位取决于未确认的上游——不武断改字段语义
 
 **定位**:`include/dss/core/types.h:75-76`;`src/tracking/candidate_utils.cpp:28`;`src/tracking/geo_continuous_tracking.cpp:122-124,137-140`
 **根因(证据链)**:
