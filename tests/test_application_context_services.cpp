@@ -441,3 +441,23 @@ TEST(SerialResync, BuffersPartialFrameAcrossFeeds) {
     worker.feedBytes({frame.data() + 3, frame.size() - 3});  // 后半
     EXPECT_EQ(worker.decodedCount(), 1);  // 拼成完整帧后解码
 }
+
+TEST(SerialResync, ClearsAccumulatorOnCloseBeforeNextSession) {
+    Dss::App::ApplicationContext::MessageBus bus;
+    std::vector<Dss::Core::SerialFrameErrorEvent> errors;
+    [[maybe_unused]] auto conn = bus.subscribe<Dss::Core::SerialFrameErrorEvent>(
+        [&](const Dss::Core::SerialFrameErrorEvent& event) { errors.push_back(event); });
+
+    ResyncSerialWorker worker(bus);
+    const std::vector<std::uint8_t> staleHalf{Dss::Comm::FrameCodec::HEADER, 1, 2, 3, 4};
+    worker.feedBytes({staleHalf.data(), staleHalf.size()});  // 旧会话残留半帧(差1字节满帧)
+    ASSERT_EQ(worker.decodedCount(), 0);
+
+    worker.close();  // closeLocked 清 m_rxAccumulator(模拟重连前清理)
+
+    const auto frame = makeTestFrame({10, 11, 12, 13});
+    worker.feedBytes({frame.data(), frame.size()});  // 新会话完整帧
+    EXPECT_EQ(worker.decodedCount(), 1);
+    // close 清了 → 新帧干净解码,无重同步错误;若残留则会触发 TailMismatch 事件
+    EXPECT_TRUE(errors.empty());
+}
