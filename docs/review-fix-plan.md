@@ -131,10 +131,10 @@ void SerialWorkerBase::onDataReceived(QSerialPort& serialPort) {
 
 ### 🟠 B1. 回放加载期间停止指令丢失
 
-- [ ] `ReplayViewModel` 增加 `m_stopRequestedAfterLoad` 意图
-- [ ] `MainViewModel::onMasterControl` 加载分支记录意图
-- [ ] `finishReplayTask` 检查意图
-- [ ] 补「加载中发 grab=false → 不启动」用例
+- [x] `ReplayViewModel` 增 `m_stopRequestedAfterLoad` + `requestStopAfterLoad()`(2026-07-17)
+- [x] `MainViewModel::onMasterControl` 加载分支(`replayBusy`)记录停止意图
+- [x] `finishReplayTask` 检查 `!m_stopRequestedAfterLoad` 跳过自动启动;消费后复位
+- [ ] 补「加载中发 grab=false → 加载完成后不启动」用例(需 mock 异步加载流程,推迟)
 
 **定位**:`src/ui/main_view_model.cpp:179-184`;`src/ui/replay_view_model.cpp:404`(`finishReplayTask`)
 **根因**:`else if (!event.grab && m_replay.isGrabbing())` 仅查 `m_grabbing`,加载阶段为 false,`MasterControlEvent{grab=false}` 被跳过,加载完成后违背指令启动采集。

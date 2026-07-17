@@ -401,12 +401,17 @@ void ReplayViewModel::finishReplayTask(const ReplayTaskResult& result) {
         setReplayCurrentFrame(*result.currentFrame);
     }
     setReplayBusy(false);
-    if (result.success && result.startReplayAfterCompletion) {
+    if (result.success && result.startReplayAfterCompletion && !m_stopRequestedAfterLoad) {
         startInitializedReplay();
     }
+    m_stopRequestedAfterLoad = false;
     if (!result.statusText.isEmpty()) {
         Q_EMIT statusTextChanged(result.statusText);
     }
+}
+
+void ReplayViewModel::requestStopAfterLoad() {
+    m_stopRequestedAfterLoad = true;
 }
 
 void ReplayViewModel::setupSubscriptions() {

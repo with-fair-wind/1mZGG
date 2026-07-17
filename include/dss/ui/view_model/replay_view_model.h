@@ -87,6 +87,9 @@ public Q_SLOTS:
      * @brief 停止连续采集或回放。
      */
     Q_INVOKABLE void stopGrab();
+    /// @brief 记录"加载完成后停止采集"意图。
+    /// @note 加载中收到停止指令时调用,finishReplayTask 据此跳过自动启动采集。
+    void requestStopAfterLoad();
 
     /**
      * @brief 提交单步前进回放一帧的后台任务。
@@ -214,6 +217,7 @@ private:
     Dss::Core::ServiceRegistry& m_registry;                       ///< 应用服务注册表。
     bool m_grabbing = false;                                      ///< 是否正在采集或回放。
     bool m_replayBusy = false;                                    ///< 是否正在执行回放后台任务。
+    bool m_stopRequestedAfterLoad = false;                        ///< 加载期间收到停止指令,完成后不自动启动采集。
     std::jthread m_replayTaskWorker;                              ///< 回放文件加载与单步 worker。
     int m_replayFrameCount = 0;                                   ///< 回放序列总帧数。
     int m_replayCurrentFrame = 0;                                 ///< 当前回放帧号。

@@ -179,8 +179,13 @@ void MainViewModel::onMasterControl(const Dss::Core::MasterControlEvent& event) 
     if (event.grab && !m_replay.isGrabbing()) {
         m_display.clearCurrentDisplayFrame();
         m_replay.startGrab();
-    } else if (!event.grab && m_replay.isGrabbing()) {
-        m_replay.stopGrab();
+    } else if (!event.grab) {
+        if (m_replay.isGrabbing()) {
+            m_replay.stopGrab();
+        } else if (m_replay.replayBusy()) {
+            // 加载中收到停止指令:记录意图,finishReplayTask 据此不自动启动采集
+            m_replay.requestStopAfterLoad();
+        }
     }
 }
 
