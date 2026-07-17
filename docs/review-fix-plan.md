@@ -403,3 +403,8 @@ const auto decThreshold = kGeoSameEquatorialThresholdDeg * DegToRad;   // 赤纬
 **2026-07-16(第四轮复核,外部 Codex 三次)**:补正 2 处:
 - **B3**:补充 `isInsideRaDecBounds` 边界范围缺陷——`dec>0` 拒绝南天目标、`RA>0` 拒绝春分点;修正为赤纬 `[-π/2, π/2]`、赤经 `[0, 2π)`。原测试用 `dec=-0.32` 与旧 `>0` 边界矛盾,一并修正。
 - **B15**:缩小修复范围——不「整个链路统一 alpha/sigma」(与 B3 确认的 RaDec 路径用 ra/dec 冲突),改为 `isSameEquatorialPoint` 只比较/接受 alpha/sigma,ra/dec 由 RaDec 链路单独处理。
+
+**2026-07-17(第五轮,外部 Codex 终审 9 commit)**:3 问题,P1+P2 已修,P2-零值哨兵推迟:
+- **[P1 已修]** `closeLocked` join 后未清 `m_rxAccumulator`,重连半帧拼接 → 已加 `m_rxAccumulator.clear()`(A3 遗漏补丁)。
+- **[P2 已修]** `workerLoop` 持 `m_sendMutex` 调 `sendFrameInternal`(B4 在内 `emit`),与 `requestSend()` 重入死锁 → 发送移出锁,锁内仅交换标志(B4 遗漏补丁)。
+- **[P2 推迟] 零值哨兵**:`hasRaDecMeasurement`/`hasAlphaSigma` 以 `!=0` 判有效,(0,0) 春分点赤道被误判无测量。核实发现 src **无 alpha/sigma/ra/dec 上游赋值**(只 prediction 回填 ra/dec),RaDec 跟踪坐标来源在生产未接通(对应 README 星图/定标未完成);加 valid 标志无意义(无人设 true),修复需先实现上游坐标来源,属产品级未完成,推迟。

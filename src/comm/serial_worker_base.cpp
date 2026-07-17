@@ -47,6 +47,8 @@ void SerialWorkerBase::closeLocked() {
         m_workerThread.join();
     }
 
+    // worker 已 join,清空旧会话残留的半帧,防重连后与新字节拼接导致首帧丢失/误解码
+    m_rxAccumulator.clear();
     {
         std::lock_guard lock(m_sendMutex);
         m_sendRequested = false;
@@ -107,12 +109,15 @@ void SerialWorkerBase::workerLoop(std::stop_token token,
             onDataReceived(serialPort);
         }
 
+        bool sendRequested = false;
         {
             std::lock_guard lock(m_sendMutex);
-            if (m_sendRequested) {
-                m_sendRequested = false;
-                sendFrameInternal(serialPort);
-            }
+            sendRequested = m_sendRequested;
+            m_sendRequested = false;
+        }
+        // 锁外执行发送:sendFrameInternal 可能 m_bus.emit,持锁会与 requestSend() 重入死锁
+        if (sendRequested) {
+            sendFrameInternal(serialPort);
         }
 
         auto now = steady_clock::now();
