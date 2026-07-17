@@ -154,8 +154,8 @@ m_stopRequestedAfterLoad = false;
 
 ### 🟠 B2. `isMotionAngleAwayFromStars` 用 `atan` 丢象限
 
-- [ ] 改 `atan2` 并修正跨 ±π 的角度差比较
-- [ ] 补逆行目标用例
+- [x] 改 `atan2` + 环形角度差;移除随之 unused 的 `softDenominator`/`kSoftDenominatorOffset`(2026-07-17)
+- [ ] 补逆行目标专项用例(当前由 test_geo_tracker 19 项回归覆盖)
 
 **定位**:`src/tracking/geo_association.cpp:176-177`
 **方案**:
@@ -240,8 +240,8 @@ connect(display, &DisplayViewModel::imageStatsUpdated, statsLabel, [statsLabel](
 
 ### 🟠 B7. GEO 死目标无限累积
 
-- [ ] `trackTargets()` 遍历后 `std::erase_if` 移除死亡目标
-- [ ] 补长时间跟踪内存不涨用例
+- [ ] **推迟**:在 `trackTargets()` 末尾 `std::erase_if(!living)` 会让 4 个「终止目标」测试失败——它们经公开接口取 target 断言 `living=false`,erase 后取不到。简单每帧全清破坏「死目标可查」契约;需重新设计(如限制累积上限/保留近期死亡目标),不能直接 erase。
+- [ ] 重新设计后再补长时间跟踪内存不涨用例
 
 **定位**:`src/tracking/geo_tracker.cpp:202`(追加)、`210-246`(遍历)
 **方案**(循环外 erase,勿在遍历中):

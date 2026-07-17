@@ -17,7 +17,6 @@ inline constexpr float kGeoMotionConsistencyThreshold = 2.5F;
 inline constexpr float kStarLikeSpeedThreshold = 3.0F;
 inline constexpr double kGeoRaDecTrackingRadiusArcsec = 50.0;
 inline constexpr float kAngleAwayFromStarDegrees = 5.0F;
-inline constexpr float kSoftDenominatorOffset = 0.001F;
 [[nodiscard]] auto geoTrackingSpace(const Dss::Core::TrackingSettings& settings)
     -> GeoTrackingSpace {
     return settings.geoFullLeo ? GeoTrackingSpace::Frame : GeoTrackingSpace::RaDec;
@@ -161,10 +160,6 @@ inline constexpr float kSoftDenominatorOffset = 0.001F;
     return a + b + c - maxValue - minValue;
 }
 
-[[nodiscard]] auto softDenominator(float value) -> float {
-    return value < 0.0F ? value - kSoftDenominatorOffset : value + kSoftDenominatorOffset;
-}
-
 [[nodiscard]] bool isMotionStarLike(const Dss::Core::Vec2f& motion,
                                     const Dss::Core::Vec2f& starSpeed) {
     return std::abs(motion.x - starSpeed.x) < kStarLikeSpeedThreshold &&
@@ -173,10 +168,16 @@ inline constexpr float kSoftDenominatorOffset = 0.001F;
 
 [[nodiscard]] bool isMotionAngleAwayFromStars(const Dss::Core::Vec2f& motion,
                                               const Dss::Core::Vec2f& starSpeed) {
-    const auto motionAngle = std::atan(motion.x / softDenominator(motion.y));
-    const auto starAngle = std::atan(starSpeed.x / softDenominator(starSpeed.y));
-    return std::abs(motionAngle - starAngle) >
-           kAngleAwayFromStarDegrees * static_cast<float>(Dss::Core::DegToRad);
+    // atan2 保留全象限方向;atan(x/y) 会丢失象限(逆行目标被误判与恒星同向)
+    const auto motionAngle = std::atan2(motion.y, motion.x);
+    const auto starAngle = std::atan2(starSpeed.y, starSpeed.x);
+    // 角度差按环形距离计算,避免跨 ±π 边界误判
+    constexpr float kTwoPi = 2.0F * static_cast<float>(Dss::Core::Pi);
+    auto angularDiff = std::abs(motionAngle - starAngle);
+    if (angularDiff > static_cast<float>(Dss::Core::Pi)) {
+        angularDiff = kTwoPi - angularDiff;
+    }
+    return angularDiff > kAngleAwayFromStarDegrees * static_cast<float>(Dss::Core::DegToRad);
 }
 
 [[nodiscard]] auto makeAssociatedTarget(
