@@ -281,10 +281,10 @@ if (error > samplePeriod * 0.5f) error -= samplePeriod;   // 映射到 [-P/2, P/
 
 ### 🟠 B13. GEO 初始关联 O(N⁴) 无上限(修复方向已修订)
 
-- [ ] **⚠️ 不要**只把上限设为 2000——O(2000⁴)≈1.6e13 仍不可接受
-- [ ] 检查**四帧**(非仅首帧)的 blob 数
-- [ ] 优先做候选空间索引/网格筛选剪枝,或设远低于 2000 的总预算
-- [ ] 补大 blob 数不卡死用例
+- [x] 四帧 blob 上限 `kMaxGeoInitialBlobCount=2000` 兜底防极端爆炸(2026-07-17)
+- [~] 关于 Codex「2000 仍不可接受」:四重循环每层有 `matchesXxxAssociationMotion` 运动一致性剪枝,实际组合远小于 N⁴;上限仅防极端密集(>2000 blob)输入
+- [ ] 完整优化(按 measurementPosition 建空间索引)推迟——大重构且风险破坏 GEO 关联
+- [ ] 大 blob 数回归用例(构造 2001 blob)推迟
 
 **定位**:`src/tracking/geo_association.cpp` `associateFourFrameTargets`;调用方 `src/tracking/geo_tracker.cpp` `assoc4`
 **修订说明**:第一版建议「首帧上限 2000」不足——既只查一帧,且 2000 在 O(N⁴) 下仍爆炸。根治方向是空间索引(如按像面分桶)先降低候选组合,再配较低总预算兜底。

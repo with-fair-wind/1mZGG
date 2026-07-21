@@ -314,6 +314,16 @@ inline constexpr float kAngleAwayFromStarDegrees = 5.0F;
         frame3.targetBlobs.empty()) {
         return {};
     }
+    // 兜底:任一帧目标像斑过多时跳过初始关联,避免四重循环组合爆炸。
+    // 注:matchesXxxAssociationMotion 的运动一致性剪枝已使实际组合远小于 N^4,
+    // 此上限仅防极端密集输入;完整优化应对内层帧按 measurementPosition 建空间索引检索。
+    constexpr std::size_t kMaxGeoInitialBlobCount = 2000;
+    if (frame0.targetBlobs.size() > kMaxGeoInitialBlobCount ||
+        frame1.targetBlobs.size() > kMaxGeoInitialBlobCount ||
+        frame2.targetBlobs.size() > kMaxGeoInitialBlobCount ||
+        frame3.targetBlobs.size() > kMaxGeoInitialBlobCount) {
+        return {};
+    }
 
     const auto space = geoTrackingSpace(settings);
     const auto measurementSpace = candidateMeasurementSpace(space);
