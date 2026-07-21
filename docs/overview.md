@@ -298,7 +298,7 @@ flowchart TB
 
 | 对象 | 主要所有者 | 执行线程 | 启动入口 | 停止/析构 |
 |---|---|---|---|---|
-| `ApplicationContext` | `main` 栈对象 | Qt 主线程 | 构造/注册 | 析构断开 Logger，总线与 Registry 随后释放 |
+| `ApplicationContext` | `main` 栈对象 | Qt 主线程 | 构造/注册 | `shutdown()` 在 `exec()` 返回后调用:先退订组合根订阅(释放回调持有的服务引用)、再 `registry.clear()` 触发服务析构 stop+join worker;析构兜底再调 `shutdown()` |
 | 注册服务 | `ServiceRegistry` 中的 `shared_ptr` | 依服务而异 | UI 显式打开或启动 | ViewModel 关闭、服务析构兜底 |
 | `ImageSequenceFrameSource` | Registry/Coordinator 共享所有权 | `std::jthread` | `start()` | `stop()` 请求停止并 join |
 | `ImageProcessor` | Registry | `std::jthread` | `ReplayViewModel::startGrab()` | 先停帧源，再停处理器 |
@@ -313,7 +313,7 @@ flowchart TB
 ### 当前实现边界
 
 - 生命周期由对应 ViewModel 显式驱动，并由服务内部的标准库生命周期锁串行化启停。
-- RAW 帧从采集起使用 `shared_ptr<const vector<uint16_t>>` 跨处理、显示和存储共享；GPU 显示只接收 RAW 与 low/high，8 位网络图通过 `ImageReadyForSendEvent::imageFactory` 按需生成。
+- RAW 帧从采集起使用 `shared_ptr<const vector<uint16_t>>` 跨处理、显示和存储共享；GPU 显示只接收 RAW 与 low/high，8 位网络图通过 `ImageReadyForSendEvent::imageFactory` 按需生成;订阅回调仅入队 ImageSender 单槽,`imageFactory`(整图拉伸)在 ImageSender 工作线程调用,不占处理线程。
 - `ServoChannel::setTrackResult()` 可把目标换算成伺服修正量，但当前没有 `TrackResultEvent` 到该方法的自动桥接。
 - CUDA、OpenCV、Sapera 都是构建期开关；阅读某条调用链前先确认对应宏和 target 是否存在。
 - Storage 是逻辑模块但编译进 `dss_core`，不能按独立动态服务理解。

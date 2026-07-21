@@ -233,7 +233,7 @@ flowchart TD
     SEND --> EVENT["ImageSendCompletedEvent{frameSeq}"]
 ```
 
-ImageSender 只保留最新 pending 图像，不是无界队列；处理速度跟不上时旧待发图会被覆盖。`ImageProcessor` 发布 `ImageReadyForSendEvent`：无 RAW 时直接携带共享 8 位缓冲，有 RAW 时携带延迟图像工厂。`ApplicationContext` 仅在发送服务已打开时执行工厂并调用 `sendImage()`；全部分片成功提交后才发布对应帧序号的 `ImageSendCompletedEvent`。
+ImageSender 只保留最新 pending 图像(单槽)，不是无界队列；处理速度跟不上时旧待发图会被覆盖。`ImageProcessor` 发布 `ImageReadyForSendEvent`：无 RAW 时直接携带共享 8 位缓冲，有 RAW 时携带延迟图像工厂。`ApplicationContext` 订阅回调仅在发送服务已打开时调 `submitForSend()`(image + imageFactory 入单槽),**不执行工厂**;`imageFactory`(整图拉伸)在 ImageSender 工作线程按需调用,不占 ImageProcessor 处理线程(B10)。全部分片成功提交后才发布对应帧序号的 `ImageSendCompletedEvent`。
 
 ### 跟踪结果到 GXTC/GDCL
 

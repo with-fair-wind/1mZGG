@@ -252,19 +252,20 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    WAIT["workerLoop: waitForReadyRead(20ms)"] --> READ["onDataReceived"]
-    READ --> SIZE{"bytesAvailable >= recvFrameSize"}
-    SIZE -->|"否"| LOOP["返回循环"]
-    SIZE -->|"是"| CHUNK["按固定长度 read"]
-    CHUNK --> VALID["FrameCodec::validateDetailed"]
-    VALID -->|"头/尾/长度正确"| DECODE["派生类 decodeFrame"]
-    VALID -->|"失败"| FE["SerialFrameErrorEvent"]
+    WAIT["workerLoop: waitForReadyRead(20ms)"] --> READ["onDataReceived: readAll 追加到累积缓冲"]
+    READ --> DRAIN["drainBufferedFrames 反复取完整帧"]
+    DRAIN --> SCAN{"首字节 == 0x7E?"}
+    SCAN -->|"否"| SYNC["扫描下一个 0x7E 丢弃失步前缀"]
+    SCAN -->|"是"| TAKE["取 recvFrameSize 字节一帧"]
+    TAKE --> VALID["FrameCodec::validateDetailed"]
+    VALID -->|"头/尾/长度正确"| DECODE["派生类 decodeFrame + 消费整帧"]
+    VALID -->|"失败"| DROP["丢首字节滑窗 + SerialFrameErrorEvent"]
     DECODE -->|"字段合法"| DOMAIN["发布领域事件/更新缓存"]
     DECODE -->|"BCD/范围等错误"| DE["SerialDecodeErrorEvent"]
     DOMAIN --> FPS["recvCount++"]
 ```
 
-基础层只做定长帧和首尾字节校验；字段范围由 `serial_protocol_codec.h` 详细解码器检查。当前读取按固定块切分，不包含从噪声流中扫描帧头的重同步状态机，线路丢字节后可能连续错位，属于硬件联调重点。
+基础层做定长帧和首尾字节校验；字段范围由 `serial_protocol_codec.h` 详细解码器检查。接收采用**流式重同步状态机**(A3):`onDataReceived` 用 `readAll` 把字节追加到 `m_rxAccumulator`,再 `drainBufferedFrames` 反复取完整帧——首字节非帧头时向前扫描到下一个 `0x7E` 丢弃失步前缀(静默对齐),帧头对齐但尾校验失败时丢首字节逐步滑窗重同步;跨 `waitForReadyRead` 边界累积半帧,`close()` 时清空缓冲防重连拼接。发送侧 `sendFrameInternal` 循环写完整帧(部分写续写),`write<=0` 发布 `SerialFrameErrorEvent` 且不递增计数,发送在 `m_sendMutex` 锁外执行避免 `emit` 与 `requestSend` 重入死锁(B4)。
 
 ### 发送调用栈
 
@@ -330,6 +331,6 @@ flowchart LR
 
 端口名和波特率来自 `Config::comm()`，UI 可编辑并保存；应用修改配置时会先关闭已打开通道，避免在运行中替换端口参数。新增协议应先增加 `SerialProtocol` layout 和 codec 测试，再实现薄 Channel，最后注册接口和 UI。
 
-重点测试：`test_frame_codec.cpp`、`test_serial_protocol_codec.cpp`、`test_serial_port_view_model.cpp`、`test_application_context_services.cpp`。真实串口还需覆盖断线、噪声错位、半帧、持续高频发送和关闭竞态。
+重点测试：`test_frame_codec.cpp`、`test_serial_protocol_codec.cpp`、`test_serial_port_view_model.cpp`、`test_application_context_services.cpp`。流式重同步(连续帧/垃圾字节/尾错/跨读取半帧/close 清缓存)已有单元测试覆盖(`test_application_context_services` 的 `SerialResync` 套);真实串口仍需硬件验证断线、持续高频发送和关闭竞态。
 
 推荐源码顺序：`i_serial_channel.h` → `frame_codec.h` → `serial_protocol_codec.h` / detail → `serial_command_interfaces.h` → `serial_worker_base.*` → 四个 Channel → App 注册 → `SerialPortViewModel` 和通信面板。

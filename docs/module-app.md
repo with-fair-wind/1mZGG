@@ -272,6 +272,7 @@ stateDiagram-v2
 
 - 实际生命周期由 ViewModel 的业务命令驱动；Registry 中对象析构时，各具体服务仍以 `close()` / `stop()` 兜底。
 - `open/close` 与 `start/stop` 由服务内部生命周期锁串行化，周期线程使用可由 `stop_token` 中断的等待。
+- **关机顺序(A1)**:`main()` 在 `QApplication::exec()` 返回后、栈对象析构前调 `ApplicationContext::shutdown()`(`~ApplicationContext` 兜底再调)——先 `m_connections.clear()` 退订组合根订阅(释放回调持有的 `imageSender`/`trackDataStorage` 引用),再 `m_registry.clear()` 触发服务析构级联(frame source 析构 stop 帧线程 → 释放 frame callback 持有的 `imageProcessor`/`localImageStorage` → 它们析构 stop worker;其余服务直接析构 stop/close)。目的:确保 ViewModel 析构期间无 worker emit,避免事件总线 COW 快照命中半析构对象导致 use-after-free。
 
 ### 线程、错误与诊断
 
