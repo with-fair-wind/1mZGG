@@ -1,6 +1,6 @@
 # oldsrc → 新架构迁移状态
 
-> 最近更新：2026-06-21。
+> 最近更新：2026-07-22。
 >
 > `oldsrc/` 已转为只读归档，不参与 CMake 构建，也不再作为新功能或缺陷修复的落点。行为差异以现代模块测试和 `tests/fixtures/tracking/` 黄金数据为准。
 
@@ -62,7 +62,7 @@ Sapera/CUDA 的命令、门槛和结果回填表见 [硬件验证](hardware-vali
 
 ## 当前验收基线
 
-- 默认无 Sapera、无 CUDA 的 `clang-cl-debug` 构建：218/218 CTest 通过。
+- 默认无 Sapera、无 CUDA 的 `clang-cl-debug` 构建：230/230 CTest 通过(含本次会话新增的关机生命周期、串口流式重同步、close→open 回归、RaDec 南天边界等测试)。
 - Sapera 和 CUDA 都是显式启用能力，默认配置必须继续保持无硬件安全。
 - 硬件验收未执行前，不把 Sapera 标记为“硬件验证完成”，也不在 UI 暴露 CUDA 模式。
 

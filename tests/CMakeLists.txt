@@ -12,7 +12,9 @@ endfunction()
 
 function(dss_add_test TEST_NAME TEST_SOURCE)
     dss_configure_test_target(${TEST_NAME} ${TEST_SOURCE} ${ARGN})
-    gtest_discover_tests(${TEST_NAME})
+    # PRE_TEST:ctest 运行时再 discover,规避 Windows POST_BUILD 在构建子进程
+    # 跑测试 exe 时偶发的空输出(JSON 解析失败)——exe 本身正常(直接运行 OK)
+    gtest_discover_tests(${TEST_NAME} DISCOVERY_MODE PRE_TEST)
 endfunction()
 
 function(dss_add_qt_test TEST_NAME TEST_SOURCE)
