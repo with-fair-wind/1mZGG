@@ -1,6 +1,7 @@
 #pragma once
 
 #include <bit>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -66,12 +67,17 @@ namespace Detail {
     constexpr size_t humidityOffset = temperatureOffset + sizeof(double);
     constexpr size_t pressureOffset = humidityOffset + sizeof(double);
 
-    return AtmosSample{
+    const auto sample = AtmosSample{
         .frameHead = Detail::readI32Le(data, 0),
         .temperature = Detail::readDoubleLe(data, temperatureOffset),
         .humidity = Detail::readDoubleLe(data, humidityOffset),
         .pressure = Detail::readDoubleLe(data, pressureOffset) * 100.0,
     };
+    if (!std::isfinite(sample.temperature) || !std::isfinite(sample.humidity) ||
+        !std::isfinite(sample.pressure)) {
+        return std::nullopt;
+    }
+    return sample;
 }
 
 }  // namespace Dss::Network

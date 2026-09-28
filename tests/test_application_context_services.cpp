@@ -15,6 +15,7 @@
 #include "dss/acquisition/source/i_frame_source.h"
 #include "dss/acquisition/source/image_sequence_frame_source.h"
 #include "dss/app/application_context.h"
+#include "dss/app/replay_session.h"
 #include "dss/app/track_result_data_exchange_bridge.h"
 #include "dss/comm/channel/serial_worker_base.h"
 #include "dss/comm/port/i_serial_channel.h"
@@ -104,13 +105,23 @@ class ResyncSerialWorker final : public Dss::Comm::SerialWorkerBase {
 public:
     using SerialWorkerBase::SerialWorkerBase;
 
-    void feedBytes(std::span<const std::uint8_t> bytes) { processReceivedBytes(bytes); }
-    [[nodiscard]] int decodedCount() const { return m_decoded; }
+    void feedBytes(std::span<const std::uint8_t> bytes) {
+        processReceivedBytes(bytes);
+    }
+    [[nodiscard]] int decodedCount() const {
+        return m_decoded;
+    }
 
 protected:
-    [[nodiscard]] auto recvFrameSize() const -> std::size_t override { return 6U; }
-    [[nodiscard]] auto sendFrameSize() const -> std::size_t override { return 0U; }
-    [[nodiscard]] auto channelName() const -> std::string_view override { return "test"; }
+    [[nodiscard]] auto recvFrameSize() const -> std::size_t override {
+        return 6U;
+    }
+    [[nodiscard]] auto sendFrameSize() const -> std::size_t override {
+        return 0U;
+    }
+    [[nodiscard]] auto channelName() const -> std::string_view override {
+        return "test";
+    }
 
     void decodeFrame(std::span<const std::uint8_t> data) override {
         ++m_decoded;
@@ -228,6 +239,9 @@ TEST(ApplicationContextServices, RegistersCommunicationServicesWithoutOpeningPor
     const auto imageSequenceSource =
         context.registry().get<Dss::Acquisition::ImageSequenceFrameSource>("replay_source");
 
+    const auto replaySession = context.registry().get<Dss::App::ReplaySession>("replay_session");
+    ASSERT_NE(replaySession, nullptr);
+    EXPECT_EQ(replaySession->snapshot().state, Dss::App::ReplaySession::State::Idle);
     ASSERT_NE(imageProcessor, nullptr);
     ASSERT_NE(replaySource, nullptr);
     ASSERT_NE(imageSequenceSource, nullptr);
@@ -365,15 +379,71 @@ TEST(ApplicationContextServices, ConfiguresRotatingLoggerAfterLoadingConfig) {
 TEST(ApplicationContextServices, ShutdownClearsRegistryAndIsIdempotent) {
     Dss::App::ApplicationContext context;
     context.registerCommunicationServices();
+    auto replaySession = context.registry().get<Dss::App::ReplaySession>("replay_session");
     EXPECT_NE(context.registry().tryGet<Dss::Processing::ImageProcessor>("image_processor"),
               nullptr);
 
     context.shutdown();
 
+    EXPECT_EQ(replaySession->snapshot().state, Dss::App::ReplaySession::State::Closed);
+    EXPECT_FALSE(replaySession->start());
     EXPECT_EQ(context.registry().tryGet<Dss::Processing::ImageProcessor>("image_processor"),
               nullptr);
     // 幂等:重复显式调用 + 析构兜底调用均不应崩溃
     context.shutdown();
+}
+
+TEST(ApplicationContextServices, ShutdownStopsWorkersEvenWhenClientsRetainServices) {
+    Dss::App::ApplicationContext context;
+    context.registerCommunicationServices();
+    auto processor = context.registry().get<Dss::Processing::ImageProcessor>("image_processor");
+    auto storage =
+        context.registry().get<Dss::Storage::TrackDataStorageBackend>("track_data_storage");
+    ASSERT_TRUE(storage->init(tempContextTrackStorageDir()).has_value());
+    ASSERT_TRUE(storage->start().has_value());
+    processor->start();
+
+    context.shutdown();
+
+    EXPECT_FALSE(processor->isRunning());
+    EXPECT_FALSE(storage->isRunning());
+    EXPECT_FALSE(processor->submitFrame({}));
+    context.shutdown();
+}
+
+TEST(ApplicationContextServices, ShutdownKeepsSubscribersAliveUntilInFlightCallbackReturns) {
+    Dss::App::ApplicationContext context;
+    context.registerCommunicationServices();
+    auto processor = context.registry().get<Dss::Processing::ImageProcessor>("image_processor");
+    std::weak_ptr<Dss::App::TrackResultDataExchangeBridge> bridge =
+        context.registry().get<Dss::App::TrackResultDataExchangeBridge>(
+            "track_result_data_exchange_bridge");
+    std::promise<void> entered;
+    auto enteredFuture = entered.get_future();
+    std::promise<void> release;
+    auto releaseFuture = release.get_future().share();
+    auto connection = context.bus().subscribe<Dss::Core::ProcessingCompleteEvent>([&](const auto&) {
+        entered.set_value();
+        releaseFuture.wait();
+    });
+    processor->start();
+    ASSERT_TRUE(processor->submitFrame({}));
+    const auto reached = enteredFuture.wait_for(std::chrono::seconds{2});
+    if (reached != std::future_status::ready) {
+        release.set_value();
+        processor->stop();
+        FAIL() << "processing callback was not reached";
+    }
+    auto shutdown = std::async(std::launch::async, [&] { context.shutdown(); });
+    // 等待是对“不能越过在途回调”的有界断言，派发顺序由 promise 控制。
+    const auto state = shutdown.wait_for(std::chrono::milliseconds{100});
+    const auto subscriberAlive = !bridge.expired();
+    release.set_value();
+    shutdown.get();
+    EXPECT_EQ(state, std::future_status::timeout);
+    EXPECT_TRUE(subscriberAlive);
+    EXPECT_TRUE(bridge.expired());
+    EXPECT_FALSE(processor->isRunning());
 }
 
 TEST(ApplicationContextServices, ShutdownStopsRunningWorkersBeforeDestruction) {
@@ -439,7 +509,7 @@ TEST(SerialResync, BuffersPartialFrameAcrossFeeds) {
     worker.feedBytes({frame.data(), 3});  // 前半(不足一帧)
     EXPECT_EQ(worker.decodedCount(), 0);
     worker.feedBytes({frame.data() + 3, frame.size() - 3});  // 后半
-    EXPECT_EQ(worker.decodedCount(), 1);  // 拼成完整帧后解码
+    EXPECT_EQ(worker.decodedCount(), 1);                     // 拼成完整帧后解码
 }
 
 TEST(SerialResync, ClearsAccumulatorOnCloseBeforeNextSession) {

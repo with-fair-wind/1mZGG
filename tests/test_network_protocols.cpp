@@ -1,6 +1,7 @@
 #include <bit>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <string>
 #include <vector>
@@ -10,7 +11,6 @@
 
 #include "dss/network/protocol/atmos_protocol.h"
 #include "dss/network/protocol/diagnostic_protocol.h"
-
 namespace {
 
 void appendI32Le(std::vector<uint8_t>& packet, int32_t value) {
@@ -76,4 +76,18 @@ TEST(DiagnosticProtocol, BuildsLegacyDpsStatusJson) {
     EXPECT_EQ(json.at("DPS002").get<int>(), 1);
     EXPECT_EQ(json.at("DPS003").get<int>(), 0);
     EXPECT_EQ(json.at("DPS004").get<int>(), 1);
+}
+
+TEST(AtmosProtocol, RejectsNonFiniteWeatherValues) {
+    for (const auto value :
+         {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity()}) {
+        for (int invalidField = 0; invalidField < 3; ++invalidField) {
+            std::vector<uint8_t> packet;
+            appendI32Le(packet, 0x12345678);
+            for (int field = 0; field < 3; ++field) {
+                appendDoubleLe(packet, field == invalidField ? value : 1.0);
+            }
+            EXPECT_FALSE(Dss::Network::decodeAtmosPacket(packet));
+        }
+    }
 }

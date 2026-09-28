@@ -166,7 +166,8 @@ TEST(ScTracker, ContinuesVerifiedTargetOnNextFrame) {
     ASSERT_EQ(targets.size(), 1U);
     const auto& target = targets.front();
     EXPECT_TRUE(target.living);
-    ASSERT_EQ(target.frameInfos.size(), 5U);
+    ASSERT_EQ(target.frameInfos.size(), 4U);
+    EXPECT_EQ(target.totalFrameCount(), 5U);
     EXPECT_EQ(target.frameInfos.back().frameSeq, 5U);
     EXPECT_TRUE(target.frameInfos.back().valid);
     EXPECT_FLOAT_EQ(target.frameInfos.back().measuredBlob.area, 12.0F);
@@ -198,4 +199,41 @@ TEST(ScTracker, DropsTrackedTargetAfterMissAndCanRediscover) {
     EXPECT_EQ(target.frameInfos.back().frameSeq, 8U);
     EXPECT_NEAR(target.predictedPosFrame.x, 3066.0F, 1.0e-5F);
     EXPECT_NEAR(target.predictedPosFrame.y, 3066.0F, 1.0e-5F);
+}
+
+TEST(ScTracker, LongTrackBoundsHistoryAndRediscoversAfterLoss) {
+    auto settings = makeSettings();
+    settings.numFramesLiving = 100;
+    Dss::Tracking::ScTracker tracker(settings);
+    std::string id;
+    for (std::uint64_t seq = 1; seq <= 1000; ++seq) {
+        const auto index = static_cast<float>(seq - 1);
+        const auto targets =
+            tracker.track(makeFrame(seq, makeBlob(3060 + index / 128, 3060 + index / 64,
+                                                  1 + index * 0.01F, 2 + index * 0.01F)));
+        if (seq < 3) {
+            ASSERT_TRUE(targets.empty());
+            continue;
+        }
+        ASSERT_EQ(targets.size(), 1U) << "seq=" << seq;
+        const auto& target = targets.front();
+        if (seq == 3)
+            id = target.targetId;
+        ASSERT_TRUE(target.living);
+        ASSERT_EQ(target.targetId, id);
+        ASSERT_EQ(target.totalFrameCount(), seq);
+        ASSERT_LE(target.frameInfos.size(), 4U);
+        ASSERT_FLOAT_EQ(target.validity, 1.0F);
+    }
+    EXPECT_TRUE(tracker.track(makeFrame(1001, std::vector<Dss::Core::MeasuredBlob>{})).empty());
+    for (std::uint64_t seq = 1002; seq <= 1005; ++seq) {
+        const auto index = static_cast<float>(seq - 1002);
+        const auto targets = tracker.track(makeFrame(
+            seq, makeBlob(3060 + index, 3060 + index, 1 + index * 0.01F, 2 + index * 0.01F)));
+        if (seq == 1005) {
+            ASSERT_EQ(targets.size(), 1U);
+            EXPECT_EQ(targets.front().totalFrameCount(), 4U);
+            EXPECT_EQ(targets.front().discardedFrameCount, 0U);
+        }
+    }
 }

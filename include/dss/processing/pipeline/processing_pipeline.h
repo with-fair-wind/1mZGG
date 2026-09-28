@@ -15,6 +15,8 @@ public:
      * @param backend 处理策略实例的所有权
      */
     void setBackend(std::unique_ptr<IProcessingStrategy> backend);
+    /// 清除后端的跨帧历史，保留策略和参数。
+    void reset();
 
     /**
      * @brief 处理单帧图像

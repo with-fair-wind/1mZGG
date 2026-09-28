@@ -8,10 +8,13 @@
 #include <string>
 #include <vector>
 
-#include "dss/tracking/support/candidate_utils.h"
 #include "dss/tracking/strategy/geo_tracker.h"
+#include "dss/tracking/support/candidate_utils.h"
 
 namespace Dss::Tracking::GeoDetail {
+
+/// GEO 搜索半径失配统计的窗口；历史保留容量必须覆盖此值。
+inline constexpr int kGeoTrackingInvalidSearchWindow = 10;
 
 enum class GeoTrackingSpace {
     Frame,

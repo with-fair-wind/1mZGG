@@ -37,6 +37,8 @@ inline constexpr std::string_view imageProcessor = "image_processor";
 inline constexpr std::string_view frameSource = "frame_source";
 /** @brief 回放序列帧源服务名。 */
 inline constexpr std::string_view replaySource = "replay_source";
+/** @brief 回放生命周期编排服务名。 */
+inline constexpr std::string_view replaySession = "replay_session";
 /** @brief 本地图像存储服务名。 */
 inline constexpr std::string_view imageStorage = "image_storage";
 /** @brief 跟踪数据存储服务名。 */

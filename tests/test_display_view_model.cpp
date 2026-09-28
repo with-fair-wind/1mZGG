@@ -3,6 +3,7 @@
 #include <QSize>
 #include <cstdint>
 #include <memory>
+#include <thread>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -58,6 +59,134 @@ TEST(DisplayViewModel, AppliesDisplayStretchSettingsToImageProcessor) {
     settings = processor->displayStretchSettings();
     EXPECT_EQ(settings.low, 1000U);
     EXPECT_EQ(settings.high, 5000U);
+}
+
+TEST(DisplayViewModel, SlowUiRetainsOnlyLatestPendingFrame) {
+    QCoreApplicationFixture app;
+    MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    Dss::Ui::DisplayViewModel display({.bus = bus, .registry = registry});
+    int count = 0;
+    int lastPixel = -1;
+    QObject::connect(&display, &Dss::Ui::DisplayViewModel::displayImageReady, &display,
+                     [&](const QImage& image) {
+                         ++count;
+                         lastPixel = grayPixel(image, 0, 0);
+                     });
+    std::vector<std::weak_ptr<const std::vector<std::uint16_t>>> buffers;
+    std::jthread producer([&] {
+        for (int index = 0; index < 100; ++index) {
+            auto raw = std::make_shared<const std::vector<std::uint16_t>>(1, index);
+            buffers.push_back(raw);
+            auto image = std::make_shared<const std::vector<std::uint8_t>>(1, index);
+            bus.emit(Dss::Core::DisplayRefreshEvent{static_cast<std::uint64_t>(index), 1, 1, 1,
+                                                    image, raw});
+        }
+    });
+    producer.join();  // UI 未处理事件，生产线程已经投递 100 帧。
+    int alive = 0;
+    for (const auto& buffer : buffers) {
+        alive += !buffer.expired();
+    }
+    EXPECT_EQ(alive, 1);
+    EXPECT_EQ(count, 0);
+    QCoreApplication::processEvents();
+    EXPECT_EQ(count, 1);
+    EXPECT_EQ(lastPixel, 99);
+}
+
+TEST(DisplayViewModel, SessionResetDiscardsQueuedOldFrame) {
+    QCoreApplicationFixture app;
+    MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    Dss::Ui::DisplayViewModel display({.bus = bus, .registry = registry});
+    int count = 0;
+    QObject::connect(&display, &Dss::Ui::DisplayViewModel::displayImageReady, &display,
+                     [&](const QImage&) { ++count; });
+    std::jthread producer([&] {
+        auto image = std::make_shared<const std::vector<std::uint8_t>>(1, 42);
+        bus.emit(Dss::Core::DisplayRefreshEvent{1, 1, 1, 1, image, nullptr});
+    });
+    producer.join();
+    bus.emit(Dss::Core::ProcessingSessionResetEvent{});
+    QCoreApplication::processEvents();
+    EXPECT_EQ(count, 0);
+}
+
+TEST(DisplayViewModel, ResetDuringFrameDeliveryDiscardsOldStatsAndAcceptsNewFrame) {
+    for (const bool rawMode : {false, true}) {
+        QCoreApplicationFixture app;
+        MessageBus bus;
+        Dss::Core::ServiceRegistry registry;
+        Dss::Ui::DisplayViewModel display({.bus = bus, .registry = registry});
+        display.setRawDisplayEnabled(rawMode);
+        int deliveredFrames = 0;
+        std::vector<double> deliveredStats;
+        const auto publishFrame = [&](std::uint64_t sequence, std::uint16_t value) {
+            Dss::Core::DisplayRefreshEvent event{};
+            event.frameSeq = sequence;
+            event.width = event.height = event.stride = 1;
+            event.rawImage = std::make_shared<const std::vector<std::uint16_t>>(1, value);
+            event.displayImage = std::make_shared<const std::vector<std::uint8_t>>(1, value);
+            event.displayStretchWindowValid = true;
+            event.displayStretchHigh = 255;
+            bus.emit(event);
+            Dss::Core::ImageStats stats{};
+            stats.avg = value;
+            bus.emit(Dss::Core::ProcessingCompleteEvent{sequence, stats});
+        };
+        const auto onFrame = [&] {
+            if (++deliveredFrames == 1) {
+                // Like ReplaySession, reset on a worker while the UI batch is in flight.
+                std::jthread resetter([&] {
+                    bus.emit(Dss::Core::ProcessingSessionResetEvent{});
+                    publishFrame(0, 99);
+                });
+                resetter.join();
+                EXPECT_EQ(display.resourceSnapshot().activeItems, 0U);
+            }
+        };
+        QObject::connect(&display, &Dss::Ui::DisplayViewModel::displayImageReady, &display,
+                         [&](const QImage&) { onFrame(); });
+        QObject::connect(&display, &Dss::Ui::DisplayViewModel::rawDisplayFrameReady, &display,
+                         [&](auto, auto, auto, auto, auto, auto) { onFrame(); });
+        QObject::connect(&display, &Dss::Ui::DisplayViewModel::imageStatsUpdated, &display,
+                         [&](auto, auto, double avg, auto) { deliveredStats.push_back(avg); });
+        std::jthread producer([&] { publishFrame(12, 42); });
+        producer.join();
+        QCoreApplication::processEvents();
+        QCoreApplication::processEvents();
+        EXPECT_EQ(deliveredFrames, 2);
+        EXPECT_EQ(deliveredStats, std::vector<double>{99});
+        EXPECT_EQ(display.resourceSnapshot().activeItems, 1U);
+        display.clearCurrentDisplayFrame();
+        EXPECT_EQ(display.resourceSnapshot().activeItems, 0U);
+    }
+}
+
+TEST(DisplayViewModel, ResetDuringStretchStatsPreventsOldImageRedraw) {
+    QCoreApplicationFixture app;
+    MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    auto processor = std::make_shared<Dss::Processing::ImageProcessor>(bus);
+    registry.registerService<Dss::Processing::ImageProcessor>("image_processor", processor);
+    Dss::Ui::DisplayViewModel display({.bus = bus, .registry = registry});
+    ASSERT_TRUE(display.applyDisplayStretch(false, 1000, 5000));
+    auto raw = std::make_shared<const std::vector<std::uint16_t>>(4, 2000);
+    bus.emit(Dss::Core::DisplayRefreshEvent{1, 2, 2, 2, nullptr, raw});
+    int redraws = 0;
+    int stats = 0;
+    QObject::connect(&display, &Dss::Ui::DisplayViewModel::displayImageReady, &display,
+                     [&](const QImage&) { ++redraws; });
+    QObject::connect(&display, &Dss::Ui::DisplayViewModel::imageStatsUpdated, &display,
+                     [&](auto, auto, auto, auto) {
+                         ++stats;
+                         bus.emit(Dss::Core::ProcessingSessionResetEvent{});
+                     });
+    ASSERT_TRUE(display.applyDisplayStretch(true, 1000, 5000));
+    EXPECT_EQ(stats, 1);
+    EXPECT_EQ(redraws, 0);
+    EXPECT_EQ(display.resourceSnapshot().activeItems, 0U);
 }
 
 TEST(DisplayViewModel, RebuildsCurrentDisplayWhenStretchSettingsChange) {
@@ -210,4 +339,37 @@ TEST(DisplayViewModel, RawDisplayModeEmitsRawFrameAndSkipsCpuRebuildOnStretchCha
 
     QObject::disconnect(imageConnection);
     QObject::disconnect(rawConnection);
+}
+
+TEST(DisplayViewModel, ResourcesCountRetainedCapacityAndClearCachedRaw) {
+    QCoreApplicationFixture app;
+    MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    Dss::Ui::DisplayViewModel display({.bus = bus, .registry = registry});
+    std::jthread producer([&] {
+        for (int index = 0; index < 3; ++index) {
+            std::vector<std::uint16_t> raw(1, 1);
+            raw.reserve(16);
+            Dss::Core::DisplayRefreshEvent event{};
+            event.width = 1;
+            event.height = 1;
+            event.stride = 1;
+            event.rawImage = std::make_shared<const std::vector<std::uint16_t>>(std::move(raw));
+            bus.emit(event);
+        }
+    });
+    producer.join();
+    auto snapshot = display.resourceSnapshot();
+    EXPECT_EQ(snapshot.queuedItems, 1U);
+    EXPECT_EQ(snapshot.queuedBytes, 32U);
+    EXPECT_EQ(snapshot.replacedItems, 2U);
+    QCoreApplication::processEvents();
+    snapshot = display.resourceSnapshot();
+    EXPECT_EQ(snapshot.queuedBytes, 0U);
+    EXPECT_EQ(snapshot.activeBytes, 32U);
+    EXPECT_EQ(snapshot.completedItems, 1U);
+    display.clearCurrentDisplayFrame();
+    snapshot = display.resourceSnapshot();
+    EXPECT_EQ(snapshot.activeBytes, 0U);
+    EXPECT_EQ(snapshot.peakQueuedBytes, 32U);
 }

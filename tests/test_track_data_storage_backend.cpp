@@ -61,6 +61,26 @@ TEST(TrackDataStorageBackend, RejectsEnqueueBeforeWorkerStarts) {
     EXPECT_FALSE(backend.enqueueTrackResult(trackEvent()).has_value());
 }
 
+TEST(TrackDataStorageBackend, ArchivesFinalValidMeasurementAndIgnoresEmptySnapshot) {
+    const auto dir = tempTrackStorageDir();
+    Dss::Storage::TrackDataStorageBackend backend(dir);
+    ASSERT_TRUE(backend.init(dir));
+    ASSERT_TRUE(backend.start());
+    auto event = trackEvent();
+    event.targets.front().living = false;
+    ASSERT_TRUE(backend.enqueueTrackResult(event));
+    ASSERT_TRUE(backend.enqueueTrackResult({124, {}}));
+    event.targets.front().frameInfos.back().valid = false;
+    ASSERT_TRUE(backend.enqueueTrackResult(event));
+    backend.stop();
+    EXPECT_EQ(backend.successfulWrites(), 1U);
+    std::ifstream input(backend.outputPath());
+    std::string line;
+    ASSERT_TRUE(static_cast<bool>(std::getline(input, line)));
+    EXPECT_FALSE(line.empty());
+    EXPECT_FALSE(static_cast<bool>(std::getline(input, line)));
+}
+
 TEST(TrackDataStorageBackend, RejectsEnqueueWhenQueueIsFullAndCountsDrop) {
     auto dir = tempTrackStorageDir();
     Dss::Storage::TrackDataStorageBackend backend(dir, 0);
@@ -116,4 +136,26 @@ TEST(TrackDataStorageBackend, WritesConfiguredGaeSessionFile) {
     EXPECT_FALSE(readAllText(backend.outputPath()).empty());
     EXPECT_EQ(backend.successfulWrites(), 1U);
     EXPECT_EQ(backend.failedWrites(), 0U);
+}
+
+TEST(TrackDataStorageBackend, RejectsOldGenerationAfterSessionSwitch) {
+    const auto dir = tempTrackStorageDir();
+    Dss::Storage::TrackDataStorageBackend backend(dir);
+    ASSERT_TRUE(backend.init(dir));
+    Dss::Storage::ImageStorageNaming naming{};
+    naming.startTime = "first";
+    naming.targetId = "1";
+    ASSERT_TRUE(backend.configureSession(naming));
+    ASSERT_TRUE(backend.start());
+    const auto generation = backend.sessionGeneration();
+    backend.requestStop();
+    EXPECT_FALSE(backend.configureSession(naming));
+    backend.stop();
+    naming.startTime = "second";
+    ASSERT_TRUE(backend.configureSession(naming));
+    ASSERT_TRUE(backend.start());
+    EXPECT_FALSE(backend.enqueueTrackResult(trackEvent(), generation));
+    EXPECT_TRUE(backend.enqueueTrackResult(trackEvent(), backend.sessionGeneration()));
+    backend.stop();
+    EXPECT_EQ(backend.successfulWrites(), 1U);
 }

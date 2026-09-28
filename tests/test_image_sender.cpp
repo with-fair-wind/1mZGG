@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <future>
 #include <memory>
+#include <stdexcept>
 #include <thread>
 #include <vector>
 
@@ -140,4 +141,28 @@ TEST(ImageSender, PublishesCompletedEventWithSubmittedFrameSequence) {
     ASSERT_EQ(completedFuture.wait_for(2s), std::future_status::ready);
     EXPECT_EQ(completedFuture.get().frameSeq, 77U);
     sender.close();
+}
+
+TEST(ImageSender, FactoryFailureReleasesPendingAndActiveResources) {
+    Dss::Core::MessageBus bus;
+    Dss::Network::ImageSender sender(bus);
+    std::promise<void> failed;
+    auto future = failed.get_future();
+    auto connection = bus.subscribe<Dss::Core::BackgroundTaskErrorEvent>(
+        [&](const auto&) { failed.set_value(); });
+    ASSERT_TRUE(sender.open(
+        {.localIp = "127.0.0.1", .localPort = 0, .remoteIp = "127.0.0.1", .remotePort = 9}));
+    sender.submitForSend(
+        1, {},
+        []() -> std::shared_ptr<const std::vector<std::uint8_t>> {
+            throw std::runtime_error("factory failure");
+        },
+        2, 2, 8);
+    EXPECT_EQ(future.wait_for(2s), std::future_status::ready);
+    sender.close();
+    auto snapshot = sender.resourceSnapshot();
+    EXPECT_EQ(snapshot.activeBytes, 0U);
+    EXPECT_EQ(snapshot.queuedBytes, 0U);
+    EXPECT_EQ(snapshot.activeItems, 0U);
+    EXPECT_EQ(snapshot.completedItems, 0U);
 }

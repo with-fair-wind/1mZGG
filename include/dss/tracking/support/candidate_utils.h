@@ -117,7 +117,8 @@ struct MeasurementReuseRule {
  * @param second 第二个候选目标。
  * @param rule 初始候选目标去重规则。
  * @param space 测量点比较所使用的坐标空间。
- * @return 若存在同一初始帧索引下的相同测量则返回 true。
+ * @return 若存在同一初始帧索引下的相同测量则返回 true；任一目标已裁剪时返回 false。
+ * @note 初始候选保持完整；已裁剪在线目标的重叠检查应使用最近帧接口。
  */
 [[nodiscard]] bool sharesInitialMeasurementAtSameFrameIndex(const Core::TargetInfo& first,
                                                             const Core::TargetInfo& second,
@@ -129,7 +130,7 @@ struct MeasurementReuseRule {
  * @param first 第一个候选目标
  * @param second 第二个候选目标
  * @param rule 去重规则（指定比对帧数）
- * @return 若存在同帧同质心则返回 true
+ * @return 若存在同帧同质心则返回 true；任一目标已裁剪时返回 false。
  */
 [[nodiscard]] bool sharesInitialCentroidAtSameFrameIndex(const Core::TargetInfo& first,
                                                          const Core::TargetInfo& second,

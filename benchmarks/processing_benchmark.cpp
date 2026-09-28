@@ -40,8 +40,7 @@ int main() {
     constexpr uint32_t width = 6144;
     constexpr uint32_t height = 6144;
     constexpr int measuredFrames = 10;
-    constexpr std::size_t bytesPerCudaPixel =
-        sizeof(uint16_t) + 2 * sizeof(uint8_t);
+    constexpr std::size_t bytesPerCudaPixel = sizeof(uint16_t) + 2 * sizeof(uint8_t);
 
     auto cuda = Dss::Processing::createCudaProcessingStrategy();
     if (!cuda) {
@@ -52,15 +51,16 @@ int main() {
     Dss::Processing::FramePacket packet{};
     packet.width = width;
     packet.height = height;
-    packet.rawImage.assign(static_cast<std::size_t>(width) * height, uint16_t{1000});
-    for (std::size_t index = 0; index < packet.rawImage.size(); index += 4096) {
-        packet.rawImage[index] = 12000;
+    Dss::Processing::RawImageBuffer pixels(static_cast<std::size_t>(width) * height,
+                                           uint16_t{1000});
+    for (std::size_t index = 0; index < pixels.size(); index += 4096) {
+        pixels[index] = 12000;
     }
+    packet.rawImage = Dss::Processing::makeSharedRawImage(std::move(pixels));
 
     std::cout << "resolution=" << width << 'x' << height << '\n'
               << "frames=" << measuredFrames << '\n'
-              << "cuda.device_buffer_bytes="
-              << packet.rawImage.size() * bytesPerCudaPixel << '\n';
+              << "cuda.device_buffer_bytes=" << packet.rawImage->size() * bytesPerCudaPixel << '\n';
 #ifdef DSS_HAS_OPENCV
     Dss::Processing::OpenCvProcessingStrategy cpu;
     if (!measure("opencv", cpu, packet, measuredFrames)) {

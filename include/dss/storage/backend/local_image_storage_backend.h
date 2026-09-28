@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <span>
 #include <string>
@@ -30,10 +31,12 @@ public:
      * @brief 构造本地图像存储后端。
      * @param baseDir 默认存储根目录。
      * @param maxPendingRequests 写入队列允许的最大待处理请求数。
+     * @param maxPendingBytes 待写及在写 RAW 缓冲容量预算，不包括文件编码临时缓冲。
      */
     explicit LocalImageStorageBackend(std::filesystem::path baseDir,
-                                      std::size_t maxPendingRequests = 1024)
-        : m_baseDir(std::move(baseDir)), m_writeQueue(maxPendingRequests) {}
+                                      std::size_t maxPendingRequests = 1024,
+                                      std::size_t maxPendingBytes = 256U * 1024U * 1024U)
+        : m_baseDir(std::move(baseDir)), m_writeQueue(maxPendingRequests, maxPendingBytes) {}
 
     /// @brief 停止后台写入线程后销毁后端。
     ~LocalImageStorageBackend() override {
@@ -72,6 +75,11 @@ public:
      * @return 成功时返回空值；未初始化时返回错误描述
      */
     auto start() -> std::expected<void, std::string> {
+        std::lock_guard lifecycleLock(m_lifecycleMutex);
+        std::lock_guard sessionLock(m_sessionMutex);
+        if (m_stopping) {
+            return std::unexpected("storage worker is draining");
+        }
         if (!m_ready.load()) {
             return std::unexpected("storage backend is not initialized");
         }
@@ -92,9 +100,38 @@ public:
             });
     }
 
+    /** @brief 获取本组件的资源采样。 @return 图像写入队列的资源快照。 */
+    [[nodiscard]] auto resourceSnapshot() const -> Dss::Core::ResourceSnapshot {
+        return m_writeQueue.resourceSnapshot();
+    }
+
     /// 停止后台写入工作线程并等待其退出
     void stop() {
+        std::lock_guard lifecycleLock(m_lifecycleMutex);
+        requestStop();
         m_writeQueue.stop();
+        std::lock_guard sessionLock(m_sessionMutex);
+        m_stopping = false;
+    }
+
+    /// 关闭当前代次的提交准入；stop() 随后负责等待排空。
+    void requestStop() {
+        std::lock_guard lock(m_sessionMutex);
+        m_stopping = true;
+        ++m_sessionGeneration;
+        m_writeQueue.requestStop();
+    }
+
+    /// 在生产回调入口读取，并在提交时传回，以拒绝跨会话的在途请求。
+    /// @return 当前会话代数，供回调提交时校验。
+    [[nodiscard]] auto sessionGeneration() const -> std::uint64_t {
+        return m_sessionGeneration.load();
+    }
+
+    /// 获取待写及在写 RAW 缓冲计费字节数。
+    /// @return 等待及正在写入请求的载荷总字节数。
+    [[nodiscard]] auto pendingBytes() const -> std::size_t {
+        return m_writeQueue.pendingBytes();
     }
 
     /** @brief 查询后台写入状态。 @return 工作线程运行时返回 true。 */
@@ -129,6 +166,7 @@ public:
 
     /** @brief 查询是否已配置观测会话。 @return 会话命名配置存在时返回 true。 */
     [[nodiscard]] bool hasSession() const {
+        std::lock_guard lock(m_sessionMutex);
         return m_sessionNaming.has_value();
     }
 
@@ -137,6 +175,7 @@ public:
      * @return 会话目录路径；未配置会话时返回空路径。
      */
     [[nodiscard]] auto sessionPath() const -> std::filesystem::path {
+        std::lock_guard lock(m_sessionMutex);
         if (!m_sessionNaming.has_value()) {
             return {};
         }
@@ -148,7 +187,8 @@ public:
      * @return 配置成功时为空；工作线程运行或文件创建失败时返回错误描述。
      */
     auto configureSession(ImageStorageNaming naming) -> std::expected<void, std::string> {
-        if (isRunning()) {
+        std::lock_guard lock(m_sessionMutex);
+        if (isRunning() || m_stopping) {
             return std::unexpected("cannot configure session while storage worker is running");
         }
         naming.rootPath = m_baseDir;
@@ -167,6 +207,7 @@ public:
             return std::unexpected("failed to write image session index: " + indexPath.string());
         }
         m_sessionNaming = std::move(naming);
+        ++m_sessionGeneration;
         return {};
     }
 
@@ -190,16 +231,23 @@ public:
      * @param sequence 会话内帧序号。
      * @param metadata RAW 图像元数据。
      * @param pixels 由写入请求共享持有的 16 位像素缓冲。
+     * @param generation 可选的回调入口会话代数；不匹配时拒绝旧帧。
      * @return 入队成功时为空；缓冲无效、会话未配置或队列不可用时返回错误描述。
      */
     auto enqueueSessionFrame(std::uint64_t sequence, RawImageMetadata metadata,
-                             std::shared_ptr<const std::vector<std::uint16_t>> pixels)
+                             std::shared_ptr<const std::vector<std::uint16_t>> pixels,
+                             std::optional<std::uint64_t> generation = std::nullopt)
         -> std::expected<void, std::string> {
+        const auto submittedGeneration = generation.value_or(m_sessionGeneration.load());
+        std::lock_guard lock(m_sessionMutex);
+        if (submittedGeneration != m_sessionGeneration.load()) {
+            return std::unexpected("stale image storage session");
+        }
         if (!m_sessionNaming.has_value()) {
             return std::unexpected("image storage session is not configured");
         }
-        return enqueueRawFrame(buildImageFilePath(*m_sessionNaming, metadata, sequence),
-                               std::move(metadata), std::move(pixels));
+        return enqueueRawFrameLocked(buildImageFilePath(*m_sessionNaming, metadata, sequence),
+                                     std::move(metadata), std::move(pixels));
     }
 
     /**
@@ -227,6 +275,25 @@ public:
     auto enqueueRawFrame(std::filesystem::path relativePath, RawImageMetadata metadata,
                          std::shared_ptr<const std::vector<std::uint16_t>> pixels)
         -> std::expected<void, std::string> {
+        const auto generation = m_sessionGeneration.load();
+        std::lock_guard lock(m_sessionMutex);
+        if (generation != m_sessionGeneration.load()) {
+            return std::unexpected("stale image storage session");
+        }
+        return enqueueRawFrameLocked(std::move(relativePath), std::move(metadata),
+                                     std::move(pixels));
+    }
+
+private:
+    /** @brief 在会话锁已持有时校验并入队 RAW 写入。
+     * @param relativePath 相对输出路径。
+     * @param metadata 帧元数据。
+     * @param pixels 不可变共享像素载荷。
+     * @return 入队成功或参数、状态、预算错误。
+     */
+    auto enqueueRawFrameLocked(std::filesystem::path relativePath, RawImageMetadata metadata,
+                               std::shared_ptr<const std::vector<std::uint16_t>> pixels)
+        -> std::expected<void, std::string> {
         if (!m_ready.load()) {
             return std::unexpected("storage backend is not initialized");
         }
@@ -241,14 +308,14 @@ public:
         request.path = resolvePath(std::move(relativePath));
         request.metadata = std::move(metadata);
         request.pixels = std::move(pixels);
-        auto result = m_writeQueue.enqueue(std::move(request));
+        const auto bytes = request.pixels->capacity() * sizeof(std::uint16_t);
+        auto result = m_writeQueue.enqueue(std::move(request), bytes);
         if (!result.has_value() && result.error() == "async write queue is full") {
             return std::unexpected("storage queue is full");
         }
         return result;
     }
 
-private:
     /// 待写入的 RAW 帧请求
     struct SaveRawFrameRequest {
         std::filesystem::path path;                                ///< 目标文件路径
@@ -320,6 +387,10 @@ private:
     std::filesystem::path m_baseDir;                    ///< 存储根目录
     std::atomic<bool> m_ready{false};                   ///< 是否已完成初始化
     std::optional<ImageStorageNaming> m_sessionNaming;  ///< 当前会话命名配置
+    mutable std::mutex m_sessionMutex;                  ///< 会话路径和提交准入共同加锁。
+    std::mutex m_lifecycleMutex;                        ///< 序列化 start/stop，join 时不持会话锁。
+    std::atomic<std::uint64_t> m_sessionGeneration{0};  ///< 拒绝旧会话的在途提交。
+    bool m_stopping = false;                            ///< 排空完成前禁止重新配置。
     MessageBus* m_bus = nullptr;                        ///< 非拥有事件总线指针
     AsyncWriteQueue<SaveRawFrameRequest> m_writeQueue;  ///< 后台写入队列
 };

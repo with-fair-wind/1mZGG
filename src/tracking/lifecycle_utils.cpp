@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <stdexcept>
 
 namespace {
 
@@ -17,6 +18,19 @@ namespace {
 }  // namespace
 
 namespace Dss::Tracking {
+
+void retainRecentTargetFrames(Core::TargetInfo& target, std::size_t maxFrames) {
+    if (maxFrames == 0) {
+        throw std::invalid_argument("target history capacity must be positive");
+    }
+    if (target.frameInfos.size() <= maxFrames) {
+        return;
+    }
+    const auto removed = target.frameInfos.size() - maxFrames;
+    target.frameInfos.erase(target.frameInfos.begin(),
+                            target.frameInfos.begin() + static_cast<std::ptrdiff_t>(removed));
+    target.discardedFrameCount += static_cast<std::uint64_t>(removed);
+}
 
 /// 统计最近窗口内无效帧数量
 auto countRecentInvalidFrames(const Core::TargetInfo& target, int frameWindow) -> int {
@@ -54,7 +68,7 @@ bool passesRecentValidityRule(const Core::TargetInfo& target, int frameWindow, f
     if (target.frameInfos.empty()) {
         return false;
     }
-    if (frameWindow <= 0 || target.frameInfos.size() < static_cast<std::size_t>(frameWindow)) {
+    if (frameWindow <= 0 || target.totalFrameCount() < static_cast<std::uint64_t>(frameWindow)) {
         return true;
     }
 
@@ -79,13 +93,13 @@ bool targetRemainsLiving(const Core::TargetInfo& target, const TrackLivingRule& 
     return false;
 }
 
-/// 用指数滑动方式将最新帧有效状态融入 validity 指标
+/// 按累计样本数加权，保持旧算法的初始有效率与浮点运算顺序。
 void updateValidityWithLatestFrame(Core::TargetInfo& target) {
     if (target.frameInfos.empty()) {
         return;
     }
 
-    const auto sampleCount = static_cast<float>(target.frameInfos.size());
+    const auto sampleCount = static_cast<float>(target.totalFrameCount());
     const auto latestValid = latestFrameIsValid(target) ? 1.0F : 0.0F;
     target.validity = ((sampleCount - 1.0F) * target.validity + latestValid) / sampleCount;
 }

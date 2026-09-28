@@ -21,6 +21,7 @@ auto DiffProcessingStrategy::process(const FramePacket& input) -> ProcessingResu
     }
 
     result.stats = computeImageStats(*input.rawImage);
+    result.rawStatsValid = true;
     result.displayImage.assign(pixelCount, std::uint8_t{0});
 
     const auto dimensionsChanged =
@@ -49,6 +50,12 @@ auto DiffProcessingStrategy::process(const FramePacket& input) -> ProcessingResu
 
 auto DiffProcessingStrategy::name() const -> std::string_view {
     return "diff";
+}
+
+void DiffProcessingStrategy::reset() {
+    m_previousImage.clear();
+    m_previousWidth = 0;
+    m_previousHeight = 0;
 }
 
 auto DiffProcessingStrategy::mode() const -> Dss::Core::ProcessingMode {

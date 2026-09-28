@@ -228,7 +228,7 @@ sequenceDiagram
     end
 ```
 
-一条 `TrackResultEvent` 可能转换为多条 `TrackDataRecord`。写入采用 append；格式化函数负责旧协议字段宽度和单位兼容，业务层不应手工拼文本。
+一条 `TrackResultEvent` 可能转换为多条 `TrackDataRecord`。写入采用 append；格式化函数负责旧协议字段宽度和单位兼容，业务层不应手工拼文本。仅记录最新 `valid` 测量，包括刚失活目标的最终有效测量；空事件不写入。GEO 负责最终快照只发布一次，存储后端不缓存完整轨迹或新增去重表，也不写入独立的生命周期终态标记。
 
 ### 停止、排空与所有权
 
@@ -278,3 +278,13 @@ stateDiagram-v2
 重点测试：`test_image_storage_format.cpp`、`test_bmp_image_format.cpp`、`test_track_data_storage_format.cpp`、`test_local_image_storage_backend.cpp`、`test_track_data_storage_backend.cpp`、`test_storage_view_model.cpp`。
 
 推荐源码顺序：`i_storage_backend.h` → `image_storage_format.h` → `bmp_image_format.*` → `track_data_storage_format.h` → 两个 backend → App 帧/事件连接 → `StorageViewModel` → `ObservationSession`。
+
+### 会话并发、资源预算与异常
+
+- 两个后端的会话配置和提交准入由同一会话锁保护。采集/跟踪回调在入口记录 sessionGeneration，提交时验证；停止和配置推进代次，旧代次请求返回错误，不能穿过切换边界写入新会话。
+- `requestStop()` 立即关闭准入；`stop()` 等待已接受请求排空。排空期间禁止 configureSession/start，join 不持有会话锁，错误回调仍可读取输出路径。
+- 原图队列同时限制 1024 个待写请求及默认 256 MiB RAW 缓冲容量（构造函数第三个参数可调整）。pendingBytes 包含正在写入的请求，按 vector capacity 计费；不包含文件编码临时缓冲或其他模块持有的图像。超过预算拒绝新请求并增加 droppedRequests，保持既有可丢帧策略。
+- writer 抛异常被计为失败并通知，普通单项失败后继续排空；通知回调再次抛异常不会逃出线程。请求搬移或构造诊断时发生无法处理的异常会关闭准入并释放剩余请求，failedWrites 可观察失败。
+- StorageViewModel 的 stopSaving 立即把 isSaving 置 false、isStopping 置 true，后台等待排空；排空期间的新启动请求只保留最后一个，完成后再配置并启动。“停止保存”会取消该待启动请求。应用 shutdown 必须等待排空并禁止完成回调重启服务。
+
+TrackManager 和事件总线公共扩展接口保持兼容；此轮没有因缺少在线调用就删除可能独立消费的接口。

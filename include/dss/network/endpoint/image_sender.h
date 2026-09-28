@@ -12,6 +12,7 @@
 #include <thread>
 #include <vector>
 
+#include "dss/core/diagnostics/resource_snapshot.h"
 #include "dss/core/event/message_bus.h"
 #include "dss/network/transport/i_network_channel.h"
 #include "dss/network/transport/udp_channel.h"
@@ -22,8 +23,9 @@ namespace Dss::Network {
 class ImageSender : public INetworkChannel {
 public:
     using MessageBus = Dss::Core::MessageBus;  ///< 事件总线类型别名
-    using ImageFactory = std::function<std::shared_ptr<const std::vector<std::uint8_t>>()>;
 
+    /// 在发送线程按需生成拥有像素的 8 位图像。
+    using ImageFactory = std::function<std::shared_ptr<const std::vector<std::uint8_t>>()>;
 
     static constexpr std::size_t MaxUdpPayload = 60U * 1024U;  ///< 单个 UDP 分片最大载荷（字节）
     static constexpr std::size_t PacketHeaderSize = 20U;       ///< 分片包头长度（字节）
@@ -78,11 +80,16 @@ public:
      * @param frameSeq 图像帧序号。
      * @param image 已就绪的 8 位图像;为空时由 imageFactory 在工作线程生成。
      * @param imageFactory 延迟 8 位图生成器;image 非空时可留空。
+     * @param retainedSourceBytes 延迟工厂捕获的源载荷字节数，不与已持有图像重复计量。
      * @param width 图像宽度(像素)。
      * @param height 图像高度(像素)。
      */
     void submitForSend(uint64_t frameSeq, std::shared_ptr<const std::vector<uint8_t>> image,
-                       ImageFactory imageFactory, uint32_t width, uint32_t height);
+                       ImageFactory imageFactory, uint32_t width, uint32_t height,
+                       std::size_t retainedSourceBytes = 0);
+
+    /** @brief 获取本组件的资源采样。 @return 发送等待槽与活动帧的资源计数。 */
+    [[nodiscard]] auto resourceSnapshot() const -> Dss::Core::ResourceSnapshot;
 
     /**
      * @brief 将图像编码并拆分为 UDP 分片列表
@@ -109,13 +116,14 @@ private:
     std::jthread m_workerThread;  ///< 异步发送工作线程
     std::mutex m_lifecycleMutex;  ///< 串行化通道启停操作
 
-    std::mutex m_bufferMutex;                                    ///< 保护待发送缓冲区的互斥锁
+    mutable std::mutex m_bufferMutex;                            ///< 保护待发送缓冲区的互斥锁
     std::condition_variable_any m_bufferCv;                      ///< 待发送图像就绪条件变量
     std::shared_ptr<const std::vector<uint8_t>> m_pendingImage;  ///< 待发送共享像素数据
     ImageFactory m_pendingImageFactory;                          ///< 待发送图像的延迟生成器
     uint64_t m_pendingFrameSeq = 0;                              ///< 待发送帧序号
     uint32_t m_pendingWidth = 0;                                 ///< 待发送图像宽度
     uint32_t m_pendingHeight = 0;                                ///< 待发送图像高度
+    Dss::Core::ResourceSnapshot m_resources;                     ///< bufferMutex 保护。
     bool m_hasPending = false;                                   ///< 是否有待发送图像
     bool m_accepting = false;                                    ///< 是否接受新的发送请求
 };

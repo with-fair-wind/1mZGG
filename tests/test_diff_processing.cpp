@@ -49,6 +49,16 @@ TEST(DiffProcessing, ResetsHistoryWhenFrameDimensionsChange) {
     EXPECT_TRUE(resized.targetBlobs.empty());
 }
 
+TEST(DiffProcessing, ExplicitResetSeedsNewSequenceEvenWithSameDimensions) {
+    Dss::Processing::DiffProcessingStrategy strategy({.threshold = 5, .minArea = 1});
+    ASSERT_TRUE(strategy.process(makeFrame({0, 0, 0, 0}, 2, 2)).success);
+    strategy.reset();
+    const auto next = strategy.process(makeFrame({100, 100, 100, 100}, 2, 2));
+    ASSERT_TRUE(next.success);
+    EXPECT_TRUE(next.targetBlobs.empty());
+    EXPECT_EQ(next.displayImage, (std::vector<std::uint8_t>{0, 0, 0, 0}));
+}
+
 TEST(DiffProcessing, RejectsInvalidPixelCountWithoutReplacingHistory) {
     Dss::Processing::DiffProcessingStrategy strategy({.threshold = 5, .minArea = 1});
     ASSERT_TRUE(strategy.process(makeFrame({10, 10, 10, 10}, 2, 2)).success);

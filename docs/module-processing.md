@@ -143,7 +143,7 @@ CPU 帧差策略保留上一帧 16 位图像，尺寸变化时重置历史；绝
 跟踪算法 → TargetInfo[]
     │
     ▼
-事件发布 (DisplayRefresh / ProcessingComplete / TrackResult)
+事件发布 (DisplayRefresh / ProcessingComplete / TrackResult；实际执行跟踪时也发布空目标列表)
 ```
 
 ## 当前缺口
@@ -349,11 +349,13 @@ stateDiagram-v2
 - `m_strategyMutex` 同时保护处理策略和跟踪策略。工作线程执行整个策略期间持锁，因此 UI 切换策略会等待当前帧结束。
 - 显示拉伸设置使用独立 mutex，可在不替换策略的情况下更新。
 - `stop()` 先请求停止并关闭通道，再 join；工作线程退出后把 `m_running` 置 false。
+- `drain()` 关闭输入并等待已接受的帧处理完成，用于暂停与正常 EOF；调用前先停止帧源。
+- `resetSession()` 停止处理、清旧队列，调用处理后端和跟踪策略的 reset，然后发布 `ProcessingSessionResetEvent`。用于换序列和不连续跳转，普通暂停不调用；协调层串行执行启停和重置。Diff 清空上一帧缓冲，即使新序列尺寸不变也重新建立基准。
 - 处理和跟踪当前在同一工作线程串行执行，避免策略内部状态被并发访问。
 
 ### 错误与可观测性
 
-策略用 `ProcessingResult::success=false` 表示单帧处理失败，主循环仍会尝试构建显示并继续下一帧；没有异常或错误事件自动上报。实时采集的队列丢帧通过 `droppedFrames()` 被 `RuntimeDiagnostics` 读取；离线回放的阻塞等待与主动取消不计入丢帧。扩展策略时应保证错误帧不破坏下一帧状态，并明确是否需要新增诊断事件。
+策略用 `ProcessingResult::success=false` 表示单帧处理失败，主循环仍会尝试构建显示并继续下一帧，此返回值本身不产生错误事件。策略抛出的异常则由线程边界转换为 `BackgroundTaskErrorEvent`，随后关闭通道、释放未处理缓冲并退出 worker；等待入队的无损提交返回 false，使帧源能够进入失败终态。重新开始前由调用方停止并重置会话。实时采集的队列丢帧通过 `droppedFrames()` 被 `RuntimeDiagnostics` 读取；离线回放的阻塞等待与主动取消不计入丢帧。扩展策略时应保证错误帧不破坏下一帧状态，并明确是否需要新增诊断事件。
 
 ### 配置与扩展点
 
@@ -365,3 +367,11 @@ stateDiagram-v2
 重点测试：`test_bounded_channel.cpp`、`test_frame_view.cpp`、`test_processing_pipeline.cpp`、`test_image_processor.cpp`、`test_diff_processing.cpp`、`test_opencv_processing.cpp`、`test_display_stretch.cpp`、`test_cuda_processing_contract.cpp`。
 
 推荐源码顺序：`frame_packet.h` → `bounded_channel.h` → `i_processing_strategy.h` → `processing_pipeline.*` → `image_processor.*` → `display_stretch.*` → `labeler.*` → Diff/OpenCV/CUDA 策略 → `ProcessingViewModel`。
+
+### 统计与显示计算契约
+
+`ProcessingResult::rawStatsValid` 显式表示统计对应本次输入 RAW 全图。成功且此标志为 true 时，ImageProcessor 复用统计；其他后端和失败帧仍由处理器计算，不能因 success=true 就假定统计有效。
+
+`FramePacket::backendDisplayRequired` 在独立策略调用时默认为 true；处理器统一构建显示时设为 false。OpenCV/CUDA 据此跳过无用的显示转换，Diff 的差分掩码仍用于检测。通道 clear 会释放槽位载荷，停止和异常退出不再保留未消费 RAW 缓冲。
+
+`hasFailed()` 保留最近一次处理线程的失败终态，下一次 start 清除。回放在 source EOF 后 drain 处理器并检查该状态，尾帧处理失败不能显示为成功完成。

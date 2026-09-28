@@ -6,6 +6,7 @@
 #include <expected>
 #include <filesystem>
 #include <mutex>
+#include <optional>
 #include <stop_token>
 #include <string>
 #include <thread>
@@ -19,6 +20,18 @@ namespace Dss::Acquisition {
 /// 从本地图像文件序列按序回放帧的帧源实现
 class ImageSequenceFrameSource final : public IFrameSource {
 public:
+    /// 单文件读取预算，超过此值拒绝加载。
+    static constexpr std::uintmax_t maxFileBytes = 128U * 1024U * 1024U;
+    /// 单帧像素数预算，在分配解码缓冲前检查。
+    static constexpr std::uint64_t maxImagePixels = 64U * 1024U * 1024U;
+    /// 连续回放的终态快照；空 error 表示正常 EOF，否则为失败原因。
+    struct Completion {
+        std::string error;  ///< 空串表示正常 EOF，否则为错误原因。
+    };
+
+    /// 返回最近一次连续回放的终态；取消无终态，start/setFiles/seek 清除旧结果。
+    /// @return 已结束播放的结果；尚未结束或已取消时为空。
+    [[nodiscard]] auto completion() const -> std::optional<Completion>;
     /// @brief 创建尚未配置文件的回放帧源。
     ImageSequenceFrameSource();
 
@@ -97,6 +110,7 @@ private:
     std::uint32_t m_height = 0;                                                ///< 帧高度（像素）
     std::size_t m_nextFrameIndex = 0;                                          ///< 下一帧待播放索引
     bool m_initialized = false;                                                ///< 是否已完成初始化
+    std::optional<Completion> m_completion;  ///< 由 m_mutex 保护的完成/失败结果。
 
     std::jthread m_worker;                ///< 后台回放工作线程
     std::atomic<bool> m_running{false};   ///< 是否正在连续回放

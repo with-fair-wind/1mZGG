@@ -78,10 +78,13 @@ auto OpenCvProcessingStrategy::process(const FramePacket& input) -> ProcessingRe
     result.stats.maxVal = maxValue;
     result.stats.avg = mean[0];
     result.stats.stdDev = stddev[0];
+    result.rawStatsValid = true;
 
-    result.displayImage = stretchDisplayImage(
-        *input.rawImage,
-        DisplayStretchWindow{.low = m_options.displayLow, .high = m_options.displayHigh});
+    if (input.backendDisplayRequired) {
+        result.displayImage = stretchDisplayImage(
+            *input.rawImage,
+            DisplayStretchWindow{.low = m_options.displayLow, .high = m_options.displayHigh});
+    }
 
     const auto threshold = std::clamp(mean[0] + (m_options.thresholdSigma * stddev[0]), 0.0,
                                       static_cast<double>(std::numeric_limits<uint16_t>::max()));

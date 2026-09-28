@@ -40,7 +40,7 @@ AppEvent (跨页面 Qt 信号中枢)
 
 | 子模块 | 主要职责 |
 |------|---------|
-| `ReplayViewModel` | 选择图像序列、初始化 `ImageSequenceFrameSource`、开始/暂停、单帧前进、维护当前帧和总帧数 |
+| `ReplayViewModel` | 向 `ReplaySession` 提交回放命令、映射快照和状态文本、维护当前帧进度 |
 | `DisplayViewModel` | 缓存当前 raw frame、计算统计信息、自动/手动拉伸、实时刷新显示图 |
 | `ProcessingViewModel` | 同步 None/OpenCV/Diff 处理策略与参数快照；CUDA 仅在硬件收益达标后开放 |
 | `TrackingViewModel` | 同步 Manual/GEO/LEO/SC 跟踪策略、处理手动选点、输出跟踪状态与目标信息 |
@@ -282,22 +282,28 @@ sequenceDiagram
 sequenceDiagram
     participant Button as Start 按钮
     participant Replay as ReplayViewModel
-    participant Registry as ServiceRegistry
+    participant Session as ReplaySession 服务线程
     participant Processor as ImageProcessor
-    participant Source as IFrameSource
+    participant Source as ImageSequenceFrameSource
     participant Bus as MessageBus
-
     Button->>Replay: startGrab()
-    Replay->>Registry: tryGet(image_processor)
-    Replay->>Registry: tryGet(frame_source)
-    Replay->>Source: init()（必要时）
-    Replay->>Processor: start()
-    Replay->>Source: start()
-    Replay->>Replay: grabbing=true
-    Replay->>Bus: GrabStartedEvent
+    Replay->>Session: start() 接受命令
+    Replay->>Replay: replayBusy=true
+    Session->>Source: init / 选择 Replay 源
+    Session->>Processor: start()
+    Session->>Source: start()
+    Session->>Bus: GrabStartedEvent
+    Replay->>Session: snapshot()（25 ms 定时读取）
+    Replay->>Replay: 更新属性、文本和 busy
 ```
 
-`stopGrab()` 先停止 FrameSource，再停止 ImageProcessor，更新状态并发布 `GrabStoppedEvent`。步进和 seek 会先停止连续回放，避免两个生产路径同时推进索引。
+ViewModel 不再直接启停或等待帧源/处理器。选择、开始、单步和定位返回成功只表示接受命令；选择完成后才更新总帧数。Loading/Stopping 映射为 `replayBusy=true`，界面禁用选择、开始、单步和定位，暂停按钮仍可取消加载。状态文本、总帧数和运行属性先更新，最后发送 busy=false，允许消费者随后提交命令。
+
+`stopGrab()` / 主控加载期间停止均提交同一停止请求。源停止、drain、历史重置、EOF 和失败恢复由应用层 [ReplaySession](module-app.md#replaysession-的状态和线程契约) 统一处理。ViewModel 仍订阅 ProcessingSessionResetEvent 和 DisplayRefreshEvent，使用会话版本过滤旧进度，所有 Qt 属性更新回到对象线程。最终 shutdown 等待服务 join，并忽略尚未消费的进度通知。
+
+显示与统计跨线程投递使用两个最新值槽，共用一个待处理 Qt 唤醒，避免慢 UI 积压完整图像。显示可以覆盖旧帧，处理和存储继续执行各自的交付政策。相同跟踪模式的重复指令保持幂等，不重建已配置策略；显式手动选点仍更新目标。
+
+DisplayViewModel 的每次会话重置在同一锁范围内递增代次、清空待处理槽和 RAW 缓存；UI 取出的批次保留原代次，缓存写入与重置互斥检查，避免旧帧在重置后重新填充缓存。图像、RAW 和统计通知各自在发送前检查代次；图像信号回调触发重置后，同批旧统计被丢弃，自动拉伸统计回调触发重置后也不再继续旧图重绘。重置后的新帧仍可使用原有唤醒机制正常投递。Qt 信号调用不持有这些锁；重置不等待已经开始的信号槽返回，也不撤销已经交付给控件的图像。
 
 ### 显示事件到控件
 
@@ -417,7 +423,7 @@ Network 与 DataExchange 分开管理：普通单端点服务由 `NetworkViewMod
 | ViewModel | MessageBus 订阅 | Registry 查询/命令 |
 |---|---|---|
 | `LogViewModel` | `LogMessageEvent` 及错误事件 | 无主要服务 |
-| `ReplayViewModel` | `DisplayRefreshEvent` | replay source、frame source、processor、runtime diagnostics |
+| `ReplayViewModel` | `DisplayRefreshEvent`、`ProcessingSessionResetEvent` | ReplaySession、RuntimeDiagnostics |
 | `DisplayViewModel` | 显示刷新、处理完成 | image processor |
 | `ProcessingViewModel` | 无 | image processor，创建策略 |
 | `TrackingViewModel` | 跟踪结果 | image processor，创建策略 |
@@ -431,6 +437,7 @@ Network 与 DataExchange 分开管理：普通单端点服务由 `NetworkViewMod
 
 - QObject 子 ViewModel 由 `MainViewModel` 父子树拥有；后端服务由 Registry 的 `shared_ptr` 拥有。
 - 每个订阅型 ViewModel 保存 `ScopedConnection`，析构时自动断开 MessageBus。
+- 断开连接不会等待 COW 快照中的回调；销毁 ViewModel 前须完成 `MainViewModel::shutdown()` 和 `ApplicationContext::shutdown()`，确保所有生产者已退出。
 - 从处理/串口/存储线程进入的 MessageBus handler 不会自动切回 UI 线程；handler 应只处理线程安全状态，然后通过 Qt queued signal/invoke 更新 Widget。
 - QImage 事件进入 Widget 前必须拥有自己的像素；当前 `makeGrayImageCopy()` 已显式 `copy()`。
 - UI 不应持有指向事件临时载荷的裸指针或 span。
@@ -452,3 +459,9 @@ ViewModel 把后端 `expected` 错误统一转换成 `statusTextChanged`，MainW
 新增页面时先判断业务属于哪个子 ViewModel，保持 MainViewModel 只做组合和跨子模块协调；页面文件只装配控件和信号，不直接编码协议或 new 后端服务。跨线程事件先写线程边界测试，再接 Widget。
 
 推荐源码顺序：`view_model_context.h` → `main_view_model.*` → 各子 ViewModel → `main_window.cpp` 与各 page 文件 → `app_event.*` → `image_display.*` → `wheel_guarded_spin_box.*` → communication panels → 对应模块后端与测试。
+
+### 存储与跟踪更新的异步边界
+
+StorageViewModel 暴露 isStopping，常规停止/切换存储在后台 drain，不阻塞 UI 等磁盘。MainViewModel 在排空中收到 save=false 同样取消待启动会话，shutdown 等待存储停止完成。启动目录和索引的准备仍为同步小文件操作。
+
+TrackingViewModel 使用最新显示快照合并跨线程更新，快照仅含目标数与显示文本。会话重置覆盖旧快照；逐帧业务结果由独立订阅者消费。

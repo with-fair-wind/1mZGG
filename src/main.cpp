@@ -63,6 +63,7 @@ int main(int argc, char* argv[]) {
     initDialog.close();
 
     const int exitCode = QApplication::exec();
+    mainViewModel.shutdown();
     context.shutdown();  // 先停所有后台 worker,再让栈对象逆序析构,避免关机竞态 UAF
     return exitCode;
 }

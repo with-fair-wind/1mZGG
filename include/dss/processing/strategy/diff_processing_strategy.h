@@ -27,6 +27,7 @@ public:
     [[nodiscard]] auto process(const FramePacket& input) -> ProcessingResult override;
     [[nodiscard]] auto name() const -> std::string_view override;
     [[nodiscard]] auto mode() const -> Dss::Core::ProcessingMode override;
+    void reset() override;
 
 private:
     DiffProcessingOptions m_options;             ///< 当前差分检测参数

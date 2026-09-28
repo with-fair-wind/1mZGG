@@ -14,10 +14,29 @@
 
 #include "dss/core/event/events.h"
 #include "dss/processing/pipeline/image_processor.h"
+#include "dss/tracking/strategy/geo_tracker.h"
 #include "dss/tracking/strategy/i_tracking_strategy.h"
 #include "dss/tracking/strategy/manual_tracker.h"
 
 using namespace std::chrono_literals;
+
+TEST(ImageProcessor, PublishesEmptySnapshotWhenTrackingRanWithoutTargets) {
+    Dss::Core::MessageBus bus;
+    Dss::Processing::ImageProcessor processor(bus);
+    std::vector<Dss::Core::TrackResultEvent> events;
+    auto connection = bus.subscribe<Dss::Core::TrackResultEvent>(
+        [&](const auto& event) { events.push_back(event); });
+    processor.setTrackingStrategy(
+        std::make_unique<Dss::Tracking::GeoTracker>(Dss::Core::TrackingSettings{}));
+    processor.start();
+    Dss::Processing::FramePacket packet;
+    packet.frameSeq = 42;
+    ASSERT_TRUE(processor.submitFrame(std::move(packet)));
+    processor.drain();
+    ASSERT_EQ(events.size(), 1U);
+    EXPECT_EQ(events.front().frameSeq, 42U);
+    EXPECT_TRUE(events.front().targets.empty());
+}
 
 namespace {
 
@@ -150,6 +169,24 @@ TEST(ImageProcessor, PublishesDisplayFramePayload) {
     EXPECT_EQ(sendEvent.height, 2U);
     ASSERT_TRUE(sendEvent.image);
     EXPECT_EQ(*sendEvent.image, (std::vector<uint8_t>{1, 2, 3, 4}));
+}
+
+TEST(ImageProcessor, DrainPublishesEveryAcceptedFrame) {
+    Dss::Core::MessageBus bus;
+    Dss::Processing::ImageProcessor processor(bus);
+    std::vector<std::uint64_t> frames;
+    auto connection = bus.subscribe<Dss::Core::ProcessingCompleteEvent>(
+        [&](const auto& event) { frames.push_back(event.frameSeq); });
+    processor.start();
+    for (std::uint64_t seq = 0; seq < 20; ++seq) {
+        Dss::Processing::FramePacket packet{};
+        packet.frameSeq = seq;
+        ASSERT_TRUE(processor.submitFrameBlocking(std::move(packet), {}));
+    }
+    processor.drain();
+    ASSERT_EQ(frames.size(), 20U);
+    EXPECT_EQ(frames.back(), 19U);
+    EXPECT_FALSE(processor.isRunning());
 }
 
 TEST(ImageProcessor, RejectsFramesWhileStopped) {
@@ -460,4 +497,61 @@ TEST(ImageProcessor, PassesValidatedTargetBlobsToTrackingWithoutProcessingBacken
     EXPECT_EQ(measurements.validatedTargetBlobs.front().id, "geo");
     EXPECT_FLOAT_EQ(measurements.validatedTargetBlobs.front().centroid.x, 131.0F);
     EXPECT_FLOAT_EQ(measurements.validatedTargetBlobs.front().centroid.y, 122.0F);
+}
+
+TEST(ImageProcessor, WorkerFailureReleasesBlockedSubmitWithoutExplicitStop) {
+    class GatedFailure final : public Dss::Processing::IProcessingStrategy {
+    public:
+        GatedFailure(std::latch& entered, std::latch& release)
+            : entered(entered), release(release) {}
+        auto process(const Dss::Processing::FramePacket&)
+            -> Dss::Processing::ProcessingResult override {
+            entered.count_down();
+            release.wait();
+            throw std::runtime_error("gated failure");
+        }
+        auto name() const -> std::string_view override {
+            return "gated-failure";
+        }
+        auto mode() const -> Dss::Core::ProcessingMode override {
+            return Dss::Core::ProcessingMode::Direct;
+        }
+        std::latch& entered;
+        std::latch& release;
+    };
+    Dss::Core::MessageBus bus;
+    Dss::Processing::ImageProcessor processor(bus);
+    std::latch entered{1}, release{1};
+    processor.setProcessingStrategy(std::make_unique<GatedFailure>(entered, release));
+    processor.start();
+    ASSERT_TRUE(processor.submitFrame({}));
+    entered.wait();
+    for (int i = 0; i < 4; ++i)
+        EXPECT_TRUE(processor.submitFrame({}));
+    auto blocked =
+        std::async(std::launch::async, [&] { return processor.submitFrameBlocking({}, {}); });
+    EXPECT_EQ(blocked.wait_for(50ms), std::future_status::timeout);
+    release.count_down();
+    const auto status = blocked.wait_for(2s);
+    processor.stop();  // Cleanup also releases the future if this regression fails.
+    EXPECT_EQ(status, std::future_status::ready);
+    EXPECT_FALSE(blocked.get());
+}
+
+TEST(ImageProcessor, FailedWorkerReleasesResourceAccounting) {
+    Dss::Core::MessageBus bus;
+    Dss::Processing::ImageProcessor processor(bus);
+    processor.setProcessingStrategy(std::make_unique<ThrowingStrategy>());
+    processor.start();
+    Dss::Processing::FramePacket packet;
+    packet.rawImage = Dss::Processing::makeSharedRawImage({1, 2, 3, 4});
+    ASSERT_TRUE(processor.submitFrame(std::move(packet)));
+    processor.drain();
+    EXPECT_TRUE(processor.hasFailed());
+    const auto resources = processor.resourceSnapshot();
+    EXPECT_EQ(resources.queuedItems, 0U);
+    EXPECT_EQ(resources.activeItems, 0U);
+    EXPECT_EQ(resources.queuedBytes, 0U);
+    EXPECT_EQ(resources.activeBytes, 0U);
+    EXPECT_EQ(resources.completedItems, 0U);
 }

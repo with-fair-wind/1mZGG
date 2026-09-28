@@ -1,6 +1,7 @@
 #include <QCoreApplication>
 #include <QEventLoop>
 #include <QString>
+#include <QTemporaryDir>
 #include <QThread>
 #include <chrono>
 #include <filesystem>
@@ -159,9 +160,43 @@ TEST(MainViewModel, MasterControlCreatesTaskSpecificStorageSession) {
         .start = {.hour = 10},
         .end = {.hour = 11},
     });
+    const auto deadline = std::chrono::steady_clock::now() + 2s;
+    while (viewModel.storage().isStopping() && std::chrono::steady_clock::now() < deadline) {
+        app.processEvents();
+        std::this_thread::yield();
+    }
+    ASSERT_TRUE(viewModel.storage().isSaving());
     EXPECT_NE(imageStorage->sessionPath().filename().string().find("_43_0.BMP"), std::string::npos);
     EXPECT_NE(trackStorage->outputPath().filename().string().find("_43_0.GAE"), std::string::npos);
 
     bus.emit(Dss::Core::MasterControlEvent{.save = false});
+    viewModel.shutdown();
     std::filesystem::remove_all(root);
+}
+
+TEST(MainViewModel, StopSavingCommandCancelsSessionQueuedDuringDrain) {
+    auto& app = ensureQCoreApplication();
+    Dss::Core::MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    QTemporaryDir directory;
+    ASSERT_TRUE(directory.isValid());
+    auto backend = std::make_shared<Dss::Storage::LocalImageStorageBackend>(
+        std::filesystem::path(directory.path().toStdWString()));
+    registry.registerService<Dss::Storage::LocalImageStorageBackend>("image_storage", backend);
+    Dss::Ui::MainViewModel vm(bus, registry);
+    bus.emit(Dss::Core::MasterControlEvent{.save = true, .targetId = 1});
+    ASSERT_TRUE(vm.storage().isSaving());
+    const auto firstPath = backend->sessionPath();
+    bus.emit(Dss::Core::MasterControlEvent{.save = true, .targetId = 2});
+    ASSERT_TRUE(vm.storage().isStopping());
+    bus.emit(Dss::Core::MasterControlEvent{.save = false});
+    const auto deadline = std::chrono::steady_clock::now() + 2s;
+    while (vm.storage().isStopping() && std::chrono::steady_clock::now() < deadline) {
+        app.processEvents();
+        std::this_thread::yield();
+    }
+    EXPECT_FALSE(vm.storage().isSaving());
+    EXPECT_FALSE(backend->isRunning());
+    EXPECT_EQ(backend->sessionPath(), firstPath);
+    vm.shutdown();
 }

@@ -1,6 +1,6 @@
 # oldsrc → 新架构迁移状态
 
-> 最近更新：2026-07-22。
+> 最近更新：2026-09-20。
 >
 > `oldsrc/` 已转为只读归档，不参与 CMake 构建，也不再作为新功能或缺陷修复的落点。行为差异以现代模块测试和 `tests/fixtures/tracking/` 黄金数据为准。
 
@@ -62,9 +62,11 @@ Sapera/CUDA 的命令、门槛和结果回填表见 [硬件验证](hardware-vali
 
 ## 当前验收基线
 
-- 默认无 Sapera、无 CUDA 的 `clang-cl-debug` 构建：230/230 CTest 通过(含本次会话新增的关机生命周期、串口流式重同步、close→open 回归、RaDec 南天边界等测试)。
+- 默认无 Sapera、无 CUDA 的 `clang-cl-debug` 构建：232/232 CTest 在原生 Windows Qt 平台通过（2026-09-20，含窗口布局测试）。本轮新增 12 个 GoogleTest 用例，覆盖在途回调关闭、服务外部引用、显示单槽、重复跟踪模式、会话重置、回放 EOF/坏帧及关闭取消；Qt 测试按可执行文件注册，所以 CTest 数量不等于 GoogleTest 用例数。
 - Sapera 和 CUDA 都是显式启用能力，默认配置必须继续保持无硬件安全。
 - 硬件验收未执行前，不把 Sapera 标记为“硬件验证完成”，也不在 UI 暴露 CUDA 模式。
+
+运行时修复与后续实施顺序见 [框架完善与后续实施计划](implementation-plan.md)。
 
 ## 模块文档
 

@@ -1,8 +1,11 @@
 #include "dss/acquisition/source/image_sequence_frame_source.h"
 
 #include <QImage>
+#include <QImageReader>
 #include <QString>
+#include <array>
 #include <cwctype>
+#include <exception>
 #include <fstream>
 #include <limits>
 #include <span>
@@ -46,9 +49,24 @@ namespace {
     }
 
     const auto byteCount = static_cast<std::uintmax_t>(endPosition);
-    if (byteCount > static_cast<std::uintmax_t>(std::numeric_limits<std::size_t>::max()) ||
+    if (byteCount > ImageSequenceFrameSource::maxFileBytes ||
+        byteCount > static_cast<std::uintmax_t>(std::numeric_limits<std::size_t>::max()) ||
         byteCount > static_cast<std::uintmax_t>(std::numeric_limits<std::streamsize>::max())) {
         return std::unexpected("image file is too large: " + path.string());
+    }
+
+    if (isRawFile(path)) {
+        std::array<std::uint8_t, Dss::Storage::kRawImageHeaderSize> header{};
+        input.seekg(0, std::ios::beg);
+        input.read(reinterpret_cast<char*>(header.data()), header.size());
+        const auto metadata = Dss::Storage::decodeRawImageHeader(header);
+        const auto pixels =
+            metadata ? static_cast<std::uint64_t>(metadata->width) * metadata->height : 0;
+        if (!input || pixels == 0 || pixels > ImageSequenceFrameSource::maxImagePixels ||
+            byteCount != header.size() + pixels * sizeof(std::uint16_t)) {
+            return std::unexpected("invalid raw image dimensions or payload length: " +
+                                   path.string());
+        }
     }
 
     std::vector<std::uint8_t> bytes(static_cast<std::size_t>(byteCount));
@@ -135,7 +153,14 @@ namespace {
  */
 [[nodiscard]] auto loadImageFrame(const std::filesystem::path& path, std::uint64_t frameSeq)
     -> std::expected<Dss::Processing::FramePacket, std::string> {
-    QImage image(QString::fromStdWString(path.wstring()));
+    QImageReader reader(QString::fromStdWString(path.wstring()));
+    const auto dimensions = reader.size();
+    if (!dimensions.isValid() || dimensions.isEmpty() ||
+        static_cast<std::uint64_t>(dimensions.width()) * dimensions.height() >
+            ImageSequenceFrameSource::maxImagePixels) {
+        return std::unexpected("image dimensions exceed replay budget: " + path.string());
+    }
+    auto image = reader.read();
     if (image.isNull()) {
         return std::unexpected("failed to load image file: " + path.string());
     }
@@ -171,10 +196,23 @@ namespace {
  */
 [[nodiscard]] auto loadFrame(const std::filesystem::path& path, std::uint64_t frameSeq)
     -> std::expected<Dss::Processing::FramePacket, std::string> {
+    std::error_code error;
+    const auto bytes = std::filesystem::file_size(path, error);
+    if (error || bytes > ImageSequenceFrameSource::maxFileBytes) {
+        return std::unexpected(
+            "failed to load image file (unavailable or exceeds replay budget): " + path.string());
+    }
     if (isRawFile(path)) {
         return loadRawFrame(path, frameSeq);
     }
     if (isBmpFile(path)) {
+        QImageReader reader(QString::fromStdWString(path.wstring()));
+        const auto size = reader.size();
+        if (!size.isValid() || size.isEmpty() ||
+            static_cast<std::uint64_t>(size.width()) * size.height() >
+                ImageSequenceFrameSource::maxImagePixels) {
+            return std::unexpected("bmp dimensions exceed replay budget: " + path.string());
+        }
         if (auto legacyBmp = loadLegacyBmpFrame(path, frameSeq); legacyBmp.has_value()) {
             return legacyBmp;
         }
@@ -204,6 +242,7 @@ auto ImageSequenceFrameSource::setFiles(std::vector<std::filesystem::path> files
         m_height = 0;
         m_nextFrameIndex = 0;
         m_initialized = false;
+        m_completion.reset();
     }
     if (frameCount() == 0U) {
         return std::unexpected("image sequence is empty");
@@ -221,6 +260,11 @@ auto ImageSequenceFrameSource::nextFrameIndex() const -> std::size_t {
     return m_nextFrameIndex;
 }
 
+auto ImageSequenceFrameSource::completion() const -> std::optional<Completion> {
+    std::lock_guard lock(m_mutex);
+    return m_completion;
+}
+
 auto ImageSequenceFrameSource::seek(std::size_t index) -> std::expected<void, std::string> {
     {
         std::lock_guard lock(m_mutex);
@@ -236,6 +280,7 @@ auto ImageSequenceFrameSource::seek(std::size_t index) -> std::expected<void, st
     {
         std::lock_guard lock(m_mutex);
         m_nextFrameIndex = index;
+        m_completion.reset();
     }
 
     if (resume) {
@@ -342,37 +387,59 @@ void ImageSequenceFrameSource::start() {
         interval = m_frameInterval;
         callback = m_callback;
         startIndex = m_nextFrameIndex;
+        m_completion.reset();
     }
 
     if (files.empty() || !callback || startIndex >= files.size()) {
+        std::lock_guard lock(m_mutex);
+        m_completion = Completion{files.empty() ? "image sequence is empty"
+                                  : !callback   ? "frame callback is not set"
+                                                : ""};
         m_running.store(false);
         return;
     }
 
     m_worker = std::jthread([this, files = std::move(files), interval, startIndex,
                              callback = std::move(callback)](std::stop_token token) mutable {
-        for (std::size_t index = startIndex; index < files.size(); ++index) {
-            if (token.stop_requested()) {
-                break;
-            }
-
-            auto packet = loadFrame(files[index], static_cast<std::uint64_t>(index));
-            if (!packet.has_value()) {
-                break;
-            }
-            if (!callback(std::move(*packet),
-                          FrameDeliveryContext{FrameDeliveryPolicy::Lossless, token})) {
-                break;
-            }
-            std::lock_guard lock(m_mutex);
-            if (m_nextFrameIndex <= index) {
-                m_nextFrameIndex = index + 1U;
-            }
-
-            if (interval.count() > 0 && index + 1U < files.size()) {
-                if (m_wait.waitFor(token, interval)) {
+        Completion result;
+        try {
+            for (std::size_t index = startIndex; index < files.size(); ++index) {
+                if (token.stop_requested()) {
                     break;
                 }
+
+                auto packet = loadFrame(files[index], static_cast<std::uint64_t>(index));
+                if (!packet.has_value()) {
+                    result.error = files[index].string() + ": " + packet.error();
+                    break;
+                }
+                if (!callback(std::move(*packet),
+                              FrameDeliveryContext{FrameDeliveryPolicy::Lossless, token})) {
+                    result.error = "frame delivery was rejected";
+                    break;
+                }
+                {
+                    std::lock_guard lock(m_mutex);
+                    if (m_nextFrameIndex <= index) {
+                        m_nextFrameIndex = index + 1U;
+                    }
+                }
+
+                if (interval.count() > 0 && index + 1U < files.size()) {
+                    if (m_wait.waitFor(token, interval)) {
+                        break;
+                    }
+                }
+            }
+        } catch (const std::exception& error) {
+            result.error = error.what();
+        } catch (...) {
+            result.error = "unknown replay failure";
+        }
+        {
+            std::lock_guard lock(m_mutex);
+            if (!token.stop_requested()) {
+                m_completion = std::move(result);
             }
         }
         m_running.store(false);

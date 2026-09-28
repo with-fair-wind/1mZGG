@@ -148,9 +148,8 @@ void FrameSourceCoordinator::stop() {
         }
     }
     for (const auto& source : sources) {
-        if (source->isRunning()) {
-            source->stop();
-        }
+        // 已结束的生产者也可能仍持有 joinable 线程或待回收的 SDK 回调。
+        source->stop();
     }
 }
 

@@ -5,6 +5,7 @@
 #include <functional>
 #include <vector>
 
+#include "dss/core/diagnostics/resource_snapshot.h"
 #include "dss/core/event/message_bus.h"
 
 namespace Dss::App {
@@ -21,17 +22,25 @@ struct RuntimeDiagnosticsSnapshot {
     std::uint64_t networkErrors = 0;            ///< 网络传输错误事件数
     std::uint64_t serialErrors = 0;             ///< 串口帧或解码错误事件数
     std::uint64_t storageErrors = 0;            ///< 存储错误事件数
+    Dss::Core::ResourceSnapshot processing;     ///< 处理队列与工作线程资源采样。
+    Dss::Core::ResourceSnapshot imageStorage;   ///< 图像写入队列资源采样。
+    Dss::Core::ResourceSnapshot trackStorage;   ///< 轨迹写入队列资源采样。
+    Dss::Core::ResourceSnapshot imageSender;    ///< 图像发送资源采样。
 };
 
 /// @brief 从各运行服务读取诊断计数器的回调集合。
 struct RuntimeDiagnosticsSources {
-    std::function<std::uint64_t()> processingDroppedFrames;  ///< 读取处理丢帧数
-    std::function<std::uint64_t()> imageSuccessfulWrites;    ///< 读取图像成功写入数
-    std::function<std::uint64_t()> imageFailedWrites;        ///< 读取图像写入失败数
-    std::function<std::uint64_t()> imageDroppedRequests;     ///< 读取图像丢弃请求数
-    std::function<std::uint64_t()> trackSuccessfulWrites;    ///< 读取跟踪成功写入数
-    std::function<std::uint64_t()> trackFailedWrites;        ///< 读取跟踪写入失败数
-    std::function<std::uint64_t()> trackDroppedRequests;     ///< 读取跟踪丢弃请求数
+    std::function<std::uint64_t()> processingDroppedFrames;     ///< 读取处理丢帧数
+    std::function<std::uint64_t()> imageSuccessfulWrites;       ///< 读取图像成功写入数
+    std::function<std::uint64_t()> imageFailedWrites;           ///< 读取图像写入失败数
+    std::function<std::uint64_t()> imageDroppedRequests;        ///< 读取图像丢弃请求数
+    std::function<std::uint64_t()> trackSuccessfulWrites;       ///< 读取跟踪成功写入数
+    std::function<std::uint64_t()> trackFailedWrites;           ///< 读取跟踪写入失败数
+    std::function<std::uint64_t()> trackDroppedRequests;        ///< 读取跟踪丢弃请求数
+    std::function<Dss::Core::ResourceSnapshot()> processing;    ///< 处理队列与工作线程资源采样。
+    std::function<Dss::Core::ResourceSnapshot()> imageStorage;  ///< 图像写入队列资源采样。
+    std::function<Dss::Core::ResourceSnapshot()> trackStorage;  ///< 轨迹写入队列资源采样。
+    std::function<Dss::Core::ResourceSnapshot()> imageSender;   ///< 图像发送资源采样。
 };
 
 /**

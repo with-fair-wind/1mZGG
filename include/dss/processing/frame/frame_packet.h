@@ -39,6 +39,14 @@ struct FramePacket {
     std::vector<Dss::Core::MeasuredBlob> targetBlobs;           ///< 检测到的目标光斑
     std::vector<Dss::Core::MeasuredBlob> validatedTargetBlobs;  ///< 校验通过的目标光斑
     std::vector<Dss::Core::MeasuredBlob> starBlobs;             ///< 检测到的恒星光斑
+    bool backendDisplayRequired = true;  ///< 独立调用默认生成显示；处理器统一拉伸时关闭。
 };
+
+/// 帧中图像 vector 的保留容量；不含 blob、元数据及策略临时缓冲。
+[[nodiscard]] inline auto imagePayloadBytes(const FramePacket& packet) -> std::size_t {
+    return (packet.rawImage ? packet.rawImage->capacity() * sizeof(std::uint16_t) : 0) +
+           packet.rotatedImage.capacity() * sizeof(std::uint16_t) + packet.displayImage.capacity() +
+           packet.photometryImage.capacity() * sizeof(float);
+}
 
 }  // namespace Dss::Processing

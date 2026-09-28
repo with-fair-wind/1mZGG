@@ -133,8 +133,29 @@ void DisplayViewModel::setRawDisplayEnabled(bool enabled) {
     }
 }
 
+auto DisplayViewModel::resourceSnapshot() const -> Dss::Core::ResourceSnapshot {
+    std::scoped_lock lock(m_pendingMutex, m_currentDisplayMutex);
+    auto result = m_resources;
+    if (m_pendingFrame) {
+        result.queuedItems = 1;
+        result.queuedBytes =
+            (m_pendingFrame->rawImage ? m_pendingFrame->rawImage->capacity() * sizeof(std::uint16_t)
+                                      : 0) +
+            (m_pendingFrame->displayImage ? m_pendingFrame->displayImage->capacity() : 0);
+    }
+    // active 表示当前 RAW 缓存，不包括 QImage、纹理或正在发送的 UI 信号。
+    result.activeItems = m_currentRawImage ? 1 : 0;
+    result.activeBytes =
+        m_currentRawImage ? m_currentRawImage->capacity() * sizeof(std::uint16_t) : 0;
+    return result;
+}
+
 void DisplayViewModel::clearCurrentDisplayFrame() {
-    std::lock_guard lock(m_currentDisplayMutex);
+    std::scoped_lock lock(m_pendingMutex, m_currentDisplayMutex);
+    ++m_sessionRevision;
+    m_pendingFrame.reset();
+    m_pendingStats.reset();
+    // 保留 m_flushQueued：已投递的唤醒仍会执行，可处理随后到达的新帧。
     m_currentRawImage.reset();
     m_currentDisplayFrameSeq = 0;
     m_currentDisplayWidth = 0;
@@ -146,6 +167,8 @@ void DisplayViewModel::clearCurrentDisplayFrame() {
 }
 
 void DisplayViewModel::setupSubscriptions() {
+    m_connections.push_back(m_bus.subscribe<Dss::Core::ProcessingSessionResetEvent>(
+        [this](const auto&) { clearCurrentDisplayFrame(); }));
     m_connections.push_back(m_bus.subscribe<Dss::Core::DisplayRefreshEvent>(
         [this](const Dss::Core::DisplayRefreshEvent& e) { onDisplayRefresh(e); }));
 
@@ -155,17 +178,35 @@ void DisplayViewModel::setupSubscriptions() {
 
 void DisplayViewModel::onDisplayRefresh(const Dss::Core::DisplayRefreshEvent& event) {
     if (!isObjectThread(this)) {
-        auto eventCopy = event;
-        invokeOnObjectThread(
-            this, [this, eventCopy = std::move(eventCopy)] { onDisplayRefresh(eventCopy); });
+        {
+            std::lock_guard lock(m_pendingMutex);
+            if (m_pendingFrame) {
+                ++m_resources.replacedItems;
+            }
+            m_pendingFrame = event;
+            const auto bytes =
+                (event.rawImage ? event.rawImage->capacity() * sizeof(std::uint16_t) : 0) +
+                (event.displayImage ? event.displayImage->capacity() : 0);
+            m_resources.peakQueuedBytes =
+                (std::max)(m_resources.peakQueuedBytes, static_cast<std::uint64_t>(bytes));
+            if (m_flushQueued) {
+                return;
+            }
+            m_flushQueued = true;
+        }
+        invokeOnObjectThread(this, [this] { flushPendingUpdates(); });
         return;
     }
 
-    if (event.width == 0 || event.height == 0 || event.stride == 0) {
+    displayFrame(event, m_sessionRevision.load());
+}
+
+void DisplayViewModel::displayFrame(const Dss::Core::DisplayRefreshEvent& event,
+                                    std::uint64_t revision) {
+    if (event.width == 0 || event.height == 0 || event.stride == 0 ||
+        !cacheCurrentDisplayFrame(event, revision)) {
         return;
     }
-
-    cacheCurrentDisplayFrame(event);
     if (m_rawDisplayEnabled && emitCurrentRawDisplayFrame()) {
         return;
     }
@@ -178,27 +219,63 @@ void DisplayViewModel::onDisplayRefresh(const Dss::Core::DisplayRefreshEvent& ev
     if (event.displayImage->size() < expectedSize) {
         return;
     }
-    Q_EMIT displayImageReady(
-        makeGrayImageCopy(*event.displayImage, event.width, event.height, event.stride));
+    auto image = makeGrayImageCopy(*event.displayImage, event.width, event.height, event.stride);
+    if (revision == m_sessionRevision.load()) {
+        Q_EMIT displayImageReady(std::move(image));
+    }
 }
 
 void DisplayViewModel::onProcessingComplete(const Dss::Core::ProcessingCompleteEvent& event) {
     if (!isObjectThread(this)) {
-        auto eventCopy = event;
-        invokeOnObjectThread(
-            this, [this, eventCopy = std::move(eventCopy)] { onProcessingComplete(eventCopy); });
+        {
+            std::lock_guard lock(m_pendingMutex);
+            m_pendingStats = event;
+            if (m_flushQueued) {
+                return;
+            }
+            m_flushQueued = true;
+        }
+        invokeOnObjectThread(this, [this] { flushPendingUpdates(); });
         return;
     }
 
-    const auto& stats = event.stats;
-    Q_EMIT imageStatsUpdated(stats.minVal, stats.maxVal, stats.avg, stats.stdDev);
+    displayStats(event.stats, m_sessionRevision.load());
 }
 
-void DisplayViewModel::cacheCurrentDisplayFrame(const Dss::Core::DisplayRefreshEvent& event) {
+void DisplayViewModel::displayStats(const Dss::Core::ImageStats& stats, std::uint64_t revision) {
+    if (revision == m_sessionRevision.load()) {
+        Q_EMIT imageStatsUpdated(stats.minVal, stats.maxVal, stats.avg, stats.stdDev);
+    }
+}
+
+void DisplayViewModel::flushPendingUpdates() {
+    std::optional<Dss::Core::DisplayRefreshEvent> frame;
+    std::optional<Dss::Core::ProcessingCompleteEvent> stats;
+    std::uint64_t revision = 0;
+    {
+        std::lock_guard lock(m_pendingMutex);
+        frame = std::exchange(m_pendingFrame, std::nullopt);
+        stats = std::exchange(m_pendingStats, std::nullopt);
+        revision = m_sessionRevision.load();
+        m_flushQueued = false;
+    }
+    if (frame) {
+        displayFrame(*frame, revision);
+    }
+    if (stats) {
+        displayStats(stats->stats, revision);
+    }
+}
+
+bool DisplayViewModel::cacheCurrentDisplayFrame(const Dss::Core::DisplayRefreshEvent& event,
+                                                std::uint64_t revision) {
     const auto expectedPixelCount =
         static_cast<std::size_t>(event.width) * static_cast<std::size_t>(event.height);
 
-    std::lock_guard lock(m_currentDisplayMutex);
+    std::scoped_lock lock(m_pendingMutex, m_currentDisplayMutex);
+    if (revision != m_sessionRevision.load()) {
+        return false;
+    }
     m_currentDisplayFrameSeq = event.frameSeq;
     m_currentDisplayWidth = event.width;
     m_currentDisplayHeight = event.height;
@@ -212,6 +289,8 @@ void DisplayViewModel::cacheCurrentDisplayFrame(const Dss::Core::DisplayRefreshE
         m_currentRawImage.reset();
         m_currentAutoStretchWindowValid = false;
     }
+    ++m_resources.completedItems;
+    return true;
 }
 
 bool DisplayViewModel::emitCurrentRawDisplayFrame() {
@@ -220,8 +299,10 @@ bool DisplayViewModel::emitCurrentRawDisplayFrame() {
     std::uint32_t height = 0;
     int low = m_displayStretchLow;
     int high = m_displayStretchHigh;
+    std::uint64_t revision = 0;
     {
         std::lock_guard lock(m_currentDisplayMutex);
+        revision = m_sessionRevision.load();
         rawImage = m_currentRawImage;
         width = m_currentDisplayWidth;
         height = m_currentDisplayHeight;
@@ -242,6 +323,9 @@ bool DisplayViewModel::emitCurrentRawDisplayFrame() {
         high = low + 1;
     }
 
+    if (revision != m_sessionRevision.load()) {
+        return false;
+    }
     Q_EMIT rawDisplayFrameReady(std::move(rawImage), width, height, width, low, high);
     return true;
 }
@@ -250,8 +334,10 @@ bool DisplayViewModel::refreshCurrentDisplayFromStretch() {
     std::shared_ptr<const std::vector<std::uint16_t>> rawImage;
     std::uint32_t width = 0;
     std::uint32_t height = 0;
+    std::uint64_t revision = 0;
     {
         std::lock_guard lock(m_currentDisplayMutex);
+        revision = m_sessionRevision.load();
         rawImage = m_currentRawImage;
         width = m_currentDisplayWidth;
         height = m_currentDisplayHeight;
@@ -274,15 +360,18 @@ bool DisplayViewModel::refreshCurrentDisplayFromStretch() {
         displayImage = Dss::Processing::stretchDisplayImage(*rawImage, window);
     } else {
         auto display = Dss::Processing::buildDisplayImage(*rawImage, settings);
-        Q_EMIT imageStatsUpdated(display.stats.minVal, display.stats.maxVal, display.stats.avg,
-                                 display.stats.stdDev);
+        displayStats(display.stats, revision);
         displayImage = std::move(display.displayImage);
     }
 
     if (displayImage.size() != expectedPixelCount) {
         return false;
     }
-    Q_EMIT displayImageReady(makeGrayImageCopy(displayImage, width, height, width));
+    auto image = makeGrayImageCopy(displayImage, width, height, width);
+    if (revision != m_sessionRevision.load()) {
+        return false;
+    }
+    Q_EMIT displayImageReady(std::move(image));
     return true;
 }
 

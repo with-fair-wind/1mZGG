@@ -142,7 +142,11 @@ struct InvalidFallbackBlobOptions {
                                                          float invalidHalfExtent = 5.0F)
     -> Core::TargetInfo;
 
-/// 根据最近四帧运动的中位数更新目标预测位置与速度
+/**
+ * @brief 用最近四帧的三段运动中值更新预测，并按累计样本数更新 validity。
+ * @param target 已追加本帧的目标；不足四个保留帧时不更新。
+ * @note 每次追加后调用一次。裁剪不改变 totalFrameCount()；调用者应至少保留四帧。
+ */
 void updatePredictionFromRecentFour(Core::TargetInfo& target);
 
 }  // namespace Dss::Tracking

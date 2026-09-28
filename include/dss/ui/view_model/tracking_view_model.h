@@ -3,6 +3,8 @@
 #include <QObject>
 #include <QPointF>
 #include <QString>
+#include <atomic>
+#include <mutex>
 #include <optional>
 #include <vector>
 
@@ -67,7 +69,7 @@ Q_SIGNALS:
 
     /**
      * @brief 目标列表数量更新。
-     * @param count 当前目标数量。
+     * @param count 当前 living 目标数量，不包含刚失活的最终快照。
      */
     void targetListUpdated(int count);
 
@@ -84,10 +86,12 @@ private:
     void setupSubscriptions();
 
     /**
-     * @brief 处理跟踪结果事件并转为 UI 信号。
+     * @brief 合并跟踪结果并显示活跃目标；无活跃目标时清空数量和详情。
      * @param event 跟踪结果事件。
      */
     void onTrackResult(const Dss::Core::TrackResultEvent& event);
+    /// @brief 在对象线程消费最新显示快照并释放唤醒标记。
+    void flushPendingResult();
 
     /**
      * @brief 根据当前跟踪模式配置 ImageProcessor 跟踪策略。
@@ -101,10 +105,21 @@ private:
      */
     [[nodiscard]] static auto makeManualTarget(QPointF pos) -> Dss::Core::MeasuredBlob;
 
-    UiServiceContext::MessageBus& m_bus;       ///< 应用事件总线。
-    Dss::Core::ServiceRegistry& m_registry;    ///< 应用服务注册表。
+    UiServiceContext::MessageBus& m_bus;                             ///< 应用事件总线。
+    Dss::Core::ServiceRegistry& m_registry;                          ///< 应用服务注册表。
     int m_trackMode = static_cast<int>(Dss::Core::TrackMode::Init);  ///< 当前跟踪模式。
-    std::optional<Dss::Core::MeasuredBlob> m_manualTarget;  ///< 手动选定的跟踪目标。
+    std::optional<Dss::Core::MeasuredBlob> m_manualTarget;           ///< 手动选定的跟踪目标。
+    bool m_strategyConfigured = false;                ///< 首次配置与重复模式命令分开处理。
+    std::atomic<std::uint64_t> m_sessionRevision{0};  ///< 用于拒绝上一会话的显示更新。
+
+    /** @brief 只保留显示所需字段的快照，不持有目标历史。 */
+    struct DisplayResult {
+        int count = 0;  ///< 活跃目标数量。
+        QString info;   ///< 首个活跃目标的摘要；没有目标时为空。
+    };
+    std::mutex m_pendingMutex;                     ///< 保护待显示快照和唤醒标记。
+    std::optional<DisplayResult> m_pendingResult;  ///< 尚未消费的最新显示快照。
+    bool m_updateQueued = false;                   ///< 一个最新显示快照，最多一个 Qt 唤醒。
     std::vector<Dss::Evt::ScopedConnection> m_connections;  ///< 事件订阅连接列表。
 };
 

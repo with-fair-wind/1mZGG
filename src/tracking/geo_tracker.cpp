@@ -60,6 +60,8 @@ GeoTracker::GeoTracker(const Dss::Core::TrackingSettings& settings) : m_settings
  */
 auto GeoTracker::track(const Dss::Core::FrameMeasurements& measurements)
     -> std::vector<Dss::Core::TargetInfo> {
+    // 失活当帧已返回最终快照；下一帧清理，避免重复发送/归档旧测量。
+    std::erase_if(m_targets, [](const auto& target) { return !target.living; });
     m_fifoTarget.push_back(measurements);
     m_fifoStar.push_back(measurements);
     if (m_fifoTarget.size() > 10) {
@@ -86,6 +88,12 @@ auto GeoTracker::track(const Dss::Core::FrameMeasurements& measurements)
         m_targetVerified = m_targetFound;
     }
 
+    // 所有关联/存活检查完成后裁剪，重发现仍可读取最近四帧。
+    const auto historyCapacity = static_cast<std::size_t>(
+        (std::max)(GeoDetail::kGeoTrackingInvalidSearchWindow, m_settings.numFramesLiving));
+    for (auto& target : m_targets) {
+        retainRecentTargetFrames(target, historyCapacity);
+    }
     return m_targets;
 }
 

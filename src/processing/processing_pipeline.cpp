@@ -2,6 +2,12 @@
 
 namespace Dss::Processing {
 
+void ProcessingPipeline::reset() {
+    if (m_backend) {
+        m_backend->reset();
+    }
+}
+
 void ProcessingPipeline::setBackend(std::unique_ptr<IProcessingStrategy> backend) {
     m_backend = std::move(backend);
 }

@@ -18,6 +18,7 @@ namespace Dss::Core {
 ///
 /// @param target 待转换的目标轨迹。
 /// @return 轨迹有帧信息时返回结果数据包；轨迹为空时返回空。
+/// @note valid 取自最新测量，不取自 living；目标刚失活时的有效测量仍可归档。
 [[nodiscard]] auto makeResultPacket(const TargetInfo& target) -> std::optional<ResultPacket>;
 
 /// 批量构造测量结果数据包。

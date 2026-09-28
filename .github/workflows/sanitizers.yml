@@ -1,0 +1,96 @@
+name: Core and replay sanitizers
+
+on:
+  push:
+    branches: [develop, main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-address:
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [core, qt]
+    runs-on: windows-2022
+    timeout-minutes: 60
+    env:
+      CONAN_HOME: ${{ github.workspace }}/.conan-sanitizer
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install build tools
+        run: python -m pip install "conan==2.29.0" "cmake>=3.28,<4" ninja
+      - name: Install pinned Qt for replay tests
+        if: matrix.suite == 'qt'
+        shell: pwsh
+        run: |
+          python -m pip install "aqtinstall>=3.3,<4"
+          if ($LASTEXITCODE -ne 0) { throw 'aqt installation failed' }
+          python -m aqt install-qt windows desktop 6.8.0 win64_msvc2022_64 -O Qt -m qtcharts qtserialport
+          if ($LASTEXITCODE -ne 0) { throw 'Qt installation failed' }
+          "DSS_QT_ROOT=${{ github.workspace }}/Qt/6.8.0/msvc2022_64" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Build instrumented dependencies and run ASan
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (!$vsPath) { throw 'Visual Studio x64 tools missing' }
+          $vcvars = Join-Path $vsPath 'VC/Auxiliary/Build/vcvars64.bat'
+          $qtArgument = if ('${{ matrix.suite }}' -eq 'qt') { ' --qt-prefix "%DSS_QT_ROOT%"' } else { '' }
+          $sanitizerCommand = 'python tools/run_sanitizer.py --sanitizer address --build-dir build/ci-address --host-profile profiles/conan/windows-clang-cl-ci' + $qtArgument
+          $commands = @(
+            'conan profile detect --name default',
+            'clang-cl --version',
+            $sanitizerCommand
+          ) -join ' && '
+          cmd.exe /d /s /c "`"$vcvars`" && $commands"
+          if ($LASTEXITCODE -ne 0) { throw "ASan failed: $LASTEXITCODE" }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: windows-address-${{ matrix.suite }}-results
+          path: |
+            build/ci-address/sanitizer-results.xml
+            build/ci-address/Testing/Temporary/**
+          retention-days: 14
+
+  linux-thread:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      CONAN_HOME: ${{ github.workspace }}/.conan-sanitizer
+      CC: gcc-14
+      CXX: g++-14
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++-14 ninja-build
+          python -m pip install "conan==2.29.0" "cmake>=3.28,<4"
+      - name: Build instrumented dependencies and run TSan
+        run: |
+          conan profile detect --name default
+          python tools/run_sanitizer.py --sanitizer thread --build-dir build/ci-thread --host-profile default
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: linux-thread-results
+          path: |
+            build/ci-thread/sanitizer-results.xml
+            build/ci-thread/Testing/Temporary/**
+          retention-days: 14

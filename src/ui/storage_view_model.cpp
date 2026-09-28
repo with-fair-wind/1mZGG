@@ -6,13 +6,28 @@
 #include "dss/core/config/config.h"
 #include "dss/storage/backend/local_image_storage_backend.h"
 #include "dss/storage/backend/track_data_storage_backend.h"
+#include "dss/ui/support/qt_thread_utils.h"
 
 namespace Dss::Ui {
 
 StorageViewModel::StorageViewModel(UiServiceContext context, QObject* parent)
     : QObject(parent), m_registry(context.registry) {}
 
-StorageViewModel::~StorageViewModel() = default;
+StorageViewModel::~StorageViewModel() {
+    shutdown();
+}
+
+void StorageViewModel::shutdown() {
+    if (m_shutdown) {
+        return;
+    }
+    m_shutdown = true;
+    m_pendingSession.reset();
+    stopSaving();
+    if (m_stopWorker.joinable()) {
+        m_stopWorker.join();
+    }
+}
 
 bool StorageViewModel::isSaving() const {
     return m_saving;
@@ -31,6 +46,16 @@ void StorageViewModel::startSaving() {
 }
 
 void StorageViewModel::startSaving(const Dss::Storage::ImageStorageNaming& naming) {
+    if (m_shutdown) {
+        return;
+    }
+    if (m_saving) {
+        stopSaving();
+    }
+    if (m_stopping) {
+        m_pendingSession = naming;
+        return;
+    }
     auto storage = m_registry.tryGet<Dss::Storage::LocalImageStorageBackend>(
         Dss::App::ServiceKey::imageStorage);
     if (!storage) {
@@ -87,18 +112,49 @@ void StorageViewModel::startSaving(const Dss::Storage::ImageStorageNaming& namin
 }
 
 void StorageViewModel::stopSaving() {
+    m_pendingSession.reset();
+    if (m_stopping) {
+        return;
+    }
     auto storage = m_registry.tryGet<Dss::Storage::LocalImageStorageBackend>(
         Dss::App::ServiceKey::imageStorage);
     if (storage) {
-        storage->stop();
+        storage->requestStop();
     }
     auto trackStorage = m_registry.tryGet<Dss::Storage::TrackDataStorageBackend>(
         Dss::App::ServiceKey::trackDataStorage);
     if (trackStorage) {
-        trackStorage->stop();
+        trackStorage->requestStop();
     }
+    m_stopping = true;
     setSaving(false);
+    Q_EMIT stoppingChanged(true);
+    Q_EMIT statusTextChanged("Saving: draining");
+    m_stopWorker = std::jthread([this, storage, trackStorage] {
+        if (storage) {
+            storage->stop();
+        }
+        if (trackStorage) {
+            trackStorage->stop();
+        }
+        invokeOnObjectThread(this, [this] { finishStop(); });
+    });
+}
+
+void StorageViewModel::finishStop() {
+    if (m_shutdown) {
+        return;
+    }
+    if (m_stopWorker.joinable()) {
+        m_stopWorker.join();
+    }
+    m_stopping = false;
+    Q_EMIT stoppingChanged(false);
     Q_EMIT statusTextChanged("Saving stopped");
+    auto pending = std::exchange(m_pendingSession, std::nullopt);
+    if (pending) {
+        startSaving(*pending);
+    }
 }
 
 void StorageViewModel::setSaving(bool value) {

@@ -46,6 +46,8 @@ public:
      * @brief 析构 UI 层主 ViewModel。
      */
     ~MainViewModel() override;
+    /// 在 ApplicationContext::shutdown 前调用，等待 UI 发起的后台任务退出。
+    void shutdown();
 
     /**
      * @brief 获取当前状态栏文本。
@@ -157,6 +159,7 @@ private:
     DataExchangeViewModel m_dataExchange;    ///< 数据交换子 ViewModel。
     QString m_statusText = "Ready";          ///< 最近一次状态栏文本。
     double m_exposure = 0.0;                 ///< 当前曝光时间，单位毫秒。
+    bool m_shutdown = false;                 ///< 已进入关闭流程，禁止后续业务命令。
     std::string m_activeStorageSessionId;    ///< 当前主控存储会话标识。
 
     std::vector<Dss::Evt::ScopedConnection> m_connections;  ///< 事件订阅连接列表。

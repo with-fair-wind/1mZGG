@@ -157,7 +157,8 @@ TEST(LeoTracker, KeepsVerifiedTargetLivingAfterSingleTrackMiss) {
     EXPECT_EQ(target.targetId, "leo-1");
     EXPECT_TRUE(target.living);
     EXPECT_NEAR(target.validity, 5.0F / 6.0F, 1.0e-6F);
-    ASSERT_EQ(target.frameInfos.size(), 6U);
+    ASSERT_EQ(target.frameInfos.size(), 5U);
+    EXPECT_EQ(target.totalFrameCount(), 6U);
     const auto& latest = target.frameInfos.back();
     EXPECT_EQ(latest.frameSeq, 6U);
     EXPECT_FALSE(latest.valid);
@@ -208,4 +209,52 @@ TEST(LeoTracker, DropsUnverifiedCandidateAndAllowsRediscoveryAfterFourthFrameMis
     ASSERT_EQ(target.frameInfos.size(), 3U);
     EXPECT_EQ(target.frameInfos.front().frameSeq, 5U);
     EXPECT_EQ(target.frameInfos.back().frameSeq, 7U);
+}
+
+TEST(LeoTracker, LongTrackBoundsHistoryAndRetainsFiveMissRetirement) {
+    Dss::Tracking::LeoTracker tracker(makeSettings());
+    std::string id;
+    float expectedValidity = 1.0F;
+    for (std::uint64_t seq = 1; seq <= 1000; ++seq) {
+        const auto index = static_cast<float>(seq - 1);
+        const bool valid = seq % 100 != 0;
+        const auto targets =
+            tracker.track(valid ? makeFrame(seq, makeBlob(100 + index * 0.125F, 200 + index * 0.25F,
+                                                          1 + index * 0.03F, 2 + index * 0.02F))
+                                : makeEmptyFrame(seq));
+        if (seq < 3) {
+            ASSERT_TRUE(targets.empty());
+            continue;
+        }
+        ASSERT_EQ(targets.size(), 1U) << "seq=" << seq;
+        const auto& target = targets.front();
+        if (seq == 3) {
+            id = target.targetId;
+        } else {
+            expectedValidity =
+                (static_cast<float>(seq - 1) * expectedValidity + (valid ? 1.0F : 0.0F)) /
+                static_cast<float>(seq);
+        }
+        ASSERT_TRUE(target.living);
+        ASSERT_EQ(target.targetId, id);
+        ASSERT_EQ(target.totalFrameCount(), seq);
+        ASSERT_LE(target.frameInfos.size(), 5U);
+        ASSERT_FLOAT_EQ(target.validity, expectedValidity);
+        ASSERT_EQ(target.frameInfos.back().valid, valid);
+    }
+    // Frame 1000 was already a miss; the fourth additional miss retires the target.
+    for (std::uint64_t seq = 1001; seq <= 1004; ++seq) {
+        EXPECT_EQ(tracker.track(makeEmptyFrame(seq)).empty(), seq == 1004);
+    }
+    tracker.reset();
+    for (std::uint64_t seq = 1; seq <= 4; ++seq) {
+        const auto index = static_cast<float>(seq - 1);
+        const auto targets = tracker.track(makeFrame(
+            seq, makeBlob(100 + index, 200 + index, 1 + index * 0.03F, 2 + index * 0.02F)));
+        if (seq == 4) {
+            ASSERT_EQ(targets.size(), 1U);
+            EXPECT_EQ(targets.front().totalFrameCount(), 4U);
+            EXPECT_EQ(targets.front().discardedFrameCount, 0U);
+        }
+    }
 }

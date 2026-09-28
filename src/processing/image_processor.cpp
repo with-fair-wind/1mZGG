@@ -1,9 +1,26 @@
 #include "dss/processing/pipeline/image_processor.h"
 
+#include <algorithm>
+#include <exception>
+
 #include "dss/core/concurrency/background_task.h"
 #include "dss/core/event/events.h"
 
 namespace Dss::Processing {
+
+namespace {
+/// 在异常离开 worker 时先标记失败，再由顶层 runBackgroundTask 发布诊断。
+struct WorkerFailureGuard {
+    std::atomic<bool>& failed;                           ///< 工作线程的失败标志。
+    int initialExceptions = std::uncaught_exceptions();  ///< 进入任务时正在传播的异常数。
+    /// @brief 栈展开时标记失败，不捕获或重新抛出异常。
+    ~WorkerFailureGuard() {
+        if (std::uncaught_exceptions() > initialExceptions) {
+            failed.store(true);
+        }
+    }
+};
+}  // namespace
 
 ImageProcessor::ImageProcessor(MessageBus& bus) : m_bus(bus) {}
 
@@ -17,14 +34,25 @@ void ImageProcessor::start() {
         return;
     }
     m_frameChannel.open();
+    m_failed.store(false);
     m_workerThread = std::jthread([this](std::stop_token token) {
-        Dss::Core::runBackgroundTask(m_bus, "image_processor",
-                                     [this, token] { workerLoop(token); });
+        Dss::Core::runBackgroundTask(m_bus, "image_processor", [this, token] {
+            const WorkerFailureGuard failureGuard{m_failed};
+            workerLoop(token);
+        });
+        m_frameChannel.close();
+        m_frameChannel.clear();
+        {
+            std::lock_guard lock(m_resourceMutex);
+            m_resources.activeItems = 0;
+            m_resources.activeBytes = 0;
+        }
         m_running.store(false);
     });
 }
 
 void ImageProcessor::stop() {
+    const auto started = std::chrono::steady_clock::now();
     std::lock_guard lifecycleLock(m_lifecycleMutex);
     m_running.store(false);
     m_frameChannel.close();
@@ -33,24 +61,64 @@ void ImageProcessor::stop() {
         m_workerThread.join();
     }
     m_frameChannel.clear();
+    std::lock_guard resourceLock(m_resourceMutex);
+    m_resources.lastStopMicroseconds = Dss::Core::elapsedMicroseconds(started);
 }
 
 bool ImageProcessor::submitFrame(FramePacket packet) {
     if (!m_running.load()) {
         return false;
     }
-    if (!m_frameChannel.tryPush(std::move(packet))) {
+    const auto bytes = imagePayloadBytes(packet);
+    if (!m_frameChannel.tryPush(std::move(packet), bytes)) {
         m_droppedFrames.fetch_add(1, std::memory_order_relaxed);
         return false;
     }
     return true;
 }
 
+void ImageProcessor::drain() {
+    const auto started = std::chrono::steady_clock::now();
+    std::lock_guard lifecycleLock(m_lifecycleMutex);
+    m_running.store(false);
+    m_frameChannel.close();
+    if (m_workerThread.joinable()) {
+        m_workerThread.join();
+    }
+    std::lock_guard resourceLock(m_resourceMutex);
+    m_resources.lastStopMicroseconds = Dss::Core::elapsedMicroseconds(started);
+}
+
+void ImageProcessor::resetSession() {
+    stop();
+    {
+        std::lock_guard lock(m_strategyMutex);
+        m_pipeline.reset();
+        if (m_trackStrategy) {
+            m_trackStrategy->reset();
+        }
+    }
+    m_bus.emit(Dss::Core::ProcessingSessionResetEvent{});
+}
+
 bool ImageProcessor::submitFrameBlocking(FramePacket packet, std::stop_token token) {
     if (!m_running.load() || token.stop_requested()) {
         return false;
     }
-    return m_frameChannel.push(std::move(packet), token);
+    const auto bytes = imagePayloadBytes(packet);
+    return m_frameChannel.push(std::move(packet), token, bytes);
+}
+
+auto ImageProcessor::resourceSnapshot() const -> Dss::Core::ResourceSnapshot {
+    auto result = m_frameChannel.resourceSnapshot();
+    std::lock_guard lock(m_resourceMutex);
+    result.activeItems = m_resources.activeItems;
+    result.activeBytes = m_resources.activeBytes;
+    result.completedItems = m_resources.completedItems;
+    result.lastWorkMicroseconds = m_resources.lastWorkMicroseconds;
+    result.maxWorkMicroseconds = m_resources.maxWorkMicroseconds;
+    result.lastStopMicroseconds = m_resources.lastStopMicroseconds;
+    return result;
 }
 
 auto ImageProcessor::droppedFrames() const -> uint64_t {
@@ -108,6 +176,13 @@ void ImageProcessor::workerLoop(std::stop_token token) {
         }
 
         auto& packet = *packetOpt;
+        const auto started = std::chrono::steady_clock::now();
+        {
+            std::lock_guard lock(m_resourceMutex);
+            m_resources.activeItems = 1;
+            m_resources.activeBytes = imagePayloadBytes(packet);
+        }
+        packet.backendDisplayRequired = false;
 
         ProcessingResult procResult;
         {
@@ -116,6 +191,7 @@ void ImageProcessor::workerLoop(std::stop_token token) {
         }
 
         std::vector<Dss::Core::TargetInfo> trackResults;
+        bool trackingRan = false;
         {
             std::lock_guard lock(m_strategyMutex);
             const auto canTrackDirectFrame = !m_pipeline.hasBackend();
@@ -135,6 +211,7 @@ void ImageProcessor::workerLoop(std::stop_token token) {
                                                     : std::move(packet.starBlobs);
 
                 trackResults = m_trackStrategy->track(meas);
+                trackingRan = true;
             }
         }
 
@@ -148,7 +225,9 @@ void ImageProcessor::workerLoop(std::stop_token token) {
                                    packet.rawImage->size() == expectedPixelCount;
         if (rawImageValid) {
             const auto settings = currentDisplayStretchSettings();
-            displayStats = computeImageStats(*packet.rawImage);
+            if (!procResult.success || !procResult.rawStatsValid) {
+                displayStats = computeImageStats(*packet.rawImage);
+            }
             displayWindow = resolveDisplayStretchWindow(displayStats, settings);
             displayWindowValid = true;
             if (m_cpuDisplayImageRequired.load()) {
@@ -178,7 +257,7 @@ void ImageProcessor::workerLoop(std::stop_token token) {
         m_bus.emit(refreshEvent);
         m_bus.emit(Dss::Core::ProcessingCompleteEvent{packet.frameSeq, displayStats});
 
-        if (!trackResults.empty()) {
+        if (trackingRan) {
             m_bus.emit(Dss::Core::TrackResultEvent{packet.frameSeq, std::move(trackResults)});
         }
 
@@ -197,7 +276,17 @@ void ImageProcessor::workerLoop(std::stop_token token) {
                 .height = packet.height,
                 .image = displayImage,
                 .imageFactory = std::move(imageFactory),
+                .retainedSourceBytes = rawImage ? rawImage->capacity() * sizeof(std::uint16_t) : 0,
             });
+        }
+        {
+            std::lock_guard lock(m_resourceMutex);
+            m_resources.activeItems = 0;
+            m_resources.activeBytes = 0;
+            ++m_resources.completedItems;
+            m_resources.lastWorkMicroseconds = Dss::Core::elapsedMicroseconds(started);
+            m_resources.maxWorkMicroseconds =
+                (std::max)(m_resources.maxWorkMicroseconds, m_resources.lastWorkMicroseconds);
         }
     }
     m_running.store(false);

@@ -27,7 +27,15 @@ MainViewModel::MainViewModel(MessageBus& bus, Dss::Core::ServiceRegistry& regist
     setupSubscriptions();
 }
 
-MainViewModel::~MainViewModel() = default;
+MainViewModel::~MainViewModel() {
+    shutdown();
+}
+
+void MainViewModel::shutdown() {
+    m_shutdown = true;
+    m_replay.shutdown();
+    m_storage.shutdown();
+}
 
 auto MainViewModel::statusText() const -> QString {
     return m_statusText;
@@ -152,6 +160,9 @@ void MainViewModel::setupSubscriptions() {
 }
 
 void MainViewModel::onMasterControl(const Dss::Core::MasterControlEvent& event) {
+    if (m_shutdown) {
+        return;
+    }
     setExposure(event.exposure);
     m_tracking.setTrackMode(event.trackMode);
 
@@ -167,11 +178,9 @@ void MainViewModel::onMasterControl(const Dss::Core::MasterControlEvent& event) 
                 m_storage.stopSaving();
             }
             m_storage.startSaving(session->naming);
-            if (m_storage.isSaving()) {
-                m_activeStorageSessionId = session->id;
-            }
+            m_activeStorageSessionId = session->id;
         }
-    } else if (m_storage.isSaving()) {
+    } else if (m_storage.isSaving() || m_storage.isStopping()) {
         m_storage.stopSaving();
         m_activeStorageSessionId.clear();
     }
@@ -183,7 +192,7 @@ void MainViewModel::onMasterControl(const Dss::Core::MasterControlEvent& event) 
         if (m_replay.isGrabbing()) {
             m_replay.stopGrab();
         } else if (m_replay.replayBusy()) {
-            // 加载中收到停止指令:记录意图,finishReplayTask 据此不自动启动采集
+            // 加载中收到停止指令：交由 ReplaySession 取消在途任务并回收。
             m_replay.requestStopAfterLoad();
         }
     }

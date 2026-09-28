@@ -10,7 +10,7 @@
 
 ## 模块职责
 
-App 模块是系统的**组合根 (Composition Root)**，负责组装所有子系统、管理全局生命周期、注册通信服务。它是 `main.cpp` 与各业务模块之间的中间层。
+App 模块是系统的**组合根 (Composition Root)**，负责组装所有子系统、管理全局生命周期、注册通信服务，并通过 ReplaySession 编排回放用例。它是 `main.cpp` 与各业务模块之间的中间层。
 
 ## 组件清单
 
@@ -53,6 +53,7 @@ App 模块是系统的**组合根 (Composition Root)**，负责组装所有子�
 | `ImageProcessor` | dss_processing | `image_processor` |
 | `FrameSourceCoordinator` / `IFrameSource` | dss_acquisition_qt | `frame_source` |
 | `ImageSequenceFrameSource` / `IFrameSource` | dss_acquisition_qt | `replay_source` |
+| `ReplaySession` | dss_app | `replay_session` |
 | `SaperaFrameSource` / `IFrameSource`（条件注册） | dss_acquisition_qt | `sapera_source` |
 | `LocalImageStorageBackend` / `IStorageBackend` | dss_core (`Dss::Storage`) | `image_storage` |
 | `TrackDataStorageBackend` / `IStorageBackend` | dss_core (`Dss::Storage`) | `track_data_storage` |
@@ -176,6 +177,7 @@ classDiagram
 | `track_data_storage` | `TrackDataStorageBackend` | 具体类型、`IStorageBackend` |
 | `image_processor` | `ImageProcessor` | 具体类型 |
 | `replay_source` | `ImageSequenceFrameSource` | 具体类型、`IFrameSource` |
+| `replay_session` | `ReplaySession` | 具体类型 |
 | `sapera_source` | `SaperaFrameSource`（可选） | `IFrameSource` |
 | `frame_source` | `FrameSourceCoordinator` | 具体类型、`IFrameSource` |
 | `track_result_data_exchange_bridge` | 结果交换桥 | 具体类型 |
@@ -272,13 +274,13 @@ stateDiagram-v2
 
 - 实际生命周期由 ViewModel 的业务命令驱动；Registry 中对象析构时，各具体服务仍以 `close()` / `stop()` 兜底。
 - `open/close` 与 `start/stop` 由服务内部生命周期锁串行化，周期线程使用可由 `stop_token` 中断的等待。
-- **关机顺序(A1)**:`main()` 在 `QApplication::exec()` 返回后、栈对象析构前调 `ApplicationContext::shutdown()`(`~ApplicationContext` 兜底再调)——先 `m_connections.clear()` 退订组合根订阅(释放回调持有的 `imageSender`/`trackDataStorage` 引用),再 `m_registry.clear()` 触发服务析构级联(frame source 析构 stop 帧线程 → 释放 frame callback 持有的 `imageProcessor`/`localImageStorage` → 它们析构 stop worker;其余服务直接析构 stop/close)。目的:确保 ViewModel 析构期间无 worker emit,避免事件总线 COW 快照命中半析构对象导致 use-after-free。
+- **关机顺序**：`main()` 在 `QApplication::exec()` 返回后先调用 `MainViewModel::shutdown()`，关闭 ReplaySession 并 join 服务线程；随后调用 `ApplicationContext::shutdown()`。组合根在所有服务和订阅仍存活时显式关闭外部输入，再次幂等关闭 ReplaySession，再停止并 join 帧源、处理器，排空存储并关闭网络服务；最后释放组合根订阅、注册表和停止回调持有的服务引用。外部 shared_ptr 不会使停止动作失效。析构仅作幂等兜底，不能用注册表元素析构顺序代替生命周期协议。COW 派发中的退订不是等待屏障，必须先结束生产线程再销毁订阅者。
 
 ### 线程、错误与诊断
 
-- App 自身不创建工作线程；它创建的 Processing、Acquisition、Storage、Comm、Network 服务各自管理线程。
+- App 中 ReplaySession 拥有串行命令线程；组合根创建的 Processing、Acquisition、Storage、Comm、Network 服务各自管理线程。
 - 帧回调可能来自回放线程或 Sapera SDK 回调线程；回调只做有界入队，不应添加阻塞 UI 操作。
-- `RuntimeDiagnostics` 用原子计数统计网络、串口、存储错误，并通过注入的 reader 读取处理丢帧和存储计数。
+- `RuntimeDiagnostics` 用原子计数统计网络、串口、存储错误，并通过注入的 reader 读取处理丢帧、存储计数及处理/存储/图像发送资源快照。字节口径与压力验证见 [资源验证](resource-validation.md)。
 - 配置加载失败返回 `unexpected`；文件日志配置失败只记录警告，不让整体配置加载失败。
 - 注册表名称错误通常表现为 ViewModel 获取服务失败，测试应同时覆盖具体类型和接口类型查询。
 
@@ -289,3 +291,25 @@ stateDiagram-v2
 重点测试：`test_application_context_services.cpp`、`test_observation_session.cpp`、`test_track_result_data_exchange_bridge.cpp`、`test_runtime_diagnostics.cpp`、`test_main_view_model.cpp`。
 
 推荐源码顺序：`application_context.h/.cpp` → `communication_services.cpp` → `track_result_data_exchange_bridge.*` → `observation_session.*` → `runtime_diagnostics.*` → `src/main.cpp`，再跳到各服务的具体模块。
+
+### ReplaySession 的状态和线程契约
+
+`ReplaySession` 由组合根创建并以 `replay_session` 注册；服务创建时启动一个等待命令的线程，尚不启动回放或处理器。接口与实现不使用 QObject、QString 或 Qt 事件循环，但复用的图像解码器依赖 Qt，因此本服务仅在 `DSS_BUILD_APP=ON` 时编译。
+
+| 状态 | 含义及允许的下一步 |
+|---|---|
+| Idle | 未运行；可选序列、开始、单步、定位 |
+| Loading | 正在执行已接受命令；只接受停止/关闭 |
+| Running | 连续播放；可停止、换序列、单步或定位；重复 start 拒绝 |
+| Stopping | 等待源退出和处理队列回收；拒绝普通命令 |
+| Completed | 正常 EOF 且处理队列已排空；start 从头开始 |
+| Failed | 初始化、解码或处理失败；start/step 重新加载已选序列并清历史 |
+| Closed | shutdown 已完成；永久拒绝新命令 |
+
+`selectFiles/start/step/seek` 的成功返回只表示命令被接受，不能立即接下一条命令。读取一致的 `snapshot()` 判断完成；界面额外等待其快照被映射，避免排队的旧状态覆盖新操作。命令槽容量为一，停止意图单独保存并优先处理。停止请求通过 stop_token 取消单步无损提交等待，不在状态锁内执行回调、源启停或 join。
+
+普通暂停先停止生产者再 drain，保留策略历史；换序列、后退、定位及 EOF 重播清理历史。运行中的定位完成后恢复连续播放。单步也在返回空闲前 drain，因此“单步完成”包含处理完成。服务线程每 25 ms 检查连续回放 EOF/失败；正常结束同样先 drain，再检查 `ImageProcessor::hasFailed()`，末帧失败不能成为 Completed。已发生的失败不会被随后 stop 抹掉。
+
+`shutdown()` 先封闭命令入口、请求取消，再 join；它是允许阻塞的最终关闭屏障，析构作幂等兜底。文件读取/解码和已进入的处理回调不支持强制中断，取消及关闭仍须等待它们返回。服务独占回放生命周期操作；不允许其他线程直接启停/reset 相同依赖对象。
+
+回归入口 `test_replay_session` 不创建 Qt 窗口，也不创建 QCoreApplication，使用 RAW 文件和标准 C++ 同步验证状态转换；链接仍需要 Qt 解码依赖。core-only sanitizer 任务不包含此测试；公共 Qt ASan 配置覆盖 ReplaySession、回放/主/显示 ViewModel 及网络测试，详见 [sanitizer 验证](sanitizer-validation.md)。

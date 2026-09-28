@@ -1,3 +1,5 @@
+#include <stdexcept>
+
 #include <gtest/gtest.h>
 
 #include "dss/tracking/support/lifecycle_utils.h"
@@ -116,4 +118,64 @@ TEST(TrackingLifecycleUtils, UpdatesValidityFromLatestFrame) {
     emptyTarget.validity = 0.25F;
     Dss::Tracking::updateValidityWithLatestFrame(emptyTarget);
     EXPECT_FLOAT_EQ(emptyTarget.validity, 0.25F);
+}
+
+TEST(TrackingLifecycleUtils, ValidityWeightUsesTotalHistoryBeyondPredictionWindow) {
+    Dss::Core::TargetInfo target{};
+    target.frameInfos.resize(100);
+    target.validity = 0.75F;
+    target.frameInfos.back().valid = false;
+    Dss::Tracking::updateValidityWithLatestFrame(target);
+    EXPECT_NEAR(target.validity, 0.7425F, 1e-6F);
+    target.frameInfos.push_back(makeFrameInfo(true));
+    Dss::Tracking::updateValidityWithLatestFrame(target);
+    EXPECT_NEAR(target.validity, 75.25F / 101.0F, 1e-6F);
+}
+
+TEST(TrackingLifecycleUtils, BoundedHistoryMatchesFullHistoryValidityAndLivingRules) {
+    for (const auto capacity : {4U, 5U, 17U}) {
+        Dss::Core::TargetInfo full{};
+        Dss::Core::TargetInfo bounded{};
+        full.validity = bounded.validity = 0.375F;
+        for (std::uint64_t seq = 1; seq <= 3000; ++seq) {
+            // Isolated misses, runs longer than each window, and recovery.
+            auto frame = makeFrameInfo(seq % 97U > 21U && seq % 11U != 0U);
+            frame.frameSeq = seq;
+            full.frameInfos.push_back(frame);
+            bounded.frameInfos.push_back(frame);
+            Dss::Tracking::updateValidityWithLatestFrame(full);
+            Dss::Tracking::updateValidityWithLatestFrame(bounded);
+            Dss::Tracking::retainRecentTargetFrames(bounded, capacity);
+            ASSERT_LE(bounded.frameInfos.size(), capacity);
+            ASSERT_EQ(bounded.totalFrameCount(), seq);
+            ASSERT_FLOAT_EQ(bounded.validity, full.validity);
+            ASSERT_EQ(Dss::Tracking::countRecentInvalidFrames(bounded, capacity),
+                      Dss::Tracking::countRecentInvalidFrames(full, capacity));
+            for (const auto mode : {Dss::Tracking::RecentFrameWindowMode::RequireFullWindow,
+                                    Dss::Tracking::RecentFrameWindowMode::UseAvailableFrames}) {
+                ASSERT_EQ(Dss::Tracking::latestFramesAreAllInvalid(bounded, capacity, mode),
+                          Dss::Tracking::latestFramesAreAllInvalid(full, capacity, mode));
+            }
+            // Total-age gate must still work when greater than retained capacity.
+            ASSERT_EQ(Dss::Tracking::passesRecentValidityRule(bounded, 100, 0.9F),
+                      Dss::Tracking::passesRecentValidityRule(full, 100, 0.9F));
+        }
+        const auto capacityBefore = bounded.frameInfos.capacity();
+        Dss::Tracking::retainRecentTargetFrames(bounded, capacity);
+        EXPECT_EQ(bounded.totalFrameCount(), 3000U);
+        EXPECT_EQ(bounded.frameInfos.capacity(), capacityBefore);
+        bounded = {};
+        EXPECT_EQ(bounded.totalFrameCount(), 0U);
+    }
+}
+
+TEST(TrackingLifecycleUtils, RejectsZeroHistoryCapacityWithoutChangingTarget) {
+    auto target = makeTarget({true, false, true});
+    EXPECT_THROW(Dss::Tracking::retainRecentTargetFrames(target, 0), std::invalid_argument);
+    EXPECT_EQ(target.totalFrameCount(), 3U);
+    EXPECT_EQ(target.discardedFrameCount, 0U);
+    Dss::Tracking::retainRecentTargetFrames(target, 2);
+    EXPECT_EQ(target.totalFrameCount(), 3U);
+    EXPECT_EQ(target.discardedFrameCount, 1U);
+    EXPECT_FALSE(target.frameInfos.front().valid);
 }

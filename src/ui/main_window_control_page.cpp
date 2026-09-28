@@ -101,11 +101,11 @@ void MainWindow::setupControlPage() {
                                    btnStepForward, replayProgress, replayStateLabel](bool busy) {
         btnSelectSequence->setEnabled(!busy);
         btnStart->setEnabled(!busy);
-        btnStop->setEnabled(!busy);
+        btnStop->setEnabled(true);  // 加载/单步期间也允许请求取消。
         btnStepBackward->setEnabled(!busy);
         btnStepForward->setEnabled(!busy);
         replayProgress->setEnabled(!busy);
-        replayStateLabel->setText(busy ? "Replay: Loading" : "Replay: Ready");
+        replayStateLabel->setText(busy ? "Replay: Busy" : "Replay: Ready");
     };
     connect(replay, &ReplayViewModel::replayBusyChanged, refreshReplayBusyState);
     refreshReplayBusyState(replay->replayBusy());

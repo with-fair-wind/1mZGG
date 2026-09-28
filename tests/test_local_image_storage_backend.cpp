@@ -134,3 +134,38 @@ TEST(LocalImageStorageBackend, PublishesWriteErrors) {
     EXPECT_EQ(errors.front().backend, "image_storage");
     EXPECT_EQ(backend.failedWrites(), 1U);
 }
+
+TEST(LocalImageStorageBackend, RejectsOldGenerationAfterSessionSwitch) {
+    const auto dir = tempStorageDir();
+    Dss::Storage::LocalImageStorageBackend backend(dir);
+    ASSERT_TRUE(backend.init(dir));
+    Dss::Storage::ImageStorageNaming naming{};
+    naming.startTime = "first";
+    naming.targetId = "1";
+    ASSERT_TRUE(backend.configureSession(naming));
+    ASSERT_TRUE(backend.start());
+    const auto oldGeneration = backend.sessionGeneration();
+    backend.requestStop();
+    EXPECT_FALSE(backend.configureSession(naming));
+    backend.stop();
+    naming.startTime = "second";
+    ASSERT_TRUE(backend.configureSession(naming));
+    ASSERT_TRUE(backend.start());
+    auto pixels = std::make_shared<const std::vector<std::uint16_t>>(2, 42);
+    EXPECT_FALSE(backend.enqueueSessionFrame(1, metadata(), pixels, oldGeneration));
+    EXPECT_TRUE(backend.enqueueSessionFrame(2, metadata(), pixels, backend.sessionGeneration()));
+    backend.stop();
+    EXPECT_EQ(backend.successfulWrites(), 1U);
+}
+
+TEST(LocalImageStorageBackend, RejectsFrameLargerThanByteBudget) {
+    const auto dir = tempStorageDir();
+    Dss::Storage::LocalImageStorageBackend backend(dir, 1024, 3);
+    ASSERT_TRUE(backend.init(dir));
+    ASSERT_TRUE(backend.start());
+    EXPECT_FALSE(
+        backend.enqueueRawFrame("frame.raw", metadata(), std::vector<std::uint16_t>{1, 2}));
+    EXPECT_EQ(backend.droppedRequests(), 1U);
+    EXPECT_EQ(backend.pendingBytes(), 0U);
+    backend.stop();
+}

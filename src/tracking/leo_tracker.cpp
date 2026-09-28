@@ -239,6 +239,7 @@ auto LeoTracker::track(const Dss::Core::FrameMeasurements& measurements)
     }
 
     m_currentTarget = trackTargetOnFrame(measurements, m_currentTarget, m_settings);
+    retainRecentTargetFrames(m_currentTarget, 5U);
     if (!m_currentTarget.living) {
         m_candidates.clear();
         m_targetFound = false;

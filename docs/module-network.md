@@ -207,13 +207,13 @@ sequenceDiagram
     Channel->>Worker: 启动 I/O 循环 + init promise
     Worker->>Socket: 构造并 bind(localIp,localPort)
     Worker-->>Channel: 绑定结果
-    Worker->>Socket: waitForReadyRead()
-    loop hasPendingDatagrams
+    Worker->>Worker: 等待条件变量（无发送时最多 5 ms）
+    loop hasPendingDatagrams，每批最多 64 条
         Worker->>Socket: receiveDatagram()
         Worker->>Callback: callback(span,sender,port)
     end
     Caller->>Channel: send(data)
-    Channel->>Worker: 入队 SendRequest + future
+    Channel->>Worker: 检查条数/字节预算，入队并 notify_one
     Worker->>Socket: writeDatagram(remoteIp,remotePort)
     Worker-->>Caller: 实际发送字节数
 ```
@@ -289,7 +289,7 @@ flowchart LR
 ### 错误与可观测性
 
 - bind 失败通过 `expected<string>` 返回，UI 显示错误。
-- `UdpChannel::send()` 在未绑定或写失败时返回 -1；`DataExchange` 将其升级为 `NetworkTransmissionErrorEvent`。
+- `UdpChannel::send()` 在未绑定、关闭中、超预算或写失败时返回 -1；`DataExchange` 将其升级为 `NetworkTransmissionErrorEvent`。
 - ImageSender 逐分片检查发送结果并发布 `NetworkTransmissionErrorEvent`；Heartbeat、ErrorDiagnostics 仍未把周期发送失败升级为事件。
 - Atmos 解码失败直接丢弃，不发布错误事件；若现场需要区分链路静默与坏包，应增加计数或专用事件。
 - UDP 本身无到达/顺序保证，图像接收端必须按分片头重组并处理丢片。
@@ -301,3 +301,19 @@ flowchart LR
 重点测试：`test_network_protocols.cpp`、`test_data_exchange_protocol.cpp`、`test_data_exchange.cpp`、`test_image_sender.cpp`、`test_heartbeat.cpp`、`test_error_diagnostics.cpp`、`test_network_view_model.cpp`、`test_data_exchange_view_model.cpp`。
 
 推荐源码顺序：`i_network_channel.h` → `udp_channel.*` → 各 protocol 头文件 → `data_exchange.*` → App 结果桥 → `image_sender.*` → `heartbeat.*` → `error_diagnostics.*` → `atmos_receiver.*` → 两个网络 ViewModel。
+
+### 气象输入校验边界
+
+Atmos 解码拒绝 NaN/Inf（包括压力单位转换后的非有限值）。帧头常量、物理范围及发送端口的权威协议约束尚未确认，接收方仍不执行来源认证；不要把有限数值校验描述成鉴权。接入气象业务计算前应明确设备来源、部署网络信任边界和范围规则。
+
+资源观测：ImageSender 的快照区分单槽待发载荷和在发送载荷，累计覆盖计数及工作/关闭耗时；延迟生成器的 RAW 捕获由 retainedSourceBytes 显式计费。直接图像替换 factory 和 worker 异常退出均释放旧捕获。口径见 [资源验证](resource-validation.md)。
+
+### 2026-09-28：发送唤醒与队列边界
+
+发送线程默认最多等待 64 条请求、1 MiB 载荷；预算不包含当前正在执行的一条报文，其载荷仍受 65,507 字节的单报文上限约束。条数与字节上限可通过构造参数配置，拒绝时返回 -1；DataExchange 沿用 NetworkTransmissionErrorEvent 报告失败。预算检查在复制载荷之前执行，sendQueueSnapshot 提供一致的待发条数、字节数、累计拒绝数和是否接受发送的状态。
+
+发送和关闭请求使用条件变量直接唤醒 I/O worker，不再等待 socket 的接收轮询超时。接收仍按 5 ms 周期检查（实际调度精度受系统影响）；收发各按最多 64 条交替执行，避免持续接收或发送让另一方向饥饿。所有 socket 操作保持在同一个线程；接收回调内同通道发送直接执行，避免等待自身。Qt 的数据报查询与实际发送返回语义见 [QUdpSocket 官方说明](https://doc.qt.io/qt-6/qudpsocket.html)。
+
+close 先封闭新发送，再唤醒线程并逐条尝试发送已接受的请求，最后 join。成功表示本地 socket 写入成功，不保证对端收到；回调或内部执行异常使未完成请求返回失败并关闭通道。接收回调不得调用本通道 bind/close；最终关闭仍会等待正在执行的回调返回。没有引入重传或无损网络交付保证。
+
+`test_udp_channel` 使用回调门闩验证条数/字节饱和、拒绝发生在关闭期间、已接受请求回收、回调内回复、异常退出和重复重开；性能改善以同参数 Release 基准为依据，测试不使用脆弱的毫秒级通过阈值。

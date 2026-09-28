@@ -6,6 +6,8 @@
 #include <expected>
 #include <filesystem>
 #include <fstream>
+#include <mutex>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -13,8 +15,8 @@
 #include "dss/core/event/events.h"
 #include "dss/core/event/message_bus.h"
 #include "dss/core/result/result_packet_utils.h"
-#include "dss/storage/detail/async_write_queue.h"
 #include "dss/storage/backend/i_storage_backend.h"
+#include "dss/storage/detail/async_write_queue.h"
 #include "dss/storage/format/image_storage_format.h"
 #include "dss/storage/format/track_data_storage_format.h"
 
@@ -70,6 +72,7 @@ public:
      * @return 会话 GAE 文件路径；未配置会话时返回默认文本路径。
      */
     [[nodiscard]] auto outputPath() const -> std::filesystem::path {
+        std::lock_guard lock(m_sessionMutex);
         return m_sessionOutputPath.empty() ? m_baseDir / "track_data.txt" : m_sessionOutputPath;
     }
 
@@ -78,6 +81,11 @@ public:
      * @return 成功时返回空值；未初始化时返回错误描述
      */
     auto start() -> std::expected<void, std::string> {
+        std::lock_guard lifecycleLock(m_lifecycleMutex);
+        std::lock_guard sessionLock(m_sessionMutex);
+        if (m_stopping) {
+            return std::unexpected("track storage worker is draining");
+        }
         if (!m_ready.load()) {
             return std::unexpected("track data storage backend is not initialized");
         }
@@ -98,9 +106,32 @@ public:
             });
     }
 
+    /** @brief 获取本组件的资源采样。 @return 轨迹写入队列的资源快照。 */
+    [[nodiscard]] auto resourceSnapshot() const -> Dss::Core::ResourceSnapshot {
+        return m_writeQueue.resourceSnapshot();
+    }
+
     /// 停止后台写入工作线程并等待其退出
     void stop() {
+        std::lock_guard lifecycleLock(m_lifecycleMutex);
+        requestStop();
         m_writeQueue.stop();
+        std::lock_guard sessionLock(m_sessionMutex);
+        m_stopping = false;  ///< 由 m_sessionMutex 保护的异步停止状态。
+    }
+
+    /// 关闭当前代次的准入，不等待写入完成。
+    void requestStop() {
+        std::lock_guard lock(m_sessionMutex);
+        m_stopping = true;      ///< 由 m_sessionMutex 保护的异步停止状态。
+        ++m_sessionGeneration;  ///< 会话代数，停止/切换时递增，用于拒绝旧回调。
+        m_writeQueue.requestStop();
+    }
+
+    /// 在事件回调入口读取，并在提交时传回。
+    /// @return 当前会话代数，供回调提交时校验。
+    [[nodiscard]] auto sessionGeneration() const -> std::uint64_t {
+        return m_sessionGeneration.load();  ///< 会话代数，停止/切换时递增，用于拒绝旧回调。
     }
 
     /** @brief 查询后台写入状态。 @return 工作线程运行时返回 true。 */
@@ -139,7 +170,8 @@ public:
      * @return 配置成功时为空；工作线程运行或目录创建失败时返回错误描述。
      */
     auto configureSession(const ImageStorageNaming& naming) -> std::expected<void, std::string> {
-        if (isRunning()) {
+        std::lock_guard lock(m_sessionMutex);
+        if (isRunning() || m_stopping) {
             return std::unexpected(
                 "cannot configure session while track storage worker is running");
         }
@@ -153,16 +185,30 @@ public:
             m_sessionOutputPath.clear();
             return std::unexpected("failed to create GAE session directory: " + error.message());
         }
+        ++m_sessionGeneration;  ///< 会话代数，停止/切换时递增，用于拒绝旧回调。
         return {};
     }
 
     /**
      * @brief 将跟踪结果事件加入异步写入队列
      * @param event 跟踪结果事件
+     * @param generation 可选会话代次；拒绝旧会话提交。
+     *
      * @return 成功时返回空值；未初始化或未运行时返回错误描述
+     * @note 仅归档最新 valid
+     * 测量，包括刚失活目标的最终有效测量；空事件不写入。
+     *
+     * 不缓存全轨迹或去重；生产者负责每个目标/帧仅发布一次。
      */
-    auto enqueueTrackResult(const Dss::Core::TrackResultEvent& event)
+    auto enqueueTrackResult(const Dss::Core::TrackResultEvent& event,
+                            std::optional<std::uint64_t> generation = std::nullopt)
         -> std::expected<void, std::string> {
+        const auto submittedGeneration = generation.value_or(
+            m_sessionGeneration.load());  ///< 会话代数，停止/切换时递增，用于拒绝旧回调。
+        std::lock_guard lock(m_sessionMutex);
+        if (submittedGeneration != m_sessionGeneration.load()) {
+            return std::unexpected("stale track storage session");
+        }
         if (!m_ready.load()) {
             return std::unexpected("track data storage backend is not initialized");
         }
@@ -175,7 +221,8 @@ public:
             return {};
         }
 
-        auto result = m_writeQueue.enqueue(std::move(records));
+        const auto bytes = records.capacity() * sizeof(TrackDataRecord);
+        auto result = m_writeQueue.enqueue(std::move(records), bytes);
         if (!result.has_value() && result.error() == "async write queue is full") {
             return std::unexpected("track data storage queue is full");
         }
@@ -236,10 +283,15 @@ private:
         return {};
     }
 
-    std::filesystem::path m_baseDir;                             ///< 存储根目录
-    std::atomic<bool> m_ready{false};                            ///< 是否已完成初始化
-    std::filesystem::path m_sessionOutputPath;                   ///< 当前会话 GAE 输出路径
-    MessageBus* m_bus = nullptr;                                 ///< 非拥有事件总线指针
+    std::filesystem::path m_baseDir;            ///< 存储根目录
+    std::atomic<bool> m_ready{false};           ///< 是否已完成初始化
+    std::filesystem::path m_sessionOutputPath;  ///< 当前会话 GAE 输出路径
+    mutable std::mutex m_sessionMutex;          ///< 会话配置与准入边界。
+    std::mutex m_lifecycleMutex;                ///< join 不持有会话锁。
+    std::atomic<std::uint64_t> m_sessionGeneration{
+        0};                       ///< 会话代数，停止/切换时递增，用于拒绝旧回调。
+    bool m_stopping = false;      ///< 由 m_sessionMutex 保护的异步停止状态。
+    MessageBus* m_bus = nullptr;  ///< 非拥有事件总线指针
     AsyncWriteQueue<std::vector<TrackDataRecord>> m_writeQueue;  ///< 后台写入队列
 };
 

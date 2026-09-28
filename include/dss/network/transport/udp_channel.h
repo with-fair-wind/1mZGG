@@ -1,6 +1,8 @@
 #pragma once
 
 #include <atomic>
+#include <condition_variable>
+#include <cstddef>
 #include <cstdint>
 #include <deque>
 #include <expected>
@@ -22,8 +24,23 @@ namespace Dss::Network {
 /// UDP 通道实现；使用 std::jthread 串行执行 QUdpSocket 的绑定、收发与销毁
 class UdpChannel {
 public:
-    /// 构造 UDP 通道（套接字在 bind 时创建）
-    UdpChannel();
+    /** @brief 构造有界 UDP 通道，套接字在 bind 时创建。
+     * @param maxPendingRequests 等待发送的条数上限，可设为零以拒绝排队。
+     * @param maxPendingBytes 等待发送的载荷字节上限，不含当前执行的一条报文。
+     */
+    explicit UdpChannel(std::size_t maxPendingRequests = 64,
+                        std::size_t maxPendingBytes = 1024 * 1024);
+    /// 单报文载荷预算；实际可发送大小还取决于网络与操作系统。
+    static constexpr std::size_t maxDatagramBytes = 65507;
+    /// 发送队列的一致快照；计数在对象存续期间累计，重新 bind 不清零拒绝计数。
+    struct SendQueueSnapshot {
+        std::size_t pendingRequests;     ///< 尚未执行的发送请求数。
+        std::size_t pendingBytes;        ///< 尚未执行的载荷字节数。
+        std::uint64_t rejectedRequests;  ///< 超预算、未开启或正在关闭时的拒绝数。
+        bool accepting;                  ///< 当前是否接受发送请求。
+    };
+    /// @brief 查询发送队列状态。 @return 在同一锁内取得的快照。
+    [[nodiscard]] auto sendQueueSnapshot() const -> SendQueueSnapshot;
     /// 析构时自动关闭套接字
     ~UdpChannel();
 
@@ -37,22 +54,24 @@ public:
      */
     auto bind(const UdpEndpointConfig& config) -> std::expected<void, std::string>;
 
-    /// 关闭套接字并释放资源
+    /// 封闭发送入口并唤醒工作线程；已接受的请求逐条尝试发送后 join，不保证对端收到。
+    /// 必须由外部线程调用，接收回调不得重入 bind/close；关闭需等待当前回调返回。
     void close();
 
     /**
      * @brief 向配置中的默认远程地址发送数据
      * @param data 待发送的字节数据
-     * @return 成功发送的字节数，失败返回 -1
+     * @return 实际 socket 写入字节数；未开启、关闭中、超预算或写入失败返回 -1。
+     * @note 等待本条报文发送完成；回调内同通道发送直接执行，不进入等待队列。
      */
     auto send(std::span<const uint8_t> data) -> int64_t;
 
     /**
      * @brief 向指定主机和端口发送数据
      * @param data 待发送的字节数据
-     * @param host 目标主机地址
+     * @param host 数值形式的目标 IP 地址（含可选 scope，最多 256 字符）
      * @param port 目标端口号
-     * @return 成功发送的字节数，失败返回 -1
+     * @return 实际 socket 写入字节数；未开启、关闭中、超预算或写入失败返回 -1。
      */
     auto sendTo(std::span<const uint8_t> data, const std::string& host, uint16_t port) -> int64_t;
 
@@ -91,15 +110,16 @@ private:
                     std::promise<std::expected<void, std::string>> initPromise);
 
     /**
-     * @brief 处理已排队的全部发送命令。
+     * @brief 每轮最多处理 64 条发送命令，避免接收与停止检查饥饿。
      * @param socket 当前 I/O 工作线程独占的已绑定套接字。
      */
     void processPendingSends(QUdpSocket& socket);
     /**
-     * @brief 读取全部待处理数据报并在无锁状态下调用接收回调。
+     * @brief 每轮最多读取 64 条数据报，在无锁状态调用回调；回调异常使通道关闭。
      * @param socket 当前 I/O 工作线程独占的已绑定套接字。
+     * @param token 关闭令牌；停止后不再读取新数据报。
      */
-    void onReadyRead(QUdpSocket& socket);
+    void onReadyRead(QUdpSocket& socket, std::stop_token token);
     /// 在已持有生命周期锁时停止工作线程。
     void closeLocked();
     /// 让尚未执行的发送请求以失败结果结束。
@@ -107,7 +127,12 @@ private:
 
     std::jthread m_workerThread;                       ///< 独占 QUdpSocket 的 I/O 工作线程。
     mutable std::mutex m_lifecycleMutex;               ///< 串行化 bind/close。
-    std::mutex m_sendMutex;                            ///< 保护发送队列与默认远端配置。
+    mutable std::mutex m_sendMutex;                    ///< 保护发送队列与默认远端配置。
+    std::condition_variable m_sendWake;                ///< 发送与关闭唤醒；接收仍周期检查。
+    const std::size_t m_maxPendingRequests;            ///< 队列条数上限。
+    const std::size_t m_maxPendingBytes;               ///< 队列载荷上限。
+    std::size_t m_pendingBytes = 0;                    ///< 当前等待载荷字节数。
+    std::uint64_t m_rejectedRequests = 0;              ///< 累计拒绝次数。
     std::deque<SendRequest> m_sendQueue;               ///< 待执行发送命令。
     std::string m_remoteIp;                            ///< 默认远端 IP。
     uint16_t m_remotePort = 0;                         ///< 默认远端端口。

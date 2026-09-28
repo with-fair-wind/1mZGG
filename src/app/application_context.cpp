@@ -56,14 +56,13 @@ auto ApplicationContext::loadConfig(const std::filesystem::path& configPath)
 }
 
 void ApplicationContext::shutdown() {
-    // 1) 先退订组合根事件订阅:回调(communication_services.cpp 注册的 imageSender、trackDataStorage 等)
-    //    持有的服务 shared_ptr 在此释放。退订后工作线程不再命中这些订阅。
-    //    ViewModel 仅持有 registry 引用、不缓存服务 shared_ptr,故无其它引用妨碍下一步清理。
+    // 退订不能等待 COW 快照中的回调。先 join 所有生产者，期间保持订阅者存活。
+    if (m_stopServices) {
+        m_stopServices();
+    }
     m_connections.clear();
-    // 2) 再清空服务注册表:触发服务析构级联——frame source 析构 stop 帧线程并释放 frame callback
-    //    持有的 imageProcessor/localImageStorage 引用,随后它们析构 stop worker;
-    //    其余服务直接析构 stop/close。幂等,重复调用安全。
     m_registry.clear();
+    m_stopServices = {};
 }
 
 }  // namespace Dss::App

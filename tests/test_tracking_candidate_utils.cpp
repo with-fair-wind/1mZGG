@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 
 #include "dss/tracking/support/candidate_utils.h"
+#include "dss/tracking/support/lifecycle_utils.h"
 
 namespace {
 
@@ -313,4 +314,17 @@ TEST(TrackingCandidateUtils, OverlapsOnlyLivingTargetsInRecentWindow) {
     living.frameInfos[3].measuredBlob.centroid = Dss::Core::Vec2f{3.0F, 3.0F};
     const std::vector<Dss::Core::TargetInfo> withLivingOverlap{nonLiving, living};
     EXPECT_TRUE(Dss::Tracking::overlapsAnyLivingTarget(candidate, withLivingOverlap, rule));
+}
+
+TEST(TrackingCandidateUtils, TrimmedSuffixIsNotMistakenForInitialMeasurements) {
+    auto full = makeTarget("old", {{1, 1}, {2, 2}, {3, 3}, {4, 4}});
+    auto bounded = full;
+    Dss::Tracking::retainRecentTargetFrames(bounded, 3);
+    auto candidate = makeTargetWithFrameSeq("new", {{2, 2}, {3, 3}, {4, 4}}, 2);
+    EXPECT_FALSE(Dss::Tracking::sharesInitialCentroidAtSameFrameIndex(bounded, candidate,
+                                                                      {.frameCount = 3}));
+    EXPECT_TRUE(Dss::Tracking::sharesRecentMeasurementAtSameFrameIndex(candidate, bounded,
+                                                                       {.frameCount = 3}));
+    EXPECT_TRUE(
+        Dss::Tracking::sharesRecentMeasurementAtSameFrameIndex(candidate, full, {.frameCount = 3}));
 }

@@ -1,12 +1,16 @@
 #include <algorithm>
 #include <array>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include <gtest/gtest.h>
 
+#include "../src/tracking/geo_tracking_detail.h"
 #include "dss/core/constants.h"
+#include "dss/core/result/result_packet_utils.h"
 #include "dss/tracking/strategy/geo_tracker.h"
+#include "dss/tracking/support/lifecycle_utils.h"
 
 namespace {
 
@@ -82,6 +86,74 @@ void addGeoTargetWithRaDec(Dss::Core::FrameMeasurements& frame, float x, float y
 }
 
 }  // namespace
+
+TEST(GeoTracker, EmitsEachRetirementOnceWhileOtherTargetsRemainAlive) {
+    auto settings = makeSettings();
+    settings.numFramesLiving = 2;
+    settings.opticParams.imageWidth = 20000;
+    settings.opticParams.imageHeight = 20000;
+    Dss::Tracking::GeoTracker tracker(settings);
+    std::unordered_set<std::string> retiredIds;
+    std::string persistentId;
+    int validFinalMeasurements = 0;
+    constexpr std::uint64_t cycles = 100;
+    for (std::uint64_t seq = 1; seq <= cycles * 12; ++seq) {
+        const auto phase = (seq - 1) % 12;
+        const auto cycle = (seq - 1) / 12;
+        auto frame = makeFrame(seq, 0);
+        addCenteredStars(frame, 0, 0);
+        addGeoTarget(frame, 100 + static_cast<float>(seq) * 5, 100 + static_cast<float>(seq) * 4);
+        if (phase < 4 || (phase == 4 && cycle % 2 == 0)) {
+            addGeoTarget(frame, 300 + static_cast<float>(phase) * 3,
+                         500 + static_cast<float>(phase) * 5);
+            if (phase == 4) {
+                // 有效测量重复赤经/赤纬导致退休，最后有效结果仍应保留一次。
+                frame.targetBlobs.back().alpha = 0.0209;
+                frame.targetBlobs.back().sigma = 0.0415;
+            }
+        }
+        const auto targets = tracker.track(frame);
+        if (seq < 4) {
+            ASSERT_TRUE(targets.empty());
+            continue;
+        }
+        ASSERT_LE(targets.size(), 2U) << "seq=" << seq;
+        if (seq == 4) {
+            ASSERT_EQ(targets.size(), 2U);
+            persistentId = targets.front().targetId;
+        }
+        const auto persistent =
+            std::ranges::find(targets, persistentId, &Dss::Core::TargetInfo::targetId);
+        ASSERT_NE(persistent, targets.end());
+        ASSERT_TRUE(persistent->living);
+        ASSERT_EQ(persistent->totalFrameCount(), seq);
+        for (const auto& target : targets) {
+            ASSERT_FALSE(retiredIds.contains(target.targetId)) << "seq=" << seq;
+            ASSERT_LE(target.frameInfos.size(), 10U);
+            const auto packet = Dss::Core::makeResultPacket(target);
+            ASSERT_TRUE(packet);
+            EXPECT_EQ(packet->frameSeq, seq);  // 不重复发送旧帧。
+            if (!target.living) {
+                EXPECT_NE(target.targetId, persistentId);
+                EXPECT_TRUE(retiredIds.insert(target.targetId).second);
+                validFinalMeasurements += packet->valid ? 1 : 0;
+            }
+        }
+    }
+    EXPECT_EQ(retiredIds.size(), cycles);
+    EXPECT_EQ(validFinalMeasurements, cycles / 2);
+
+    for (std::uint64_t seq = cycles * 12 + 1; seq <= cycles * 12 + 3; ++seq) {
+        const auto targets = tracker.track(makeFrame(seq, 0));
+        if (seq == cycles * 12 + 2) {
+            ASSERT_EQ(targets.size(), 1U);
+            EXPECT_FALSE(targets.front().living);
+            EXPECT_EQ(targets.front().targetId, persistentId);
+        } else if (seq == cycles * 12 + 3) {
+            EXPECT_TRUE(targets.empty());
+        }
+    }
+}
 
 TEST(GeoTracker, EstimatesStarSpeedFromDominantCenteredMotion) {
     const auto settings = makeSettings();
@@ -729,5 +801,82 @@ TEST(GeoTracker, EndsTrackedTargetWhenConsecutiveMeasurementsRepeatEquatorialPoi
         ASSERT_EQ(target.frameInfos.size(), 5U);
         EXPECT_TRUE(target.frameInfos.back().valid);
         EXPECT_FALSE(target.living);
+    }
+}
+
+TEST(GeoTracker, LongTrackBoundsHistoryAndPreservesCumulativeValidity) {
+    for (const int window : {-1, 4, 17}) {
+        auto settings = makeSettings();
+        settings.numFramesLiving = window;
+        settings.opticParams.imageWidth = 20000;
+        settings.opticParams.imageHeight = 20000;
+        Dss::Tracking::GeoTracker tracker(settings);
+        float expectedValidity = 1.0F;
+        Dss::Core::TargetInfo reference;
+        std::string id;
+        for (std::uint64_t seq = 1; seq <= 1000; ++seq) {
+            const auto index = static_cast<float>(seq - 1);
+            auto frame = makeFrame(seq, 0);
+            addCenteredStars(frame, index, 0.0F);
+            const bool valid = seq % 100 != 0;
+            if (valid) {
+                addGeoTarget(frame, 105.0F + index * 5, 100.0F + index * 4);
+            }
+            const auto targets = tracker.track(frame);
+            if (seq < 4) {
+                ASSERT_TRUE(targets.empty());
+                continue;
+            }
+            ASSERT_EQ(targets.size(), 1U) << "seq=" << seq;
+            const auto& target = targets.front();
+            if (seq == 4) {
+                id = target.targetId;
+                reference = target;
+            } else {
+                reference.frameInfos.push_back(target.frameInfos.back());
+                Dss::Tracking::GeoDetail::updatePredictionFromHistory(reference, 1.0F, settings);
+                const auto count = static_cast<float>(seq);
+                expectedValidity =
+                    ((count - 1.0F) * expectedValidity + (valid ? 1.0F : 0.0F)) / count;
+            }
+            ASSERT_TRUE(target.living) << "seq=" << seq;
+            ASSERT_EQ(target.targetId, id);
+            ASSERT_EQ(target.totalFrameCount(), seq);
+            ASSERT_LE(target.frameInfos.size(), static_cast<std::size_t>((std::max)(10, window)));
+            ASSERT_FLOAT_EQ(target.validity, expectedValidity);
+            ASSERT_EQ(Dss::Tracking::countRecentInvalidFrames(target, 10),
+                      Dss::Tracking::countRecentInvalidFrames(reference, 10));
+            ASSERT_FLOAT_EQ(target.predictedPosFrame.x, reference.predictedPosFrame.x);
+            ASSERT_FLOAT_EQ(target.predictedPosFrame.y, reference.predictedPosFrame.y);
+            ASSERT_FLOAT_EQ(target.predictedSpdFrame.x, reference.predictedSpdFrame.x);
+            ASSERT_FLOAT_EQ(target.predictedSpdFrame.y, reference.predictedSpdFrame.y);
+            ASSERT_FLOAT_EQ(target.predictedPosAe.x, reference.predictedPosAe.x);
+            ASSERT_FLOAT_EQ(target.predictedPosAe.y, reference.predictedPosAe.y);
+            ASSERT_FLOAT_EQ(target.predictedSpdAe.x, reference.predictedSpdAe.x);
+            ASSERT_FLOAT_EQ(target.predictedSpdAe.y, reference.predictedSpdAe.y);
+            const auto packet = Dss::Core::makeResultPacket(target);
+            const auto referencePacket = Dss::Core::makeResultPacket(reference);
+            ASSERT_TRUE(packet && referencePacket);
+            ASSERT_EQ(packet->targetId, referencePacket->targetId);
+            ASSERT_EQ(packet->frameSeq, referencePacket->frameSeq);
+            ASSERT_EQ(packet->valid, referencePacket->valid);
+            ASSERT_FLOAT_EQ(packet->targetPosFrame.x, referencePacket->targetPosFrame.x);
+            ASSERT_FLOAT_EQ(packet->targetSpdAe.y, referencePacket->targetSpdAe.y);
+            ASSERT_EQ(target.frameInfos.back().valid, valid);
+            ASSERT_EQ(target.frameInfos.back().frameSeq, seq);
+        }
+        tracker.reset();
+        for (std::uint64_t seq = 1; seq <= 4; ++seq) {
+            auto frame = makeFrame(seq, 0);
+            addCenteredStars(frame, static_cast<float>(seq), 0);
+            addGeoTarget(frame, 100 + static_cast<float>(seq) * 5,
+                         100 + static_cast<float>(seq) * 4);
+            const auto targets = tracker.track(frame);
+            if (seq == 4) {
+                ASSERT_EQ(targets.size(), 1U);
+                EXPECT_EQ(targets.front().totalFrameCount(), 4U);
+                EXPECT_EQ(targets.front().discardedFrameCount, 0U);
+            }
+        }
     }
 }

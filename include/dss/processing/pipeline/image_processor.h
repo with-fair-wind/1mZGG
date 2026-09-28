@@ -36,6 +36,13 @@ public:
     /// 停止接收新帧，等待后台处理线程退出并清空尚未处理的帧
     void stop();
 
+    /// 停止接受新帧，处理完已入队帧并 join；调用前须停止帧源。
+    void drain();
+
+    /// 停止处理并丢弃旧队列，清理处理/跟踪历史并通知消费者。调用前须停止帧源。
+    /// 启停及 resetSession 由协调层串行调用；普通暂停续播不调用本方法。
+    void resetSession();
+
     /**
      * @brief 提交帧到处理队列
      * @param packet 待处理帧数据包
@@ -50,6 +57,16 @@ public:
      * @return 成功入队返回 true；处理器未运行、正在停止或等待被取消时返回 false。
      */
     [[nodiscard]] bool submitFrameBlocking(FramePacket packet, std::stop_token token);
+
+    /// 队列与工作线程分别采样，运行中允许存在短暂的跨快照时间差。
+    /// @return 队列与工作线程分别采样的资源计数，不是全局原子快照。
+    [[nodiscard]] auto resourceSnapshot() const -> Dss::Core::ResourceSnapshot;
+
+    /// 最近一次 start 后是否异常退出；详细原因通过 BackgroundTaskErrorEvent 发布。
+    /// @return 最近一次启动的处理线程发生异常时为 true。
+    [[nodiscard]] bool hasFailed() const {
+        return m_failed.load();
+    }
 
     /** @brief 获取累计丢帧数。 @return 因输入队列已满而丢弃的帧数。 */
     [[nodiscard]] auto droppedFrames() const -> uint64_t;
@@ -109,11 +126,14 @@ private:
      */
     [[nodiscard]] auto currentDisplayStretchSettings() const -> DisplayStretchSettings;
 
+    mutable std::mutex m_resourceMutex;             ///< 保护处理线程活动项与耗时指标。
+    Dss::Core::ResourceSnapshot m_resources;        ///< 处理线程活动载荷、完成数和耗时。
     MessageBus& m_bus;                              ///< 事件消息总线
     BoundedChannel<FramePacket, 4> m_frameChannel;  ///< 帧输入有界通道
     std::jthread m_workerThread;                    ///< 后台处理线程
     std::mutex m_lifecycleMutex;                    ///< 串行化启动与停止操作
     std::atomic<bool> m_running{false};             ///< 运行状态标志
+    std::atomic<bool> m_failed{false};              ///< 失败终态，下一次 start 清除。
     std::atomic<uint64_t> m_droppedFrames{0};       ///< 丢弃帧计数
 
     mutable std::mutex m_strategyMutex;                                 ///< 保护策略对象的互斥锁

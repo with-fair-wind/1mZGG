@@ -39,3 +39,17 @@ TEST(RuntimeDiagnostics, AggregatesBackendCountersAndErrorEvents) {
     EXPECT_EQ(snapshot.serialErrors, 2U);
     EXPECT_EQ(snapshot.storageErrors, 1U);
 }
+
+TEST(RuntimeDiagnostics, OptionalResourceProvidersReturnLiveSnapshots) {
+    Dss::Core::MessageBus bus;
+    Dss::Core::ResourceSnapshot state;
+    Dss::App::RuntimeDiagnostics diagnostics(bus, {.processing = [&] { return state; }});
+    EXPECT_EQ(diagnostics.snapshot().imageStorage.queuedBytes, 0U);
+    EXPECT_EQ(diagnostics.snapshot().imageSender.activeBytes, 0U);
+    state.queuedBytes = 4096;
+    state.activeItems = 1;
+    EXPECT_EQ(diagnostics.snapshot().processing.queuedBytes, 4096U);
+    EXPECT_EQ(diagnostics.snapshot().processing.activeItems, 1U);
+    state = {};
+    EXPECT_EQ(diagnostics.snapshot().processing.queuedBytes, 0U);
+}

@@ -3,20 +3,25 @@
 #include <QObject>
 #include <QString>
 #include <QStringList>
-#include <functional>
-#include <optional>
-#include <stop_token>
-#include <thread>
+#include <atomic>
+#include <cstdint>
+#include <expected>
+#include <memory>
+#include <string>
 #include <vector>
 
 #include "dss/core/event/event_bus.h"
 #include "dss/core/event/events.h"
 #include "dss/ui/view_model/view_model_context.h"
 
+namespace Dss::App {
+class ReplaySession;
+}
+
 namespace Dss::Ui {
 
 /**
- * @brief 回放子 ViewModel，负责图像序列选择、播放控制与帧进度状态。
+ * @brief 回放展示适配器，向 ReplaySession 提交命令并映射 Qt 属性、文本和帧进度。
  */
 class ReplayViewModel : public QObject {
     Q_OBJECT
@@ -40,6 +45,9 @@ public:
      */
     ~ReplayViewModel() override;
 
+    /// UI 线程关闭入口：取消并 join 后台任务，再停止帧源/处理器；不发 UI 信号，幂等。
+    void shutdown();
+
     /**
      * @brief 当前是否正在连续采集或回放。
      * @return 正在运行时返回 true。
@@ -47,7 +55,7 @@ public:
     [[nodiscard]] bool isGrabbing() const;
 
     /**
-     * @brief 当前是否正在执行回放文件加载或单步后台任务。
+     * @brief 当前是否正在执行选择、加载、定位、单步或停止回收。
      * @return 后台任务尚未完成时返回 true。
      */
     [[nodiscard]] bool replayBusy() const;
@@ -72,9 +80,9 @@ public:
 
 public Q_SLOTS:
     /**
-     * @brief 登记回放图像序列路径并立即更新回放计数，不读取图像内容。
+     * @brief 异步登记回放序列并清理旧历史；完成后更新计数，不解码图像。
      * @param files 图像文件路径列表。
-     * @return 路径成功登记时返回 true；服务缺失、路径为空或已有任务运行时返回 false。
+     * @return 命令已接受时返回 true；完成由 replayBusyChanged(false) 表示。
      */
     Q_INVOKABLE bool selectReplayFiles(const QStringList& files);
 
@@ -84,11 +92,11 @@ public Q_SLOTS:
     Q_INVOKABLE void startGrab();
 
     /**
-     * @brief 停止连续采集或回放。
+     * @brief 异步停止回放并等待已接受帧处理完成，期间 replayBusy 为 true。
      */
     Q_INVOKABLE void stopGrab();
-    /// @brief 记录"加载完成后停止采集"意图。
-    /// @note 加载中收到停止指令时调用,finishReplayTask 据此跳过自动启动采集。
+    /// @brief 取消加载或单步任务并异步停止。
+    /// @note 兼容主控停止入口，与 stopGrab 使用同一服务停止操作。
     void requestStopAfterLoad();
 
     /**
@@ -101,9 +109,9 @@ public Q_SLOTS:
     Q_INVOKABLE bool stepReplayBackward();
 
     /**
-     * @brief 将下一帧定位到零基索引。
+     * @brief 异步将下一帧定位到零基索引并清理历史。
      * @param index 目标帧索引。
-     * @return 索引有效且定位成功时返回 true。
+     * @return 命令已接受时返回 true，完成前拒绝其他回放命令。
      */
     Q_INVOKABLE bool seekReplayFrame(int index);
 
@@ -148,35 +156,15 @@ Q_SIGNALS:
     void statusTextChanged(const QString& text);
 
 private:
-    /**
-     * @brief 回放后台任务完成后回到 UI 线程应用的结果。
-     */
-    struct ReplayTaskResult {
-        bool success = false;                     ///< 任务是否成功完成。
-        bool startReplayAfterCompletion = false;  ///< 完成后是否在 UI 线程启动连续回放。
-        std::optional<int> frameCount;            ///< 需要更新的序列总帧数。
-        std::optional<int> currentFrame;          ///< 需要更新的当前帧号。
-        QString statusText;                       ///< 任务完成后展示的状态文本。
-    };
-
-    using ReplayTask = std::function<ReplayTaskResult(std::stop_token)>;  ///< 后台回放任务类型。
-
-    /**
-     * @brief 启动一个串行回放后台任务。
-     * @param loadingText 任务开始时显示的状态文本。
-     * @param task 在 std::jthread 中执行的任务体。
-     * @return 任务成功提交时返回 true。
-     */
-    [[nodiscard]] bool startReplayTask(const QString& loadingText, ReplayTask task);
-
-    /**
-     * @brief 在 UI 线程应用回放后台任务完成结果。
-     * @param result 后台任务产生的结果。
-     */
-    void finishReplayTask(const ReplayTaskResult& result);
-
-    /** @brief 在回放源完成后台初始化后启动处理器和连续回放。 */
-    void startInitializedReplay();
+    /// 检查服务是否可用及 UI 是否仍有未消费的命令结果。
+    /// @return 可提交普通命令时为 true。
+    [[nodiscard]] bool canSubmit();
+    /// 映射命令接收结果，成功时立即置 busy，等待后续快照确认完成。
+    /// @param result 应用服务的命令接收结果。
+    /// @return 命令被接受时为 true。
+    bool acceptCommand(const std::expected<void, std::string>& result);
+    /// 在对象线程映射应用层快照；不启停或等待后端服务。
+    void refreshSession();
 
     /**
      * @brief 订阅显示刷新事件，用于同步当前帧进度。
@@ -216,9 +204,11 @@ private:
     UiServiceContext::MessageBus& m_bus;                          ///< 应用事件总线。
     Dss::Core::ServiceRegistry& m_registry;                       ///< 应用服务注册表。
     bool m_grabbing = false;                                      ///< 是否正在采集或回放。
+    bool m_shutdown = false;                                      ///< 已关闭，忽略后续排队通知。
+    std::atomic<std::uint64_t> m_sessionRevision{0};              ///< 过滤旧会话的已投递进度更新。
     bool m_replayBusy = false;                                    ///< 是否正在执行回放后台任务。
-    bool m_stopRequestedAfterLoad = false;                        ///< 加载期间收到停止指令,完成后不自动启动采集。
-    std::jthread m_replayTaskWorker;                              ///< 回放文件加载与单步 worker。
+    std::shared_ptr<Dss::App::ReplaySession> m_session;           ///< 应用层持有的回放服务。
+    std::uint64_t m_snapshotRevision = 0;                         ///< 最近映射的服务快照版本。
     int m_replayFrameCount = 0;                                   ///< 回放序列总帧数。
     int m_replayCurrentFrame = 0;                                 ///< 当前回放帧号。
     QString m_runtimeDiagnosticsText{"Diagnostics unavailable"};  ///< 当前诊断摘要文本

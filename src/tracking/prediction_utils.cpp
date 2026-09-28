@@ -172,7 +172,7 @@ auto appendMatchedFrameAndUpdatePrediction(const Core::FrameMeasurements& frame,
     return updated;
 }
 
-/// 取最近三帧像面/AE 运动的中位数更新预测，并滚动更新有效性
+/// 最近四帧产生三段运动中值；有效率分母使用累计样本数，保持原浮点运算顺序。
 void updatePredictionFromRecentFour(Core::TargetInfo& target) {
     const auto size = target.frameInfos.size();
     if (size < 4U) {
@@ -198,8 +198,9 @@ void updatePredictionFromRecentFour(Core::TargetInfo& target) {
                                         latestBlob.posAe.y + target.predictedSpdAe.y * period};
 
     const auto latestValid = target.frameInfos.back().valid ? 1.0F : 0.0F;
-    target.validity = ((static_cast<float>(size - 1U) * target.validity) + latestValid) /
-                      static_cast<float>(size);
+    const auto sampleCount = target.totalFrameCount();
+    target.validity = ((static_cast<float>(sampleCount - 1U) * target.validity) + latestValid) /
+                      static_cast<float>(sampleCount);
 }
 
 }  // namespace Dss::Tracking

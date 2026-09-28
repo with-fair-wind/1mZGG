@@ -121,19 +121,20 @@ protected:
      */
     void resizeGL(int width, int height) override;
 
-    /** @brief 处理左键选点和中键平移起点。 */
+    /** @brief 处理左键选点和中键平移起点。 @param event Qt 分发的输入或尺寸变化事件。 */
     void mousePressEvent(QMouseEvent* event) override;
 
-    /** @brief 处理中键拖拽平移并发出鼠标图像坐标。 */
+    /** @brief 处理中键拖拽平移并发出鼠标图像坐标。 @param event Qt 分发的输入或尺寸变化事件。 */
     void mouseMoveEvent(QMouseEvent* event) override;
 
-    /** @brief 处理中键释放以结束平移状态。 */
+    /** @brief 处理中键释放以结束平移状态。 @param event Qt 分发的输入或尺寸变化事件。 */
     void mouseReleaseEvent(QMouseEvent* event) override;
 
-    /** @brief 控件尺寸变化时尽量保持原视图中心。 */
+    /** @brief 控件尺寸变化时尽量保持原视图中心。 @param event Qt 分发的输入或尺寸变化事件。 */
     void resizeEvent(QResizeEvent* event) override;
 
-    /** @brief 处理滚轮缩放并保持鼠标锚点对应的图像位置不变。 */
+    /** @brief 处理滚轮缩放并保持鼠标锚点对应的图像位置不变。 @param event Qt
+     * 分发的输入或尺寸变化事件。 */
     void wheelEvent(QWheelEvent* event) override;
 
 private:

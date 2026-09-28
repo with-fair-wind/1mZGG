@@ -3,11 +3,14 @@
 #include <QImage>
 #include <QObject>
 #include <QString>
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <vector>
 
+#include "dss/core/diagnostics/resource_snapshot.h"
 #include "dss/core/event/event_bus.h"
 #include "dss/core/event/events.h"
 #include "dss/ui/view_model/view_model_context.h"
@@ -24,6 +27,8 @@ class DisplayViewModel : public QObject {
     Q_PROPERTY(int displayStretchHigh READ displayStretchHigh NOTIFY displayStretchSettingsChanged)
 
 public:
+    /** @brief 获取本组件的资源采样。 @return 待显示槽及覆盖次数的线程安全快照。 */
+    [[nodiscard]] auto resourceSnapshot() const -> Dss::Core::ResourceSnapshot;
     /**
      * @brief 构造显示子 ViewModel 并订阅显示与处理事件。
      * @param context UI 子 ViewModel 共享的后端上下文。
@@ -101,7 +106,8 @@ public Q_SLOTS:
     Q_INVOKABLE void setRawDisplayEnabled(bool enabled);
 
     /**
-     * @brief 清除当前可重绘帧缓存。
+     * @brief 线程安全地推进会话代次，清除排队更新和当前可重绘帧缓存。
+     * @note 已取出的旧批次不再缓存或开始后续通知；不等待已经开始的 Qt 信号槽返回。
      */
     void clearCurrentDisplayFrame();
 
@@ -171,11 +177,29 @@ private:
      */
     void onProcessingComplete(const Dss::Core::ProcessingCompleteEvent& event);
 
-    /**
-     * @brief 缓存最近一次显示事件中的 RAW 帧。
-     * @param event 显示刷新事件。
+    /// UI 线程取走最新帧、统计及会话代次；每类仅保留一份，最多一个待处理唤醒。
+    void flushPendingUpdates();
+
+    /** @brief 在 UI 线程应用同一会话的显示帧。
+     * @param event 待显示事件。
+     * @param revision 入队批次所属的会话代次；重置后丢弃。
      */
-    void cacheCurrentDisplayFrame(const Dss::Core::DisplayRefreshEvent& event);
+    void displayFrame(const Dss::Core::DisplayRefreshEvent& event, std::uint64_t revision);
+
+    /** @brief 在 UI 线程发布同一会话的统计，不持锁调用 Qt 信号。
+     * @param stats 待发布统计。
+     * @param revision 入队批次所属的会话代次；重置后丢弃。
+     */
+    void displayStats(const Dss::Core::ImageStats& stats, std::uint64_t revision);
+
+    /**
+     * @brief 与重置互斥地检查代次并缓存最近一次显示事件中的 RAW 帧。
+     * @param event 显示刷新事件。
+     * @param revision 显示事件所属的会话代次。
+     * @return 代次仍有效且已缓存时返回 true。
+     */
+    [[nodiscard]] bool cacheCurrentDisplayFrame(const Dss::Core::DisplayRefreshEvent& event,
+                                                std::uint64_t revision);
 
     /**
      * @brief 使用当前拉伸设置重建并发送当前显示图像。
@@ -195,12 +219,19 @@ private:
      */
     [[nodiscard]] bool syncDisplayStretchToProcessor();
 
-    UiServiceContext::MessageBus& m_bus;       ///< 应用事件总线。
-    Dss::Core::ServiceRegistry& m_registry;    ///< 应用服务注册表。
-    bool m_displayAutoStretch = true;          ///< 是否启用显示自动拉伸。
-    int m_displayStretchLow = 1000;            ///< 显示拉伸低阈值。
-    int m_displayStretchHigh = 5000;           ///< 显示拉伸高阈值。
-    bool m_rawDisplayEnabled = false;          ///< 是否直接发送 RAW 帧给显示控件。
+    UiServiceContext::MessageBus& m_bus;              ///< 应用事件总线。
+    Dss::Core::ServiceRegistry& m_registry;           ///< 应用服务注册表。
+    bool m_displayAutoStretch = true;                 ///< 是否启用显示自动拉伸。
+    int m_displayStretchLow = 1000;                   ///< 显示拉伸低阈值。
+    int m_displayStretchHigh = 5000;                  ///< 显示拉伸高阈值。
+    bool m_rawDisplayEnabled = false;                 ///< 是否直接发送 RAW 帧给显示控件。
+    std::atomic<std::uint64_t> m_sessionRevision{0};  ///< 重置时在两把缓存锁内递增，通知前读取。
+    mutable std::mutex m_pendingMutex;                ///< 保护待显示槽、唤醒状态与资源计数。
+    Dss::Core::ResourceSnapshot m_resources;          ///< pendingMutex 保护累计指标。
+    std::optional<Dss::Core::DisplayRefreshEvent>
+        m_pendingFrame;  ///< 至多一份待显示图像，后到帧可覆盖。
+    std::optional<Dss::Core::ProcessingCompleteEvent> m_pendingStats;  ///< 至多一份待显示处理统计。
+    bool m_flushQueued = false;                ///< 是否已有 Qt 唤醒等待执行，避免重复排队。
     mutable std::mutex m_currentDisplayMutex;  ///< 保护当前显示帧缓存。
     std::shared_ptr<const std::vector<std::uint16_t>> m_currentRawImage;  ///< 当前 RAW 图像。
     std::uint64_t m_currentDisplayFrameSeq = 0;                           ///< 当前显示帧序号。

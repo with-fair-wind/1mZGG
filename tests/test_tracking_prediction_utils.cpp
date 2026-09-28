@@ -3,6 +3,7 @@
 
 #include <gtest/gtest.h>
 
+#include "dss/tracking/support/lifecycle_utils.h"
 #include "dss/tracking/support/prediction_utils.h"
 
 namespace {
@@ -278,4 +279,54 @@ TEST(TrackingPredictionUtils, AppendsInvalidFrameWhenNoBlobMatches) {
     EXPECT_EQ(invalidFrame.measuredBlob.id, "target-1");
     expectVecNear(invalidFrame.measuredBlob.centroid, Dss::Core::Vec2f{22.0F, 16.0F});
     expectVecNear(invalidFrame.measuredBlob.posAe, Dss::Core::Vec2f{1.6F, 2.9F});
+}
+
+TEST(TrackingPredictionUtils, MotionUsesRecentFourButValidityUsesTotalSampleCount) {
+    const auto settings = makeSettings();
+    Dss::Core::TargetInfo complete{};
+    complete.validity = 0.75F;
+    for (std::uint64_t index = 0; index < 100; ++index) {
+        const auto value = static_cast<float>(index);
+        complete.frameInfos.push_back(Dss::Tracking::makeTargetFrameInfo(
+            makeFrame(index, 10.0F, {}),
+            makeBlob("target", value * 2, value * 3, value * 0.1F, value * 0.2F), settings));
+    }
+    complete.frameInfos.back().valid = false;
+    auto recent = complete;
+    recent.frameInfos.erase(recent.frameInfos.begin(), recent.frameInfos.end() - 4);
+    Dss::Tracking::updatePredictionFromRecentFour(complete);
+    Dss::Tracking::updatePredictionFromRecentFour(recent);
+    expectVecNear(complete.predictedPosFrame, recent.predictedPosFrame);
+    expectVecNear(complete.predictedSpdFrame, recent.predictedSpdFrame);
+    expectVecNear(complete.predictedPosAe, recent.predictedPosAe);
+    EXPECT_NEAR(complete.validity, 0.7425F, 1e-6F);
+    EXPECT_NEAR(recent.validity, 0.5625F, 1e-6F);
+}
+
+TEST(TrackingPredictionUtils, BoundedPredictionMatchesFullHistoryForLongVariableRateSequence) {
+    Dss::Core::TargetInfo full{};
+    Dss::Core::TargetInfo bounded{};
+    full.validity = bounded.validity = 0.75F;
+    const auto settings = makeSettings();
+    for (std::uint64_t seq = 0; seq < 3000; ++seq) {
+        const auto value = static_cast<float>(seq);
+        const auto noise = seq % 13 == 0 ? 0.25F : 0.0F;
+        auto frame = Dss::Tracking::makeTargetFrameInfo(
+            makeFrame(seq, seq % 2 == 0 ? 10.0F : 20.0F, {}),
+            makeBlob("target", value * 0.5F + noise, value * 0.25F, value * 0.001F, value * 0.002F),
+            settings);
+        frame.valid = seq % 23 > 4;
+        full.frameInfos.push_back(frame);
+        bounded.frameInfos.push_back(frame);
+        Dss::Tracking::updatePredictionFromRecentFour(full);
+        Dss::Tracking::updatePredictionFromRecentFour(bounded);
+        Dss::Tracking::retainRecentTargetFrames(bounded, 4);
+        ASSERT_LE(bounded.frameInfos.size(), 4U);
+        ASSERT_EQ(bounded.totalFrameCount(), seq + 1);
+        ASSERT_FLOAT_EQ(bounded.validity, full.validity);
+        expectVecNear(bounded.predictedPosFrame, full.predictedPosFrame);
+        expectVecNear(bounded.predictedSpdFrame, full.predictedSpdFrame);
+        expectVecNear(bounded.predictedPosAe, full.predictedPosAe);
+        expectVecNear(bounded.predictedSpdAe, full.predictedSpdAe);
+    }
 }

@@ -1,5 +1,6 @@
 #include "dss/ui/view_model/tracking_view_model.h"
 
+#include <algorithm>
 #include <utility>
 
 #include "dss/app/service_keys.h"
@@ -23,6 +24,9 @@ int TrackingViewModel::trackMode() const {
 }
 
 void TrackingViewModel::setTrackMode(int mode) {
+    if (m_trackMode == mode && m_strategyConfigured) {
+        return;
+    }
     if (m_trackMode != mode) {
         m_trackMode = mode;
         Q_EMIT trackModeChanged(mode);
@@ -44,27 +48,54 @@ void TrackingViewModel::selectTarget(QPointF pos) {
 }
 
 void TrackingViewModel::setupSubscriptions() {
+    m_connections.push_back(
+        m_bus.subscribe<Dss::Core::ProcessingSessionResetEvent>([this](const auto&) {
+            ++m_sessionRevision;
+            onTrackResult({});
+        }));
     m_connections.push_back(m_bus.subscribe<Dss::Core::TrackResultEvent>(
         [this](const Dss::Core::TrackResultEvent& e) { onTrackResult(e); }));
 }
 
 void TrackingViewModel::onTrackResult(const Dss::Core::TrackResultEvent& event) {
-    if (!isObjectThread(this)) {
-        auto eventCopy = event;
-        invokeOnObjectThread(
-            this, [this, eventCopy = std::move(eventCopy)] { onTrackResult(eventCopy); });
-        return;
+    const auto revision = m_sessionRevision.load();
+    DisplayResult result{};
+    result.count =
+        static_cast<int>(std::ranges::count(event.targets, true, &Dss::Core::TargetInfo::living));
+    const auto active = std::ranges::find(event.targets, true, &Dss::Core::TargetInfo::living);
+    if (active != event.targets.end()) {
+        const auto& t = *active;
+        result.info = QString("Target: %1 | AZ: %2 EL: %3")
+                          .arg(QString::fromStdString(t.targetId))
+                          .arg(static_cast<double>(t.predictedPosAe.x), 0, 'f', 4)
+                          .arg(static_cast<double>(t.predictedPosAe.y), 0, 'f', 4);
     }
+    bool schedule = false;
+    {
+        std::lock_guard lock(m_pendingMutex);
+        if (revision != m_sessionRevision.load()) {
+            return;
+        }
+        m_pendingResult = std::move(result);
+        schedule = !std::exchange(m_updateQueued, true);
+    }
+    if (schedule && isObjectThread(this)) {
+        flushPendingResult();
+    } else if (schedule) {
+        invokeOnObjectThread(this, [this] { flushPendingResult(); });
+    }
+}
 
-    Q_EMIT targetListUpdated(static_cast<int>(event.targets.size()));
-
-    if (!event.targets.empty()) {
-        const auto& t = event.targets.front();
-        auto info = QString("Target: %1 | AZ: %2 EL: %3")
-                        .arg(QString::fromStdString(t.targetId))
-                        .arg(static_cast<double>(t.predictedPosAe.x), 0, 'f', 4)
-                        .arg(static_cast<double>(t.predictedPosAe.y), 0, 'f', 4);
-        Q_EMIT trackInfoUpdated(info);
+void TrackingViewModel::flushPendingResult() {
+    std::optional<DisplayResult> result;
+    {
+        std::lock_guard lock(m_pendingMutex);
+        result = std::exchange(m_pendingResult, std::nullopt);
+        m_updateQueued = false;
+    }
+    if (result) {
+        Q_EMIT targetListUpdated(result->count);
+        Q_EMIT trackInfoUpdated(result->info);
     }
 }
 
@@ -77,6 +108,7 @@ void TrackingViewModel::configureTrackingStrategy() {
     }
 
     const auto mode = static_cast<Dss::Core::TrackMode>(m_trackMode);
+    m_strategyConfigured = true;
     auto strategy =
         Dss::Tracking::makeTrackingStrategy(mode, Dss::Core::Config::instance().trackingSettings());
     if (!strategy) {

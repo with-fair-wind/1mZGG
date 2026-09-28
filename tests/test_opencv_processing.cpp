@@ -36,3 +36,19 @@ TEST(OpenCvProcessingStrategyTest, ComputesStatsAndExtractsBrightBlob) {
     EXPECT_FLOAT_EQ(result.targetBlobs.front().centroid.x, 2.5f);
     EXPECT_FLOAT_EQ(result.targetBlobs.front().centroid.y, 2.5f);
 }
+
+TEST(OpenCvProcessingStrategyTest, CanSkipUnusedDisplayConversionWithoutChangingDetection) {
+    Dss::Processing::FramePacket packet{};
+    packet.width = 2;
+    packet.height = 2;
+    packet.rawImage = Dss::Processing::makeSharedRawImage({1, 2, 3, 100});
+    Dss::Processing::OpenCvProcessingStrategy strategy;
+    const auto withDisplay = strategy.process(packet);
+    packet.backendDisplayRequired = false;
+    const auto withoutDisplay = strategy.process(packet);
+    ASSERT_TRUE(withoutDisplay.success);
+    EXPECT_TRUE(withoutDisplay.rawStatsValid);
+    EXPECT_TRUE(withoutDisplay.displayImage.empty());
+    EXPECT_DOUBLE_EQ(withoutDisplay.stats.avg, withDisplay.stats.avg);
+    EXPECT_EQ(withoutDisplay.targetBlobs.size(), withDisplay.targetBlobs.size());
+}

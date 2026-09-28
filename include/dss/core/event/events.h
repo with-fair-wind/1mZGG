@@ -41,6 +41,9 @@ struct GrabStartedEvent {
 /// 采集事件：停止抓帧
 struct GrabStoppedEvent {};
 
+/// 时间序列边界：旧帧已停止派发，消费者应丢弃尚未应用的 UI 更新。
+struct ProcessingSessionResetEvent {};
+
 /// 处理事件：请求刷新显示
 struct DisplayRefreshEvent {
     uint64_t frameSeq = 0;                                     ///< 帧序号
@@ -66,10 +69,13 @@ struct RotatedFrameReadyEvent {
     uint64_t frameSeq = 0;  ///< 帧序号
 };
 
-/// 跟踪事件：跟踪结果更新
+/// 跟踪事件：每次实际执行策略后发布，包括无目标的空列表。
+/// GEO 失活当帧含一次最终快照，下帧移除；UI 仅展示 living 目标。
+/// 最新测量 valid 与 living 独立，存储/网络继续按测量有效性处理最终快照。
 struct TrackResultEvent {
-    uint64_t frameSeq = 0;            ///< 帧序号
-    std::vector<TargetInfo> targets;  ///< 当前跟踪目标列表
+    uint64_t frameSeq = 0;  ///< 帧序号
+    std::vector<TargetInfo>
+        targets;  ///< 当前目标快照；frameInfos 为近期窗口，累计长度见 totalFrameCount()。
 };
 
 /// 网络事件：处理完成的显示图像已可提交发送
@@ -82,6 +88,7 @@ struct ImageReadyForSendEvent {
     uint32_t height = 0;                                ///< 图像高度（像素）
     std::shared_ptr<const std::vector<uint8_t>> image;  ///< 不可变 8 位灰度图像
     ImageFactory imageFactory;                          ///< 仅在消费者确实需要时执行的图像生成器
+    std::size_t retainedSourceBytes = 0;  ///< factory 捕获的图像载荷容量，0 表示未计费。
 };
 
 /// 网络事件：图像的全部 UDP 分片已提交给套接字

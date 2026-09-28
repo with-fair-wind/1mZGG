@@ -1,6 +1,9 @@
 include_guard(GLOBAL)
 
 function(dss_target_defaults target_name)
+    if(COMMAND dss_enable_sanitizer)
+        dss_enable_sanitizer(${target_name})
+    endif()
     target_compile_features(${target_name} PUBLIC cxx_std_23)
     target_include_directories(${target_name}
         PUBLIC

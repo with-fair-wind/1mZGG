@@ -49,7 +49,14 @@ public:
     /**
      * @brief 处理单帧测量，执行恒星速度估算、目标关联与跟踪
      * @param measurements 当前帧测量数据
-     * @return 当前活跃目标列表
+     * @return 活跃目标及本次调用刚失活目标的快照，刚失活目标仅返回一次。
+     * @note
+     * 下次调用先移除上次失活目标；重发现分配新 ID，reset 后 ID 从头编号。
+     * 最终快照的
+     * living=false 不等价于最后测量无效，归档应检查 frameInfos.back().valid。
+     * @note
+     * 在线目标历史最多保留 max(10, numFramesLiving)
+     * 帧，累计有效率仍使用总样本数；不提供完整轨迹归档。
      */
     auto track(const Dss::Core::FrameMeasurements& measurements)
         -> std::vector<Dss::Core::TargetInfo> override;
@@ -82,7 +89,7 @@ private:
     Dss::Core::TrackingSettings m_settings;                 ///< 跟踪算法参数
     std::deque<Dss::Core::FrameMeasurements> m_fifoTarget;  ///< 目标测量帧 FIFO
     std::deque<Dss::Core::FrameMeasurements> m_fifoStar;    ///< 恒星测量帧 FIFO
-    std::vector<Dss::Core::TargetInfo> m_targets;           ///< 当前跟踪的目标集合
+    std::vector<Dss::Core::TargetInfo> m_targets;           ///< 活跃目标及待下次调用清理的最终快照
     Dss::Core::Vec2f m_starSpeed{};                         ///< 像面恒星背景速度
     Dss::Core::Vec2f m_starSpeedAe{};                       ///< 方位-俯仰恒星背景速度
     float m_frameFreq = 1.0f;                               ///< 当前帧频率（Hz）

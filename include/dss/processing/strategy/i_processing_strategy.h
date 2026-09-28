@@ -17,12 +17,16 @@ struct ProcessingResult {
     std::vector<Dss::Core::MeasuredBlob> starBlobs;             ///< 检测到的恒星光斑
     std::vector<uint8_t> displayImage;                          ///< 8 位显示用图像
     bool success = false;                                       ///< 处理是否成功
+    bool rawStatsValid = false;  ///< stats 对应本次输入 RAW 全图；否则由消费方计算。
 };
 
 /// 图像处理策略接口，定义可插拔的处理后端
 class IProcessingStrategy {
 public:
     virtual ~IProcessingStrategy() = default;
+
+    /// 清除跨帧历史，保留配置。仅在没有并发 process 调用时执行。
+    virtual void reset() {}
 
     /**
      * @brief 处理单帧图像

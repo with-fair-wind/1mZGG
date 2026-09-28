@@ -298,7 +298,7 @@ flowchart TB
 
 | 对象 | 主要所有者 | 执行线程 | 启动入口 | 停止/析构 |
 |---|---|---|---|---|
-| `ApplicationContext` | `main` 栈对象 | Qt 主线程 | 构造/注册 | `shutdown()` 在 `exec()` 返回后调用:先退订组合根订阅(释放回调持有的服务引用)、再 `registry.clear()` 触发服务析构 stop+join worker;析构兜底再调 `shutdown()` |
+| `ApplicationContext` | `main` 栈对象 | Qt 主线程 | 构造/注册 | `exec()` 返回后先关闭 MainViewModel 的后台任务，再显式 stop/join 服务；所有生产者退出后才退订和清空注册表；析构幂等兜底 |
 | 注册服务 | `ServiceRegistry` 中的 `shared_ptr` | 依服务而异 | UI 显式打开或启动 | ViewModel 关闭、服务析构兜底 |
 | `ImageSequenceFrameSource` | Registry/Coordinator 共享所有权 | `std::jthread` | `start()` | `stop()` 请求停止并 join |
 | `ImageProcessor` | Registry | `std::jthread` | `ReplayViewModel::startGrab()` | 先停帧源，再停处理器 |
@@ -321,3 +321,5 @@ flowchart TB
 ### 文档导航
 
 每份模块文档末尾都给出：本模块一跳依赖、关键类图、主要调用栈、线程/错误路径、扩展点、测试入口和推荐源码顺序。跨模块追踪时，优先按“调用方文档 → 被调用模块文档 → 对应测试”三步走。
+
+跨模块验收范围见 [验证覆盖矩阵](validation-matrix.md)，后续实施顺序见 [实施计划](implementation-plan.md)。性能数值以 [资源验证](resource-validation.md) 的实际场景和限制为准。

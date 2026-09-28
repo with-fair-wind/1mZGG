@@ -10,6 +10,7 @@
 #ifdef DSS_HAS_SAPERA
 #include "dss/acquisition/source/sapera_frame_source.h"
 #endif
+#include "dss/app/replay_session.h"
 #include "dss/app/runtime_diagnostics.h"
 #include "dss/app/service_keys.h"
 #include "dss/app/track_result_data_exchange_bridge.h"
@@ -62,8 +63,8 @@ void ApplicationContext::registerCommunicationServices() {
             }
             // 仅更新单槽;imageFactory 由 ImageSender 工作线程按需调用,
             // 避免在 ImageProcessor 处理线程执行整图拉伸
-            imageSender->submitForSend(event.frameSeq, event.image, event.imageFactory,
-                                       event.width, event.height);
+            imageSender->submitForSend(event.frameSeq, event.image, event.imageFactory, event.width,
+                                       event.height, event.retainedSourceBytes);
         }));
     m_registry.registerService<Dss::Network::Heartbeat>(ServiceKey::heartbeat, heartbeat);
     m_registry.registerService<Dss::Network::INetworkChannel>(ServiceKey::heartbeat, heartbeat);
@@ -119,6 +120,7 @@ void ApplicationContext::registerCommunicationServices() {
     frameSource->setFrameCallback(
         [imageProcessor, localImageStorage](Dss::Processing::FramePacket packet,
                                             Dss::Acquisition::FrameDeliveryContext context) {
+            const auto storageGeneration = localImageStorage->sessionGeneration();
             if (localImageStorage->isRunning() && packet.rawImage && !packet.rawImage->empty()) {
                 Dss::Storage::RawImageMetadata metadata{};
                 metadata.width = packet.width;
@@ -128,7 +130,7 @@ void ApplicationContext::registerCommunicationServices() {
                     static_cast<double>(packet.metadata.exposureTime) * 1000.0;
                 metadata.frameFrequency = packet.metadata.frameFrequency;
                 (void)localImageStorage->enqueueSessionFrame(packet.frameSeq, metadata,
-                                                             packet.rawImage);
+                                                             packet.rawImage, storageGeneration);
             }
             if (context.policy == Dss::Acquisition::FrameDeliveryPolicy::Lossless) {
                 return imageProcessor->submitFrameBlocking(std::move(packet), context.stopToken);
@@ -137,8 +139,9 @@ void ApplicationContext::registerCommunicationServices() {
         });
     m_connections.push_back(m_bus.subscribe<Dss::Core::TrackResultEvent>(
         [trackDataStorage](const Dss::Core::TrackResultEvent& event) {
+            const auto generation = trackDataStorage->sessionGeneration();
             if (trackDataStorage->isRunning()) {
-                (void)trackDataStorage->enqueueTrackResult(event);
+                (void)trackDataStorage->enqueueTrackResult(event, generation);
             }
         }));
 
@@ -156,6 +159,10 @@ void ApplicationContext::registerCommunicationServices() {
             .trackFailedWrites = [trackDataStorage] { return trackDataStorage->failedWrites(); },
             .trackDroppedRequests =
                 [trackDataStorage] { return trackDataStorage->droppedRequests(); },
+            .processing = [imageProcessor] { return imageProcessor->resourceSnapshot(); },
+            .imageStorage = [localImageStorage] { return localImageStorage->resourceSnapshot(); },
+            .trackStorage = [trackDataStorage] { return trackDataStorage->resourceSnapshot(); },
+            .imageSender = [imageSender] { return imageSender->resourceSnapshot(); },
         });
     m_registry.registerService<Dss::App::RuntimeDiagnostics>(ServiceKey::runtimeDiagnostics,
                                                              runtimeDiagnostics);
@@ -171,6 +178,29 @@ void ApplicationContext::registerCommunicationServices() {
                                                                replaySource);
     m_registry.registerService<Dss::Storage::LocalImageStorageBackend>(ServiceKey::imageStorage,
                                                                        localImageStorage);
+    auto replaySession =
+        std::make_shared<ReplaySession>(m_bus, replaySource, imageProcessor, frameSource);
+    m_registry.registerService<ReplaySession>(ServiceKey::replaySession, replaySession);
+    m_stopServices = [display, exposure, masterControl, servo, atmosReceiver, frameSource,
+                      replaySource, imageProcessor, localImageStorage, trackDataStorage,
+                      imageSender, heartbeat, errorDiagnostics, dataExchange, replaySession] {
+        // 先关闭外部输入；所有订阅者此时仍由 registry 持有。
+        masterControl->close();
+        exposure->close();
+        display->close();
+        servo->close();
+        atmosReceiver->close();
+        replaySession->shutdown();
+        frameSource->stop();
+        replaySource->stop();  // 自然结束后也 join，不能只检查 isRunning。
+        imageProcessor->stop();
+        localImageStorage->stop();
+        trackDataStorage->stop();
+        imageSender->close();
+        heartbeat->close();
+        errorDiagnostics->close();
+        dataExchange->close();
+    };
     m_registry.registerService<Dss::Storage::IStorageBackend>(ServiceKey::imageStorage,
                                                               std::move(localImageStorage));
     m_registry.registerService<Dss::Storage::TrackDataStorageBackend>(ServiceKey::trackDataStorage,

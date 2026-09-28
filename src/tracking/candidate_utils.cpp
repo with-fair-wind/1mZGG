@@ -8,7 +8,8 @@ namespace {
 
 [[nodiscard]] bool hasEnoughInitialFrames(const Dss::Core::TargetInfo& target,
                                           std::size_t frameCount) {
-    return frameCount > 0U && target.frameInfos.size() >= frameCount;
+    return target.discardedFrameCount == 0 && frameCount > 0U &&
+           target.frameInfos.size() >= frameCount;
 }
 
 }  // namespace

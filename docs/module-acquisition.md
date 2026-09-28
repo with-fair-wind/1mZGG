@@ -80,7 +80,7 @@ public:
 | `CommCamera.h/.cpp` (命令编码) | `camera_control_protocol.h` | **已迁移** |
 | `CommCamera.h/.cpp` (串口通信) | `SerialCameraController` + `ICameraSerialPort` | 发送适配器已实现；默认组合根仍使用 command-only |
 | `Grabber.h/.cpp` (Sapera SDK) | `SaperaFrameSource` + `ISaperaCaptureSession` | **可选适配器已实现** |
-| `ImageReplayer.h/.cpp` (图像序列) | `ImageSequenceFrameSource` + `ReplayViewModel` | **已迁移** |
+| `ImageReplayer.h/.cpp` (图像序列) | `ImageSequenceFrameSource` + `ReplaySession` + `ReplayViewModel` | **已迁移** |
 
 ## 当前缺口
 
@@ -108,7 +108,8 @@ flowchart LR
     ACQ --> REPLAY["ImageSequenceFrameSource"]
     ACQ --> LIVE["SaperaFrameSource（可选）"]
     APP["ApplicationContext"] --> ACQ
-    UI["ReplayViewModel"] --> ACQ
+    UI["ReplayViewModel"] --> SESSION["App::ReplaySession"]
+    SESSION --> ACQ
 ```
 
 Storage 格式头被回放加载器用于解析 RAW/BMP，但 Storage 当前编入 `dss_core`，通过 Processing/Core 依赖可见。Sapera SDK 只在 `DSS_HAS_SAPERA` 时链接。
@@ -179,7 +180,7 @@ classDiagram
 
 ```mermaid
 sequenceDiagram
-    participant UI as ReplayViewModel
+    participant UI as ReplaySession
     participant Coord as FrameSourceCoordinator
     participant Old as 当前帧源
     participant New as 目标帧源
@@ -202,17 +203,19 @@ sequenceDiagram
     end
 ```
 
-Coordinator 在注册源时把已有 callback 下发给新源；重新设置 callback 时会同步更新所有已注册源。它保证对外只暴露一个活动源，但 `selectSource()` 内部持锁调用源的 `stop()/start()`，扩展新帧源时不得在这些方法里反向调用 Coordinator。
+Coordinator 在注册源时把已有 callback 下发给新源；重新设置 callback 时会同步更新所有已注册源。它保证对外只暴露一个活动源。`selectSource()` 在释放数据互斥锁后调用源的 `init()/stop()/start()`；这些方法可以查询 `activeMode()`。生命周期变更由 `LifecycleOperation` 独立串行化，源回调不得重入注册、切换、启动或停止等生命周期操作。
 
 ### 回放完整调用栈
 
 ```mermaid
 flowchart TD
-    PICK["ReplayViewModel::selectReplayFiles"] --> FILES["ImageSequenceFrameSource::setFiles"]
-    FILES --> INIT["init() 读取首帧确定宽高"]
+    PICK["ReplayViewModel::selectReplayFiles"] --> REG["ReplaySession::selectFiles 异步登记/清历史"]
+    REG --> FILES["ImageSequenceFrameSource::setFiles 不解码"]
+    START["ReplayViewModel::startGrab"] --> SESSION["ReplaySession::start 服务线程执行"]
+    SESSION --> INIT["init() 读取首帧确定宽高"]
     INIT --> SELECT["Coordinator::selectSource(Replay)"]
-    START["ReplayViewModel::startGrab"] --> PST["ImageProcessor::start"]
-    START --> SST["IFrameSource::start"]
+    SELECT --> PST["ImageProcessor::start"]
+    PST --> SST["ImageSequenceFrameSource::start"]
     SST --> COPY["锁内复制 files/callback/interval/index"]
     COPY --> THREAD["创建 std::jthread"]
     THREAD --> LOAD["loadRawFrame / 图像加载"]
@@ -222,7 +225,9 @@ flowchart TD
     WAIT --> NEXT["成功入队后更新下一帧索引并等待帧间隔"]
 ```
 
-`stepForward()` 不启动连续线程，而是在调用线程读取一帧并立即执行 callback；UI 在步进前先停止连续回放并确保处理器已启动。连续回放和单帧回放都使用 `Lossless` 提交，只有成功入队后才推进索引。到达序列末尾后再次开始会先 `seek(0)`。停止顺序是先停帧源，再停处理器；帧源的 `stop_token` 会取消正在等待队列空位的提交。
+`stepForward()` 不启动连续线程，而是在调用线程读取一帧并立即执行 callback；ReplaySession 在自己的工作线程中先停止连续回放并确保处理器已启动，单步提交后 drain。连续回放和单帧回放都使用 `Lossless` 提交，只有成功入队后才推进索引。到达序列末尾后再次开始会先 `seek(0)`。停止顺序是先停帧源，再停处理器；帧源的 `stop_token` 会取消正在等待队列空位的提交。
+
+连续回放通过线程安全的 `completion()` 快照区分尚无终态、正常 EOF 和失败原因。取消不产生完成结果，start/setFiles/seek 清除旧结果；读帧失败包含文件路径，后台异常转为失败结果。ReplaySession 读取终态后等待帧源退出，并 drain 已成功提交的处理帧，再发布终态快照；界面仅映射快照。普通暂停保留历史；ReplaySession 在换序列/跳转时另外调用处理器的 `resetSession()`，不能只改帧源游标。
 
 ### Sapera 实时采集链
 
@@ -271,7 +276,7 @@ flowchart LR
 | 对象 | 线程 | 共享状态保护 | 输出 |
 |---|---|---|---|
 | `FrameSourceCoordinator` | 调用者线程 | 单个 mutex 保护源表、活动模式、callback | 转发活动源 callback |
-| `ImageSequenceFrameSource` | UI 配置 + 回放 `jthread` | mutex；启动时复制运行快照 | `Lossless` 上下文和拥有像素的 `FramePacket` |
+| `ImageSequenceFrameSource` | ReplaySession 配置 + 回放 `jthread` | mutex；启动时复制运行快照 | `Lossless` 上下文和拥有像素的 `FramePacket` |
 | `SaperaFrameSource` | 控制线程 + SDK 回调线程 | mutex 保护尺寸、序号、callback | `DropIfBusy` 上下文和拥有像素的 `FramePacket` |
 | `SerialCameraController` | 调用者线程 | 依赖注入端口自行保证线程安全 | `expected` 错误 |
 
@@ -288,3 +293,7 @@ Acquisition 自身没有有界帧队列，背压发生在 `ImageProcessor`。离
 重点测试：`test_image_sequence_frame_source.cpp`、`test_frame_source_coordinator.cpp`、`test_sapera_frame_source_contract.cpp`、`test_camera_control_protocol.cpp`、`test_serial_camera_controller.cpp`、`test_replay_view_model.cpp`。
 
 推荐源码顺序：`i_frame_source.h` → `frame_source_coordinator.*` → `image_sequence_frame_source.*` → `sapera_frame_source.*` → `i_camera_controller.h` → `camera_control_protocol.h` → `serial_camera_controller.*` → App 注册与 `ReplayViewModel`。
+
+### 回放资源上限
+
+`ImageSequenceFrameSource` 在读取载荷前限制单文件为 128 MiB、单图为 64×1024×1024 像素（头文件中的公开常量）。这覆盖 6144×6144 的 16 位 RAW，但不是进程总内存上限。RAW 先读取 31 字节头，校验尺寸与精确载荷长度；BMP/通用图像在解码前用 QImageReader 检查尺寸。超限作为可恢复的加载错误返回，不尝试整文件分配。RAW 尾随数据不再被忽略。

@@ -245,6 +245,7 @@ auto ScTracker::track(const Dss::Core::FrameMeasurements& measurements)
     }
 
     m_currentTarget = trackTargetOnFrame(measurements, m_currentTarget, m_settings);
+    retainRecentTargetFrames(m_currentTarget, 4U);
     if (!m_currentTarget.living) {
         m_currentTarget = {};
         m_candidates.clear();

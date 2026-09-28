@@ -4,6 +4,7 @@
 #include <optional>
 
 #include "dss/core/constants.h"
+#include "dss/tracking/support/lifecycle_utils.h"
 
 namespace Dss::Tracking {
 
@@ -103,11 +104,6 @@ ManualTracker::ManualTracker(const Dss::Core::TrackingSettings& settings) : m_se
 /// 基于手动指定目标更新轨迹，并推算帧间速度与预测位置
 auto ManualTracker::track(const Dss::Core::FrameMeasurements& measurements)
     -> std::vector<Dss::Core::TargetInfo> {
-    m_fifo.push_back(measurements);
-    if (m_fifo.size() > 10) {
-        m_fifo.pop_front();
-    }
-
     Dss::Core::MeasuredBlob blob{};
     {
         std::lock_guard lock(m_blobMutex);
@@ -132,6 +128,7 @@ auto ManualTracker::track(const Dss::Core::FrameMeasurements& measurements)
     }
 
     m_currentTarget.frameInfos.push_back(info);
+    retainRecentTargetFrames(m_currentTarget, historyCapacity);
     m_currentTarget.validity = 1.0F;
     m_currentTarget.living = true;
     m_currentTarget.lastRmDm =
@@ -162,7 +159,6 @@ auto ManualTracker::track(const Dss::Core::FrameMeasurements& measurements)
 }
 
 void ManualTracker::reset() {
-    m_fifo.clear();
     m_currentTarget = {};
     std::lock_guard lock(m_blobMutex);
     m_manualBlob = {};

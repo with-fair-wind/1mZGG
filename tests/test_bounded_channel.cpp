@@ -1,11 +1,11 @@
 #include <chrono>
 #include <future>
+#include <memory>
 #include <stop_token>
 
 #include <gtest/gtest.h>
 
 #include "dss/processing/detail/bounded_channel.h"
-
 using namespace std::chrono_literals;
 
 TEST(BoundedChannelTest, PreservesFifoOrder) {
@@ -51,4 +51,37 @@ TEST(BoundedChannelTest, BlockingPushReturnsFalseWhenStopped) {
 
     EXPECT_FALSE(pushed.get());
     EXPECT_EQ(channel.size(), 1U);
+}
+
+TEST(BoundedChannelTest, ClearReleasesPendingPayloadsAndChannelCanBeReused) {
+    Dss::Processing::BoundedChannel<std::shared_ptr<int>, 2> channel;
+    auto payload = std::make_shared<int>(3);
+    std::weak_ptr<int> observer = payload;
+    ASSERT_TRUE(channel.tryPush(std::move(payload)));
+    channel.clear();
+    EXPECT_TRUE(observer.expired());
+    EXPECT_TRUE(channel.empty());
+    ASSERT_TRUE(channel.tryPush(std::make_shared<int>(4)));
+    auto next = channel.tryPop();
+    ASSERT_TRUE(next);
+    EXPECT_EQ(**next, 4);
+}
+
+TEST(BoundedChannel, ResourceBytesFollowPopClearAndReopen) {
+    Dss::Processing::BoundedChannel<int, 2> channel;
+    EXPECT_TRUE(channel.tryPush(1, 8));
+    EXPECT_TRUE(channel.tryPush(2, 12));
+    EXPECT_FALSE(channel.tryPush(3, 100));
+    EXPECT_EQ(channel.resourceSnapshot().queuedBytes, 20U);
+    EXPECT_EQ(channel.resourceSnapshot().peakQueuedBytes, 20U);
+    EXPECT_EQ(channel.tryPop(), 1);
+    EXPECT_EQ(channel.resourceSnapshot().queuedBytes, 12U);
+    channel.close();
+    channel.clear();
+    channel.open();
+    EXPECT_TRUE(channel.push(4, {}, 3));
+    EXPECT_EQ(channel.resourceSnapshot().queuedBytes, 3U);
+    EXPECT_EQ(channel.resourceSnapshot().peakQueuedBytes, 20U);
+    EXPECT_EQ(channel.pop({}), 4);
+    EXPECT_EQ(channel.resourceSnapshot().queuedBytes, 0U);
 }

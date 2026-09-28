@@ -107,17 +107,30 @@ struct TargetFrameInfo {
 
 /// 跨帧目标跟踪状态
 struct TargetInfo {
-    std::string targetId;                     ///< 目标标识
-    std::string saveStartTime;                ///< 数据保存起始时间
-    std::string filenameGae;                  ///< GAE 文件名
-    std::vector<TargetFrameInfo> frameInfos;  ///< 各帧目标信息
-    Vec2f predictedPosFrame{};                ///< 预测位置（像素）
-    Vec2f predictedPosAe{};                   ///< 预测位置（度）
-    Vec2f predictedSpdFrame{};                ///< 预测速度（像素/帧）
-    Vec2f predictedSpdAe{};                   ///< 预测角速度（度/秒）
-    float validity = 1.0f;                    ///< 有效性评分（0~1）
-    bool living = false;                      ///< 是否处于活跃跟踪状态
-    Vec2f lastRmDm{};                         ///< 最近一次赤经/赤纬修正量
+    std::string targetId;       ///< 目标标识
+    std::string saveStartTime;  ///< 数据保存起始时间
+    std::string filenameGae;    ///< GAE 文件名
+    std::vector<TargetFrameInfo>
+        frameInfos;             ///< 按时间排列的保留帧；在线策略可裁剪，不保证完整历史。
+    Vec2f predictedPosFrame{};  ///< 预测位置（像素）
+    Vec2f predictedPosAe{};     ///< 预测位置（度）
+    Vec2f predictedSpdFrame{};  ///< 预测速度（像素/帧）
+    Vec2f predictedSpdAe{};     ///< 预测角速度（度/秒）
+    float validity = 1.0f;      ///< 有效性评分（0~1）
+    bool living = false;        ///< 是否处于活跃跟踪状态
+    Vec2f lastRmDm{};           ///< 最近一次赤经/赤纬修正量
+    uint64_t discardedFrameCount =
+        0;  ///< 从 frameInfos 前端移除的帧数，仅统计实际移除的历史项（含无效占位帧）。
+
+    /**
+     * @brief 获取本目标累计纳入历史的样本数，包括无效占位帧。
+     * @return 已移除帧数与当前保留帧数之和。
+     * @note 裁剪须同步 discardedFrameCount；重置目标时两者同时清零。
+     * 手动构造且未裁剪的目标保持 discardedFrameCount=0 即可。
+     */
+    [[nodiscard]] auto totalFrameCount() const -> uint64_t {
+        return discardedFrameCount + static_cast<uint64_t>(frameInfos.size());
+    }
 };
 
 /// 图像统计量

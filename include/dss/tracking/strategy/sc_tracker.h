@@ -20,6 +20,7 @@ public:
      * @brief 处理单帧测量，执行三帧关联、验证与跟踪
      * @param measurements 当前帧测量数据
      * @return 当前活跃目标列表（验证前返回候选，验证后返回面积最大的目标）
+     * @note 在线目标历史最多保留 4 帧；三帧候选及第四帧确认保持初始测量；不提供完整轨迹归档。
      */
     auto track(const Dss::Core::FrameMeasurements& measurements)
         -> std::vector<Dss::Core::TargetInfo> override;

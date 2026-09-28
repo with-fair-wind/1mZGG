@@ -51,6 +51,7 @@ endif()
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 include(DssTooling)
+include(DssSanitizers)
 include(DssTargetDefaults)
 include(DssQtDeploy)
 
@@ -178,6 +179,10 @@ endif()
 file(GLOB_RECURSE DSS_CORE_SOURCES CONFIGURE_DEPENDS src/core/*.cpp)
 file(GLOB_RECURSE DSS_STORAGE_SOURCES CONFIGURE_DEPENDS src/storage/*.cpp)
 file(GLOB_RECURSE DSS_APP_SOURCES CONFIGURE_DEPENDS src/app/*.cpp)
+if(NOT DSS_BUILD_APP)
+    # ReplaySession reuses the Qt-backed file decoder; core-only builds omit this service.
+    list(FILTER DSS_APP_SOURCES EXCLUDE REGEX ".*/replay_session\\.cpp$")
+endif()
 file(GLOB_RECURSE DSS_ACQUISITION_QT_SOURCES CONFIGURE_DEPENDS src/acquisition/*.cpp)
 file(GLOB_RECURSE DSS_ACQUISITION_QT_HEADERS CONFIGURE_DEPENDS include/dss/acquisition/*.h)
 file(GLOB_RECURSE DSS_PROCESSING_SOURCES CONFIGURE_DEPENDS src/processing/*.cpp)
@@ -319,6 +324,26 @@ if(DSS_BUILD_APP)
 
     if(DSS_HAS_OPENCV)
         target_link_libraries(dss_ui_qt PUBLIC dss_processing_opencv)
+    endif()
+
+    if(DSS_ENABLE_TESTS)
+        qt_add_executable(dss_resource_stress benchmarks/resource_stress.cpp)
+        dss_target_defaults(dss_resource_stress)
+        target_link_libraries(dss_resource_stress PRIVATE dss_ui_qt)
+        qt_add_executable(dss_tracking_io_baseline benchmarks/tracking_io_baseline.cpp)
+        dss_target_defaults(dss_tracking_io_baseline)
+        target_compile_definitions(dss_tracking_io_baseline PRIVATE
+            DSS_BASELINE_COMPILER="${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
+        target_link_libraries(dss_tracking_io_baseline PRIVATE dss_tracking dss_network_qt)
+        if(MSVC AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND Qt6_VERSION VERSION_GREATER_EQUAL 6.11)
+            # Qt supplies asInvoker in its manifest. Avoid lld merging a second
+            # UAC section, which can incorrectly qualify the level attribute.
+            target_link_options(dss_tracking_io_baseline PRIVATE /MANIFESTUAC:NO)
+        endif()
+        if(WIN32)
+            target_link_libraries(dss_resource_stress PRIVATE Psapi)
+            target_link_libraries(dss_tracking_io_baseline PRIVATE Psapi)
+        endif()
     endif()
 
     add_executable(DSS_QT src/main.cpp)

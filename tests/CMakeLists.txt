@@ -83,6 +83,7 @@ if(TARGET dss_gpu_cuda)
 endif()
 
 if(TARGET dss_network_qt)
+    dss_add_qt_test(test_udp_channel test_udp_channel.cpp dss_network_qt)
     dss_add_test(test_error_diagnostics test_error_diagnostics.cpp dss_network_qt)
     dss_add_test(test_data_exchange test_data_exchange.cpp dss_network_qt)
     dss_add_test(test_image_sender test_image_sender.cpp dss_network_qt)
@@ -102,6 +103,7 @@ if(TARGET dss_comm_qt AND TARGET dss_network_qt)
 endif()
 
 if(TARGET dss_acquisition_qt)
+    dss_add_qt_test(test_replay_session test_replay_session.cpp dss_app dss_acquisition_qt)
     dss_add_test(test_frame_source_coordinator
         test_frame_source_coordinator.cpp
         dss_acquisition_qt
@@ -189,4 +191,13 @@ endif()
 
 if(TARGET dss_processing_opencv)
     dss_add_test(test_opencv_processing test_opencv_processing.cpp dss_processing_opencv)
+endif()
+
+if(TARGET dss_resource_stress)
+    add_test(NAME resource_stress_smoke COMMAND dss_resource_stress 32 32 12 2 1)
+    set_tests_properties(resource_stress_smoke PROPERTIES TIMEOUT 120)
+    if(WIN32 AND DSS_QT_RUNTIME_BIN_DIR)
+        set_tests_properties(resource_stress_smoke PROPERTIES
+            ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:${DSS_QT_RUNTIME_BIN_DIR}")
+    endif()
 endif()

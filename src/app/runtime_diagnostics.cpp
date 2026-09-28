@@ -11,6 +11,11 @@ namespace {
     return reader ? reader() : 0U;
 }
 
+auto readResources(const std::function<Dss::Core::ResourceSnapshot()>& reader)
+    -> Dss::Core::ResourceSnapshot {
+    return reader ? reader() : Dss::Core::ResourceSnapshot{};
+}
+
 }  // namespace
 
 RuntimeDiagnostics::RuntimeDiagnostics(MessageBus& bus, RuntimeDiagnosticsSources sources)
@@ -37,6 +42,10 @@ auto RuntimeDiagnostics::snapshot() const -> RuntimeDiagnosticsSnapshot {
         .networkErrors = m_networkErrors.load(std::memory_order_relaxed),
         .serialErrors = m_serialErrors.load(std::memory_order_relaxed),
         .storageErrors = m_storageErrors.load(std::memory_order_relaxed),
+        .processing = readResources(m_sources.processing),
+        .imageStorage = readResources(m_sources.imageStorage),
+        .trackStorage = readResources(m_sources.trackStorage),
+        .imageSender = readResources(m_sources.imageSender),
     };
 }
 

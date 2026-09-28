@@ -31,7 +31,13 @@ thread_local UdpChannel* CurrentUdpChannel = nullptr;
 
 }  // namespace
 
-UdpChannel::UdpChannel() = default;
+UdpChannel::UdpChannel(std::size_t maxPendingRequests, std::size_t maxPendingBytes)
+    : m_maxPendingRequests(maxPendingRequests), m_maxPendingBytes(maxPendingBytes) {}
+
+auto UdpChannel::sendQueueSnapshot() const -> SendQueueSnapshot {
+    std::lock_guard lock(m_sendMutex);
+    return {m_sendQueue.size(), m_pendingBytes, m_rejectedRequests, m_acceptingSends};
+}
 
 UdpChannel::~UdpChannel() {
     close();
@@ -62,10 +68,6 @@ auto UdpChannel::bind(const UdpEndpointConfig& config) -> std::expected<void, st
         return result;
     }
 
-    {
-        std::lock_guard sendLock(m_sendMutex);
-        m_acceptingSends = true;
-    }
     return {};
 }
 
@@ -81,6 +83,7 @@ void UdpChannel::closeLocked() {
     }
     if (m_workerThread.joinable()) {
         m_workerThread.request_stop();
+        m_sendWake.notify_one();
         m_workerThread.join();
     }
     failPendingSends();
@@ -101,25 +104,35 @@ auto UdpChannel::send(std::span<const uint8_t> data) -> int64_t {
 
 auto UdpChannel::sendTo(std::span<const uint8_t> data, const std::string& host, uint16_t port)
     -> int64_t {
-    if (CurrentUdpChannel == this) {
-        if (auto* socket = m_workerSocket.load(); socket != nullptr) {
-            return sendDatagram(*socket, data, host, port);
-        }
-    }
-
+    const bool direct = CurrentUdpChannel == this;
     SendRequest request;
-    request.data.assign(data.begin(), data.end());
-    request.host = host;
-    request.port = port;
     auto resultFuture = request.result.get_future();
     {
         std::lock_guard lock(m_sendMutex);
-        if (!m_acceptingSends) {
+        if (!m_acceptingSends || data.size() > maxDatagramBytes || host.size() > 256 ||
+            (!direct && (m_sendQueue.size() >= m_maxPendingRequests ||
+                         data.size() > m_maxPendingBytes - m_pendingBytes))) {
+            ++m_rejectedRequests;
             return -1;
         }
-        m_sendQueue.push_back(std::move(request));
+        if (!direct) {
+            // 先检查预算再复制，拒绝请求不额外保留载荷。
+            request.data.assign(data.begin(), data.end());
+            request.host = host;
+            request.port = port;
+            m_sendQueue.push_back(std::move(request));
+            m_pendingBytes += data.size();
+        }
     }
-    return resultFuture.get();
+    if (direct) {
+        return sendDatagram(*m_workerSocket.load(), data, host, port);
+    }
+    m_sendWake.notify_one();
+    try {
+        return resultFuture.get();
+    } catch (const std::future_error&) {
+        return -1;  // 工作线程异常时，已取出的请求也必须让等待者退出。
+    }
 }
 
 bool UdpChannel::isBound() const {
@@ -139,32 +152,52 @@ void UdpChannel::setReceiveCallback(
 void UdpChannel::workerLoop(std::stop_token token, UdpEndpointConfig config,
                             std::promise<std::expected<void, std::string>> initPromise) {
     QUdpSocket socket;
-    if (!socket.bind(bindAddress(config), config.localPort)) {
-        initPromise.set_value(
-            std::unexpected("Failed to bind UDP: " + socket.errorString().toStdString()));
-        return;
-    }
-
-    m_localPort.store(socket.localPort());
-    m_bound.store(true);
-    m_workerSocket.store(&socket);
-    CurrentUdpChannel = this;
-    initPromise.set_value({});
-
-    while (true) {
-        processPendingSends(socket);
-        if (token.stop_requested()) {
+    bool initialized = false;
+    try {
+        if (!socket.bind(bindAddress(config), config.localPort)) {
+            initPromise.set_value(
+                std::unexpected("Failed to bind UDP: " + socket.errorString().toStdString()));
+            return;
+        }
+        m_localPort.store(socket.localPort());
+        m_bound.store(true);
+        m_workerSocket.store(&socket);
+        CurrentUdpChannel = this;
+        {
             std::lock_guard lock(m_sendMutex);
-            if (m_sendQueue.empty()) {
+            m_acceptingSends = true;
+        }
+        initialized = true;
+        initPromise.set_value({});
+
+        while (true) {
+            processPendingSends(socket);
+            if (!token.stop_requested()) {
+                onReadyRead(socket, token);
+                if (socket.hasPendingDatagrams()) {
+                    continue;  // 收发分批交替，积压接收不额外等待轮询周期。
+                }
+            }
+            std::unique_lock lock(m_sendMutex);
+            if (token.stop_requested() && m_sendQueue.empty()) {
                 break;
             }
+            // 发送/关闭直接唤醒；未收到命令时才按接收轮询周期等待。
+            m_sendWake.wait_for(lock, UdpPollInterval, [&] {
+                return token.stop_requested() || !m_acceptingSends || !m_sendQueue.empty();
+            });
         }
-
-        if (socket.waitForReadyRead(static_cast<int>(UdpPollInterval.count()))) {
-            onReadyRead(socket);
+    } catch (...) {
+        if (!initialized) {
+            initPromise.set_value(std::unexpected("UDP worker initialization failed"));
         }
+        // 回调或分配异常不能逃出线程入口，未发送请求统一失败。
     }
-
+    {
+        std::lock_guard lock(m_sendMutex);
+        m_acceptingSends = false;
+    }
+    failPendingSends();
     socket.close();
     CurrentUdpChannel = nullptr;
     m_workerSocket.store(nullptr);
@@ -173,7 +206,7 @@ void UdpChannel::workerLoop(std::stop_token token, UdpEndpointConfig config,
 }
 
 void UdpChannel::processPendingSends(QUdpSocket& socket) {
-    while (true) {
+    for (std::size_t count = 0; count < 64; ++count) {
         std::optional<SendRequest> request;
         {
             std::lock_guard lock(m_sendMutex);
@@ -182,6 +215,7 @@ void UdpChannel::processPendingSends(QUdpSocket& socket) {
             }
             request = std::move(m_sendQueue.front());
             m_sendQueue.pop_front();
+            m_pendingBytes -= request->data.size();
         }
 
         const auto sent = sendDatagram(socket, request->data, request->host, request->port);
@@ -189,8 +223,9 @@ void UdpChannel::processPendingSends(QUdpSocket& socket) {
     }
 }
 
-void UdpChannel::onReadyRead(QUdpSocket& socket) {
-    while (socket.hasPendingDatagrams()) {
+void UdpChannel::onReadyRead(QUdpSocket& socket, std::stop_token token) {
+    for (std::size_t count = 0;
+         count < 64 && !token.stop_requested() && socket.hasPendingDatagrams(); ++count) {
         const auto datagram = socket.receiveDatagram();
         if (!datagram.isValid()) {
             continue;
@@ -220,6 +255,7 @@ void UdpChannel::failPendingSends() {
     {
         std::lock_guard lock(m_sendMutex);
         pending.swap(m_sendQueue);
+        m_pendingBytes = 0;
     }
     for (auto& request : pending) {
         request.result.set_value(-1);

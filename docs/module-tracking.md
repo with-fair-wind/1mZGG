@@ -230,7 +230,7 @@ sequenceDiagram
     end
 ```
 
-策略切换会销毁旧实例，因此 FIFO、候选和预测状态全部重置。相同模式再次配置同样会创建新策略；若需要保留状态，不能只比较模式枚举，必须明确热更新参数的语义。
+策略切换会销毁旧实例，因此 FIFO、候选和预测状态全部重置。UI 的相同模式重复命令在首次配置后保持幂等，不会重建策略；显式重新选点仍创建新的 Manual 策略。直接调用底层配置入口会替换策略，参数热更新须明确保留哪些状态。
 
 ### 公共跟踪阶段
 
@@ -247,7 +247,7 @@ stateDiagram-v2
     Collecting --> [*]: reset/策略销毁
 ```
 
-`TargetInfo::frameInfos` 是状态核心：每帧追加有效或 invalid 的 `TargetFrameInfo`，预测和 living/validity 均从最近窗口计算。网络、存储不要自行解释内部历史，应优先通过 `makeResultPacket(s)` 读取标准化最新结果。
+`TargetInfo::frameInfos` 保存近期有效或 invalid 的 `TargetFrameInfo`；预测和失配检查使用近期窗口，累计 validity 与年龄门槛使用 `totalFrameCount()`（保留帧数加 `discardedFrameCount`）。网络、存储不要自行解释内部历史，应优先通过 `makeResultPacket(s)` 读取标准化最新结果。
 
 ### GEO 四帧链
 
@@ -335,3 +335,13 @@ sequenceDiagram
 重点测试：`test_track_manager.cpp`、四个 `test_*_tracker.cpp`、`test_tracking_candidate_utils.cpp`、`test_tracking_prediction_utils.cpp`、`test_tracking_lifecycle_utils.cpp`、`test_tracking_legacy_scenarios.cpp`、`tests/fixtures/tracking/*.json`。
 
 推荐源码顺序：`i_tracking_strategy.h` → `track_manager.*` 与工厂 → `candidate_utils.*` → `prediction_utils.*` → `lifecycle_utils.*` → LEO/SC → GEO 四个拆分源文件 → Manual → `math_utils.*`，最后回看 `ImageProcessor::workerLoop()` 和 `TrackingViewModel`。
+
+### Manual 历史与 UI 结果预算
+
+Manual 当前预测只依赖相邻两帧，因此 `historyCapacity=2`，返回的 frameInfos 为两帧滚动窗口；未被读取的 measurements FIFO 已移除。需要完整轨迹时由逐帧存储结果重建，不应依赖 Manual 单次返回全部历史。GEO/LEO/SC 使用各自窗口并保留累计有效率：GEO 为 max(10, numFramesLiving)，LEO 为 5，SC 为 4。
+
+TrackingViewModel 仅提取活跃目标数量和首个活跃目标的显示文本，保留一个最新快照和一个待执行 Qt 唤醒；没有活跃目标时清空显示。结果包和存储订阅仍逐帧处理，包括 GEO 刚失活目标的最终有效测量。
+
+GEO 在失活当帧返回一次最终快照，下次 `track` 入口移除，避免其他目标持续活跃期间重复返回旧帧。重发现分配新 ID，reset 后重新编号；此策略消除失活项积累，不限制活跃目标总量。ImageProcessor 实际运行策略后也发布空结果，让消费者更新无目标状态。
+
+2026-09-22 已完成 GEO/LEO/SC 有界历史；GEO 下限十帧还覆盖搜索半径的失配统计。窗口、累计计数、API 兼容性与后续工作见 [历史契约](tracking-history-contracts.md)。

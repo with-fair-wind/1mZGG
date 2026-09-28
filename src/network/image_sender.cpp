@@ -81,6 +81,15 @@ auto ImageSender::open(const UdpEndpointConfig& config) -> std::expected<void, s
     }
     m_workerThread = std::jthread([this](std::stop_token token) {
         Dss::Core::runBackgroundTask(m_bus, "image_sender", [this, token] { workerLoop(token); });
+        std::lock_guard lock(m_bufferMutex);
+        m_accepting = false;
+        m_hasPending = false;
+        m_pendingImage.reset();
+        m_pendingImageFactory = {};
+        m_resources.queuedItems = 0;
+        m_resources.queuedBytes = 0;
+        m_resources.activeItems = 0;
+        m_resources.activeBytes = 0;
     });
     return {};
 }
@@ -91,8 +100,11 @@ void ImageSender::close() {
 }
 
 void ImageSender::closeLocked() {
+    const auto started = std::chrono::steady_clock::now();
     {
         std::lock_guard lock(m_bufferMutex);
+        m_resources.queuedItems = 0;
+        m_resources.queuedBytes = 0;
         m_accepting = false;
         m_hasPending = false;
         m_pendingImage.reset();
@@ -104,6 +116,10 @@ void ImageSender::closeLocked() {
         m_workerThread.join();
     }
     m_channel.close();
+    std::lock_guard lock(m_bufferMutex);
+    m_resources.queuedItems = 0;
+    m_resources.queuedBytes = 0;
+    m_resources.lastStopMicroseconds = Dss::Core::elapsedMicroseconds(started);
 }
 
 bool ImageSender::isOpen() const {
@@ -126,23 +142,13 @@ void ImageSender::sendImage(uint64_t frameSeq,
     if (!imageData || imageData->empty()) {
         return;
     }
-    {
-        std::lock_guard lock(m_bufferMutex);
-        if (!m_accepting) {
-            return;
-        }
-        m_pendingImage = std::move(imageData);
-        m_pendingFrameSeq = frameSeq;
-        m_pendingWidth = width;
-        m_pendingHeight = height;
-        m_hasPending = true;
-    }
-    m_bufferCv.notify_one();
+    submitForSend(frameSeq, std::move(imageData), {}, width, height);
 }
 
 void ImageSender::submitForSend(uint64_t frameSeq,
                                 std::shared_ptr<const std::vector<uint8_t>> image,
-                                ImageFactory imageFactory, uint32_t width, uint32_t height) {
+                                ImageFactory imageFactory, uint32_t width, uint32_t height,
+                                std::size_t retainedSourceBytes) {
     if (!image && !imageFactory) {
         return;
     }
@@ -151,6 +157,14 @@ void ImageSender::submitForSend(uint64_t frameSeq,
         if (!m_accepting) {
             return;
         }
+        if (m_hasPending) {
+            ++m_resources.replacedItems;
+        }
+        m_resources.queuedItems = 1;
+        m_resources.queuedBytes =
+            (image ? image->capacity() : 0) + (imageFactory ? retainedSourceBytes : 0);
+        m_resources.peakQueuedBytes =
+            (std::max)(m_resources.peakQueuedBytes, m_resources.queuedBytes);
         m_pendingImage = std::move(image);
         m_pendingImageFactory = std::move(imageFactory);
         m_pendingFrameSeq = frameSeq;
@@ -159,6 +173,11 @@ void ImageSender::submitForSend(uint64_t frameSeq,
         m_hasPending = true;
     }
     m_bufferCv.notify_one();
+}
+
+auto ImageSender::resourceSnapshot() const -> Dss::Core::ResourceSnapshot {
+    std::lock_guard lock(m_bufferMutex);
+    return m_resources;
 }
 
 auto ImageSender::buildPackets(std::span<const uint8_t> imageData, uint32_t width, uint32_t height)
@@ -217,17 +236,40 @@ void ImageSender::workerLoop(std::stop_token token) {
             w = m_pendingWidth;
             h = m_pendingHeight;
             m_hasPending = false;
+            m_resources.activeItems = 1;
+            m_resources.activeBytes = m_resources.queuedBytes;
+            m_resources.queuedItems = 0;
+            m_resources.queuedBytes = 0;
         }
+        const auto started = std::chrono::steady_clock::now();
+        const auto finishWork = [this, started] {
+            std::lock_guard lock(m_bufferMutex);
+            m_resources.activeItems = 0;
+            m_resources.activeBytes = 0;
+            ++m_resources.completedItems;
+            m_resources.lastWorkMicroseconds = Dss::Core::elapsedMicroseconds(started);
+            m_resources.maxWorkMicroseconds =
+                (std::max)(m_resources.maxWorkMicroseconds, m_resources.lastWorkMicroseconds);
+        };
 
         // image 为空时由 factory 在本工作线程生成,把整图拉伸移出 ImageProcessor 处理线程
         if ((!image || image->empty()) && factory) {
             image = factory();
         }
+        factory = {};
         if (!image || image->empty()) {
+            finishWork();
             continue;
         }
 
-        const auto packets = buildPackets(*image, w, h);
+        auto packets = buildPackets(*image, w, h);
+        {
+            std::lock_guard lock(m_bufferMutex);
+            m_resources.activeBytes = image->capacity();
+            for (const auto& packet : packets) {
+                m_resources.activeBytes += packet.capacity();
+            }
+        }
         bool sentAllPackets = !packets.empty();
         for (const auto& packet : packets) {
             if (m_channel.send(packet) != static_cast<int64_t>(packet.size())) {
@@ -244,6 +286,9 @@ void ImageSender::workerLoop(std::stop_token token) {
         if (sentAllPackets) {
             m_bus.emit(Dss::Core::ImageSendCompletedEvent{frameSeq});
         }
+        packets.clear();
+        image.reset();
+        finishWork();
     }
 }
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <deque>
+#include <cstddef>
 #include <mutex>
 
 #include "dss/tracking/strategy/i_tracking_strategy.h"
@@ -10,6 +10,7 @@ namespace Dss::Tracking {
 /// 手动跟踪器，根据操作员指定的目标位置生成跟踪轨迹
 class ManualTracker final : public ITrackingStrategy {
 public:
+    static constexpr std::size_t historyCapacity = 2;  ///< 预测仅需当前帧与上一帧。
     /**
      * @brief 创建手动目标跟踪器。
      * @param settings 跟踪门限、光学参数和生命周期配置。
@@ -29,7 +30,7 @@ public:
         return Dss::Core::TrackMode::Manual;
     }
 
-    /// 重置 FIFO 缓存、目标状态与手动目标
+    /// 重置目标状态与手动目标
     void reset() override;
 
     /**
@@ -40,7 +41,6 @@ public:
 
 private:
     Dss::Core::TrackingSettings m_settings;           ///< 跟踪算法参数
-    std::deque<Dss::Core::FrameMeasurements> m_fifo;  ///< 历史帧 FIFO
     Dss::Core::TargetInfo m_currentTarget{};          ///< 当前手动跟踪目标
     Dss::Core::MeasuredBlob m_manualBlob{};           ///< 操作员指定的目标像斑
     bool m_hasManualBlob = false;                     ///< 是否已设置手动目标

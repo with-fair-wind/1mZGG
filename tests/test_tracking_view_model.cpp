@@ -115,6 +115,53 @@ TEST(TrackingViewModel, SetTrackModeConfiguresNonManualTrackingStrategies) {
     EXPECT_EQ(processor->currentTrackMode(), Dss::Core::TrackMode::Init);
 }
 
+TEST(TrackingViewModel, RepeatingSameModePreservesTrackingHistory) {
+    (void)ensureApplication();
+    Dss::Core::MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    auto processor = std::make_shared<Dss::Processing::ImageProcessor>(bus);
+    registry.registerService<Dss::Processing::ImageProcessor>("image_processor", processor);
+    Dss::Ui::TrackingViewModel tracking({.bus = bus, .registry = registry});
+    std::vector<std::size_t> historyLengths;
+    auto connection = bus.subscribe<Dss::Core::TrackResultEvent>([&](const auto& event) {
+        if (!event.targets.empty()) {
+            historyLengths.push_back(event.targets.front().frameInfos.size());
+        }
+    });
+    tracking.selectTarget(QPointF{1, 1});
+    for (std::uint64_t index = 0; index < 2; ++index) {
+        tracking.setTrackMode(static_cast<int>(Dss::Core::TrackMode::Manual));
+        Dss::Processing::FramePacket packet{};
+        packet.frameSeq = index;
+        packet.width = 2;
+        packet.height = 2;
+        packet.displayImage = {1, 2, 3, 4};
+        processor->start();
+        ASSERT_TRUE(processor->submitFrame(std::move(packet)));
+        processor->drain();
+    }
+    EXPECT_EQ(historyLengths, (std::vector<std::size_t>{1, 2}));
+}
+
+TEST(TrackingViewModel, ResetDiscardsQueuedResultsFromPreviousSession) {
+    auto& app = ensureApplication();
+    Dss::Core::MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    Dss::Ui::TrackingViewModel tracking({.bus = bus, .registry = registry});
+    std::vector<int> counts;
+    QObject::connect(&tracking, &Dss::Ui::TrackingViewModel::targetListUpdated, &tracking,
+                     [&](int count) { counts.push_back(count); });
+    std::jthread worker([&] {
+        Dss::Core::TrackResultEvent event;
+        event.targets.resize(1);
+        bus.emit(event);
+    });
+    worker.join();
+    bus.emit(Dss::Core::ProcessingSessionResetEvent{});
+    app.processEvents();
+    EXPECT_EQ(counts, (std::vector<int>{0}));
+}
+
 TEST(TrackingViewModel, TrackResultFromWorkerThreadUpdatesOnObjectThread) {
     auto& app = ensureApplication();
 
@@ -138,4 +185,55 @@ TEST(TrackingViewModel, TrackResultFromWorkerThreadUpdatesOnObjectThread) {
 
     ASSERT_TRUE(waitForReady(app, signalThreadFuture));
     EXPECT_EQ(signalThreadFuture.get(), tracking.thread());
+}
+
+TEST(TrackingViewModel, CoalescesWorkerResultsWhileUiIsBusy) {
+    auto& app = ensureApplication();
+    Dss::Core::MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    Dss::Ui::TrackingViewModel tracking({.bus = bus, .registry = registry});
+    std::vector<QString> updates;
+    QObject::connect(&tracking, &Dss::Ui::TrackingViewModel::trackInfoUpdated, &tracking,
+                     [&](const QString& info) { updates.push_back(info); });
+    std::jthread worker([&] {
+        for (int index = 0; index < 100; ++index) {
+            Dss::Core::TrackResultEvent event;
+            event.targets.resize(1);
+            event.targets.front().targetId = std::to_string(index);
+            event.targets.front().living = true;
+            event.targets.front().frameInfos.resize(1000);
+            bus.emit(event);
+        }
+    });
+    worker.join();
+    EXPECT_TRUE(updates.empty());
+    app.processEvents();
+    ASSERT_EQ(updates.size(), 1U);
+    EXPECT_TRUE(updates.front().contains("Target: 99 |"));
+}
+
+TEST(TrackingViewModel, DisplaysOnlyLivingTargetsAndClearsOnEmptySnapshot) {
+    (void)ensureApplication();
+    Dss::Core::MessageBus bus;
+    Dss::Core::ServiceRegistry registry;
+    Dss::Ui::TrackingViewModel tracking({.bus = bus, .registry = registry});
+    std::vector<int> counts;
+    std::vector<QString> infos;
+    QObject::connect(&tracking, &Dss::Ui::TrackingViewModel::targetListUpdated, &tracking,
+                     [&](int count) { counts.push_back(count); });
+    QObject::connect(&tracking, &Dss::Ui::TrackingViewModel::trackInfoUpdated, &tracking,
+                     [&](const QString& info) { infos.push_back(info); });
+    Dss::Core::TargetInfo retired;
+    retired.targetId = "retired";
+    Dss::Core::TargetInfo active;
+    active.targetId = "active";
+    active.living = true;
+    bus.emit(Dss::Core::TrackResultEvent{.frameSeq = 1, .targets = {retired, active}});
+    bus.emit(Dss::Core::TrackResultEvent{.frameSeq = 2, .targets = {retired}});
+    bus.emit(Dss::Core::TrackResultEvent{.frameSeq = 3, .targets = {}});
+    EXPECT_EQ(counts, (std::vector<int>{1, 0, 0}));
+    ASSERT_EQ(infos.size(), 3U);
+    EXPECT_TRUE(infos[0].contains("Target: active |"));
+    EXPECT_TRUE(infos[1].isEmpty());
+    EXPECT_TRUE(infos[2].isEmpty());
 }

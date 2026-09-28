@@ -42,17 +42,22 @@ public:
         try {
             ensureCapacity(pixelCount);
             result.stats = computeImageStats(*input.rawImage);
-            result.displayImage.resize(pixelCount);
+            result.rawStatsValid = true;
+            if (input.backendDisplayRequired) {
+                result.displayImage.resize(pixelCount);
+            }
             std::vector<uint8_t> binary(pixelCount);
 
             const auto stream = m_device->stream();
             m_input.upload(*input.rawImage, stream);
-            const auto stretchRange =
-                std::max(1, static_cast<int>(m_options.displayHigh) - m_options.displayLow);
-            Dss::Gpu::short_to_byte(m_input.devicePtr(), m_display.devicePtr(),
-                                    m_options.displayLow, m_options.displayHigh,
-                                    static_cast<float>(stretchRange), static_cast<int>(pixelCount),
-                                    stream);
+            if (input.backendDisplayRequired) {
+                const auto stretchRange =
+                    std::max(1, static_cast<int>(m_options.displayHigh) - m_options.displayLow);
+                Dss::Gpu::short_to_byte(m_input.devicePtr(), m_display.devicePtr(),
+                                        m_options.displayLow, m_options.displayHigh,
+                                        static_cast<float>(stretchRange),
+                                        static_cast<int>(pixelCount), stream);
+            }
 
             const auto thresholdValue =
                 std::clamp(result.stats.avg + m_options.thresholdSigma * result.stats.stdDev, 0.0,
@@ -64,7 +69,9 @@ public:
             if (cudaGetLastError() != cudaSuccess) {
                 return result;
             }
-            m_display.download(result.displayImage, stream);
+            if (input.backendDisplayRequired) {
+                m_display.download(result.displayImage, stream);
+            }
             m_binary.download(binary, stream);
             m_device->synchronize();
 

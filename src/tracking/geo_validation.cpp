@@ -8,7 +8,7 @@
 namespace Dss::Tracking::GeoDetail {
 
 inline constexpr float kMaxGeoRediscoveryFrameSpeed = 100.0F;
-inline constexpr int kGeoTrackingInvalidSearchWindow = 10;
+
 inline constexpr int kGeoTrackingRadiusInvalidLimit = 5;
 inline constexpr float kGeoTrackingRadiusInvalidStep = 10.0F;
 inline constexpr float kGeoTrackingBaseSpeedErrorThreshold = 5.0F;

@@ -80,3 +80,19 @@ TEST(ManualTracker, ResetClearsManualSelectionAndTrackHistory) {
 
     EXPECT_TRUE(tracker.track(makeMeasurements(2)).empty());
 }
+
+TEST(ManualTracker, LongSequenceRetainsOnlyPredictionWindow) {
+    Dss::Tracking::ManualTracker tracker(Dss::Core::TrackingSettings{});
+    Dss::Core::MeasuredBlob selected{};
+    selected.centroid = {1.0F, 2.0F};
+    tracker.setManualTarget(selected);
+    for (std::uint64_t index = 0; index < 1000; ++index) {
+        Dss::Core::FrameMeasurements frame{};
+        frame.frameSeq = index;
+        frame.frameFreq = 20;
+        const auto targets = tracker.track(frame);
+        ASSERT_EQ(targets.size(), 1U);
+        EXPECT_LE(targets.front().frameInfos.size(), Dss::Tracking::ManualTracker::historyCapacity);
+        EXPECT_FLOAT_EQ(targets.front().predictedPosFrame.x, 1.0F);
+    }
+}

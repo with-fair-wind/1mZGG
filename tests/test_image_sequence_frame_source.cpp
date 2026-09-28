@@ -1,5 +1,6 @@
 #include <QCoreApplication>
 #include <QImage>
+#include <QTemporaryDir>
 #include <condition_variable>
 #include <cstdint>
 #include <filesystem>
@@ -16,7 +17,7 @@
 #include "dss/core/event/events.h"
 #include "dss/processing/pipeline/image_processor.h"
 #include "dss/storage/format/bmp_image_format.h"
-
+#include "dss/storage/format/image_storage_format.h"
 namespace {
 
 class QCoreApplicationFixture {
@@ -447,4 +448,21 @@ TEST(ImageSequenceFrameSource, SeekWhileRunningContinuesAtRequestedFrame) {
     EXPECT_EQ(frames.front(), 0U);
     EXPECT_EQ(frames[frames.size() - 2U], 2U);
     EXPECT_EQ(frames.back(), 3U);
+}
+
+TEST(ImageSequenceFrameSource, RejectsOversizedRawDimensionsBeforePayloadRead) {
+    QTemporaryDir directory;
+    ASSERT_TRUE(directory.isValid());
+    const auto path = std::filesystem::path(directory.path().toStdWString()) / "huge.raw";
+    Dss::Storage::RawImageMetadata metadata{};
+    metadata.width = 65535;
+    metadata.height = 65535;
+    const auto header = Dss::Storage::buildRawImageHeader(metadata);
+    std::ofstream output(path, std::ios::binary);
+    output.write(reinterpret_cast<const char*>(header.data()), header.size());
+    output.close();
+    Dss::Acquisition::ImageSequenceFrameSource source({path});
+    const auto result = source.init();
+    ASSERT_FALSE(result);
+    EXPECT_NE(result.error().find("dimensions or payload length"), std::string::npos);
 }

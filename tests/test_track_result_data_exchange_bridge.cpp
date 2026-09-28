@@ -58,6 +58,23 @@ struct CapturedExchange {
 
 }  // namespace
 
+TEST(TrackResultDataExchangeBridge, SendsFinalMeasurementWithoutRepeatingOnEmptySnapshot) {
+    MessageBus bus;
+    int sent = 0;
+    Dss::App::TrackResultDataExchangeBridge bridge(bus,
+                                                   [&](const auto& metadata, auto targets) {
+                                                       ++sent;
+                                                       EXPECT_EQ(metadata.targetStatus, 1U);
+                                                       EXPECT_EQ(targets.size(), 1U);
+                                                   },
+                                                   {});
+    auto retired = makeTarget("geo-42", true);
+    retired.living = false;
+    bus.emit(Dss::Core::TrackResultEvent{.frameSeq = 9, .targets = {retired}});
+    bus.emit(Dss::Core::TrackResultEvent{.frameSeq = 10, .targets = {}});
+    EXPECT_EQ(sent, 1);
+}
+
 TEST(TrackResultDataExchangeBridge, SendsGxtcForAllTargetsAndGdclForMasterTarget) {
     MessageBus bus;
     CapturedExchange captured;
