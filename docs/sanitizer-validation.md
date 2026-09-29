@@ -45,4 +45,4 @@ ASan 不检测数据竞争；TSan 也不能代替内存和业务正确性测试�
 
 本机证据保存在已忽略目录 `build/architecture-review/ci-fix-pinned-compiler-asan.log`、`ci-asan-space-regression.log`、`display-fix-full-verified.log`；JUnit 在 `build/clang-cl-asan-replay/sanitizer-results.xml`。这些是本地记录，不随源码分发；其他环境应运行上述公共入口生成自己的证据。本机 Qt 版本与 CI 不同，远端证据见 [验证矩阵](validation-matrix.md)。
 
-远端 Linux TSan 已有 **107/107 通过**记录。Windows 验收先后暴露路径转义、MSVC 工具目录映射和旧 Clang 的异常处理问题；当前配置已修正前两项并固定包含上游修复的 LLVM 23.1.2，完整 runner 结果待后续运行确认。详情见 [验证矩阵](validation-matrix.md)。
+2026-09-29，代码提交 `3c7927f` 的 [远端 sanitizer 工作流](https://github.com/with-fair-wind/1mZGG/actions/runs/36507360000) 全部通过：Windows core **107/107，9.32 秒**，Windows Qt **119/119，14.30 秒**，Linux TSan **107/107，1.86 秒**。Windows 日志确认依赖与项目均为 Clang 23.1.2，未混用 VS 自带的 Clang 19。修复包含库路径转义、MSVC 14.4x 映射、固定 LLVM 与编译器绝对路径；未过滤失败测试。普通 Release CI 同样通过，详情见 [验证矩阵](validation-matrix.md)。
