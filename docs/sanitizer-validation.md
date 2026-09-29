@@ -2,7 +2,7 @@
 
 ## 公共入口
 
-`tools/run_sanitizer.py` 使用独立 Release 目录，默认关闭 Qt；`--qt-prefix` 可增加回放、显示与网络测试。OpenCV/CUDA/Sapera 保持关闭。脚本以同一 sanitizer 编译 Conan 的 GTest/fmt/spdlog，包 ID 包含插桩选项；不会修改用户 profile。构建目录必须位于仓库 build 下。
+`tools/run_sanitizer.py` 使用独立 Release 目录，默认关闭 Qt；`--qt-prefix` 可增加回放、显示与网络测试。OpenCV/CUDA/Sapera 保持关闭。脚本以同一 sanitizer 编译 Conan 的 GTest/fmt/spdlog，包 ID 包含插桩选项；Windows 先解析 clang-cl 的绝对路径，再统一传给 Conan 依赖和项目，保证编译器与 ASan 运行库一致，不受 vcvars 重排 PATH 的影响。不会修改用户 profile；构建目录必须位于仓库 build 下。
 
 Windows 在 x64 Visual Studio 开发者终端运行，确保 clang-cl、Conan、CMake、Ninja 在 PATH；准备兼容的 host profile 和 Conan default build profile：
 
@@ -41,8 +41,8 @@ ASan 不检测数据竞争；TSan 也不能代替内存和业务正确性测试�
 
 ## 最新本机结果
 
-2026-09-29，Windows x64 / clang-cl 23.1.2 / VS 18/v145 / Qt 6.11.1：修复后的公共 Qt 入口 **119/119 CTest 通过，40.89 秒**，无 ASan 报告。另用 VS 自带 clang-cl 22.1.3 的 `Program Files` 路径复现原链接错误，修复后 Conan/CMake 配置、链接与 ASan 程序执行通过。显示测试内部有 9 个 GoogleTest 用例，覆盖 CPU/RAW 回调期间重置、拉伸重绘取消与新帧继续投递。此前普通 Debug 全量为 **263/263，74.84 秒**，Doxygen 零警告。
+2026-09-29，Windows x64 / clang-cl 23.1.2 / VS 18/v145 / Qt 6.11.1：修复后的公共 Qt 入口 **119/119 CTest 通过，41.06 秒**，无 ASan 报告。另用 VS 自带 clang-cl 22.1.3 的 `Program Files` 路径复现原链接错误，修复后 Conan/CMake 配置、链接与 ASan 程序执行通过。显示测试内部有 9 个 GoogleTest 用例，覆盖 CPU/RAW 回调期间重置、拉伸重绘取消与新帧继续投递。此前普通 Debug 全量为 **263/263，74.84 秒**，Doxygen 零警告。
 
-本机证据保存在已忽略目录 `build/architecture-review/ci-fix-asan-verified.log`、`ci-asan-space-regression.log`、`display-fix-full-verified.log`；JUnit 在 `build/clang-cl-asan-replay/sanitizer-results.xml`。这些是本地记录，不随源码分发；其他环境应运行上述公共入口生成自己的证据。本机 Qt 版本与 CI 不同，远端证据见 [验证矩阵](validation-matrix.md)。
+本机证据保存在已忽略目录 `build/architecture-review/ci-fix-pinned-compiler-asan.log`、`ci-asan-space-regression.log`、`display-fix-full-verified.log`；JUnit 在 `build/clang-cl-asan-replay/sanitizer-results.xml`。这些是本地记录，不随源码分发；其他环境应运行上述公共入口生成自己的证据。本机 Qt 版本与 CI 不同，远端证据见 [验证矩阵](validation-matrix.md)。
 
 远端 Linux TSan 已有 **107/107 通过**记录。Windows 验收先后暴露路径转义、MSVC 工具目录映射和旧 Clang 的异常处理问题；当前配置已修正前两项并固定包含上游修复的 LLVM 23.1.2，完整 runner 结果待后续运行确认。详情见 [验证矩阵](validation-matrix.md)。

@@ -9,6 +9,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 
 
@@ -44,8 +45,11 @@ def main():
         env["PATH"] = str(qt / "bin") + os.pathsep + env["PATH"]
         env.setdefault("QT_QPA_PLATFORM", "offscreen")
     if windows:
+        compiler = shutil.which("clang-cl")
+        if not compiler:
+            parser.error("clang-cl must be available in the Visual Studio developer shell")
         runtime = Path(subprocess.check_output(
-            ["clang-cl", "--print-resource-dir"], text=True).strip()) / "lib/windows"
+            [compiler, "--print-resource-dir"], text=True).strip()) / "lib/windows"
         flags = ["/fsanitize=address"]
         # Conan joins these into CMAKE_EXE_LINKER_FLAGS, a command-line string.
         # Conan embeds this in a quoted CMake string, so escape the linker quotes.
@@ -65,6 +69,11 @@ def main():
                '-c:h=tools.info.package_id:confs=["tools.build:cxxflags"]',
                '-c:h=tools.cmake.cmaketoolchain:extra_variables={"CMAKE_TRY_COMPILE_CONFIGURATION":"Release"}',
                "--output-folder=" + str(build), "--build=missing"]
+    if windows:
+        # Conan's vcvars activation can put Visual Studio's older Clang first.
+        # Bind dependencies and the project to the compiler owning this runtime.
+        install.append("-c:h=tools.build:compiler_executables=" +
+                       json.dumps({"c": compiler, "cpp": compiler}))
     if args.offline:
         install.append("--no-remote")
     run(install, root, env)
