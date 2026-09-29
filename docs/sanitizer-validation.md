@@ -30,6 +30,18 @@ python tools/run_sanitizer.py --sanitizer thread --build-dir build/ci-thread --h
 
 ASan 不检测数据竞争；TSan 也不能代替内存和业务正确性测试。预编译 Qt DLL 内部未插桩；可选 Qt 套件不代表全量 UI、OpenCV、真实相机、CUDA 或生产网络验收。完整边界见 [验证矩阵](validation-matrix.md)。
 
+## 最新稳定工具链兼容性
+
+独立工作流 `.github/workflows/toolchain-latest.yml` 在同样的推送、PR 和手动入口运行 Windows Qt ASan。每次解析 LLVM 官方 latest 稳定发布，校验 Windows x64 MSI 的 SHA-256 与实际编译器版本；Conan、CMake、Ninja 由 pip 安装当前 Python 3.12 可用的最新稳定版。Qt 暂时固定 6.8.0，runner 固定为 windows-2022；这不是整台环境所有组件都使用最新版，也不自动复制本机 Scoop 环境。
+
+每次任务使用全新的 `.conan-latest`，不恢复或保存依赖缓存，并传入 `--rebuild-deps` 强制源码重建依赖，避免编译器补丁版本变化后复用旧插桩包或下载远端旧二进制。编译器主版本只扩展到该任务的 Conan `settings_user.yml`。依赖版本仍遵守 `conanfile.py`；解析后的 recipe/package revision 和插桩参数保存在构建日志中。
+
+产物 `windows-latest-toolchain-qt-asan` 保留 14 天，包含 LLVM 下载元数据、pip 安装报告、实际工具路径与版本、MSVC/SDK、Qt、Conan profiles、构建日志、CMake 配置和 JUnit。`tools/record_ci_toolchain.py` 在激活后的 VS 环境中采集白名单字段，不导出整个环境；这些记录用于定位某次运行，不等于锁定未来构建。
+
+滚动任务保持真实失败状态，不通过 `continue-on-error`、跳过异常测试或关闭 ASan 掩盖失败。初期建议不将它加入分支必需检查；GitHub 分支保护需单独配置，此工作流不修改保护规则。新版本通过兼容性验证及现有基线全套回归后，再以明确的版本更新提交提升基线。现有基线的 LLVM/Conan/Qt 有固定版本，但 CMake 范围、Ninja 和 runner 镜像仍会更新，不能视为完全锁定环境。
+
+本机 Scoop 升级后，应重新配置独立构建目录、核对实际编译器与 ASan runtime；若复用了旧 Conan home 且编译器补丁、MSVC 或 SDK 已变化，在本页公共命令上增加 `--rebuild-deps` 重建相关依赖，不能仅凭相同 Clang 主版本推断二进制兼容。优先重跑 Qt ASan，再提交业务变更。
+
 ## 工具链注意事项
 
 - 本机 Windows profile 使用 VS 18/v145；CI 使用 VS 2022 的 MSVC 14.4x，Conan 的 clang profile 需设 `compiler.runtime_version=v144` 才会激活 14.4x（微软的平台工具集名称仍为 v143）。clang-cl 版本按实际检测生成；如果 Conan 未收录该版本，先配置用户 `settings_user.yml`，不要静默降级版本号。
@@ -41,8 +53,8 @@ ASan 不检测数据竞争；TSan 也不能代替内存和业务正确性测试�
 
 ## 最新本机结果
 
-2026-09-29，Windows x64 / clang-cl 23.1.2 / VS 18/v145 / Qt 6.11.1：修复后的公共 Qt 入口 **119/119 CTest 通过，41.06 秒**，无 ASan 报告。另用 VS 自带 clang-cl 22.1.3 的 `Program Files` 路径复现原链接错误，修复后 Conan/CMake 配置、链接与 ASan 程序执行通过。显示测试内部有 9 个 GoogleTest 用例，覆盖 CPU/RAW 回调期间重置、拉伸重绘取消与新帧继续投递。此前普通 Debug 全量为 **263/263，74.84 秒**，Doxygen 零警告。
+2026-09-29，Windows x64 / clang-cl 23.1.2 / VS 18/v145 / Qt 6.11.1：公共 Qt 入口增加 `--rebuild-deps` 强制重建依赖后 **119/119 CTest 通过，40.39 秒**，无 ASan 报告。另用 VS 自带 clang-cl 22.1.3 的 `Program Files` 路径复现原链接错误，修复后 Conan/CMake 配置、链接与 ASan 程序执行通过。显示测试内部有 9 个 GoogleTest 用例，覆盖 CPU/RAW 回调期间重置、拉伸重绘取消与新帧继续投递。此前普通 Debug 全量为 **263/263，74.84 秒**，Doxygen 零警告。
 
-本机证据保存在已忽略目录 `build/architecture-review/ci-fix-pinned-compiler-asan.log`、`ci-asan-space-regression.log`、`display-fix-full-verified.log`；JUnit 在 `build/clang-cl-asan-replay/sanitizer-results.xml`。这些是本地记录，不随源码分发；其他环境应运行上述公共入口生成自己的证据。本机 Qt 版本与 CI 不同，远端证据见 [验证矩阵](validation-matrix.md)。
+本机证据保存在已忽略目录 `build/architecture-review/latest-local-check.log`、`ci-asan-space-regression.log`、`display-fix-full-verified.log`；JUnit 在 `build/clang-cl-asan-replay/sanitizer-results.xml`。这些是本地记录，不随源码分发；其他环境应运行上述公共入口生成自己的证据。本机 Qt 版本与 CI 不同，远端证据见 [验证矩阵](validation-matrix.md)。
 
 2026-09-29，代码提交 `3c7927f` 的 [远端 sanitizer 工作流](https://github.com/with-fair-wind/1mZGG/actions/runs/36507360000) 全部通过：Windows core **107/107，9.32 秒**，Windows Qt **119/119，14.30 秒**，Linux TSan **107/107，1.86 秒**。Windows 日志确认依赖与项目均为 Clang 23.1.2，未混用 VS 自带的 Clang 19。修复包含库路径转义、MSVC 14.4x 映射、固定 LLVM 与编译器绝对路径；未过滤失败测试。普通 Release CI 同样通过，详情见 [验证矩阵](validation-matrix.md)。

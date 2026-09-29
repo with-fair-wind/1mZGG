@@ -25,6 +25,8 @@ def main():
     parser.add_argument("--host-profile", required=True)
     parser.add_argument("--build-profile", default="default")
     parser.add_argument("--offline", action="store_true")
+    parser.add_argument("--rebuild-deps", action="store_true",
+                        help="Rebuild dependencies after compiler, MSVC or SDK updates")
     parser.add_argument("--qt-prefix", help="Optional installed Qt prefix; includes replay/UI and UDP tests")
     parser.add_argument("--jobs", type=int, default=4)
     args = parser.parse_args()
@@ -68,7 +70,7 @@ def main():
                "-c:h=tools.build:exelinkflags=" + json.dumps(link),
                '-c:h=tools.info.package_id:confs=["tools.build:cxxflags"]',
                '-c:h=tools.cmake.cmaketoolchain:extra_variables={"CMAKE_TRY_COMPILE_CONFIGURATION":"Release"}',
-               "--output-folder=" + str(build), "--build=missing"]
+               "--output-folder=" + str(build), "--build=*" if args.rebuild_deps else "--build=missing"]
     if windows:
         # Conan's vcvars activation can put Visual Studio's older Clang first.
         # Bind dependencies and the project to the compiler owning this runtime.

@@ -1,0 +1,107 @@
+name: Latest stable toolchain
+
+on:
+  push:
+    branches: [develop, main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Compatibility signal; promote validated versions through a separate baseline change.
+# Keep failures visible. Required branch checks are configured separately in GitHub.
+jobs:
+  windows-latest-qt-address:
+    runs-on: windows-2022
+    timeout-minutes: 60
+    env:
+      # No cache restore/save: compiler patch updates must rebuild instrumented dependencies.
+      CONAN_HOME: ${{ github.workspace }}/.conan-latest
+      DSS_QT_ROOT: ${{ github.workspace }}/Qt/6.8.0/msvc2022_64
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install latest stable build tools
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force build/toolchain-latest-report | Out-Null
+          python -m pip install --upgrade --report build/toolchain-latest-report/pip-install.json conan cmake ninja "aqtinstall>=3.3,<4"
+          if ($LASTEXITCODE -ne 0) { throw 'Build tool installation failed' }
+      - name: Resolve and verify latest stable LLVM
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json' }
+          $release = Invoke-RestMethod 'https://api.github.com/repos/llvm/llvm-project/releases/latest' -Headers $headers
+          if ($release.draft -or $release.prerelease -or $release.tag_name -notmatch '^llvmorg-(\d+\.\d+\.\d+)$') {
+            throw 'Expected an official stable LLVM release'
+          }
+          $version = $Matches[1]
+          $assets = @($release.assets | Where-Object name -EQ "LLVM-$version-win64.msi")
+          if ($assets.Count -ne 1 -or $assets[0].digest -notmatch '^sha256:([a-fA-F0-9]{64})$') {
+            throw 'Latest LLVM has no unique Windows x64 MSI with a SHA-256 digest'
+          }
+          $expectedHash = $Matches[1]
+          $asset = $assets[0]
+          if ($asset.browser_download_url -ne "https://github.com/llvm/llvm-project/releases/download/llvmorg-$version/LLVM-$version-win64.msi") {
+            throw 'Unexpected LLVM download URL'
+          }
+          @{ version = $version; tag = $release.tag_name; url = $asset.browser_download_url; sha256 = $expectedHash } |
+            ConvertTo-Json | Set-Content build/toolchain-latest-report/llvm-release.json
+          $installer = Join-Path $env:RUNNER_TEMP $asset.name
+          $extractRoot = Join-Path $env:RUNNER_TEMP "llvm-latest-$version"
+          Invoke-WebRequest $asset.browser_download_url -OutFile $installer
+          if ((Get-FileHash $installer -Algorithm SHA256).Hash -ne $expectedHash) { throw 'LLVM checksum mismatch' }
+          $process = Start-Process msiexec.exe -ArgumentList @('/a', "`"$installer`"", '/qn', "TARGETDIR=`"$extractRoot`"") -WindowStyle Hidden -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "LLVM extraction failed: $($process.ExitCode)" }
+          $llvmBin = Join-Path $extractRoot 'LLVM/bin'
+          $actualVersion = & (Join-Path $llvmBin 'clang-cl.exe') --version
+          if ($LASTEXITCODE -ne 0 -or ($actualVersion -join "`n") -notmatch "clang version $([regex]::Escape($version))(\s|$)") {
+            throw 'Extracted compiler does not match the resolved release'
+          }
+          "DSS_LLVM_BIN=$llvmBin" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          # Extend only this job's schema; never label a new compiler as an older version.
+          $major = $version.Split('.')[0]
+          New-Item -ItemType Directory -Force $env:CONAN_HOME | Out-Null
+          "compiler:`n  clang:`n    version: ['$major']" | Set-Content (Join-Path $env:CONAN_HOME 'settings_user.yml')
+      - name: Install pinned Qt
+        shell: pwsh
+        run: |
+          python -m aqt install-qt windows desktop 6.8.0 win64_msvc2022_64 -O Qt -m qtcharts qtserialport
+          if ($LASTEXITCODE -ne 0) { throw 'Qt installation failed' }
+      - name: Record toolchain and run Qt ASan
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (!$vsPath) { throw 'Visual Studio x64 tools missing' }
+          $vcvars = Join-Path $vsPath 'VC/Auxiliary/Build/vcvars64.bat'
+          $commands = @(
+            'set "PATH=%DSS_LLVM_BIN%;%PATH%"',
+            'conan profile detect --name default',
+            'python tools/record_ci_toolchain.py --output build/toolchain-latest-report/toolchain.json',
+            'python tools/run_sanitizer.py --sanitizer address --build-dir build/ci-latest-address --host-profile profiles/conan/windows-clang-cl-ci --qt-prefix "%DSS_QT_ROOT%" --rebuild-deps'
+          ) -join ' && '
+          cmd.exe /d /s /c "`"$vcvars`" && $commands" 2>&1 | Tee-Object -FilePath build/toolchain-latest-report/build.log
+          if ($LASTEXITCODE -ne 0) { throw "Latest toolchain ASan failed: $LASTEXITCODE" }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: windows-latest-toolchain-qt-asan
+          path: |
+            build/toolchain-latest-report/**
+            build/ci-latest-address/sanitizer-results.xml
+            build/ci-latest-address/Testing/Temporary/**
+            build/ci-latest-address/CMakeCache.txt
+            build/ci-latest-address/generators/conan_toolchain.cmake
+          retention-days: 14
