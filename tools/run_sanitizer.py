@@ -47,9 +47,11 @@ def main():
         runtime = Path(subprocess.check_output(
             ["clang-cl", "--print-resource-dir"], text=True).strip()) / "lib/windows"
         flags = ["/fsanitize=address"]
-        link = [(runtime / "clang_rt.asan_dynamic-x86_64.lib").as_posix(),
+        # Conan joins these into CMAKE_EXE_LINKER_FLAGS, a command-line string.
+        # Conan embeds this in a quoted CMake string, so escape the linker quotes.
+        link = [r'\"' + (runtime / "clang_rt.asan_dynamic-x86_64.lib").as_posix() + r'\"',
                 "/INCLUDE:__asan_seh_interceptor",
-                "/WHOLEARCHIVE:" + (runtime / "clang_rt.asan_dynamic_runtime_thunk-x86_64.lib").as_posix()]
+                r'/WHOLEARCHIVE:\"' + (runtime / "clang_rt.asan_dynamic_runtime_thunk-x86_64.lib").as_posix() + r'\"']
         env["PATH"] = str(runtime) + os.pathsep + env["PATH"]
     else:
         flags = ["-fsanitize=" + args.sanitizer, "-fno-omit-frame-pointer"]
