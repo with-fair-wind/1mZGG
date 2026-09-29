@@ -26,13 +26,14 @@ python tools/run_sanitizer.py --sanitizer thread --build-dir build/ci-thread --h
 
 核心套件构建 12 个目标，覆盖有界通道、异步写入队列、处理异常、四种跟踪器及候选/预测/生命周期辅助函数、轨迹存储和结果网络映射。可选 Qt 套件再增加 ReplaySession、回放/主/显示 ViewModel、UdpChannel、DataExchange、ImageSender，共 19 个目标。CTest 每项超时 90 秒、无匹配测试即失败；生成构建目录中的 `sanitizer-results.xml` 和 `Testing/Temporary` 日志。
 
-`.github/workflows/sanitizers.yml` 配置 Windows core/qt ASan 矩阵与 Linux core TSan，在目标分支推送、PR 或手动触发时运行。Windows Qt 固定为 6.8.0 / MSVC 2022，安装 qtcharts、qtserialport；每项保留独立 JUnit 和日志，失败不取消其他矩阵项。普通 MSVC Release CI 继续运行全量回归。
+`.github/workflows/sanitizers.yml` 配置 Windows core/qt ASan 矩阵与 Linux core TSan，在目标分支推送、PR 或手动触发时运行。Windows 固定 LLVM 23.1.2（官方 MSI 校验 SHA-256 后解包），Qt 固定为 6.8.0 / MSVC 2022，安装 qtcharts、qtserialport；每项保留独立 JUnit 和日志，失败不取消其他矩阵项。普通 MSVC Release CI 继续运行全量回归。
 
 ASan 不检测数据竞争；TSan 也不能代替内存和业务正确性测试。预编译 Qt DLL 内部未插桩；可选 Qt 套件不代表全量 UI、OpenCV、真实相机、CUDA 或生产网络验收。完整边界见 [验证矩阵](validation-matrix.md)。
 
 ## 工具链注意事项
 
 - 本机 Windows profile 使用 VS 18/v145；CI 使用 VS 2022 的 MSVC 14.4x，Conan 的 clang profile 需设 `compiler.runtime_version=v144` 才会激活 14.4x（微软的平台工具集名称仍为 v143）。clang-cl 版本按实际检测生成；如果 Conan 未收录该版本，先配置用户 `settings_user.yml`，不要静默降级版本号。
+- CI 的 Conan 2.29.0 尚未列出 clang 23，因此仅在工作流专用 `CONAN_HOME` 写入 `settings_user.yml` 扩展版本；调用 vcvars 后重新把固定 LLVM 放到 PATH 首位，避免重新选中 VS 自带的 Clang 19。后者缺少 [LLVM Windows ASan catch 参数修复](https://github.com/llvm/llvm-project/pull/159618)，会在正常捕获异常时崩溃；不通过过滤异常测试或关闭插桩处理此问题。
 - Windows clang-cl 仅支持这里配置的单配置 Release/RelWithDebInfo、x64 ASan；依赖 CRT 与 STL 容器注解必须一致，不能混用普通 Debug 库或通过关闭容器注解规避问题。
 - CMake 使用 lld-link，需显式链接 ASan runtime/thunk 和 SEH interceptor；项目保留 `/Zi`、`/DEBUG`、`/OPT:NOICF`。Conan 的链接 flags 会嵌入 CMake 字符串，库路径的引号需转义，才能支持 `Program Files` 等含空格目录。编译器升级后由当前资源目录重新定位运行库，公共脚本采用 fresh 配置，避免缓存旧版本路径。
 - 本机 Windows ASan 曾在独立嵌套 catch/rethrow 线程程序中复现 VCRUNTIME 异常。ImageProcessor 用栈展开守卫标记失败，再交由线程顶层捕获并报告，避免重复捕获重抛；未关闭检查或过滤异常路径测试。
@@ -44,4 +45,4 @@ ASan 不检测数据竞争；TSan 也不能代替内存和业务正确性测试�
 
 本机证据保存在已忽略目录 `build/architecture-review/ci-fix-asan-verified.log`、`ci-asan-space-regression.log`、`display-fix-full-verified.log`；JUnit 在 `build/clang-cl-asan-replay/sanitizer-results.xml`。这些是本地记录，不随源码分发；其他环境应运行上述公共入口生成自己的证据。本机 Qt 版本与 CI 不同，远端证据见 [验证矩阵](validation-matrix.md)。
 
-2026-09-28 的 [首轮远端运行](https://github.com/with-fair-wind/1mZGG/actions/runs/36395960713)：Linux TSan **107/107 通过**；Windows core/Qt 在 fmt 的编译器检查阶段因 ASan 库路径未正确转义而失败，尚未执行测试，另有 MSVC 14.3 激活错误。路径转义与 CI profile 已修正，Windows runner 结果待后续运行确认。
+远端 Linux TSan 已有 **107/107 通过**记录。Windows 验收先后暴露路径转义、MSVC 工具目录映射和旧 Clang 的异常处理问题；当前配置已修正前两项并固定包含上游修复的 LLVM 23.1.2，完整 runner 结果待后续运行确认。详情见 [验证矩阵](validation-matrix.md)。

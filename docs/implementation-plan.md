@@ -4,7 +4,7 @@
 
 ## 1. 持续验证与生命周期覆盖
 
-- Linux core TSan 首轮真实 runner 已通过。修复 Windows ASan 的路径转义和 MSVC 工具目录映射后，取得 core/Qt 两项真实 runner 成功记录，保留各项 JUnit 和失败日志；本机通过或 YAML 解析不能替代远端验收。
+- Linux core TSan 真实 runner 已通过。Windows ASan 的路径转义和 MSVC 工具目录映射已修复；固定包含异常处理修复的 LLVM 23.1.2 后，取得 core/Qt 两项真实 runner 成功记录，保留各项 JUnit 和失败日志；本机通过或 YAML 解析不能替代远端验收。
 - 现有核心和 Qt ASan 已覆盖处理器、回放及部分 ViewModel；组合根持有外部服务引用时的关闭回归仍需加入 sanitizer 覆盖评估，不能把部分 Qt 套件描述成全应用内存审计。
 - 审查 UI 中无 context 的 lambda 连接，重点是回放进度、显示拉伸和统计控件；确认发送方与控件销毁顺序后补 context，并验证窗口关闭后无回调访问。旧清单的固定数量及旧行号不再作为依据。
 - 后续扩展实时采集/回放切换时，统一会话 ID、取消及停止顺序；已进入的解码或用户回调无法强制中断，最终关闭仍需等待返回。

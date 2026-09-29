@@ -18,6 +18,6 @@
 - 正常构建与回归：`cmake --build build/clang-cl-debug --parallel 4`，随后 `ctest --test-dir build/clang-cl-debug --output-on-failure --no-tests=error --timeout 90`；Doxygen 用 `cmake --build build/clang-cl-debug --target doxygen`。
 - Sanitizer：按 [sanitizer 验证](sanitizer-validation.md) 准备 VS/Conan/Qt 环境，使用 `tools/run_sanitizer.py`；JUnit 与 CTest 日志由脚本/工作流保存。ASan 只检查实际执行且可观测的内存路径，零报告不是不存在所有内存错误的证明。
 - 性能：按 [资源验证](resource-validation.md) 运行独立 Release 工具；测量期间避免并行构建/测试，保留输入参数、工具链、report.json 和输出文件。成功写入与容量拒绝必须一起报告。
-- 远端：提交 `b18a993` 的 [MSVC Release CI](https://github.com/with-fair-wind/1mZGG/actions/runs/36395960627) 与 [Linux TSan](https://github.com/with-fair-wind/1mZGG/actions/runs/36395960713/job/108842293615) 已通过。同轮 Windows ASan core/qt 在依赖配置阶段失败，原因是带空格库路径的引号与 MSVC 工具目录映射，修复后仍需实际 runner 验收；本地 YAML 解析或推送成功均不能算远端通过。
+- 远端：提交 `b18a993` 的 [MSVC Release CI](https://github.com/with-fair-wind/1mZGG/actions/runs/36395960627) 与 [Linux TSan](https://github.com/with-fair-wind/1mZGG/actions/runs/36395960713/job/108842293615) 已通过。`2416faa` 的 [后续运行](https://github.com/with-fair-wind/1mZGG/actions/runs/36506047359) 已解决 Windows ASan 的路径转义和 MSVC 工具目录错误，但旧 Clang 19 在异常捕获路径中导致 core 4 项、Qt 7 项失败。工作流改为固定 LLVM 23.1.2，仍需新 runner 验收；本地 YAML 解析或推送成功均不能算远端通过。
 
 后续执行顺序与尚未满足的外部条件见 [实施计划](implementation-plan.md)。本文记录指定验证快照，不将本地日志或工作流配置视为远端 runner 已通过。
