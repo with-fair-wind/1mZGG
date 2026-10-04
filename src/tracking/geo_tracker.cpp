@@ -4,10 +4,10 @@
 #include <string>
 #include <utility>
 
+#include "dss/tracking/detail/geo_tracking_detail.h"
 #include "dss/tracking/support/candidate_utils.h"
 #include "dss/tracking/support/lifecycle_utils.h"
 #include "dss/tracking/support/prediction_utils.h"
-#include "geo_tracking_detail.h"
 
 namespace Dss::Tracking {
 

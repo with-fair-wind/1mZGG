@@ -6,7 +6,7 @@
 #include <utility>
 
 #include "dss/core/constants.h"
-#include "geo_tracking_detail.h"
+#include "dss/tracking/detail/geo_tracking_detail.h"
 
 namespace Dss::Tracking::GeoDetail {
 

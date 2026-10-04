@@ -2,8 +2,8 @@
 #include <cmath>
 #include <limits>
 
+#include "dss/tracking/detail/geo_tracking_detail.h"
 #include "dss/tracking/support/lifecycle_utils.h"
-#include "geo_tracking_detail.h"
 
 namespace Dss::Tracking::GeoDetail {
 

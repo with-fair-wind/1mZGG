@@ -29,6 +29,8 @@ DSS_QT 是面向天文观测的 C++23 / Qt 6 桌面系统，覆盖高帧率图�
 
 ## 架构
 
+头文件统一放在 `include/dss/<模块>/`，模块内部实现声明放在对应的 `detail/` 子目录；`src/<模块>/` 存放 `.cpp` 实现。生产代码和测试均使用 `dss/...` 路径引用头文件。
+
 ```text
 IFrameSource (Replay / Sapera)
         │

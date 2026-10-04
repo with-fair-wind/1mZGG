@@ -6,9 +6,9 @@
 
 #include <gtest/gtest.h>
 
-#include "../src/tracking/geo_tracking_detail.h"
 #include "dss/core/constants.h"
 #include "dss/core/result/result_packet_utils.h"
+#include "dss/tracking/detail/geo_tracking_detail.h"
 #include "dss/tracking/strategy/geo_tracker.h"
 #include "dss/tracking/support/lifecycle_utils.h"
 
