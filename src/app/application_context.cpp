@@ -3,6 +3,7 @@
 #include <exception>
 #include <string>
 
+#include "dss/core/config/config.h"
 #include "dss/core/logger.h"
 
 namespace Dss::App {

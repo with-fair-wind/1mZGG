@@ -1,6 +1,5 @@
 #pragma once
 
-#include <atomic>
 #include <expected>
 #include <mutex>
 #include <stop_token>
@@ -8,7 +7,6 @@
 #include <vector>
 
 #include "dss/core/concurrency/interruptible_wait.h"
-#include "dss/core/event/events.h"
 #include "dss/core/event/message_bus.h"
 #include "dss/network/protocol/diagnostic_protocol.h"
 #include "dss/network/transport/i_network_channel.h"

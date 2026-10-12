@@ -3,11 +3,9 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
-#include <span>
 #include <string>
 #include <vector>
 
-#include "dss/core/constants.h"
 #include "dss/core/types.h"
 
 namespace Dss::Core {

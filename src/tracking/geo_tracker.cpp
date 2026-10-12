@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <string>
-#include <utility>
 
 #include "dss/tracking/detail/geo_tracking_detail.h"
 #include "dss/tracking/support/candidate_utils.h"

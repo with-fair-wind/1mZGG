@@ -1,7 +1,6 @@
 #include "dss/processing/detail/labeler.h"
 
 #include <algorithm>
-#include <numeric>
 #include <queue>
 #include <utility>
 #include <vector>

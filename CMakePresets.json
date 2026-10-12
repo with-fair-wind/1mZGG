@@ -13,6 +13,7 @@
       "binaryDir": "${sourceDir}/build/${presetName}",
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_DISABLE_PRECOMPILE_HEADERS": "OFF",
         "DSS_BUILD_APP": "ON",
         "DSS_ENABLE_TESTS": "ON",
         "DSS_ENABLE_CUDA": "OFF",

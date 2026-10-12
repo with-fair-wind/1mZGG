@@ -1,6 +1,19 @@
 #pragma once
 
-namespace detail {
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <expected>
+#include <span>
+#include <string>
+#include <utility>
+
+#include "dss/comm/protocol/serial_protocol_types.h"
+#include "dss/core/types.h"
+
+namespace Dss::Comm::detail {
 
 inline constexpr double AngleCodeDenominator =
     static_cast<double>(1ULL << 29U);  ///< 角度编码分母（2^29）
@@ -299,4 +312,4 @@ inline void encodeSignedMagnitude24(std::span<uint8_t> frame, std::size_t offset
     }
 }
 
-}  // namespace detail
+}  // namespace Dss::Comm::detail

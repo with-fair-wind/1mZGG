@@ -38,36 +38,6 @@ endif()
 string(REPLACE "\\" "/" DSS_SOURCE_DIR_RE "${SOURCE_DIR}")
 set(DSS_SOURCE_FILTER "${DSS_SOURCE_DIR_RE}/(src|tests|tools|benchmarks)/.*")
 
-if(NOT WIN32)
-    get_filename_component(CLANG_TIDY_DIR "${CLANG_TIDY}" DIRECTORY)
-    set(DSS_RUN_CLANG_TIDY_CANDIDATES
-        "${CLANG_TIDY_DIR}/run-clang-tidy"
-        "${CLANG_TIDY_DIR}/run-clang-tidy.py"
-    )
-
-    foreach(candidate IN LISTS DSS_RUN_CLANG_TIDY_CANDIDATES)
-        if(EXISTS "${candidate}")
-            include(ProcessorCount)
-            ProcessorCount(DSS_TIDY_JOBS)
-            if(DSS_TIDY_JOBS EQUAL 0)
-                set(DSS_TIDY_JOBS 4)
-            endif()
-
-            execute_process(
-                COMMAND "${candidate}"
-                    -p "${BUILD_DIR}"
-                    -clang-tidy-binary "${CLANG_TIDY}"
-                    -j ${DSS_TIDY_JOBS}
-                    -quiet
-                    ${DSS_TIDY_EXTRA_ARGS}
-                    "${DSS_SOURCE_FILTER}"
-                COMMAND_ERROR_IS_FATAL ANY
-            )
-            return()
-        endif()
-    endforeach()
-endif()
-
 file(READ "${BUILD_DIR}/compile_commands.json" DSS_COMPILE_COMMANDS)
 string(JSON DSS_COMPILE_COMMANDS_LENGTH ERROR_VARIABLE json_error LENGTH "${DSS_COMPILE_COMMANDS}")
 if(json_error)
@@ -97,10 +67,62 @@ if(NOT DSS_TIDY_FILES)
     message(FATAL_ERROR "No in-scope source files found in compile_commands.json.")
 endif()
 
+function(dss_run_source_tidy)
+    if(NOT WIN32)
+        get_filename_component(CLANG_TIDY_DIR "${CLANG_TIDY}" DIRECTORY)
+        set(DSS_RUN_CLANG_TIDY_CANDIDATES
+            "${CLANG_TIDY_DIR}/run-clang-tidy"
+            "${CLANG_TIDY_DIR}/run-clang-tidy.py"
+        )
+
+        foreach(candidate IN LISTS DSS_RUN_CLANG_TIDY_CANDIDATES)
+            if(EXISTS "${candidate}")
+                include(ProcessorCount)
+                ProcessorCount(DSS_TIDY_JOBS)
+                if(DSS_TIDY_JOBS EQUAL 0)
+                    set(DSS_TIDY_JOBS 4)
+                endif()
+
+                execute_process(
+                    COMMAND "${candidate}"
+                        -p "${BUILD_DIR}"
+                        -clang-tidy-binary "${CLANG_TIDY}"
+                        -j ${DSS_TIDY_JOBS}
+                        -quiet
+                        ${DSS_TIDY_EXTRA_ARGS}
+                        "${DSS_SOURCE_FILTER}"
+                    COMMAND_ERROR_IS_FATAL ANY
+                )
+                return()
+            endif()
+        endforeach()
+    endif()
+
+    execute_process(
+        COMMAND "${CLANG_TIDY}"
+            -p "${BUILD_DIR}"
+            ${DSS_TIDY_EXTRA_ARGS}
+            ${DSS_TIDY_FILES}
+        COMMAND_ERROR_IS_FATAL ANY
+    )
+endfunction()
+
+if(NOT PYTHON_EXECUTABLE OR NOT GENERATOR STREQUAL "Ninja")
+    message(FATAL_ERROR "Header Include Cleaner requires Python 3.9+ and a built Ninja configuration.")
+endif()
+
+message(STATUS "Checking active header includes before full source analysis")
+set(DSS_INCLUDE_ARGS "")
+if(WARNINGS_AS_ERRORS)
+    list(APPEND DSS_INCLUDE_ARGS --warnings-as-errors)
+endif()
 execute_process(
-    COMMAND "${CLANG_TIDY}"
-        -p "${BUILD_DIR}"
-        ${DSS_TIDY_EXTRA_ARGS}
-        ${DSS_TIDY_FILES}
+    COMMAND "${PYTHON_EXECUTABLE}" "${SOURCE_DIR}/tools/run_include_check.py"
+        --source-dir "${SOURCE_DIR}" --build-dir "${BUILD_DIR}"
+        --clang-tidy "${CLANG_TIDY}" --ninja "${NINJA_EXECUTABLE}"
+        --mode "${MODE}" ${DSS_INCLUDE_ARGS}
     COMMAND_ERROR_IS_FATAL ANY
 )
+
+message(STATUS "Running full source clang-tidy checks")
+dss_run_source_tidy()

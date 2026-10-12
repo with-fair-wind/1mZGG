@@ -3,11 +3,9 @@
 #include <QImage>
 #include <QTemporaryDir>
 #include <chrono>
-#include <condition_variable>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
-#include <mutex>
 #include <stdexcept>
 #include <thread>
 #include <vector>

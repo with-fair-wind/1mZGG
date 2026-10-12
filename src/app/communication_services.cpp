@@ -1,6 +1,7 @@
 #include <stdexcept>
 
 #include "dss/app/application_context.h"
+#include "dss/core/config/config.h"
 
 #ifdef DSS_BUILD_APP
 #include <memory>

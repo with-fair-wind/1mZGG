@@ -41,7 +41,7 @@ Comm 模块封装四路串口通信通道，负责与天文设备的低层协议
 
 ### 2. SerialProtocolCodec (`serial_protocol_codec.h`)
 
-所有四路协议的编解码函数（header-only），核心编解码逻辑集中在此。
+所有四路协议的编解码函数（header-only）。`protocol/serial_protocol_types.h` 定义共享协议类型、布局与帧检查；`detail/serial_protocol_codec_detail.h` 提供私有字段编解码辅助函数。两个头文件均显式包含依赖并自行声明命名空间，可独立解析；公共入口仍为 `serial_protocol_codec.h`，既有调用方式与类型布局保持不变。
 
 **解码函数:**
 - `decodeDisplayFrame(frame)` → `ExposureDisplayData`

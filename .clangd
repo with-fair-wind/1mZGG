@@ -12,6 +12,8 @@ Completion:
 Diagnostics:
   MissingIncludes: None
   UnusedIncludes: Strict
+  Includes:
+    AnalyzeAngledIncludes: true
 
 Index:
   Background: Build

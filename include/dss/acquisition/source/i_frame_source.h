@@ -6,7 +6,6 @@
 #include <stop_token>
 #include <string>
 
-#include "dss/core/types.h"
 #include "dss/processing/frame/frame_packet.h"
 
 namespace Dss::Acquisition {

@@ -89,6 +89,7 @@ jobs:
             'set "PATH=%DSS_LLVM_BIN%;%PATH%"',
             'conan profile detect --force --name default',
             'python tools/record_ci_toolchain.py --output build/quality-report/toolchain.json',
+            'python -B -m unittest discover -s tests -p test_include_check.py',
             'conan install . --build=missing -pr:h profiles/conan/windows-clang-cl-ci -pr:b default -s:h build_type=Release -o:h "&:with_opencv=True" -c:h tools.build:jobs=4 --output-folder=build\%PRESET%',
             'call build\%PRESET%\generators\conanbuild.bat',
             'cmake --preset %PRESET% --fresh',
@@ -104,4 +105,5 @@ jobs:
           path: |
             build/quality-report/**
             build/ci-clang-quality/CMakeCache.txt
+            build/ci-clang-quality/include-check/**
           retention-days: 14

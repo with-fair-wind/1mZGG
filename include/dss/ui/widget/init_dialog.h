@@ -4,8 +4,6 @@
 #include <QLabel>
 #include <QProgressBar>
 #include <QVBoxLayout>
-#include <expected>
-#include <string>
 
 namespace Dss::Ui {
 

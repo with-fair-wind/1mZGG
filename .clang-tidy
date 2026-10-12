@@ -5,6 +5,7 @@ Checks: >
   concurrency-*,
   cppcoreguidelines-*,
   modernize-*,
+  misc-include-cleaner,
   performance-*,
   portability-*,
   readability-*,
@@ -37,6 +38,10 @@ FormatStyle: file
 UseColor: true
 
 CheckOptions:
+  - key: misc-include-cleaner.UnusedIncludes
+    value: 'true'
+  - key: misc-include-cleaner.MissingIncludes
+    value: 'false'
   - key: readability-identifier-naming.NamespaceCase
     value: CamelCase
   - key: readability-identifier-naming.ClassCase

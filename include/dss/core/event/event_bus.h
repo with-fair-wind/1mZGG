@@ -5,16 +5,11 @@
 /// 后续计划：将 SFINAE 升级为 concepts，std::function 升级为 std::move_only_function。
 
 #include <algorithm>
-#include <atomic>
 #include <cassert>
 #include <cstddef>
 #include <exception>
 #include <functional>
 #include <memory>
-#include <optional>
-#include <shared_mutex>
-#include <stdexcept>
-#include <tuple>
 #include <type_traits>
 #include <typeindex>
 #include <unordered_map>

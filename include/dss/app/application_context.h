@@ -6,7 +6,6 @@
 #include <string>
 #include <vector>
 
-#include "dss/core/config/config.h"
 #include "dss/core/event/message_bus.h"
 #include "dss/core/service/service_registry.h"
 

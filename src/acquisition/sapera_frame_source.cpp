@@ -2,7 +2,6 @@
 
 #include <limits>
 #include <utility>
-#include <vector>
 
 #include "dss/core/event/events.h"
 

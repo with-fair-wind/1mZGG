@@ -1,10 +1,11 @@
-#include <cstddef>
-#include <cstdint>
-
 #include <gtest/gtest.h>
 
 #include "dss/processing/strategy/cuda_processing_strategy.h"
 #if defined(DSS_HAS_CUDA) && defined(DSS_HAS_OPENCV)
+#include <cstddef>
+#include <cstdint>
+#include <utility>
+
 #include "dss/processing/strategy/opencv_processing_strategy.h"
 #endif
 

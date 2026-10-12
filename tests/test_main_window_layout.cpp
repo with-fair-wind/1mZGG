@@ -20,7 +20,8 @@
 #include <gtest/gtest.h>
 
 #ifdef Q_OS_WIN
-#include <qt_windows.h>
+// Qt platform wrapper supplies the Win32 HWND and window-style API declarations.
+#include <qt_windows.h>  // IWYU pragma: keep
 #endif
 
 #include "dss/core/service/service_registry.h"

@@ -3,9 +3,7 @@
 #include <exception>
 
 #include "dss/app/application_context.h"
-#include "dss/core/config/config.h"
 #include "dss/core/diagnostics/emergency_report.h"
-#include "dss/core/event/events.h"
 #include "dss/ui/view_model/main_view_model.h"
 #include "dss/ui/widget/init_dialog.h"
 #include "dss/ui/widget/main_window.h"

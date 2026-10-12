@@ -12,13 +12,13 @@
 | Windows Release CI | MSVC / Qt 6.8.0 / OpenCV；全量回归及部署目录检查 | 2026-10-12 真实 runner 266/266（8.41 秒），部署检查及产物上传成功 | 安装包的人工交互验收与真实设备测试 |
 | 最新稳定工具链 | 独立 Windows Qt ASan；LLVM/Conan/CMake/Ninja 滚动，Qt 6.8.0 固定，依赖缓存隔离 | 2026-10-12 真实 runner 128/128（16.16 秒）；LLVM 23.1.3 / Conan 2.33.0 / CMake 4.4.4 / Ninja 1.13.2，版本与日志产物上传成功 | 整机所有工具最新版、本机 Scoop 环境完全复刻、自动升级基线 |
 | Release 真实 I/O | 生产 GEO、文件 writer、DataExchange 和 UDP 回环，逐字节核验报文与接受请求归档 | 10,000 帧无节流和固定 500 帧/s 场景已运行，指标及拒绝数见资源验证 | 跨机交付、断电持久化、长期满负载 RAW、生产帧率保证 |
-| 格式与静态分析 | `format-check` 扫描 Git 跟踪的项目 C/C++ 文件；`tidy-check` 扫描默认配置中的 src/tests/tools/benchmarks 与项目头文件 | 固定 LLVM 23.1.3 的 Code quality 已执行并通过；新增网络测试入口也已通过本机静态检查，warning 即失败 | 非默认硬件配置、第三方/生成文件、所有潜在缺陷的证明；宏参数与有原因的局部例外见 README |
+| 格式与静态分析 | `format-check` 扫描 Git 跟踪的项目 C/C++ 文件；`tidy-check` 先将 103 个活动头文件作为主文件检查冗余 include，再扫描默认配置中的 140 个源文件 | 既有固定 LLVM 23.1.3 门禁已通过；本轮新增独立头文件检查，本机格式与完整 clang-tidy 通过，Debug/PCH、Release/无 PCH 及 Release/PCH 的头文件检查均 103/103 无诊断，三种配置回归各 266/266；真实 Git/Ninja 正反例已验证 clang-cl/clang++ 的 PCH 参数处理及构建依赖不足时提前退出。远端新增覆盖须以本轮提交的工作流结果为准 | 非默认硬件配置、第三方/生成文件、所有潜在缺陷的证明；宏参数与有原因的局部例外见 README |
 | Doxygen | 全项目文档生成；补齐参数、返回值、资源预算、队列与停止契约 | 本轮原 67 条警告已消除，生成零警告；未通过抑制诊断达成 | 注释业务语义的形式化证明或全部文档永不偏移 |
 | 真实设备与科学验收 | Sapera、串口命令/应答、断连恢复、CUDA 数值与性能、观测黄金数据 | 尚待设备、标定数据和业务容差 | 不得用合成序列、模拟端或 ASan 通过替代 |
 
 ## 执行与证据
 
-- 代码质量：重新配置后运行 `cmake --build --preset clang-cl-debug --target format-check tidy-check`；工作流入口为 [Code quality](https://github.com/with-fair-wind/1mZGG/actions/workflows/quality.yml)，其 runner 结果须按具体提交核对，不能由本机通过推断。
+- 代码质量：需要 Python 3.9+ 和 Ninja，先完成当前配置的全量构建，再运行 `cmake --build --preset clang-cl-debug --target format-check tidy-check`；单独验证头文件门禁可在 VS/LLVM 环境运行 `python -B -m unittest discover -s tests -p test_include_check.py`。工作流入口为 [Code quality](https://github.com/with-fair-wind/1mZGG/actions/workflows/quality.yml)，其 runner 结果须按具体提交核对，不能由本机通过推断。
 - 正常构建与回归：`cmake --build build/clang-cl-debug --parallel 4`，随后 `ctest --test-dir build/clang-cl-debug --output-on-failure --no-tests=error --timeout 90`；Doxygen 用 `cmake --build build/clang-cl-debug --target doxygen`。
 - Sanitizer：按 [sanitizer 验证](sanitizer-validation.md) 准备 VS/Conan/Qt 环境，使用 `tools/run_sanitizer.py`；JUnit 与 CTest 日志由脚本/工作流保存。ASan 只检查实际执行且可观测的内存路径，零报告不是不存在所有内存错误的证明。
 - 性能：按 [资源验证](resource-validation.md) 运行独立 Release 工具；测量期间避免并行构建/测试，保留输入参数、工具链、report.json 和输出文件。成功写入与容量拒绝必须一起报告。

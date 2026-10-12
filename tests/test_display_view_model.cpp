@@ -14,7 +14,6 @@
 #include "dss/processing/frame/display_stretch.h"
 #include "dss/processing/pipeline/image_processor.h"
 #include "dss/ui/view_model/display_view_model.h"
-#include "dss/ui/view_model/view_model_context.h"
 
 namespace {
 

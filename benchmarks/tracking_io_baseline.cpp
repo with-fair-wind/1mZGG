@@ -28,7 +28,8 @@
 #define NOMINMAX
 #endif
 // clang-format off: Windows types must precede psapi.h.
-#include <windows.h>
+// Win32 declarations are prerequisites for Psapi, including HANDLE and process APIs.
+#include <windows.h>  // IWYU pragma: keep
 #include <psapi.h>
 // clang-format on
 #endif

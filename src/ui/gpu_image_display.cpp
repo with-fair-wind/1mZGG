@@ -7,7 +7,6 @@
 #include <QSurfaceFormat>
 #include <algorithm>
 #include <array>
-#include <cmath>
 #include <cstddef>
 
 namespace Dss::Ui {

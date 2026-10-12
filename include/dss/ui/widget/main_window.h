@@ -9,7 +9,6 @@
 #endif
 
 #include <array>
-#include <memory>
 
 class QDockWidget;
 class QCloseEvent;

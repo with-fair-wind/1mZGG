@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <chrono>
 
+#include "dss/comm/protocol/frame_codec.h"
 #include "dss/core/event/events.h"
 
 namespace Dss::Comm {

@@ -4,7 +4,6 @@
 #include <gtest/gtest.h>
 
 #include "dss/app/runtime_diagnostics.h"
-#include "dss/core/event/event_bus.h"
 #include "dss/core/event/events.h"
 
 TEST(RuntimeDiagnostics, AggregatesBackendCountersAndErrorEvents) {

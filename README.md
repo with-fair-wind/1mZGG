@@ -117,6 +117,9 @@ ctest --test-dir build/core-tests --output-on-failure
 | `DSS_ENABLE_SAPERA` | OFF | 构建 Sapera SDK 适配器 |
 | `DSS_ENABLE_STARLIBS` | OFF | 链接 StarMap/Photometry 库 |
 | `DSS_ENABLE_QT_DEPLOY` | Windows ON | 构建后运行 `windeployqt` |
+| `CMAKE_DISABLE_PRECOMPILE_HEADERS` | 普通预设 OFF；质量 CI ON | 控制已配置目标是否使用 PCH |
+
+项目已通过 `dss_std_pch` 为核心库配置标准库 PCH，通过 `dss_qt_pch` 为 Qt 模块和主程序追加常用 QtCore 头。普通开发预设明确启用 PCH，质量预设 `ci-clang-quality` 关闭 PCH，以暴露被预编译头掩盖的依赖。PCH 由 CMake 在构建目录生成，各目标私有使用，不作为公共接口传播；测试与独立头文件检查不依赖 PCH。可通过 `cmake --preset clang-cl-debug -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON` 临时关闭，普通预设下次重新配置会恢复启用；不额外引入项目开关或跨目标 PCH 复用。
 
 Sapera/CUDA 不使用默认开发 preset 验收；请严格按 [硬件验证手册](docs/hardware-validation.md) 执行并回填结果。
 
@@ -129,9 +132,15 @@ cmake --build --preset clang-cl-debug --target tidy-check
 
 项目遵循 `.clang-format`、`.clang-tidy` 和现代 C++ RAII/窄接口约定。`format`/`tidy` 会修改代码，带 `-check` 的目标只检查；`tidy-check` 默认将 warning 作为失败条件，已有构建目录需重新配置或显式设置 `DSS_CLANG_TIDY_WARNINGS_AS_ERRORS=ON`。clangd 共用 `.clang-tidy` 规则。检查器版本不同仍可能产生不同诊断；本机 Scoop 升级后，应先用 CI 固定版本复现，再通过版本更新提交提升质量基线。
 
-`format-check` 检查受 Git 跟踪的项目 C/C++ 文件；`tidy-check` 分析当前编译数据库中的 `src`、`tests`、`tools` 和 `benchmarks` 翻译单元及项目头文件。旧代码、第三方及生成文件不作为扫描入口；编译数据库之外的 CUDA/Sapera 可选硬件配置需另行验收。复杂度规则忽略宏展开及宏参数（包括 GoogleTest 的测试体），普通函数的阈值仍为 30。Qt 槽标记、公共枚举 ABI 和必要的平台转换使用带原因的局部例外，不关闭整类检查；`tidy` 的自动修改必须审查并运行回归测试，特别注意引用类别、NaN 比较和 Qt 元对象。
+`format-check` 检查受 Git 跟踪的项目 C/C++ 文件；`tidy-check` 先检查实际被当前目标使用的项目头文件，将其逐个作为主文件运行 Include Cleaner。通过后，再按共享规则分析编译数据库中的 `src`、`tests`、`tools` 和 `benchmarks` 翻译单元；仅扫描 `.cpp` 不能发现被包含头文件中的冗余 include。
 
-`.github/workflows/quality.yml` 在推送、PR 和手动触发时运行独立质量门禁：LLVM 23.1.3、Conan 2.32.0、CMake 4.4.3、Ninja 1.13.2、Qt 6.8.0；启用默认 Qt/OpenCV 和测试，使用 Ninja 并禁用 PCH，先验证格式与规则配置，再构建并运行 `format-check`/`tidy-check`。失败日志与工具版本保留 14 天。工具升级通过版本更新提交验证，最新稳定工具链兼容性任务继续独立运行。
+完整检查需要 Python 3.9+ 和已完成全量构建的 Ninja 目录；缺失对象依赖或 Ninja 报告为过期的依赖记录会在源码分析之前使检查失败，并输出当前构建目录对应的全量构建命令。头文件使用实际消费它的编译命令，临时数据库只移除 PCH 和输出参数，不补造宏或搜索路径。每个活动头文件选取一个实际消费目标的上下文，不代表检查了全部条件编译组合。
+
+旧代码、第三方及生成文件不作为扫描入口；编译数据库之外的 CUDA/Sapera 可选硬件配置需另行验收。编辑器与门禁均检查冗余 include，包括非标准库的尖括号 include；缺失 include 检查仍关闭。正常 C++ 源文件统一使用 `.h`/`.cpp`，私有头文件也应显式包含依赖并在文件内声明命名空间。必要的平台前置头和公开类型转导出使用有原因的 IWYU 注释。日志中的 `N warnings generated` 包含随后被过滤的第三方诊断和局部例外，应以实际显示的项目诊断及进程退出码判断门禁结果。
+
+复杂度规则忽略宏展开及宏参数（包括 GoogleTest 的测试体），普通函数的阈值仍为 30。Qt 槽标记、公共枚举 ABI 和必要的平台转换使用带原因的局部例外，不关闭整类检查；`tidy` 的自动修改必须审查并运行回归测试，特别注意引用类别、NaN 比较和 Qt 元对象。
+
+`.github/workflows/quality.yml` 在推送、PR 和手动触发时运行独立质量门禁：LLVM 23.1.3、Conan 2.32.0、CMake 4.4.3、Ninja 1.13.2、Qt 6.8.0；启用默认 Qt/OpenCV 和测试，使用 Ninja 并禁用 PCH，先验证格式与规则配置，执行真实 Git/Ninja 小项目回归（验证 clang-cl/clang++ 的 PCH 参数处理、未构建时提前停止，以及仅头文件中的冗余 include 会使门禁失败、清理后通过），再构建并运行 `format-check`/`tidy-check`。默认配置当前覆盖 140 个源文件及 103 个活动头文件；4 个未启用的 GPU 头文件会明确报告为未检查。失败日志与工具版本保留 14 天。工具升级通过版本更新提交验证，最新稳定工具链兼容性任务继续独立运行。
 
 ## 文档索引
 

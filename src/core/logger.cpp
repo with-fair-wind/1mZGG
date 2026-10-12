@@ -1,6 +1,5 @@
 #include "dss/core/logger.h"
 
-#include <algorithm>
 #include <filesystem>
 #include <functional>
 #include <string>

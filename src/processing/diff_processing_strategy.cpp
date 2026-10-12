@@ -1,6 +1,5 @@
 #include "dss/processing/strategy/diff_processing_strategy.h"
 
-#include <algorithm>
 #include <cstddef>
 #include <cstdlib>
 

@@ -2,7 +2,8 @@
 
 #include <string>
 
-#include <nlohmann/json.hpp>
+// The JSON alias is declared elsewhere; construction and dump require the full definition.
+#include <nlohmann/json.hpp>  // IWYU pragma: keep
 
 namespace Dss::Network {
 

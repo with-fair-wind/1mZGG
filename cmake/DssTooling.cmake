@@ -62,6 +62,7 @@ find_program(DSS_CLANG_TIDY_EXECUTABLE
 
 if(DSS_CLANG_TIDY_EXECUTABLE AND EXISTS "${CMAKE_SOURCE_DIR}/.git" AND NOT DSS_IS_MULTI_CONFIG)
     set(DSS_RUN_CLANG_TIDY "${CMAKE_SOURCE_DIR}/cmake/RunClangTidy.cmake")
+    find_package(Python3 3.9 QUIET COMPONENTS Interpreter)
 
     add_custom_target(tidy
         COMMAND ${CMAKE_COMMAND}
@@ -69,10 +70,13 @@ if(DSS_CLANG_TIDY_EXECUTABLE AND EXISTS "${CMAKE_SOURCE_DIR}/.git" AND NOT DSS_I
             "-DSOURCE_DIR=${CMAKE_SOURCE_DIR}"
             "-DBUILD_DIR=${CMAKE_BINARY_DIR}"
             "-DMODE=fix"
+            "-DPYTHON_EXECUTABLE=${Python3_EXECUTABLE}"
+            "-DNINJA_EXECUTABLE=${CMAKE_MAKE_PROGRAM}"
+            "-DGENERATOR=${CMAKE_GENERATOR}"
             "-DWARNINGS_AS_ERRORS=OFF"
             -P "${DSS_RUN_CLANG_TIDY}"
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-        COMMENT "Running clang-tidy --fix over project sources"
+        COMMENT "Fixing source diagnostics and active header includes"
         VERBATIM USES_TERMINAL
     )
 
@@ -82,10 +86,13 @@ if(DSS_CLANG_TIDY_EXECUTABLE AND EXISTS "${CMAKE_SOURCE_DIR}/.git" AND NOT DSS_I
             "-DSOURCE_DIR=${CMAKE_SOURCE_DIR}"
             "-DBUILD_DIR=${CMAKE_BINARY_DIR}"
             "-DMODE=check"
+            "-DPYTHON_EXECUTABLE=${Python3_EXECUTABLE}"
+            "-DNINJA_EXECUTABLE=${CMAKE_MAKE_PROGRAM}"
+            "-DGENERATOR=${CMAKE_GENERATOR}"
             "-DWARNINGS_AS_ERRORS=${DSS_CLANG_TIDY_WARNINGS_AS_ERRORS}"
             -P "${DSS_RUN_CLANG_TIDY}"
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-        COMMENT "Running clang-tidy over project sources"
+        COMMENT "Checking source diagnostics and active header includes"
         VERBATIM USES_TERMINAL
     )
 else()
