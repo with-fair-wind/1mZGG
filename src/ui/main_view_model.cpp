@@ -154,8 +154,8 @@ void MainViewModel::setupSubscriptions() {
     m_connections.push_back(m_bus.subscribe<Dss::Core::MasterControlEvent>(
         [this](const Dss::Core::MasterControlEvent& event) {
             auto eventCopy = event;
-            invokeOnObjectThread(
-                this, [this, eventCopy = std::move(eventCopy)] { onMasterControl(eventCopy); });
+            invokeOnObjectThread(this,
+                                 [this, eventCopy = eventCopy] { onMasterControl(eventCopy); });
         }));
 }
 

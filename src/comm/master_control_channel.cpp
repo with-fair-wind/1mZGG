@@ -8,7 +8,7 @@ MasterControlChannel::MasterControlChannel(MessageBus& bus) : SerialWorkerBase(b
 
 void MasterControlChannel::sendMasterControlStatus(const MasterControlStatus& status) {
     {
-        std::lock_guard lock(m_statusMutex);
+        std::scoped_lock lock(m_statusMutex);
         m_pendingStatus = status;
     }
     requestSend();
@@ -26,7 +26,7 @@ void MasterControlChannel::decodeFrame(std::span<const uint8_t> data) {
 }
 
 void MasterControlChannel::encodeFrame(std::span<uint8_t> buffer) {
-    std::lock_guard lock(m_statusMutex);
+    std::scoped_lock lock(m_statusMutex);
     (void)encodeMasterControlStatus(m_pendingStatus, buffer);
 }
 

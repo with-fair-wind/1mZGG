@@ -57,6 +57,8 @@ void DataExchangeViewModel::closeForEndpointReconfigure() {
     setDataExchangeOpen(false);
 }
 
+// 端点配置逐字段校验与提交集中在同一事务。
+// NOLINTNEXTLINE(readability-function-size)
 bool DataExchangeViewModel::applyDataExchangeEndpoints(
     const QString& gxtcLocalIp, int gxtcLocalPort, const QString& gxtcRemoteIp, int gxtcRemotePort,
     const QString& gdclLocalIp, int gdclLocalPort, const QString& gdclRemoteIp,

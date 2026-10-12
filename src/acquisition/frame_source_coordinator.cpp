@@ -1,12 +1,19 @@
 #include "dss/acquisition/source/frame_source_coordinator.h"
 
+#include <exception>
 #include <utility>
 #include <vector>
+
+#include "dss/core/diagnostics/emergency_report.h"
 
 namespace Dss::Acquisition {
 
 FrameSourceCoordinator::~FrameSourceCoordinator() {
-    stop();
+    try {
+        stop();
+    } catch (...) {
+        Dss::Core::reportEmergencyFailure("DSS: frame source coordinator shutdown failed\n");
+    }
 }
 
 FrameSourceCoordinator::LifecycleOperation::LifecycleOperation(FrameSourceCoordinator& owner)
@@ -28,7 +35,7 @@ auto FrameSourceCoordinator::registerSource(FrameSourceMode mode,
     LifecycleOperation operation(*this);
     FrameCallback callback;
     {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         if (m_sources.contains(mode)) {
             return std::unexpected("frame source mode is already registered");
         }
@@ -38,7 +45,7 @@ auto FrameSourceCoordinator::registerSource(FrameSourceMode mode,
         source->setFrameCallback(callback);
     }
     {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         m_sources.emplace(mode, std::move(source));
         if (!m_activeMode.has_value()) {
             m_activeMode = mode;
@@ -54,7 +61,7 @@ auto FrameSourceCoordinator::selectSource(FrameSourceMode mode)
     std::shared_ptr<IFrameSource> current;
     std::vector<std::shared_ptr<IFrameSource>> inactiveSources;
     {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         const auto targetEntry = m_sources.find(mode);
         if (targetEntry == m_sources.end()) {
             return std::unexpected("requested frame source is not registered");
@@ -85,7 +92,7 @@ auto FrameSourceCoordinator::selectSource(FrameSourceMode mode)
     }
 
     {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         m_activeMode = mode;
     }
     if (resume) {
@@ -95,7 +102,7 @@ auto FrameSourceCoordinator::selectSource(FrameSourceMode mode)
 }
 
 auto FrameSourceCoordinator::activeMode() const -> std::optional<FrameSourceMode> {
-    std::lock_guard lock(m_mutex);
+    std::scoped_lock lock(m_mutex);
     return m_activeMode;
 }
 
@@ -103,7 +110,7 @@ auto FrameSourceCoordinator::init() -> std::expected<void, std::string> {
     LifecycleOperation operation(*this);
     std::shared_ptr<IFrameSource> source;
     {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         source = activeSourceLocked();
     }
     if (!source) {
@@ -117,7 +124,7 @@ void FrameSourceCoordinator::start() {
     std::shared_ptr<IFrameSource> active;
     std::vector<std::shared_ptr<IFrameSource>> inactiveSources;
     {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         active = activeSourceLocked();
         for (const auto& [mode, source] : m_sources) {
             if (m_activeMode != mode) {
@@ -140,16 +147,26 @@ void FrameSourceCoordinator::stop() {
     LifecycleOperation operation(*this);
     std::vector<std::shared_ptr<IFrameSource>> sources;
     {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         sources.reserve(m_sources.size());
         for (const auto& [mode, source] : m_sources) {
             static_cast<void>(mode);
             sources.push_back(source);
         }
     }
+    std::exception_ptr firstFailure;
     for (const auto& source : sources) {
         // 已结束的生产者也可能仍持有 joinable 线程或待回收的 SDK 回调。
-        source->stop();
+        try {
+            source->stop();
+        } catch (...) {
+            if (!firstFailure) {
+                firstFailure = std::current_exception();
+            }
+        }
+    }
+    if (firstFailure) {
+        std::rethrow_exception(firstFailure);
     }
 }
 
@@ -157,7 +174,7 @@ void FrameSourceCoordinator::setFrameCallback(FrameCallback callback) {
     LifecycleOperation operation(*this);
     std::vector<std::shared_ptr<IFrameSource>> sources;
     {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         m_callback = std::move(callback);
         sources.reserve(m_sources.size());
         for (const auto& [mode, source] : m_sources) {
@@ -174,7 +191,7 @@ void FrameSourceCoordinator::setFrameCallback(FrameCallback callback) {
 bool FrameSourceCoordinator::isRunning() const {
     std::shared_ptr<IFrameSource> source;
     {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         source = activeSourceLocked();
     }
     return source && source->isRunning();
@@ -183,7 +200,7 @@ bool FrameSourceCoordinator::isRunning() const {
 auto FrameSourceCoordinator::frameWidth() const -> uint32_t {
     std::shared_ptr<IFrameSource> source;
     {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         source = activeSourceLocked();
     }
     return source ? source->frameWidth() : 0U;
@@ -192,7 +209,7 @@ auto FrameSourceCoordinator::frameWidth() const -> uint32_t {
 auto FrameSourceCoordinator::frameHeight() const -> uint32_t {
     std::shared_ptr<IFrameSource> source;
     {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         source = activeSourceLocked();
     }
     return source ? source->frameHeight() : 0U;
@@ -214,7 +231,7 @@ void FrameSourceCoordinator::beginLifecycleOperation() {
 
 void FrameSourceCoordinator::endLifecycleOperation() noexcept {
     {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         m_operationInProgress = false;
     }
     m_operationCv.notify_one();

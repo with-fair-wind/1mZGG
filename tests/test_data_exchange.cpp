@@ -9,7 +9,7 @@
 
 namespace {
 
-using MessageBus = Dss::Core::MessageBus;
+using Dss::Core::MessageBus;
 
 }  // namespace
 

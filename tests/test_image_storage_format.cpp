@@ -13,14 +13,16 @@ auto sampleMetadata() -> Dss::Storage::RawImageMetadata {
     Dss::Storage::RawImageMetadata metadata{};
     metadata.width = 0x1234;
     metadata.height = 0x0403;
-    metadata.exposure.timestamp = {.year = 2026,
-                                   .month = 6,
-                                   .day = 2,
-                                   .hour = 3,
-                                   .minute = 4,
-                                   .second = 5,
-                                   .millisecond = 678,
-                                   .microsecond = 901};
+    metadata.exposure.timestamp = {
+        .year = 2026,
+        .month = 6,
+        .day = 2,
+        .hour = 3,
+        .minute = 4,
+        .second = 5,
+        .millisecond = 678,
+        .microsecond = 901,
+    };
     metadata.exposure.pointingAe = {.x = 1.2345F, .y = 6.7890F};
     metadata.exposure.temperature = 17.9;
     metadata.exposure.atmosPressure = 78910.0;
@@ -58,7 +60,8 @@ TEST(ImageStorageFormat, BuildsLegacyRawHeaderBytes) {
         0x61, 0xA8,        // frame frequency * 1000
         0x75,              // temperature + 100
         0x1E, 0xD3,        // pressure / 10
-        0x1A};             // humidity * 100
+        0x1A,
+    };  // humidity * 100
 
     EXPECT_EQ(header, expected);
 }

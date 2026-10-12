@@ -1,4 +1,5 @@
-{% set compiler, version, compiler_exe = detect_api.detect_clang_compiler(compiler_exe="clang-cl") %}
+{% set selected_compiler = (os.getenv("DSS_LLVM_BIN").replace("\\", "/") + "/clang-cl.exe") if os.getenv("DSS_LLVM_BIN") else "clang-cl" %}
+{% set compiler, version, compiler_exe = detect_api.detect_clang_compiler(compiler_exe=selected_compiler) %}
 
 [settings]
 os=Windows

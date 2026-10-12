@@ -9,6 +9,8 @@
 namespace Dss::Processing {
 
 /// 显示拉伸模式。
+// 保留公共枚举的既有整数表示和对象布局。
+// NOLINTNEXTLINE(performance-enum-size)
 enum class DisplayStretchMode {
     Auto,    ///< 按图像统计量自动计算低/高阈值
     Manual,  ///< 使用用户指定的低/高阈值
@@ -17,11 +19,11 @@ enum class DisplayStretchMode {
 /// 16 位图像到 8 位显示图的拉伸参数。
 struct DisplayStretchSettings {
     DisplayStretchMode mode = DisplayStretchMode::Auto;  ///< 当前拉伸模式
-    std::uint16_t low = 1000;                             ///< 手动低阈值
-    std::uint16_t high = 5000;                            ///< 手动高阈值
-    std::uint16_t signalMin = 0;                          ///< 允许的最小信号值
-    std::uint16_t signalMax = 16384;                      ///< 允许的最大信号值
-    double sigma = 3.0;                                   ///< 自动拉伸标准差倍率
+    std::uint16_t low = 1000;                            ///< 手动低阈值
+    std::uint16_t high = 5000;                           ///< 手动高阈值
+    std::uint16_t signalMin = 0;                         ///< 允许的最小信号值
+    std::uint16_t signalMax = 16384;                     ///< 允许的最大信号值
+    double sigma = 3.0;                                  ///< 自动拉伸标准差倍率
 };
 
 /// 实际用于显示映射的低/高阈值窗口。
@@ -32,9 +34,9 @@ struct DisplayStretchWindow {
 
 /// 显示拉伸输出结果。
 struct DisplayStretchResult {
-    Dss::Core::ImageStats stats{};             ///< 输入 RAW 图像统计量
-    DisplayStretchWindow window{};             ///< 实际使用的显示窗口
-    std::vector<std::uint8_t> displayImage;    ///< 8 位显示图像
+    Dss::Core::ImageStats stats{};           ///< 输入 RAW 图像统计量
+    DisplayStretchWindow window{};           ///< 实际使用的显示窗口
+    std::vector<std::uint8_t> displayImage;  ///< 8 位显示图像
 };
 
 /**
@@ -42,8 +44,7 @@ struct DisplayStretchResult {
  * @param raw 16 位 RAW 图像
  * @return 最小值、最大值、均值与标准差
  */
-[[nodiscard]] auto computeImageStats(std::span<const std::uint16_t> raw)
-    -> Dss::Core::ImageStats;
+[[nodiscard]] auto computeImageStats(std::span<const std::uint16_t> raw) -> Dss::Core::ImageStats;
 
 /**
  * @brief 根据统计量和拉伸设置计算显示窗口。
@@ -62,8 +63,7 @@ struct DisplayStretchResult {
  * @return 8 位显示图像
  */
 [[nodiscard]] auto stretchDisplayImage(std::span<const std::uint16_t> raw,
-                                       DisplayStretchWindow window)
-    -> std::vector<std::uint8_t>;
+                                       DisplayStretchWindow window) -> std::vector<std::uint8_t>;
 
 /**
  * @brief 计算统计量、解析窗口并生成 8 位显示图。

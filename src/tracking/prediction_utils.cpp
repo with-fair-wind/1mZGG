@@ -24,8 +24,8 @@ namespace {
 namespace Dss::Tracking {
 
 auto median3(float first, float second, float third) -> float {
-    const auto minValue = std::min(first, std::min(second, third));
-    const auto maxValue = std::max(first, std::max(second, third));
+    const auto minValue = std::min({first, second, third});
+    const auto maxValue = std::max({first, second, third});
     return first + second + third - minValue - maxValue;
 }
 
@@ -147,7 +147,7 @@ auto findNearestBlob(const Core::FrameMeasurements& frame, const Core::TargetInf
         const auto actual = blobPosition(blob, options.space);
         const auto dx = predicted.x - actual.x;
         const auto dy = predicted.y - actual.y;
-        const auto distance = dx * dx + dy * dy;
+        const auto distance = (dx * dx) + (dy * dy);
         if (std::abs(dx) <= options.threshold && std::abs(dy) <= options.threshold &&
             distance <= nearestDistance) {
             nearestBlob = &blob;
@@ -188,14 +188,22 @@ void updatePredictionFromRecentFour(Core::TargetInfo& target) {
     const auto& latestBlob = target.frameInfos.back().measuredBlob;
     const auto period = framePeriodSeconds(target.frameInfos.back());
 
-    target.predictedSpdFrame = Core::Vec2f{median3(frameMotion3.x, frameMotion2.x, frameMotion1.x),
-                                           median3(frameMotion3.y, frameMotion2.y, frameMotion1.y)};
-    target.predictedPosFrame = Core::Vec2f{latestBlob.centroid.x + target.predictedSpdFrame.x,
-                                           latestBlob.centroid.y + target.predictedSpdFrame.y};
-    target.predictedSpdAe = Core::Vec2f{median3(aeMotion3.x, aeMotion2.x, aeMotion1.x) / period,
-                                        median3(aeMotion3.y, aeMotion2.y, aeMotion1.y) / period};
-    target.predictedPosAe = Core::Vec2f{latestBlob.posAe.x + target.predictedSpdAe.x * period,
-                                        latestBlob.posAe.y + target.predictedSpdAe.y * period};
+    target.predictedSpdFrame = Core::Vec2f{
+        median3(frameMotion3.x, frameMotion2.x, frameMotion1.x),
+        median3(frameMotion3.y, frameMotion2.y, frameMotion1.y),
+    };
+    target.predictedPosFrame = Core::Vec2f{
+        latestBlob.centroid.x + target.predictedSpdFrame.x,
+        latestBlob.centroid.y + target.predictedSpdFrame.y,
+    };
+    target.predictedSpdAe = Core::Vec2f{
+        median3(aeMotion3.x, aeMotion2.x, aeMotion1.x) / period,
+        median3(aeMotion3.y, aeMotion2.y, aeMotion1.y) / period,
+    };
+    target.predictedPosAe = Core::Vec2f{
+        latestBlob.posAe.x + (target.predictedSpdAe.x * period),
+        latestBlob.posAe.y + (target.predictedSpdAe.y * period),
+    };
 
     const auto latestValid = target.frameInfos.back().valid ? 1.0F : 0.0F;
     const auto sampleCount = target.totalFrameCount();

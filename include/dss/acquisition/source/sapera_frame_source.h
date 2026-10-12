@@ -60,6 +60,10 @@ public:
  */
 class SaperaFrameSource final : public IFrameSource {
 public:
+    // 生命周期绑定当前对象，禁止复制或移动资源及回调所有者。
+    SaperaFrameSource(SaperaFrameSource&&) = delete;
+    auto operator=(SaperaFrameSource&&) -> SaperaFrameSource& = delete;
+
     using MessageBus = Dss::Core::MessageBus;  ///< 跨线程消息总线类型
 
     /**
@@ -68,7 +72,7 @@ public:
      * @param session 可注入的采集会话；为空时初始化阶段创建 SDK 会话。
      * @param bus 用于发布采集错误的非拥有消息总线指针。
      */
-    explicit SaperaFrameSource(SaperaConfig config = {},
+    explicit SaperaFrameSource(SaperaConfig config = SaperaConfig(),
                                std::unique_ptr<ISaperaCaptureSession> session = {},
                                MessageBus* bus = nullptr);
 

@@ -17,12 +17,16 @@ namespace Dss::Tracking {
 void retainRecentTargetFrames(Core::TargetInfo& target, std::size_t maxFrames);
 
 /// 最近帧窗口检查模式
+// 保留公共枚举的既有整数表示和对象布局。
+// NOLINTNEXTLINE(performance-enum-size)
 enum class RecentFrameWindowMode {
     RequireFullWindow,   ///< 要求帧数达到完整窗口才判定
     UseAvailableFrames,  ///< 使用当前已有的帧数进行判定
 };
 
 /// 目标丢失时的存活判定策略
+// 保留公共枚举的既有整数表示和对象布局。
+// NOLINTNEXTLINE(performance-enum-size)
 enum class TrackMissPolicy {
     UseValidityWindow,                  ///< 基于有效性窗口与阈值判定
     RequireLatestValid,                 ///< 要求最新帧必须有效

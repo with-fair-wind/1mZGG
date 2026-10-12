@@ -232,8 +232,8 @@ void MainWindow::floatDockFromTab(QDockWidget& dock) {
 
         const auto frameSize = dock.frameSize();
         const auto mainCenter = frameGeometry().center();
-        QPoint topLeft{mainCenter.x() - frameSize.width() / 2,
-                       mainCenter.y() - frameSize.height() / 2};
+        QPoint topLeft{mainCenter.x() - (frameSize.width() / 2),
+                       mainCenter.y() - (frameSize.height() / 2)};
         const int maximumX = availableGeometry.right() - frameSize.width() + 1;
         const int maximumY = availableGeometry.bottom() - frameSize.height() + 1;
         topLeft.setX(std::clamp(topLeft.x(), availableGeometry.left(),

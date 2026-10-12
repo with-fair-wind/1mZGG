@@ -21,14 +21,16 @@ namespace {
     Dss::Storage::RawImageMetadata meta{};
     meta.width = 2;
     meta.height = 1;
-    meta.exposure.timestamp = {.year = 2026,
-                               .month = 6,
-                               .day = 3,
-                               .hour = 8,
-                               .minute = 9,
-                               .second = 10,
-                               .millisecond = 11,
-                               .microsecond = 12};
+    meta.exposure.timestamp = {
+        .year = 2026,
+        .month = 6,
+        .day = 3,
+        .hour = 8,
+        .minute = 9,
+        .second = 10,
+        .millisecond = 11,
+        .microsecond = 12,
+    };
     meta.exposureTimeMilliseconds = 4.0;
     meta.frameFrequency = 25.0;
     return meta;

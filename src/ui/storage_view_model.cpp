@@ -4,6 +4,7 @@
 
 #include "dss/app/service_keys.h"
 #include "dss/core/config/config.h"
+#include "dss/core/diagnostics/emergency_report.h"
 #include "dss/storage/backend/local_image_storage_backend.h"
 #include "dss/storage/backend/track_data_storage_backend.h"
 #include "dss/ui/support/qt_thread_utils.h"
@@ -14,7 +15,11 @@ StorageViewModel::StorageViewModel(UiServiceContext context, QObject* parent)
     : QObject(parent), m_registry(context.registry) {}
 
 StorageViewModel::~StorageViewModel() {
-    shutdown();
+    try {
+        shutdown();
+    } catch (...) {
+        Dss::Core::reportEmergencyFailure("DSS: storage ViewModel shutdown failed\n");
+    }
 }
 
 void StorageViewModel::shutdown() {
@@ -37,8 +42,11 @@ void StorageViewModel::startSaving() {
     const auto sessionTimestamp =
         QDateTime::currentDateTimeUtc().toString("yyyyMMddhhmmss").toStdString();
     startSaving(Dss::Storage::ImageStorageNaming{
+        .rootPath = {},
         .startTime = sessionTimestamp,
         .endTime = sessionTimestamp,
+        .taskId = {},
+        .targetId = {},
         .observatoryId = Dss::Core::Config::instance().observatory().id,
         .imageFormat = "raw",
         .searchMode = true,

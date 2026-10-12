@@ -102,10 +102,11 @@ TEST(GeoTracker, EmitsEachRetirementOnceWhileOtherTargetsRemainAlive) {
         const auto cycle = (seq - 1) / 12;
         auto frame = makeFrame(seq, 0);
         addCenteredStars(frame, 0, 0);
-        addGeoTarget(frame, 100 + static_cast<float>(seq) * 5, 100 + static_cast<float>(seq) * 4);
+        addGeoTarget(frame, 100 + (static_cast<float>(seq) * 5),
+                     100 + (static_cast<float>(seq) * 4));
         if (phase < 4 || (phase == 4 && cycle % 2 == 0)) {
-            addGeoTarget(frame, 300 + static_cast<float>(phase) * 3,
-                         500 + static_cast<float>(phase) * 5);
+            addGeoTarget(frame, 300 + (static_cast<float>(phase) * 3),
+                         500 + (static_cast<float>(phase) * 5));
             if (phase == 4) {
                 // 有效测量重复赤经/赤纬导致退休，最后有效结果仍应保留一次。
                 frame.targetBlobs.back().alpha = 0.0209;
@@ -143,13 +144,13 @@ TEST(GeoTracker, EmitsEachRetirementOnceWhileOtherTargetsRemainAlive) {
     EXPECT_EQ(retiredIds.size(), cycles);
     EXPECT_EQ(validFinalMeasurements, cycles / 2);
 
-    for (std::uint64_t seq = cycles * 12 + 1; seq <= cycles * 12 + 3; ++seq) {
+    for (std::uint64_t seq = (cycles * 12) + 1; seq <= (cycles * 12) + 3; ++seq) {
         const auto targets = tracker.track(makeFrame(seq, 0));
-        if (seq == cycles * 12 + 2) {
+        if (seq == (cycles * 12) + 2) {
             ASSERT_EQ(targets.size(), 1U);
             EXPECT_FALSE(targets.front().living);
             EXPECT_EQ(targets.front().targetId, persistentId);
-        } else if (seq == cycles * 12 + 3) {
+        } else if (seq == (cycles * 12) + 3) {
             EXPECT_TRUE(targets.empty());
         }
     }
@@ -185,8 +186,8 @@ TEST(GeoTracker, FindsFourFrameTargetThatDoesNotMoveLikeStars) {
     for (uint64_t index = 0; index < 4; ++index) {
         auto frame = makeFrame(index + 1, static_cast<int>(index));
         addCenteredStars(frame, static_cast<float>(index), 0.0F);
-        addGeoTarget(frame, 105.0F + static_cast<float>(index) * 5.0F,
-                     100.0F + static_cast<float>(index) * 4.0F);
+        addGeoTarget(frame, 105.0F + (static_cast<float>(index) * 5.0F),
+                     100.0F + (static_cast<float>(index) * 4.0F));
 
         const auto targets = tracker.track(frame);
         if (index < 3) {
@@ -211,8 +212,8 @@ TEST(GeoTracker, ContinuesTrackedTargetOnNextFrame) {
     for (uint64_t index = 0; index < 5; ++index) {
         auto frame = makeFrame(index + 1, static_cast<int>(index));
         addCenteredStars(frame, static_cast<float>(index), 0.0F);
-        addGeoTarget(frame, 105.0F + static_cast<float>(index) * 5.0F,
-                     100.0F + static_cast<float>(index) * 4.0F);
+        addGeoTarget(frame, 105.0F + (static_cast<float>(index) * 5.0F),
+                     100.0F + (static_cast<float>(index) * 4.0F));
 
         const auto targets = tracker.track(frame);
         if (index < 4) {
@@ -239,10 +240,10 @@ TEST(GeoTracker, AssignsStableUniqueIdsToAssociatedTargets) {
     for (uint64_t index = 0; index < 5; ++index) {
         auto frame = makeFrame(index + 1, static_cast<int>(index));
         addCenteredStars(frame, static_cast<float>(index), 0.0F);
-        addGeoTarget(frame, 105.0F + static_cast<float>(index) * 5.0F,
-                     100.0F + static_cast<float>(index) * 4.0F);
-        addGeoTarget(frame, 300.0F + static_cast<float>(index) * 3.0F,
-                     360.0F + static_cast<float>(index) * 5.0F);
+        addGeoTarget(frame, 105.0F + (static_cast<float>(index) * 5.0F),
+                     100.0F + (static_cast<float>(index) * 4.0F));
+        addGeoTarget(frame, 300.0F + (static_cast<float>(index) * 3.0F),
+                     360.0F + (static_cast<float>(index) * 5.0F));
 
         const auto targets = tracker.track(frame);
         if (index < 3) {
@@ -277,8 +278,8 @@ TEST(GeoTracker, ExpandsTrackingSearchAfterRecentInvalidFrames) {
         auto frame = makeFrame(index + 1, static_cast<int>(index));
         addCenteredStars(frame, 0.0F, 0.0F);
         if (index < 4) {
-            addGeoTarget(frame, 105.0F + static_cast<float>(index) * 4.0F,
-                         100.0F + static_cast<float>(index) * 3.0F);
+            addGeoTarget(frame, 105.0F + (static_cast<float>(index) * 4.0F),
+                         100.0F + (static_cast<float>(index) * 3.0F));
         } else if (index == 5) {
             addGeoTarget(frame, 130.5F, 115.0F);
         }
@@ -310,8 +311,8 @@ TEST(GeoTracker, RejectsTrackedMeasurementWhenFrameSpeedErrorIsTooLarge) {
         auto frame = makeFrame(index + 1, static_cast<int>(index));
         addCenteredStars(frame, static_cast<float>(index), 0.0F);
         if (index < 4) {
-            addGeoTarget(frame, 105.0F + static_cast<float>(index) * 5.0F,
-                         100.0F + static_cast<float>(index) * 4.0F);
+            addGeoTarget(frame, 105.0F + (static_cast<float>(index) * 5.0F),
+                         100.0F + (static_cast<float>(index) * 4.0F));
         } else {
             addGeoTarget(frame, 133.0F, 116.0F);
         }
@@ -340,8 +341,8 @@ TEST(GeoTracker, RejectsTrackedMeasurementWhenAePositionErrorExceedsThreshold) {
     for (uint64_t index = 0; index < 5; ++index) {
         auto frame = makeFrame(index + 1, static_cast<int>(index));
         addCenteredStars(frame, static_cast<float>(index), 0.0F);
-        addGeoTarget(frame, 105.0F + static_cast<float>(index) * 5.0F,
-                     100.0F + static_cast<float>(index) * 4.0F);
+        addGeoTarget(frame, 105.0F + (static_cast<float>(index) * 5.0F),
+                     100.0F + (static_cast<float>(index) * 4.0F));
         if (index == 4) {
             frame.targetBlobs.back().posAe = Dss::Core::Vec2f{0.8F, 0.9F};
         }
@@ -378,10 +379,10 @@ TEST(GeoTracker, TracksNonFullLeoTargetInRaDecSpace) {
         auto frame = makeFrame(index + 1, static_cast<int>(index));
         addCenteredStars(frame, static_cast<float>(index), 0.0F);
         if (index < 4) {
-            addGeoTargetWithRaDec(frame, 105.0F + static_cast<float>(index) * 5.0F,
-                                  100.0F + static_cast<float>(index) * 4.0F,
-                                  1.0 + static_cast<double>(index) * 0.0001,
-                                  0.5 + static_cast<double>(index) * 0.00007);
+            addGeoTargetWithRaDec(frame, 105.0F + (static_cast<float>(index) * 5.0F),
+                                  100.0F + (static_cast<float>(index) * 4.0F),
+                                  1.0 + (static_cast<double>(index) * 0.0001),
+                                  0.5 + (static_cast<double>(index) * 0.00007));
         } else {
             addGeoTargetWithRaDec(frame, 900.0F, 900.0F, 1.0004, 0.50028);
         }
@@ -414,10 +415,10 @@ TEST(GeoTracker, TracksNonFullLeoSouthernTargetInRaDecSpace) {
         auto frame = makeFrame(index + 1, static_cast<int>(index));
         addCenteredStars(frame, static_cast<float>(index), 0.0F);
         if (index < 4) {
-            addGeoTargetWithRaDec(frame, 105.0F + static_cast<float>(index) * 5.0F,
-                                  100.0F + static_cast<float>(index) * 4.0F,
-                                  1.0 + static_cast<double>(index) * 0.0001,
-                                  -0.5 - static_cast<double>(index) * 0.00007);
+            addGeoTargetWithRaDec(frame, 105.0F + (static_cast<float>(index) * 5.0F),
+                                  100.0F + (static_cast<float>(index) * 4.0F),
+                                  1.0 + (static_cast<double>(index) * 0.0001),
+                                  -0.5 - (static_cast<double>(index) * 0.00007));
         } else {
             addGeoTargetWithRaDec(frame, 900.0F, 900.0F, 1.0004, -0.50028);
         }
@@ -445,10 +446,10 @@ TEST(GeoTracker, EndsNonFullLeoTargetWhenPredictedRaDecLeavesSkyBounds) {
         auto frame = makeFrame(index + 1, static_cast<int>(index));
         addCenteredStars(frame, static_cast<float>(index), 0.0F);
         if (index < 4) {
-            addGeoTargetWithRaDec(frame, 105.0F + static_cast<float>(index) * 5.0F,
-                                  100.0F + static_cast<float>(index) * 4.0F,
-                                  6.2824 + static_cast<double>(index) * 0.00019,
-                                  0.5 + static_cast<double>(index) * 0.00007);
+            addGeoTargetWithRaDec(frame, 105.0F + (static_cast<float>(index) * 5.0F),
+                                  100.0F + (static_cast<float>(index) * 4.0F),
+                                  6.2824 + (static_cast<double>(index) * 0.00019),
+                                  0.5 + (static_cast<double>(index) * 0.00007));
         } else {
             addGeoTargetWithRaDec(frame, 900.0F, 900.0F, 6.28316, 0.50028);
         }
@@ -483,8 +484,8 @@ TEST(GeoTracker, FindsInitialNonFullLeoTargetInRaDecSpaceEvenWhenPixelsJump) {
         auto frame = makeFrame(index + 1, static_cast<int>(index));
         addCenteredStars(frame, static_cast<float>(index), 0.0F);
         addGeoTargetWithRaDec(frame, pixelPositions[index].x, pixelPositions[index].y,
-                              1.0 + static_cast<double>(index) * 0.0001,
-                              0.5 + static_cast<double>(index) * 0.00007);
+                              1.0 + (static_cast<double>(index) * 0.0001),
+                              0.5 + (static_cast<double>(index) * 0.00007));
 
         const auto targets = tracker.track(frame);
         if (index < 3) {
@@ -511,10 +512,10 @@ TEST(GeoTracker, RejectsInitialNonFullLeoTargetWhenRaDecMotionIsBelowThreshold) 
     for (uint64_t index = 0; index < 4; ++index) {
         auto frame = makeFrame(index + 1, static_cast<int>(index));
         addCenteredStars(frame, static_cast<float>(index), 0.0F);
-        addGeoTargetWithRaDec(frame, 105.0F + static_cast<float>(index) * 5.0F,
-                              100.0F + static_cast<float>(index) * 4.0F,
-                              1.0 + static_cast<double>(index) * Dss::Core::ArcSecToRad,
-                              0.5 + static_cast<double>(index) * 0.5 * Dss::Core::ArcSecToRad);
+        addGeoTargetWithRaDec(frame, 105.0F + (static_cast<float>(index) * 5.0F),
+                              100.0F + (static_cast<float>(index) * 4.0F),
+                              1.0 + (static_cast<double>(index) * Dss::Core::ArcSecToRad),
+                              0.5 + (static_cast<double>(index) * 0.5 * Dss::Core::ArcSecToRad));
 
         const auto targets = tracker.track(frame);
         EXPECT_TRUE(targets.empty());
@@ -529,8 +530,8 @@ TEST(GeoTracker, UsesExternalValidationBlobForInvalidGeoFrame) {
         auto frame = makeFrame(index + 1, static_cast<int>(index));
         addCenteredStars(frame, static_cast<float>(index), 0.0F);
         if (index < 4) {
-            addGeoTarget(frame, 105.0F + static_cast<float>(index) * 5.0F,
-                         100.0F + static_cast<float>(index) * 4.0F);
+            addGeoTarget(frame, 105.0F + (static_cast<float>(index) * 5.0F),
+                         100.0F + (static_cast<float>(index) * 4.0F));
         } else {
             auto validationBlob = makeBlob(131.0F, 122.0F, 0.31F, 0.22F);
             validationBlob.id = targetId;
@@ -570,10 +571,10 @@ TEST(GeoTracker, UsesExternalValidationBlobOnlyForMatchingGeoTargetId) {
     for (uint64_t index = 0; index < 4; ++index) {
         auto frame = makeFrame(index + 1, static_cast<int>(index));
         addCenteredStars(frame, static_cast<float>(index), 0.0F);
-        addGeoTarget(frame, 105.0F + static_cast<float>(index) * 5.0F,
-                     100.0F + static_cast<float>(index) * 4.0F);
-        addGeoTarget(frame, 300.0F + static_cast<float>(index) * 3.0F,
-                     360.0F + static_cast<float>(index) * 5.0F);
+        addGeoTarget(frame, 105.0F + (static_cast<float>(index) * 5.0F),
+                     100.0F + (static_cast<float>(index) * 4.0F));
+        addGeoTarget(frame, 300.0F + (static_cast<float>(index) * 3.0F),
+                     360.0F + (static_cast<float>(index) * 5.0F));
         associatedTargets = tracker.track(frame);
     }
 
@@ -622,8 +623,8 @@ TEST(GeoTracker, EndsTrackedTargetAfterConfiguredConsecutiveInvalidFrames) {
         auto frame = makeFrame(index + 1, static_cast<int>(index));
         addCenteredStars(frame, static_cast<float>(index), 0.0F);
         if (index < 4) {
-            addGeoTarget(frame, 105.0F + static_cast<float>(index) * 5.0F,
-                         100.0F + static_cast<float>(index) * 4.0F);
+            addGeoTarget(frame, 105.0F + (static_cast<float>(index) * 5.0F),
+                         100.0F + (static_cast<float>(index) * 4.0F));
         }
 
         const auto targets = tracker.track(frame);
@@ -648,8 +649,8 @@ TEST(GeoTracker, EndsTrackedTargetWhenPredictionLeavesImageBounds) {
         auto frame = makeFrame(index + 1, static_cast<int>(index));
         addCenteredStars(frame, static_cast<float>(index), 0.0F);
         if (index < 4) {
-            addGeoTarget(frame, 985.0F + static_cast<float>(index) * 5.0F,
-                         120.0F + static_cast<float>(index) * 4.0F);
+            addGeoTarget(frame, 985.0F + (static_cast<float>(index) * 5.0F),
+                         120.0F + (static_cast<float>(index) * 4.0F));
         }
 
         const auto targets = tracker.track(frame);
@@ -673,10 +674,10 @@ TEST(GeoTracker, DoesNotReuseSameMeasurementForMultipleTrackedTargets) {
         auto frame = makeFrame(index + 1, static_cast<int>(index));
         addCenteredStars(frame, static_cast<float>(index), 0.0F);
         if (index < 4) {
-            addGeoTarget(frame, 105.0F + static_cast<float>(index) * 5.0F,
-                         100.0F + static_cast<float>(index) * 4.0F);
-            addGeoTarget(frame, 145.0F - static_cast<float>(index) * 5.0F,
-                         136.0F - static_cast<float>(index) * 4.0F);
+            addGeoTarget(frame, 105.0F + (static_cast<float>(index) * 5.0F),
+                         100.0F + (static_cast<float>(index) * 4.0F));
+            addGeoTarget(frame, 145.0F - (static_cast<float>(index) * 5.0F),
+                         136.0F - (static_cast<float>(index) * 4.0F));
         } else {
             addGeoTarget(frame, 125.0F, 118.0F);
         }
@@ -715,11 +716,11 @@ TEST(GeoTracker, RediscoversTargetAfterTrackedTargetIsLost) {
         auto frame = makeFrame(index + 1, static_cast<int>(index));
         addCenteredStars(frame, static_cast<float>(index), 0.0F);
         if (index < 4) {
-            addGeoTarget(frame, 105.0F + static_cast<float>(index) * 5.0F,
-                         100.0F + static_cast<float>(index) * 4.0F);
+            addGeoTarget(frame, 105.0F + (static_cast<float>(index) * 5.0F),
+                         100.0F + (static_cast<float>(index) * 4.0F));
         } else if (index >= 7) {
             const auto newTrackIndex = static_cast<float>(index - 7U);
-            addGeoTarget(frame, 300.0F + newTrackIndex * 4.0F, 350.0F + newTrackIndex * 5.0F);
+            addGeoTarget(frame, 300.0F + (newTrackIndex * 4.0F), 350.0F + (newTrackIndex * 5.0F));
         }
 
         const auto targets = tracker.track(frame);
@@ -746,11 +747,11 @@ TEST(GeoTracker, AddsNewTargetWhileExistingTargetContinuesTracking) {
     for (uint64_t index = 0; index < 8; ++index) {
         auto frame = makeFrame(index + 1, static_cast<int>(index));
         addCenteredStars(frame, static_cast<float>(index), 0.0F);
-        addGeoTarget(frame, 105.0F + static_cast<float>(index) * 5.0F,
-                     100.0F + static_cast<float>(index) * 4.0F);
+        addGeoTarget(frame, 105.0F + (static_cast<float>(index) * 5.0F),
+                     100.0F + (static_cast<float>(index) * 4.0F));
         if (index >= 4) {
             const auto newTrackIndex = static_cast<float>(index - 4U);
-            addGeoTarget(frame, 300.0F + newTrackIndex * 3.0F, 360.0F + newTrackIndex * 5.0F);
+            addGeoTarget(frame, 300.0F + (newTrackIndex * 3.0F), 360.0F + (newTrackIndex * 5.0F));
         }
 
         const auto targets = tracker.track(frame);
@@ -783,8 +784,8 @@ TEST(GeoTracker, EndsTrackedTargetWhenConsecutiveMeasurementsRepeatEquatorialPoi
         auto frame = makeFrame(index + 1, static_cast<int>(index));
         addCenteredStars(frame, static_cast<float>(index), 0.0F);
         if (index < 4) {
-            addGeoTarget(frame, 105.0F + static_cast<float>(index) * 5.0F,
-                         100.0F + static_cast<float>(index) * 4.0F);
+            addGeoTarget(frame, 105.0F + (static_cast<float>(index) * 5.0F),
+                         100.0F + (static_cast<float>(index) * 4.0F));
             previousAlpha = frame.targetBlobs.back().alpha;
             previousSigma = frame.targetBlobs.back().sigma;
         } else {
@@ -820,7 +821,7 @@ TEST(GeoTracker, LongTrackBoundsHistoryAndPreservesCumulativeValidity) {
             addCenteredStars(frame, index, 0.0F);
             const bool valid = seq % 100 != 0;
             if (valid) {
-                addGeoTarget(frame, 105.0F + index * 5, 100.0F + index * 4);
+                addGeoTarget(frame, 105.0F + (index * 5), 100.0F + (index * 4));
             }
             const auto targets = tracker.track(frame);
             if (seq < 4) {
@@ -837,7 +838,7 @@ TEST(GeoTracker, LongTrackBoundsHistoryAndPreservesCumulativeValidity) {
                 Dss::Tracking::GeoDetail::updatePredictionFromHistory(reference, 1.0F, settings);
                 const auto count = static_cast<float>(seq);
                 expectedValidity =
-                    ((count - 1.0F) * expectedValidity + (valid ? 1.0F : 0.0F)) / count;
+                    (((count - 1.0F) * expectedValidity) + (valid ? 1.0F : 0.0F)) / count;
             }
             ASSERT_TRUE(target.living) << "seq=" << seq;
             ASSERT_EQ(target.targetId, id);
@@ -869,8 +870,8 @@ TEST(GeoTracker, LongTrackBoundsHistoryAndPreservesCumulativeValidity) {
         for (std::uint64_t seq = 1; seq <= 4; ++seq) {
             auto frame = makeFrame(seq, 0);
             addCenteredStars(frame, static_cast<float>(seq), 0);
-            addGeoTarget(frame, 100 + static_cast<float>(seq) * 5,
-                         100 + static_cast<float>(seq) * 4);
+            addGeoTarget(frame, 100 + (static_cast<float>(seq) * 5),
+                         100 + (static_cast<float>(seq) * 4));
             const auto targets = tracker.track(frame);
             if (seq == 4) {
                 ASSERT_EQ(targets.size(), 1U);

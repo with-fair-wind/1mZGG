@@ -31,6 +31,12 @@ class MainViewModel : public QObject {
     Q_OBJECT
 
 public:
+    // 生命周期绑定当前对象，禁止复制或移动资源及回调所有者。
+    MainViewModel(const MainViewModel&) = delete;
+    auto operator=(const MainViewModel&) -> MainViewModel& = delete;
+    MainViewModel(MainViewModel&&) = delete;
+    auto operator=(MainViewModel&&) -> MainViewModel& = delete;
+
     using MessageBus = Dss::Core::MessageBus;  ///< 事件总线类型别名。
 
     /**
@@ -102,6 +108,9 @@ public:
     /** @brief 获取只读数据交换子 ViewModel。 @return 数据交换 ViewModel 常量引用。 */
     [[nodiscard]] const DataExchangeViewModel& dataExchange() const;
 
+    // Qt
+    // 槽区段参与元对象生成，必须保留。
+    // NOLINTNEXTLINE(readability-redundant-access-specifiers)
 public Q_SLOTS:
     /**
      * @brief 设置曝光时间。

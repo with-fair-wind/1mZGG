@@ -308,6 +308,7 @@ flowchart TD
 - Registry 的 `get()` 是强约束查询，缺失会抛异常；UI 的可选功能通常使用 `tryGet()` 并转换成状态提示。
 - Logger 在 `wireLogger()` 后才会把日志发布到总线；`ApplicationContext` 析构时断开 Logger 的总线指针。
 - 消息总线隔离订阅者异常并继续派发；后台线程顶层异常转换为 `BackgroundTaskErrorEvent`。
+- 无返回值与有返回值事件都保留声明的引用类别；按值参数为每个订阅者独立复制，不能用统一 `std::forward` 让后续订阅者收到已移动的值。错误报告器或析构清理再次失败时，使用 `reportEmergencyFailure` 向 stderr 尽力报告，避免递归进入消息总线；不承诺日志持久化。
 
 ### 扩展、测试与阅读顺序
 

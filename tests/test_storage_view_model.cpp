@@ -53,6 +53,7 @@ TEST(StorageViewModel, SavingToggleControlsImageAndTrackStorage) {
     Dss::Ui::StorageViewModel storage(Dss::Ui::UiServiceContext{.bus = bus, .registry = registry});
 
     const Dss::Storage::ImageStorageNaming naming{
+        .rootPath = {},
         .startTime = "20260620083000",
         .endTime = "20260620094500",
         .taskId = "7",
@@ -89,7 +90,8 @@ TEST(StorageViewModel, StopReturnsWhileWriterIsStillDraining) {
     backend->setBus(&bus);
     registry.registerService<Dss::Storage::LocalImageStorageBackend>("image_storage", backend);
     Dss::Ui::StorageViewModel vm({.bus = bus, .registry = registry});
-    std::latch entered{1}, release{1};
+    std::latch entered{1};
+    std::latch release{1};
     auto connection = bus.subscribe<Dss::Core::StorageWriteErrorEvent>([&](const auto&) {
         entered.count_down();
         release.wait();
@@ -121,7 +123,7 @@ TEST(StorageViewModel, StopReturnsWhileWriterIsStillDraining) {
 }
 
 TEST(StorageViewModel, PendingSessionKeepsLatestRequestAndShutdownPreventsRestart) {
-    auto& app = ensureApplication();
+    ensureApplication();
     QTemporaryDir directory;
     ASSERT_TRUE(directory.isValid());
     Dss::Core::MessageBus bus;
@@ -142,7 +144,7 @@ TEST(StorageViewModel, PendingSessionKeepsLatestRequestAndShutdownPreventsRestar
     vm.startSaving(naming);
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
     while (vm.isStopping() && std::chrono::steady_clock::now() < deadline) {
-        app.processEvents();
+        QCoreApplication::processEvents();
         std::this_thread::yield();
     }
     EXPECT_TRUE(vm.isSaving());
@@ -151,7 +153,7 @@ TEST(StorageViewModel, PendingSessionKeepsLatestRequestAndShutdownPreventsRestar
     naming.startTime = "never";
     vm.startSaving(naming);
     vm.shutdown();
-    app.processEvents();
+    QCoreApplication::processEvents();
     EXPECT_FALSE(backend->isRunning());
     EXPECT_TRUE(backend->sessionPath().filename().string().starts_with("third"));
 }

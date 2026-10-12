@@ -19,6 +19,12 @@ class StorageViewModel : public QObject {
     Q_PROPERTY(bool isStopping READ isStopping NOTIFY stoppingChanged)
 
 public:
+    // 生命周期绑定当前对象，禁止复制或移动资源及回调所有者。
+    StorageViewModel(const StorageViewModel&) = delete;
+    auto operator=(const StorageViewModel&) -> StorageViewModel& = delete;
+    StorageViewModel(StorageViewModel&&) = delete;
+    auto operator=(StorageViewModel&&) -> StorageViewModel& = delete;
+
     /**
      * @brief 构造存储子 ViewModel。
      * @param context UI 子 ViewModel 共享的后端上下文。
@@ -50,6 +56,9 @@ public:
      */
     void startSaving(const Dss::Storage::ImageStorageNaming& naming);
 
+    // Qt
+    // 槽区段参与元对象生成，必须保留。
+    // NOLINTNEXTLINE(readability-redundant-access-specifiers)
 public Q_SLOTS:
     /**
      * @brief 启动图像与跟踪数据本地存储。

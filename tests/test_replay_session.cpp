@@ -43,7 +43,7 @@ public:
         return m_cv.wait_for(lock, 3s, [this] { return m_entered; });
     }
     void release() {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         m_released = true;
         m_cv.notify_all();
     }
@@ -56,6 +56,12 @@ private:
 };
 
 struct ReleaseGate {
+    explicit ReleaseGate(Gate& value) noexcept : gate(value) {}
+    ReleaseGate(const ReleaseGate&) = delete;
+    auto operator=(const ReleaseGate&) -> ReleaseGate& = delete;
+    ReleaseGate(ReleaseGate&&) = delete;
+    auto operator=(ReleaseGate&&) -> ReleaseGate& = delete;
+
     Gate& gate;
     ~ReleaseGate() {
         gate.release();
@@ -65,17 +71,17 @@ struct ReleaseGate {
 class GatedProcessing final : public Dss::Processing::IProcessingStrategy {
 public:
     explicit GatedProcessing(std::shared_ptr<Gate> gate) : m_gate(std::move(gate)) {}
-    auto process(const Dss::Processing::FramePacket&)
+    auto process(const Dss::Processing::FramePacket& /*input*/)
         -> Dss::Processing::ProcessingResult override {
         m_gate->enter();
         Dss::Processing::ProcessingResult result;
         result.success = true;
         return result;
     }
-    auto mode() const -> Dss::Core::ProcessingMode override {
+    [[nodiscard]] auto mode() const -> Dss::Core::ProcessingMode override {
         return Dss::Core::ProcessingMode::Direct;
     }
-    auto name() const -> std::string_view override {
+    [[nodiscard]] auto name() const -> std::string_view override {
         return "gated";
     }
 
@@ -126,6 +132,9 @@ protected:
         const std::vector<std::uint16_t> pixels{10, 20, 30, 40};
         const auto bytes = Dss::Storage::buildRawImageFile({.width = 2, .height = 2}, pixels);
         std::ofstream out(path, std::ios::binary);
+        // 字节 I/O
+        // 或平台句柄边界，表示由外部 API 规定。
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
         out.write(reinterpret_cast<const char*>(bytes.data()),
                   static_cast<std::streamsize>(bytes.size()));
         return path;
@@ -272,14 +281,14 @@ TEST_F(ReplayApplicationSession, StopReturnsBeforeDrainAndRejectsReconfiguration
 TEST_F(ReplayApplicationSession, LastFrameFailureIsFailedAndCanRecover) {
     class Failure final : public Dss::Processing::IProcessingStrategy {
     public:
-        auto process(const Dss::Processing::FramePacket&)
+        auto process(const Dss::Processing::FramePacket& /*input*/)
             -> Dss::Processing::ProcessingResult override {
             throw std::runtime_error("last frame failure");
         }
-        auto mode() const -> Dss::Core::ProcessingMode override {
+        [[nodiscard]] auto mode() const -> Dss::Core::ProcessingMode override {
             return Dss::Core::ProcessingMode::Direct;
         }
-        auto name() const -> std::string_view override {
+        [[nodiscard]] auto name() const -> std::string_view override {
             return "failure";
         }
     };

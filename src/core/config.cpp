@@ -5,6 +5,7 @@
 #include <fstream>
 #include <limits>
 #include <string_view>
+#include <utility>
 
 #include <nlohmann/json.hpp>
 
@@ -103,6 +104,7 @@ using Json = nlohmann::json;
             return std::stod(value->get<std::string>());
         }
     } catch (...) {
+        return fallback;
     }
     return fallback;
 }
@@ -139,7 +141,7 @@ using Json = nlohmann::json;
 [[nodiscard]] auto getUInt16(const Json* object, std::string_view key, uint16_t fallback)
     -> uint16_t {
     const auto value = getInt(object, key, fallback);
-    if (value < 0 || value > static_cast<int>(std::numeric_limits<uint16_t>::max())) {
+    if (value < 0 || std::cmp_greater(value, std::numeric_limits<uint16_t>::max())) {
         return fallback;
     }
     return static_cast<uint16_t>(value);
@@ -233,10 +235,11 @@ auto Config::load(const std::filesystem::path& configPath) -> std::expected<void
 
     m_logging.enabled = getBool(logging, "enabled", true);
     m_logging.filePath = getPath(logging, "filePath", "./logs/dss.log");
-    const auto maxFileSizeBytes = getInt(logging, "maxFileSizeBytes", 10 * 1024 * 1024);
+    const auto maxFileSizeBytes =
+        getInt(logging, "maxFileSizeBytes", 10 * std::size_t{1024} * 1024U);
     const auto maxFiles = getInt(logging, "maxFiles", 5);
-    m_logging.maxFileSizeBytes =
-        maxFileSizeBytes > 0 ? static_cast<std::size_t>(maxFileSizeBytes) : 10U * 1024U * 1024U;
+    m_logging.maxFileSizeBytes = maxFileSizeBytes > 0 ? static_cast<std::size_t>(maxFileSizeBytes)
+                                                      : std::size_t{10} * 1024U * 1024U;
     m_logging.maxFiles = maxFiles > 0 ? static_cast<std::size_t>(maxFiles) : 5U;
 
     m_commNet.displayPort = loadSerial(commNet, "displayPort", {"/dev/ttyUSB0S", 230400, 8, 1});
@@ -267,7 +270,8 @@ auto Config::load(const std::filesystem::path& configPath) -> std::expected<void
     m_processing.thresholdSigma = thresholdSigma > 0.0 ? thresholdSigma : 3.0;
     const auto diffThreshold = getInt(processing, "diffThreshold", 20);
     m_processing.diffThreshold =
-        diffThreshold >= 0 && diffThreshold <= std::numeric_limits<std::uint16_t>::max()
+        diffThreshold >= 0 &&
+                std::cmp_less_equal(diffThreshold, std::numeric_limits<std::uint16_t>::max())
             ? static_cast<std::uint16_t>(diffThreshold)
             : std::uint16_t{20};
     const auto minArea = getInt(processing, "minArea", 3);
@@ -277,8 +281,9 @@ auto Config::load(const std::filesystem::path& configPath) -> std::expected<void
     m_processing.maxArea = validAreaRange ? maxArea : 100000;
     const auto displayLow = getInt(processing, "displayLow", 0);
     const auto displayHigh = getInt(processing, "displayHigh", 16384);
-    const auto validDisplayWindow = displayLow >= 0 && displayHigh > displayLow &&
-                                    displayHigh <= std::numeric_limits<std::uint16_t>::max();
+    const auto validDisplayWindow =
+        displayLow >= 0 && displayHigh > displayLow &&
+        std::cmp_less_equal(displayHigh, std::numeric_limits<std::uint16_t>::max());
     m_processing.displayLow =
         validDisplayWindow ? static_cast<std::uint16_t>(displayLow) : std::uint16_t{0};
     m_processing.displayHigh =
@@ -316,77 +321,91 @@ auto Config::save() -> std::expected<void, std::string> {
     }
 
     const Json outputJson = {
-        {"paths",
-         {
-             {"dataRoot", m_paths.dataRoot.string()},
-             {"ccfFile", m_paths.ccfFile.string()},
-             {"kernelFile", m_paths.kernelFile.string()},
-         }},
-        {"logging",
-         {
-             {"enabled", m_logging.enabled},
-             {"filePath", m_logging.filePath.string()},
-             {"maxFileSizeBytes", m_logging.maxFileSizeBytes},
-             {"maxFiles", m_logging.maxFiles},
-         }},
-        {"commNet",
-         {
-             {"displayPort", serialToJson(m_commNet.displayPort)},
-             {"exposurePort", serialToJson(m_commNet.exposurePort)},
-             {"masterControlPort", serialToJson(m_commNet.masterControlPort)},
-             {"servoPort", serialToJson(m_commNet.servoPort)},
-             {"cameraPort", m_commNet.cameraPort},
-             {"imageSender", endpointToJson(m_commNet.imageSender)},
-             {"exchange", endpointToJson(m_commNet.exchange)},
-             {"exchangeGxtc", endpointToJson(m_commNet.exchangeGxtc)},
-             {"exchangeGdcl", endpointToJson(m_commNet.exchangeGdcl)},
-             {"errorDiag", endpointToJson(m_commNet.errorDiag)},
-             {"atmos", endpointToJson(m_commNet.atmos)},
-             {"heartbeat", endpointToJson(m_commNet.heartbeat)},
-         }},
-        {"optics",
-         {
-             {"imageWidth", m_optics.imageWidth},
-             {"imageHeight", m_optics.imageHeight},
-             {"fovCenterX", m_optics.fovCenterX},
-             {"fovCenterY", m_optics.fovCenterY},
-             {"pixelScale", m_optics.pixelScale},
-         }},
-        {"processing",
-         {
-             {"thresholdSigma", m_processing.thresholdSigma},
-             {"diffThreshold", m_processing.diffThreshold},
-             {"minArea", m_processing.minArea},
-             {"maxArea", m_processing.maxArea},
-             {"displayLow", m_processing.displayLow},
-             {"displayHigh", m_processing.displayHigh},
-         }},
-        {"observatory",
-         {
-             {"id", m_observatory.id},
-             {"longitude", m_observatory.longitude},
-             {"latitude", m_observatory.latitude},
-             {"altitude", m_observatory.altitude},
-         }},
-        {"tracking",
-         {
-             {"thresholdLiving", m_tracking.thresholdLiving},
-             {"numFramesLiving", m_tracking.numFramesLiving},
-             {"searchRadius", m_tracking.searchRadius},
-             {"ratioFov", m_tracking.ratioFov},
-             {"thresholdStarMode", m_tracking.thresholdStarMode},
-             {"thresholdGazeMode", m_tracking.thresholdGazeMode},
-             {"autoDecide", m_tracking.autoDecide},
-             {"thresholdMeo", m_tracking.thresholdMeo},
-             {"spdLowAe", m_tracking.spdLowAe},
-             {"spdHighAe", m_tracking.spdHighAe},
-             {"thresholdAe", m_tracking.thresholdAe},
-             {"geoFullLeo", m_tracking.geoFullLeo},
-             {"geoRaThresholdArcsec", m_tracking.geoRaThresholdArcsec},
-             {"geoDecThresholdArcsec", m_tracking.geoDecThresholdArcsec},
-             {"geoRaSpeedThresholdArcsec", m_tracking.geoRaSpeedThresholdArcsec},
-             {"geoDecSpeedThresholdArcsec", m_tracking.geoDecSpeedThresholdArcsec},
-         }},
+        {
+            "paths",
+            {
+                {"dataRoot", m_paths.dataRoot.string()},
+                {"ccfFile", m_paths.ccfFile.string()},
+                {"kernelFile", m_paths.kernelFile.string()},
+            },
+        },
+        {
+            "logging",
+            {
+                {"enabled", m_logging.enabled},
+                {"filePath", m_logging.filePath.string()},
+                {"maxFileSizeBytes", m_logging.maxFileSizeBytes},
+                {"maxFiles", m_logging.maxFiles},
+            },
+        },
+        {
+            "commNet",
+            {
+                {"displayPort", serialToJson(m_commNet.displayPort)},
+                {"exposurePort", serialToJson(m_commNet.exposurePort)},
+                {"masterControlPort", serialToJson(m_commNet.masterControlPort)},
+                {"servoPort", serialToJson(m_commNet.servoPort)},
+                {"cameraPort", m_commNet.cameraPort},
+                {"imageSender", endpointToJson(m_commNet.imageSender)},
+                {"exchange", endpointToJson(m_commNet.exchange)},
+                {"exchangeGxtc", endpointToJson(m_commNet.exchangeGxtc)},
+                {"exchangeGdcl", endpointToJson(m_commNet.exchangeGdcl)},
+                {"errorDiag", endpointToJson(m_commNet.errorDiag)},
+                {"atmos", endpointToJson(m_commNet.atmos)},
+                {"heartbeat", endpointToJson(m_commNet.heartbeat)},
+            },
+        },
+        {
+            "optics",
+            {
+                {"imageWidth", m_optics.imageWidth},
+                {"imageHeight", m_optics.imageHeight},
+                {"fovCenterX", m_optics.fovCenterX},
+                {"fovCenterY", m_optics.fovCenterY},
+                {"pixelScale", m_optics.pixelScale},
+            },
+        },
+        {
+            "processing",
+            {
+                {"thresholdSigma", m_processing.thresholdSigma},
+                {"diffThreshold", m_processing.diffThreshold},
+                {"minArea", m_processing.minArea},
+                {"maxArea", m_processing.maxArea},
+                {"displayLow", m_processing.displayLow},
+                {"displayHigh", m_processing.displayHigh},
+            },
+        },
+        {
+            "observatory",
+            {
+                {"id", m_observatory.id},
+                {"longitude", m_observatory.longitude},
+                {"latitude", m_observatory.latitude},
+                {"altitude", m_observatory.altitude},
+            },
+        },
+        {
+            "tracking",
+            {
+                {"thresholdLiving", m_tracking.thresholdLiving},
+                {"numFramesLiving", m_tracking.numFramesLiving},
+                {"searchRadius", m_tracking.searchRadius},
+                {"ratioFov", m_tracking.ratioFov},
+                {"thresholdStarMode", m_tracking.thresholdStarMode},
+                {"thresholdGazeMode", m_tracking.thresholdGazeMode},
+                {"autoDecide", m_tracking.autoDecide},
+                {"thresholdMeo", m_tracking.thresholdMeo},
+                {"spdLowAe", m_tracking.spdLowAe},
+                {"spdHighAe", m_tracking.spdHighAe},
+                {"thresholdAe", m_tracking.thresholdAe},
+                {"geoFullLeo", m_tracking.geoFullLeo},
+                {"geoRaThresholdArcsec", m_tracking.geoRaThresholdArcsec},
+                {"geoDecThresholdArcsec", m_tracking.geoDecThresholdArcsec},
+                {"geoRaSpeedThresholdArcsec", m_tracking.geoRaSpeedThresholdArcsec},
+                {"geoDecSpeedThresholdArcsec", m_tracking.geoDecSpeedThresholdArcsec},
+            },
+        },
     };
 
     std::ofstream output(m_paths.configFile);

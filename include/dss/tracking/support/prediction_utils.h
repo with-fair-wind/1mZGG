@@ -9,6 +9,8 @@
 namespace Dss::Tracking {
 
 /// 像斑匹配所用的坐标空间
+// 保留公共枚举的既有整数表示和对象布局。
+// NOLINTNEXTLINE(performance-enum-size)
 enum class BlobMatchSpace {
     Frame,  ///< 像面像素坐标
     Ae,     ///< 方位-俯仰坐标

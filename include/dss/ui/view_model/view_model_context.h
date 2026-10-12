@@ -13,7 +13,12 @@ namespace Dss::Ui {
 struct UiServiceContext {
     using MessageBus = Dss::Core::MessageBus;  ///< 事件总线类型别名。
 
-    MessageBus& bus;                       ///< 应用事件总线。
+    // 借用服务，引用在
+    // ViewModel 生命周期内有效。
+    // NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members)
+    MessageBus& bus;  ///< 应用事件总线。
+    // 借用注册表，上下文不支持重绑定。
+    // NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members)
     Dss::Core::ServiceRegistry& registry;  ///< 应用服务注册表。
 };
 

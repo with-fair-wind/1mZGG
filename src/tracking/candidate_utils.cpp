@@ -38,8 +38,10 @@ auto measurementMotion(const Core::MeasuredBlob& current, const Core::MeasuredBl
     if (!currentPosition.has_value() || !previousPosition.has_value()) {
         return std::nullopt;
     }
-    return Core::Vec2f{currentPosition->x - previousPosition->x,
-                       currentPosition->y - previousPosition->y};
+    return Core::Vec2f{
+        currentPosition->x - previousPosition->x,
+        currentPosition->y - previousPosition->y,
+    };
 }
 
 bool hasReusedMeasurement(const Core::MeasuredBlob& candidate, const Core::MeasuredBlob& used,

@@ -80,9 +80,10 @@ public:
         m_viewportSize = newViewportSize;
         if (!m_imageSize.isEmpty()) {
             m_scaleFactor = std::max(m_scaleFactor, fitScale());
-            m_offset = QPointF(
-                static_cast<double>(m_viewportSize.width()) / 2.0 - oldCenter.x() * m_scaleFactor,
-                static_cast<double>(m_viewportSize.height()) / 2.0 - oldCenter.y() * m_scaleFactor);
+            m_offset = QPointF((static_cast<double>(m_viewportSize.width()) / 2.0) -
+                                   (oldCenter.x() * m_scaleFactor),
+                               (static_cast<double>(m_viewportSize.height()) / 2.0) -
+                                   (oldCenter.y() * m_scaleFactor));
             clamp();
         }
     }
@@ -115,8 +116,8 @@ public:
         const auto minScale = fitScale();
         const auto maxScale = std::max(kMaxImageScaleFactor, minScale);
         m_scaleFactor = std::clamp(m_scaleFactor * multiplier, minScale, maxScale);
-        m_offset = QPointF(anchorWidgetPos.x() - anchor.x() * m_scaleFactor,
-                           anchorWidgetPos.y() - anchor.y() * m_scaleFactor);
+        m_offset = QPointF(anchorWidgetPos.x() - (anchor.x() * m_scaleFactor),
+                           anchorWidgetPos.y() - (anchor.y() * m_scaleFactor));
         clamp();
         return true;
     }
@@ -140,8 +141,8 @@ public:
      * @return 当前视口下对应的控件坐标。
      */
     [[nodiscard]] auto imageToWidget(const QPointF& imagePos) const -> QPointF {
-        return {imagePos.x() * m_scaleFactor + m_offset.x(),
-                imagePos.y() * m_scaleFactor + m_offset.y()};
+        return {(imagePos.x() * m_scaleFactor) + m_offset.x(),
+                (imagePos.y() * m_scaleFactor) + m_offset.y()};
     }
 
     /**

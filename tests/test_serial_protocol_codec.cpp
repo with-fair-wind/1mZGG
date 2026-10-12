@@ -228,13 +228,16 @@ TEST(SerialProtocolCodec, EncodesMasterControlStatus) {
                 .speedValid = false,
                 .distanceArcsec = Dss::Core::Vec2f{-1.2F, 3.4F},
             },
-        .timestamp = Dss::Core::Timestamp{.year = 2026,
-                                          .month = 6,
-                                          .day = 2,
-                                          .hour = 9,
-                                          .minute = 58,
-                                          .second = 7,
-                                          .millisecond = 123},
+        .timestamp =
+            Dss::Core::Timestamp{
+                .year = 2026,
+                .month = 6,
+                .day = 2,
+                .hour = 9,
+                .minute = 58,
+                .second = 7,
+                .millisecond = 123,
+            },
         .pointingAe = Dss::Core::Vec2f{90.0F, 45.0F},
     };
 

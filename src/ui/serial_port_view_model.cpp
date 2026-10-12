@@ -38,14 +38,30 @@ struct SerialChannelDescriptor {
 
 /// 可由 UI 显式打开/关闭的串口通道描述表。
 constexpr std::array kSerialChannelDescriptors{
-    SerialChannelDescriptor{"display", Dss::App::ServiceKey::display, "Display",
-                            &Dss::Core::CommNetConfig::displayPort},
-    SerialChannelDescriptor{"exposure", Dss::App::ServiceKey::exposure, "Exposure",
-                            &Dss::Core::CommNetConfig::exposurePort},
-    SerialChannelDescriptor{"master_control", Dss::App::ServiceKey::masterControl, "Master Control",
-                            &Dss::Core::CommNetConfig::masterControlPort},
-    SerialChannelDescriptor{"servo", Dss::App::ServiceKey::servo, "Servo",
-                            &Dss::Core::CommNetConfig::servoPort},
+    SerialChannelDescriptor{
+        "display",
+        Dss::App::ServiceKey::display,
+        "Display",
+        &Dss::Core::CommNetConfig::displayPort,
+    },
+    SerialChannelDescriptor{
+        "exposure",
+        Dss::App::ServiceKey::exposure,
+        "Exposure",
+        &Dss::Core::CommNetConfig::exposurePort,
+    },
+    SerialChannelDescriptor{
+        "master_control",
+        Dss::App::ServiceKey::masterControl,
+        "Master Control",
+        &Dss::Core::CommNetConfig::masterControlPort,
+    },
+    SerialChannelDescriptor{
+        "servo",
+        Dss::App::ServiceKey::servo,
+        "Servo",
+        &Dss::Core::CommNetConfig::servoPort,
+    },
 };
 
 /// @brief 查找可控串口通道描述。
@@ -197,10 +213,16 @@ constexpr std::array kSerialChannelDescriptors{
     return Dss::Comm::ServoCorrection{
         .distanceValid = distanceValid,
         .speedValid = speedValid,
-        .distanceArcsec = Dss::Core::Vec2f{static_cast<float>(distanceXArcsec),
-                                           static_cast<float>(distanceYArcsec)},
-        .speedArcsecPerSec = Dss::Core::Vec2f{static_cast<float>(speedXArcsecPerSec),
-                                              static_cast<float>(speedYArcsecPerSec)},
+        .distanceArcsec =
+            Dss::Core::Vec2f{
+                static_cast<float>(distanceXArcsec),
+                static_cast<float>(distanceYArcsec),
+            },
+        .speedArcsecPerSec =
+            Dss::Core::Vec2f{
+                static_cast<float>(speedXArcsecPerSec),
+                static_cast<float>(speedYArcsecPerSec),
+            },
         .mode = static_cast<std::uint8_t>(mode),
     };
 }
@@ -218,7 +240,7 @@ auto SerialPortViewModel::serialChannelConfigs() -> std::vector<SerialChannelSta
     channels.reserve(kSerialChannelDescriptors.size());
     for (const auto& descriptor : kSerialChannelDescriptors) {
         channels.push_back(
-            makeSerialChannelState(descriptor, commNet.*(descriptor.member),
+            makeSerialChannelState(descriptor, commNet.*descriptor.member,
                                    registeredSerialChannel(m_registry, descriptor.serviceName)));
     }
     return channels;
@@ -242,7 +264,7 @@ bool SerialPortViewModel::openSerialChannel(const QString& key) {
     }
 
     const auto& commNet = Dss::Core::Config::instance().commNet();
-    const auto& serialConfig = commNet.*(descriptor->member);
+    const auto& serialConfig = commNet.*descriptor->member;
     auto result = openRegisteredSerialChannel(m_registry, descriptor->serviceName, serialConfig);
 
     const auto displayName = descriptorText(descriptor->displayName);
@@ -309,7 +331,7 @@ bool SerialPortViewModel::applySerialChannelConfig(const QString& key, const QSt
     }
 
     auto& commNet = Dss::Core::Config::instance().mutableCommNet();
-    commNet.*(descriptor->member) = makeSerialConfig(portName, baudRate, dataBits, stopBits);
+    commNet.*descriptor->member = makeSerialConfig(portName, baudRate, dataBits, stopBits);
 
     auto service = registeredSerialChannel(m_registry, descriptor->serviceName);
     if (service && service->isOpen()) {
@@ -391,6 +413,8 @@ bool SerialPortViewModel::sendServoCorrection(bool distanceValid, bool speedVali
     return true;
 }
 
+// 按协议字段显式构造单一状态报文，保持映射可审查。
+// NOLINTNEXTLINE(readability-function-size)
 bool SerialPortViewModel::sendMasterControlStatus(int year, int month, int day, int hour,
                                                   int minute, int second, int millisecond,
                                                   double azimuthDegrees, double elevationDegrees,
@@ -438,8 +462,11 @@ bool SerialPortViewModel::sendMasterControlStatus(int year, int month, int day, 
             makeServoCorrection(distanceValid, speedValid, distanceXArcsec, distanceYArcsec,
                                 speedXArcsecPerSec, speedYArcsecPerSec, servoMode),
         .timestamp = Dss::Core::Timestamp{year, month, day, hour, minute, second, millisecond},
-        .pointingAe = Dss::Core::Vec2f{static_cast<float>(azimuthDegrees),
-                                       static_cast<float>(elevationDegrees)},
+        .pointingAe =
+            Dss::Core::Vec2f{
+                static_cast<float>(azimuthDegrees),
+                static_cast<float>(elevationDegrees),
+            },
     });
     Q_EMIT statusTextChanged("Master control status sent");
     return true;

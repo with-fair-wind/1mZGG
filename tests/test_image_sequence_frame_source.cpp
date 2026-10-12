@@ -37,7 +37,7 @@ private:
 
 class SlowReplayStrategy final : public Dss::Processing::IProcessingStrategy {
 public:
-    [[nodiscard]] auto process(const Dss::Processing::FramePacket&)
+    [[nodiscard]] auto process(const Dss::Processing::FramePacket& /*input*/)
         -> Dss::Processing::ProcessingResult override {
         std::this_thread::sleep_for(std::chrono::milliseconds{20});
         Dss::Processing::ProcessingResult result;
@@ -65,7 +65,7 @@ public:
     for (int y = 0; y < image.height(); ++y) {
         auto* row = image.scanLine(y);
         for (int x = 0; x < image.width(); ++x) {
-            row[x] = static_cast<uchar>(seed + static_cast<uint8_t>(x + y * image.width()));
+            row[x] = static_cast<uchar>(seed + static_cast<uint8_t>(x + (y * image.width())));
         }
     }
     return image.save(QString::fromStdWString(path.wstring()), "BMP");
@@ -94,6 +94,9 @@ public:
     }
 
     std::ofstream output(path, std::ios::binary);
+    // 字节 I/O
+    // 或平台句柄边界，表示由外部 API 规定。
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
     output.write(reinterpret_cast<const char*>(file->data()),
                  static_cast<std::streamsize>(file->size()));
     return output.good();
@@ -124,7 +127,7 @@ TEST(ImageSequenceFrameSource, ReplaysSelectedImageFilesAsFramePackets) {
     source.setFrameCallback(
         [&](Dss::Processing::FramePacket packet, Dss::Acquisition::FrameDeliveryContext context) {
             {
-                std::lock_guard lock(mutex);
+                std::scoped_lock lock(mutex);
                 frames.push_back(std::move(packet));
                 policies.push_back(context.policy);
             }
@@ -175,7 +178,7 @@ TEST(ImageSequenceFrameSource, LosslessReplayWaitsUntilEveryFrameIsProcessed) {
     auto connection = bus.subscribe<Dss::Core::ProcessingCompleteEvent>(
         [&](const Dss::Core::ProcessingCompleteEvent& event) {
             {
-                std::lock_guard lock(mutex);
+                std::scoped_lock lock(mutex);
                 completedFrames.push_back(event.frameSeq);
             }
             cv.notify_one();
@@ -225,7 +228,7 @@ TEST(ImageSequenceFrameSource, StopsAtUnreadableFrameInsteadOfSkippingIt) {
     std::vector<std::uint64_t> frames;
     source.setFrameCallback(
         [&](Dss::Processing::FramePacket packet, Dss::Acquisition::FrameDeliveryContext) {
-            std::lock_guard lock(mutex);
+            std::scoped_lock lock(mutex);
             frames.push_back(packet.frameSeq);
             return true;
         });
@@ -237,7 +240,7 @@ TEST(ImageSequenceFrameSource, StopsAtUnreadableFrameInsteadOfSkippingIt) {
     }
     source.stop();
 
-    std::lock_guard lock(mutex);
+    std::scoped_lock lock(mutex);
     EXPECT_EQ(frames, std::vector<std::uint64_t>({0U}));
     EXPECT_EQ(source.nextFrameIndex(), 1U);
 }
@@ -278,7 +281,7 @@ TEST(ImageSequenceFrameSource, StepForwardAdvancesReplayPositionBeforeContinuous
     source.setFrameCallback(
         [&](Dss::Processing::FramePacket packet, Dss::Acquisition::FrameDeliveryContext) {
             {
-                std::lock_guard lock(mutex);
+                std::scoped_lock lock(mutex);
                 frames.push_back(std::move(packet));
             }
             cv.notify_one();
@@ -409,7 +412,7 @@ TEST(ImageSequenceFrameSource, SeekWhileRunningContinuesAtRequestedFrame) {
     std::vector<std::filesystem::path> files;
     for (int index = 0; index < 4; ++index) {
         const auto file = dir / ("running_seek_" + std::to_string(index) + ".bmp");
-        ASSERT_TRUE(writeGrayBmp(file, static_cast<std::uint8_t>(10 + index * 20)));
+        ASSERT_TRUE(writeGrayBmp(file, static_cast<std::uint8_t>(10 + (index * 20))));
         files.push_back(file);
     }
 
@@ -422,7 +425,7 @@ TEST(ImageSequenceFrameSource, SeekWhileRunningContinuesAtRequestedFrame) {
     source.setFrameCallback(
         [&](Dss::Processing::FramePacket packet, Dss::Acquisition::FrameDeliveryContext) {
             {
-                std::lock_guard lock(mutex);
+                std::scoped_lock lock(mutex);
                 frames.push_back(packet.frameSeq);
             }
             cv.notify_all();
@@ -443,7 +446,7 @@ TEST(ImageSequenceFrameSource, SeekWhileRunningContinuesAtRequestedFrame) {
     }
     source.stop();
 
-    std::lock_guard lock(mutex);
+    std::scoped_lock lock(mutex);
     ASSERT_GE(frames.size(), 3U);
     EXPECT_EQ(frames.front(), 0U);
     EXPECT_EQ(frames[frames.size() - 2U], 2U);
@@ -459,6 +462,9 @@ TEST(ImageSequenceFrameSource, RejectsOversizedRawDimensionsBeforePayloadRead) {
     metadata.height = 65535;
     const auto header = Dss::Storage::buildRawImageHeader(metadata);
     std::ofstream output(path, std::ios::binary);
+    // 字节 I/O
+    // 或平台句柄边界，表示由外部 API 规定。
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
     output.write(reinterpret_cast<const char*>(header.data()), header.size());
     output.close();
     Dss::Acquisition::ImageSequenceFrameSource source({path});

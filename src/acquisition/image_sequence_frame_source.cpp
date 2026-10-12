@@ -38,6 +38,8 @@ namespace {
 /// @return 文件字节流；打开失败时返回错误
 [[nodiscard]] auto readFileBytes(const std::filesystem::path& path)
     -> std::expected<std::vector<std::uint8_t>, std::string> {
+    // 标准库 openmode 是位掩码类型，按位组合遵循 iostream API 契约。
+    // NOLINTNEXTLINE(bugprone-signed-bitwise)
     std::ifstream input(path, std::ios::binary | std::ios::ate);
     if (!input) {
         return std::unexpected("failed to open image file: " + path.string());
@@ -58,12 +60,15 @@ namespace {
     if (isRawFile(path)) {
         std::array<std::uint8_t, Dss::Storage::kRawImageHeaderSize> header{};
         input.seekg(0, std::ios::beg);
+        // 字节 I/O
+        // 或平台句柄边界，表示由外部 API 规定。
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
         input.read(reinterpret_cast<char*>(header.data()), header.size());
         const auto metadata = Dss::Storage::decodeRawImageHeader(header);
         const auto pixels =
             metadata ? static_cast<std::uint64_t>(metadata->width) * metadata->height : 0;
         if (!input || pixels == 0 || pixels > ImageSequenceFrameSource::maxImagePixels ||
-            byteCount != header.size() + pixels * sizeof(std::uint16_t)) {
+            byteCount != header.size() + (pixels * sizeof(std::uint16_t))) {
             return std::unexpected("invalid raw image dimensions or payload length: " +
                                    path.string());
         }
@@ -72,6 +77,9 @@ namespace {
     std::vector<std::uint8_t> bytes(static_cast<std::size_t>(byteCount));
     input.seekg(0, std::ios::beg);
     if (!bytes.empty()) {
+        // 字节 I/O
+        // 或平台句柄边界，表示由外部 API 规定。
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
         input.read(reinterpret_cast<char*>(bytes.data()),
                    static_cast<std::streamsize>(bytes.size()));
         if (!input) {
@@ -133,8 +141,10 @@ namespace {
     packet.width = decoded->metadata.width;
     packet.height = decoded->metadata.height;
     packet.metadata.timestamp = decoded->metadata.timestamp;
-    packet.metadata.pointingAe = {.x = static_cast<float>(decoded->metadata.azimuthDegrees),
-                                  .y = static_cast<float>(decoded->metadata.elevationDegrees)};
+    packet.metadata.pointingAe = {
+        .x = static_cast<float>(decoded->metadata.azimuthDegrees),
+        .y = static_cast<float>(decoded->metadata.elevationDegrees),
+    };
     packet.metadata.exposureTime = static_cast<float>(decoded->metadata.exposure / 1000.0);
     packet.metadata.frameFrequency = static_cast<float>(decoded->metadata.frameRate);
     packet.metadata.temperature = decoded->metadata.temperature;
@@ -177,11 +187,11 @@ namespace {
     auto rawImage = std::make_shared<Dss::Processing::RawImageBuffer>(width * height);
     for (std::size_t y = 0; y < height; ++y) {
         const auto* src = gray.constScanLine(static_cast<int>(y));
-        auto* displayRow = packet.displayImage.data() + y * width;
-        auto* rawRow = rawImage->data() + y * width;
+        auto* displayRow = packet.displayImage.data() + (y * width);
+        auto* rawRow = rawImage->data() + (y * width);
         for (std::size_t x = 0; x < width; ++x) {
             displayRow[x] = src[x];
-            rawRow[x] = static_cast<std::uint16_t>(static_cast<std::uint16_t>(src[x]) << 8U);
+            rawRow[x] = static_cast<std::uint32_t>(static_cast<std::uint16_t>(src[x]) << 8U);
         }
     }
     packet.rawImage = std::move(rawImage);
@@ -236,7 +246,7 @@ auto ImageSequenceFrameSource::setFiles(std::vector<std::filesystem::path> files
     -> std::expected<void, std::string> {
     stop();
     {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         m_files = std::move(files);
         m_width = 0;
         m_height = 0;
@@ -251,23 +261,23 @@ auto ImageSequenceFrameSource::setFiles(std::vector<std::filesystem::path> files
 }
 
 auto ImageSequenceFrameSource::frameCount() const -> std::size_t {
-    std::lock_guard lock(m_mutex);
+    std::scoped_lock lock(m_mutex);
     return m_files.size();
 }
 
 auto ImageSequenceFrameSource::nextFrameIndex() const -> std::size_t {
-    std::lock_guard lock(m_mutex);
+    std::scoped_lock lock(m_mutex);
     return m_nextFrameIndex;
 }
 
 auto ImageSequenceFrameSource::completion() const -> std::optional<Completion> {
-    std::lock_guard lock(m_mutex);
+    std::scoped_lock lock(m_mutex);
     return m_completion;
 }
 
 auto ImageSequenceFrameSource::seek(std::size_t index) -> std::expected<void, std::string> {
     {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         if (index >= m_files.size()) {
             return std::unexpected("replay frame index is out of range");
         }
@@ -278,7 +288,7 @@ auto ImageSequenceFrameSource::seek(std::size_t index) -> std::expected<void, st
     }
 
     {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         m_nextFrameIndex = index;
         m_completion.reset();
     }
@@ -290,7 +300,7 @@ auto ImageSequenceFrameSource::seek(std::size_t index) -> std::expected<void, st
 }
 
 void ImageSequenceFrameSource::setFrameInterval(std::chrono::milliseconds interval) {
-    std::lock_guard lock(m_mutex);
+    std::scoped_lock lock(m_mutex);
     m_frameInterval = interval;
 }
 
@@ -304,7 +314,7 @@ auto ImageSequenceFrameSource::stepForward(std::stop_token token)
     std::size_t index = 0;
     FrameCallback callback;
     {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         if (m_files.empty()) {
             return std::unexpected("image sequence is empty");
         }
@@ -328,7 +338,7 @@ auto ImageSequenceFrameSource::stepForward(std::stop_token token)
         return std::unexpected("frame submission was canceled");
     }
     {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         if (m_nextFrameIndex == index) {
             ++m_nextFrameIndex;
         }
@@ -343,7 +353,7 @@ auto ImageSequenceFrameSource::stepForward(std::stop_token token)
 auto ImageSequenceFrameSource::init() -> std::expected<void, std::string> {
     std::vector<std::filesystem::path> files;
     {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         if (m_initialized && m_width > 0U && m_height > 0U) {
             return {};
         }
@@ -359,7 +369,7 @@ auto ImageSequenceFrameSource::init() -> std::expected<void, std::string> {
     }
 
     {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         m_width = packet->width;
         m_height = packet->height;
         m_nextFrameIndex = 0;
@@ -372,7 +382,7 @@ auto ImageSequenceFrameSource::init() -> std::expected<void, std::string> {
  * @brief 在后台线程中从当前索引连续回放至序列末尾
  */
 void ImageSequenceFrameSource::start() {
-    std::lock_guard lifecycleLock(m_lifecycleMutex);
+    std::scoped_lock lifecycleLock(m_lifecycleMutex);
     if (m_running.exchange(true)) {
         return;
     }
@@ -382,7 +392,7 @@ void ImageSequenceFrameSource::start() {
     FrameCallback callback;
     std::size_t startIndex = 0;
     {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         files = m_files;
         interval = m_frameInterval;
         callback = m_callback;
@@ -391,63 +401,73 @@ void ImageSequenceFrameSource::start() {
     }
 
     if (files.empty() || !callback || startIndex >= files.size()) {
-        std::lock_guard lock(m_mutex);
-        m_completion = Completion{files.empty() ? "image sequence is empty"
-                                  : !callback   ? "frame callback is not set"
-                                                : ""};
+        std::scoped_lock lock(m_mutex);
+        std::string error;
+        if (files.empty()) {
+            error = "image sequence is empty";
+        } else if (!callback) {
+            error = "frame callback is not set";
+        }
+        m_completion = Completion{std::move(error)};
         m_running.store(false);
         return;
     }
 
     m_worker = std::jthread([this, files = std::move(files), interval, startIndex,
                              callback = std::move(callback)](std::stop_token token) mutable {
-        Completion result;
-        try {
-            for (std::size_t index = startIndex; index < files.size(); ++index) {
-                if (token.stop_requested()) {
-                    break;
-                }
-
-                auto packet = loadFrame(files[index], static_cast<std::uint64_t>(index));
-                if (!packet.has_value()) {
-                    result.error = files[index].string() + ": " + packet.error();
-                    break;
-                }
-                if (!callback(std::move(*packet),
-                              FrameDeliveryContext{FrameDeliveryPolicy::Lossless, token})) {
-                    result.error = "frame delivery was rejected";
-                    break;
-                }
-                {
-                    std::lock_guard lock(m_mutex);
-                    if (m_nextFrameIndex <= index) {
-                        m_nextFrameIndex = index + 1U;
-                    }
-                }
-
-                if (interval.count() > 0 && index + 1U < files.size()) {
-                    if (m_wait.waitFor(token, interval)) {
-                        break;
-                    }
-                }
-            }
-        } catch (const std::exception& error) {
-            result.error = error.what();
-        } catch (...) {
-            result.error = "unknown replay failure";
-        }
-        {
-            std::lock_guard lock(m_mutex);
-            if (!token.stop_requested()) {
-                m_completion = std::move(result);
-            }
-        }
-        m_running.store(false);
+        playFiles(token, std::move(files), interval, startIndex, std::move(callback));
     });
 }
 
+void ImageSequenceFrameSource::playFiles(std::stop_token token,
+                                         std::vector<std::filesystem::path> files,
+                                         std::chrono::milliseconds interval, std::size_t startIndex,
+                                         FrameCallback callback) {
+    Completion result;
+    try {
+        for (std::size_t index = startIndex; index < files.size(); ++index) {
+            if (token.stop_requested()) {
+                break;
+            }
+
+            auto packet = loadFrame(files[index], static_cast<std::uint64_t>(index));
+            if (!packet.has_value()) {
+                result.error = files[index].string() + ": " + packet.error();
+                break;
+            }
+            if (!callback(std::move(*packet),
+                          FrameDeliveryContext{FrameDeliveryPolicy::Lossless, token})) {
+                result.error = "frame delivery was rejected";
+                break;
+            }
+            {
+                std::scoped_lock lock(m_mutex);
+                if (m_nextFrameIndex <= index) {
+                    m_nextFrameIndex = index + 1U;
+                }
+            }
+
+            if (interval.count() > 0 && index + 1U < files.size() &&
+                m_wait.waitFor(token, interval)) {
+                break;
+            }
+        }
+    } catch (const std::exception& error) {
+        result.error = error.what();
+    } catch (...) {
+        result.error = "unknown replay failure";
+    }
+    {
+        std::scoped_lock lock(m_mutex);
+        if (!token.stop_requested()) {
+            m_completion = std::move(result);
+        }
+    }
+    m_running.store(false);
+}
+
 void ImageSequenceFrameSource::stop() {
-    std::lock_guard lifecycleLock(m_lifecycleMutex);
+    std::scoped_lock lifecycleLock(m_lifecycleMutex);
     if (m_worker.joinable()) {
         m_worker.request_stop();
         m_worker.join();
@@ -456,7 +476,7 @@ void ImageSequenceFrameSource::stop() {
 }
 
 void ImageSequenceFrameSource::setFrameCallback(FrameCallback callback) {
-    std::lock_guard lock(m_mutex);
+    std::scoped_lock lock(m_mutex);
     m_callback = std::move(callback);
 }
 
@@ -465,12 +485,12 @@ bool ImageSequenceFrameSource::isRunning() const {
 }
 
 auto ImageSequenceFrameSource::frameWidth() const -> std::uint32_t {
-    std::lock_guard lock(m_mutex);
+    std::scoped_lock lock(m_mutex);
     return m_width;
 }
 
 auto ImageSequenceFrameSource::frameHeight() const -> std::uint32_t {
-    std::lock_guard lock(m_mutex);
+    std::scoped_lock lock(m_mutex);
     return m_height;
 }
 

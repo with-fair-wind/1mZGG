@@ -201,6 +201,19 @@
         "lhs": "${hostSystemName}",
         "rhs": "Linux"
       }
+    },
+    {
+      "name": "ci-clang-quality",
+      "displayName": "CI Clang quality checks",
+      "inherits": "clang-cl-release",
+      "cacheVariables": {
+        "CMAKE_CXX_COMPILER": "$env{DSS_LLVM_BIN}/clang-cl.exe",
+        "CMAKE_DISABLE_PRECOMPILE_HEADERS": "ON",
+        "DSS_ENABLE_COLOR_DIAGNOSTICS": "OFF",
+        "DSS_CLANG_TIDY_WARNINGS_AS_ERRORS": "ON",
+        "DSS_CLANG_FORMAT_EXECUTABLE": "$env{DSS_LLVM_BIN}/clang-format.exe",
+        "DSS_CLANG_TIDY_EXECUTABLE": "$env{DSS_LLVM_BIN}/clang-tidy.exe"
+      }
     }
   ],
   "buildPresets": [
@@ -256,6 +269,10 @@
     {
       "name": "clang-release",
       "configurePreset": "clang-release"
+    },
+    {
+      "name": "ci-clang-quality",
+      "configurePreset": "ci-clang-quality"
     }
   ]
 }

@@ -44,7 +44,7 @@ TEST(BoundedChannelTest, BlockingPushReturnsFalseWhenStopped) {
 
     auto pushed = std::async(
         std::launch::async,
-        [&channel, token = stopSource.get_token()]() mutable { return channel.push(20, token); });
+        [&channel, token = stopSource.get_token()] mutable { return channel.push(20, token); });
 
     ASSERT_EQ(pushed.wait_for(50ms), std::future_status::timeout);
     stopSource.request_stop();

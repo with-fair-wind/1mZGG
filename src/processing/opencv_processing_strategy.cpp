@@ -64,6 +64,9 @@ auto OpenCvProcessingStrategy::process(const FramePacket& input) -> ProcessingRe
 
     const auto rows = static_cast<int>(input.height);
     const auto cols = static_cast<int>(input.width);
+    // OpenCV 的借用视图构造器要求
+    // void*，后续仅以只读 InputArray 使用。
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
     const cv::Mat raw16(rows, cols, CV_16UC1, const_cast<uint16_t*>(input.rawImage->data()));
 
     double minValue = 0.0;

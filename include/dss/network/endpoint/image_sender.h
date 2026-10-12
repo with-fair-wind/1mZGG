@@ -22,15 +22,22 @@ namespace Dss::Network {
 /// 图像 UDP 发送服务，将图像分片编码后通过后台线程异步发送
 class ImageSender : public INetworkChannel {
 public:
+    // 生命周期绑定当前对象，禁止复制或移动资源及回调所有者。
+    ImageSender(const ImageSender&) = delete;
+    auto operator=(const ImageSender&) -> ImageSender& = delete;
+    ImageSender(ImageSender&&) = delete;
+    auto operator=(ImageSender&&) -> ImageSender& = delete;
+
     using MessageBus = Dss::Core::MessageBus;  ///< 事件总线类型别名
 
     /// 在发送线程按需生成拥有像素的 8 位图像。
     using ImageFactory = std::function<std::shared_ptr<const std::vector<std::uint8_t>>()>;
 
-    static constexpr std::size_t MaxUdpPayload = 60U * 1024U;  ///< 单个 UDP 分片最大载荷（字节）
-    static constexpr std::size_t PacketHeaderSize = 20U;       ///< 分片包头长度（字节）
-    static constexpr std::size_t ImageHeaderSize = 10U;        ///< 图像编码头长度（字节）
-    static constexpr std::size_t PacketPaddingSize = 4U;       ///< 分片尾部填充长度（字节）
+    static constexpr std::size_t MaxUdpPayload =
+        std::size_t{60} * 1024U;                          ///< 单个 UDP 分片最大载荷（字节）
+    static constexpr std::size_t PacketHeaderSize = 20U;  ///< 分片包头长度（字节）
+    static constexpr std::size_t ImageHeaderSize = 10U;   ///< 图像编码头长度（字节）
+    static constexpr std::size_t PacketPaddingSize = 4U;  ///< 分片尾部填充长度（字节）
 
     /**
      * @brief 构造图像发送服务

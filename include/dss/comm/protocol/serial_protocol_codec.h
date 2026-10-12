@@ -18,6 +18,8 @@
 namespace Dss::Comm {
 
 /// 串口通信协议类型
+// 保留公共枚举的既有整数表示和对象布局。
+// NOLINTNEXTLINE(performance-enum-size)
 enum class SerialProtocol {
     Display,        ///< 显示通道协议
     Exposure,       ///< 曝光通道协议
@@ -81,6 +83,8 @@ inline bool prepareSendFrame(SerialProtocol protocol, std::span<uint8_t> frame) 
 }
 
 /// 曝光触发模式
+// 保留公共枚举的既有整数表示和对象布局。
+// NOLINTNEXTLINE(performance-enum-size)
 enum class ExposureTriggerMode {
     External,  ///< 外部触发
     FreeRun,   ///< 自由运行

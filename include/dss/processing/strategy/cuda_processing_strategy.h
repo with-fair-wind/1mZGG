@@ -26,7 +26,7 @@ struct CudaProcessingOptions {
 auto createCudaProcessingStrategy(CudaProcessingOptions options = {})
     -> std::expected<std::unique_ptr<IProcessingStrategy>, std::string>;
 #else
-inline auto createCudaProcessingStrategy(CudaProcessingOptions = {})
+inline auto createCudaProcessingStrategy(CudaProcessingOptions /*unused*/ = {})
     -> std::expected<std::unique_ptr<IProcessingStrategy>, std::string> {
     return std::unexpected("CUDA processing is not available in this build");
 }

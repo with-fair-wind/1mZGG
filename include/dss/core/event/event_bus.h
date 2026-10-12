@@ -141,6 +141,10 @@ public:
 private:
     /// 消息通道抽象基类
     struct IChannel {
+        // 生命周期绑定当前对象，禁止复制或移动资源及回调所有者。
+        IChannel(IChannel&&) = delete;
+        auto operator=(IChannel&&) -> IChannel& = delete;
+
         IChannel() = default;
         virtual ~IChannel() = default;
         IChannel(const IChannel&) = delete;
@@ -151,7 +155,7 @@ private:
          * @brief 获取本通道中的待处理消息数量。
          * @return 待处理消息数量。
          */
-        virtual std::size_t pendingCount() const = 0;
+        [[nodiscard]] virtual std::size_t pendingCount() const = 0;
     };
 
     /**
@@ -162,11 +166,15 @@ private:
     struct TypedChannel : IChannel {
         Event<void(const Message&), CollectAll, LockPolicy> m_event;  ///< 底层 void 事件
         /// @copydoc IChannel::flush
+        // 类型擦除通道的必要虚接口，由 MSVC/Clang 构建验证。
+        // NOLINTNEXTLINE(portability-template-virtual-member-function)
         void flush() override {
             m_event.flush();
         }
         /// @copydoc IChannel::pendingCount
-        std::size_t pendingCount() const override {
+        // 类型擦除通道的必要虚接口，由 MSVC/Clang 构建验证。
+        // NOLINTNEXTLINE(portability-template-virtual-member-function)
+        [[nodiscard]] std::size_t pendingCount() const override {
             return m_event.pendingCount();
         }
     };
@@ -223,8 +231,9 @@ private:
 
         reporting = true;
         try {
-            handler(std::move(error));
+            handler(error);
         } catch (...) {
+            Dss::Core::reportEmergencyFailure("DSS: exception handler failed\n");
         }
         reporting = false;
     }

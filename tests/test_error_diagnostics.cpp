@@ -7,10 +7,11 @@ TEST(ErrorDiagnostics, AggregatesCommunicationAndStorageFailures) {
     Dss::Network::ErrorDiagnostics::MessageBus bus;
     Dss::Network::ErrorDiagnostics diagnostics(bus);
 
-    bus.emit(Dss::Core::SerialFrameErrorEvent{.channel = "display"});
-    bus.emit(Dss::Core::SerialDecodeErrorEvent{.channel = "exposure"});
-    bus.emit(Dss::Core::StorageWriteErrorEvent{.backend = "image_storage"});
-    bus.emit(Dss::Core::NetworkTransmissionErrorEvent{.channel = "data_exchange"});
+    bus.emit(Dss::Core::SerialFrameErrorEvent{.channel = "display", .message = {}});
+    bus.emit(Dss::Core::SerialDecodeErrorEvent{.channel = "exposure", .message = {}, .field = {}});
+    bus.emit(
+        Dss::Core::StorageWriteErrorEvent{.backend = "image_storage", .path = {}, .message = {}});
+    bus.emit(Dss::Core::NetworkTransmissionErrorEvent{.channel = "data_exchange", .message = {}});
 
     const auto status = diagnostics.statusSnapshot();
     EXPECT_FALSE(status.displayCommOk);

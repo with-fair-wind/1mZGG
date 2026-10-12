@@ -126,8 +126,10 @@ TEST(TrackingCandidateUtils, ComputesMeasurementMotionBySpace) {
 TEST(TrackingCandidateUtils, DetectsUsedCentroidMeasurement) {
     Dss::Tracking::MeasurementReuseRule rule{};
     rule.space = Dss::Tracking::CandidateMeasurementSpace::Centroid;
-    const std::vector<Dss::Core::MeasuredBlob> usedBlobs{makeMeasurementBlob({10.0F, 20.0F}),
-                                                         makeMeasurementBlob({30.0F, 40.0F})};
+    const std::vector<Dss::Core::MeasuredBlob> usedBlobs{
+        makeMeasurementBlob({10.0F, 20.0F}),
+        makeMeasurementBlob({30.0F, 40.0F}),
+    };
 
     EXPECT_TRUE(Dss::Tracking::isMeasurementAlreadyUsed(makeMeasurementBlob({10.0F, 20.0F}),
                                                         usedBlobs, rule));
@@ -197,8 +199,12 @@ TEST(TrackingCandidateUtils, DeduplicatesAgainstOriginalCandidateSetAndKeepsFirs
     auto independent =
         makeTarget("independent", {{100.0F, 100.0F}, {200.0F, 200.0F}, {300.0F, 300.0F}});
 
-    auto candidates = std::vector<Dss::Core::TargetInfo>{std::move(first), std::move(second),
-                                                         std::move(third), std::move(independent)};
+    auto candidates = std::vector<Dss::Core::TargetInfo>{
+        std::move(first),
+        std::move(second),
+        std::move(third),
+        std::move(independent),
+    };
 
     const auto deduplicated =
         Dss::Tracking::deduplicateInitialCandidatesByCentroid(std::move(candidates), rule);
@@ -212,13 +218,17 @@ TEST(TrackingCandidateUtils, DetectsSharedInitialRaDecByMatchingFrameIndex) {
     Dss::Tracking::InitialMeasurementDedupRule rule{};
     rule.frameCount = 3U;
 
-    const auto first = makeTargetWithRaDec("first", {{{1.0F, 1.0F}, {1.0, 0.5}},
-                                                     {{2.0F, 2.0F}, {1.0001, 0.5001}},
-                                                     {{3.0F, 3.0F}, {1.0002, 0.5002}}});
+    const auto first = makeTargetWithRaDec("first", {
+                                                        {{1.0F, 1.0F}, {1.0, 0.5}},
+                                                        {{2.0F, 2.0F}, {1.0001, 0.5001}},
+                                                        {{3.0F, 3.0F}, {1.0002, 0.5002}},
+                                                    });
     const auto sharesSecondRaDec =
-        makeTargetWithRaDec("shares-second-radec", {{{10.0F, 10.0F}, {9.0, 9.0}},
-                                                    {{20.0F, 20.0F}, {1.0001, 0.5001}},
-                                                    {{30.0F, 30.0F}, {8.0, 8.0}}});
+        makeTargetWithRaDec("shares-second-radec", {
+                                                       {{10.0F, 10.0F}, {9.0, 9.0}},
+                                                       {{20.0F, 20.0F}, {1.0001, 0.5001}},
+                                                       {{30.0F, 30.0F}, {8.0, 8.0}},
+                                                   });
 
     EXPECT_FALSE(
         Dss::Tracking::sharesInitialCentroidAtSameFrameIndex(first, sharesSecondRaDec, rule));
@@ -230,19 +240,28 @@ TEST(TrackingCandidateUtils, DeduplicatesInitialCandidatesByRaDecAndKeepsFirstCa
     Dss::Tracking::InitialMeasurementDedupRule rule{};
     rule.frameCount = 3U;
 
-    auto first = makeTargetWithRaDec("first", {{{1.0F, 1.0F}, {1.0, 0.5}},
-                                               {{2.0F, 2.0F}, {1.0001, 0.5001}},
-                                               {{3.0F, 3.0F}, {1.0002, 0.5002}}});
+    auto first = makeTargetWithRaDec("first", {
+                                                  {{1.0F, 1.0F}, {1.0, 0.5}},
+                                                  {{2.0F, 2.0F}, {1.0001, 0.5001}},
+                                                  {{3.0F, 3.0F}, {1.0002, 0.5002}},
+                                              });
     auto sameRaDecDifferentPixels =
-        makeTargetWithRaDec("same-radec-different-pixels", {{{100.0F, 100.0F}, {1.0, 0.5}},
-                                                            {{200.0F, 200.0F}, {9.0, 9.0}},
-                                                            {{300.0F, 300.0F}, {8.0, 8.0}}});
-    auto independent = makeTargetWithRaDec("independent", {{{400.0F, 400.0F}, {4.0, 0.4}},
-                                                           {{500.0F, 500.0F}, {5.0, 0.5}},
-                                                           {{600.0F, 600.0F}, {6.0, 0.6}}});
+        makeTargetWithRaDec("same-radec-different-pixels", {
+                                                               {{100.0F, 100.0F}, {1.0, 0.5}},
+                                                               {{200.0F, 200.0F}, {9.0, 9.0}},
+                                                               {{300.0F, 300.0F}, {8.0, 8.0}},
+                                                           });
+    auto independent = makeTargetWithRaDec("independent", {
+                                                              {{400.0F, 400.0F}, {4.0, 0.4}},
+                                                              {{500.0F, 500.0F}, {5.0, 0.5}},
+                                                              {{600.0F, 600.0F}, {6.0, 0.6}},
+                                                          });
 
     auto candidates = std::vector<Dss::Core::TargetInfo>{
-        std::move(first), std::move(sameRaDecDifferentPixels), std::move(independent)};
+        std::move(first),
+        std::move(sameRaDecDifferentPixels),
+        std::move(independent),
+    };
 
     const auto deduplicated = Dss::Tracking::deduplicateInitialCandidates(
         std::move(candidates), rule, Dss::Tracking::CandidateMeasurementSpace::RaDec);
@@ -280,11 +299,13 @@ TEST(TrackingCandidateUtils, DetectsRecentRaDecOverlapWithoutPixelOverlap) {
         {{{20.0F, 20.0F}, {9.0, 9.0}}, {{30.0F, 30.0F}, {1.2, 0.7}}, {{40.0F, 40.0F}, {8.0, 8.0}}},
         12U);
     const auto existing = makeTargetWithRaDec("existing",
-                                              {{{0.0F, 0.0F}, {0.1, 0.1}},
-                                               {{1.0F, 1.0F}, {0.2, 0.2}},
-                                               {{2.0F, 2.0F}, {0.3, 0.3}},
-                                               {{3.0F, 3.0F}, {1.2, 0.7}},
-                                               {{4.0F, 4.0F}, {0.4, 0.4}}},
+                                              {
+                                                  {{0.0F, 0.0F}, {0.1, 0.1}},
+                                                  {{1.0F, 1.0F}, {0.2, 0.2}},
+                                                  {{2.0F, 2.0F}, {0.3, 0.3}},
+                                                  {{3.0F, 3.0F}, {1.2, 0.7}},
+                                                  {{4.0F, 4.0F}, {0.4, 0.4}},
+                                              },
                                               10U);
 
     EXPECT_TRUE(Dss::Tracking::sharesRecentMeasurementAtSameFrameIndex(candidate, existing, rule));

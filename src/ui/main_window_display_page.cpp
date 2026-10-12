@@ -27,6 +27,8 @@
 
 namespace Dss::Ui {
 
+// 声明式 Qt 对象树和连接保持在同一布局构建入口。
+// NOLINTNEXTLINE(readability-function-size)
 void MainWindow::setupDisplayPage() {
     m_displayPage = new QWidget;
     m_displayPage->setObjectName("display_page");
@@ -114,6 +116,8 @@ void MainWindow::setupDisplayPage() {
         highSlider->setValue(high);
         highSpin->setValue(high);
     };
+    // 保留公共枚举的既有整数表示和对象布局。
+    // NOLINTNEXTLINE(performance-enum-size)
     enum class StretchEditedBound { Low, High };
     constexpr int kStretchPreviewIntervalMs = 40;
     auto* stretchThrottleTimer = new QTimer(m_displayPage);

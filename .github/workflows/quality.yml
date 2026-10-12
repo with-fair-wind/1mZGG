@@ -1,0 +1,107 @@
+name: Code quality
+
+on:
+  push:
+    branches: [develop, main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-clang-quality:
+    name: Windows formatting and static analysis
+    runs-on: windows-2022
+    timeout-minutes: 90
+    env:
+      CONAN_HOME: ${{ github.workspace }}/.conan-quality
+      DSS_QT_ROOT: ${{ github.workspace }}/Qt/6.8.0/msvc2022_64
+      PRESET: ci-clang-quality
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install build tools
+        shell: pwsh
+        run: |
+          python -m pip install "conan==2.32.0" "cmake==4.4.3" "ninja==1.13.2" "aqtinstall>=3.3,<4"
+          if ($LASTEXITCODE -ne 0) { throw 'Build tool installation failed' }
+      - name: Prepare pinned LLVM
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force build/quality-report | Out-Null
+          if (!$env:ImageVersion) { throw 'Runner image version missing' }
+          "DSS_RUNNER_IMAGE=$env:ImageVersion" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $installer = Join-Path $env:RUNNER_TEMP 'LLVM-23.1.3-win64.msi'
+          $extractRoot = Join-Path $env:RUNNER_TEMP 'llvm-quality-23.1.3'
+          Invoke-WebRequest 'https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.3/LLVM-23.1.3-win64.msi' -OutFile $installer
+          if ((Get-FileHash $installer -Algorithm SHA256).Hash -ne '5153f848ac87553118340f16f8d3cd4351d729bcba6e4785c6a4a9af29676de9') {
+            throw 'LLVM checksum mismatch'
+          }
+          $process = Start-Process msiexec.exe -ArgumentList @('/a', "`"$installer`"", '/qn', "TARGETDIR=`"$extractRoot`"") -WindowStyle Hidden -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "LLVM extraction failed: $($process.ExitCode)" }
+          $llvmBin = Join-Path $extractRoot 'LLVM/bin'
+          & (Join-Path $llvmBin 'clang-tidy.exe') --version
+          if ($LASTEXITCODE -ne 0) { throw 'clang-tidy missing' }
+          "DSS_LLVM_BIN=$llvmBin" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          New-Item -ItemType Directory -Force $env:CONAN_HOME | Out-Null
+          "compiler:`n  clang:`n    version: ['23']" | Set-Content (Join-Path $env:CONAN_HOME 'settings_user.yml')
+      - name: Check formatting and static analysis configuration
+        shell: pwsh
+        run: |
+          cmake "-DCLANG_FORMAT=$env:DSS_LLVM_BIN/clang-format.exe" "-DSOURCE_DIR=$env:GITHUB_WORKSPACE" -DMODE=check -P cmake/RunClangFormat.cmake 2>&1 | Tee-Object build/quality-report/format.log
+          if ($LASTEXITCODE -ne 0) { throw 'Formatting check failed' }
+          & "$env:DSS_LLVM_BIN/clang-tidy.exe" --verify-config 2>&1 | Tee-Object build/quality-report/config.log
+          if ($LASTEXITCODE -ne 0) { throw 'Static analysis configuration failed' }
+      - name: Cache matching dependency toolchain
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.CONAN_HOME }}
+          key: windows-quality-llvm23.1.3-conan2.32.0-cmake4.4.3-ninja1.13.2-qt6.8.0-${{ env.DSS_RUNNER_IMAGE }}-${{ hashFiles('conanfile.py', 'profiles/conan/windows-clang-cl-ci', 'CMakePresets.json') }}
+      - name: Cache pinned Qt
+        uses: actions/cache@v5
+        with:
+          path: Qt
+          key: windows-quality-qt-6.8.0-charts-serialport
+      - name: Install pinned Qt
+        shell: pwsh
+        run: |
+          if (!(Test-Path "$env:DSS_QT_ROOT/lib/cmake/Qt6SerialPort/Qt6SerialPortConfig.cmake")) {
+            python -m aqt install-qt windows desktop 6.8.0 win64_msvc2022_64 -O Qt -m qtcharts qtserialport
+            if ($LASTEXITCODE -ne 0) { throw 'Qt installation failed' }
+          }
+      - name: Build and check all default configuration sources
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (!$vsPath) { throw 'Visual Studio x64 tools missing' }
+          $vcvars = Join-Path $vsPath 'VC/Auxiliary/Build/vcvars64.bat'
+          $commands = @(
+            'set "PATH=%DSS_LLVM_BIN%;%PATH%"',
+            'conan profile detect --force --name default',
+            'python tools/record_ci_toolchain.py --output build/quality-report/toolchain.json',
+            'conan install . --build=missing -pr:h profiles/conan/windows-clang-cl-ci -pr:b default -s:h build_type=Release -o:h "&:with_opencv=True" -c:h tools.build:jobs=4 --output-folder=build\%PRESET%',
+            'call build\%PRESET%\generators\conanbuild.bat',
+            'cmake --preset %PRESET% --fresh',
+            'cmake --build --preset %PRESET% --parallel 4',
+            'cmake --build --preset %PRESET% --target format-check tidy-check'
+          ) -join ' && '
+          cmd.exe /d /s /c "`"$vcvars`" && $commands" 2>&1 | Tee-Object build/quality-report/analysis.log
+          if ($LASTEXITCODE -ne 0) { throw "Quality gate failed: $LASTEXITCODE" }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: windows-code-quality
+          path: |
+            build/quality-report/**
+            build/ci-clang-quality/CMakeCache.txt
+          retention-days: 14

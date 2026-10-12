@@ -41,7 +41,7 @@ private:
     std::unique_ptr<QCoreApplication> m_app;
 };
 
-using MessageBus = Dss::Core::MessageBus;
+using Dss::Core::MessageBus;
 
 [[nodiscard]] auto tempReplayViewModelDir() -> std::filesystem::path {
     auto dir = std::filesystem::temp_directory_path() / "dss_replay_view_model_test";
@@ -54,7 +54,7 @@ using MessageBus = Dss::Core::MessageBus;
     for (int y = 0; y < image.height(); ++y) {
         auto* row = image.scanLine(y);
         for (int x = 0; x < image.width(); ++x) {
-            row[x] = static_cast<uchar>(seed + static_cast<std::uint8_t>(x + y * image.width()));
+            row[x] = static_cast<uchar>(seed + static_cast<std::uint8_t>(x + (y * image.width())));
         }
     }
     return image.save(QString::fromStdWString(path.wstring()), "BMP");
@@ -136,7 +136,7 @@ class BlobCountTracker final : public Dss::Tracking::ITrackingStrategy {
 public:
     explicit BlobCountTracker(std::shared_ptr<std::vector<std::size_t>> counts)
         : m_counts(std::move(counts)) {}
-    auto mode() const -> Dss::Core::TrackMode override {
+    [[nodiscard]] auto mode() const -> Dss::Core::TrackMode override {
         return Dss::Core::TrackMode::Geo;
     }
     auto track(const Dss::Core::FrameMeasurements& measurements)
@@ -262,15 +262,21 @@ TEST(ReplayViewModel, SelectsSequenceAndStepsForward) {
     Dss::Core::ServiceRegistry registry;
     auto replaySource = std::make_shared<Dss::Acquisition::ImageSequenceFrameSource>();
     auto processor = std::make_shared<Dss::Processing::ImageProcessor>(bus);
-    replaySource->setFrameCallback([&bus](Dss::Processing::FramePacket packet,
-                                          Dss::Acquisition::FrameDeliveryContext) {
-        auto image =
-            std::make_shared<const std::vector<std::uint8_t>>(std::move(packet.displayImage));
-        auto raw = packet.rawImage;
-        bus.emit(Dss::Core::DisplayRefreshEvent{packet.frameSeq, packet.width, packet.height,
-                                                packet.width, std::move(image), std::move(raw)});
-        return true;
-    });
+    replaySource->setFrameCallback(
+        [&bus](Dss::Processing::FramePacket packet, Dss::Acquisition::FrameDeliveryContext) {
+            auto image =
+                std::make_shared<const std::vector<std::uint8_t>>(std::move(packet.displayImage));
+            auto raw = packet.rawImage;
+            bus.emit(Dss::Core::DisplayRefreshEvent{
+                packet.frameSeq,
+                packet.width,
+                packet.height,
+                packet.width,
+                std::move(image),
+                std::move(raw),
+            });
+            return true;
+        });
     registry.registerService<Dss::Acquisition::ImageSequenceFrameSource>("replay_source",
                                                                          replaySource);
     registry.registerService<Dss::Processing::ImageProcessor>("image_processor", processor);
@@ -432,14 +438,14 @@ TEST(ReplayViewModel, StartsReplayAfterBackgroundInitializationSucceeds) {
 TEST_F(ReplaySessionTest, LastFrameProcessingFailureIsNotReportedAsSuccessfulEof) {
     class Failure final : public Dss::Processing::IProcessingStrategy {
     public:
-        auto process(const Dss::Processing::FramePacket&)
+        auto process(const Dss::Processing::FramePacket& /*input*/)
             -> Dss::Processing::ProcessingResult override {
             throw std::runtime_error("last frame processing failure");
         }
-        auto name() const -> std::string_view override {
+        [[nodiscard]] auto name() const -> std::string_view override {
             return "failure";
         }
-        auto mode() const -> Dss::Core::ProcessingMode override {
+        [[nodiscard]] auto mode() const -> Dss::Core::ProcessingMode override {
             return Dss::Core::ProcessingMode::Direct;
         }
     };

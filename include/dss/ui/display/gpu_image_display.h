@@ -26,6 +26,12 @@ class GpuImageDisplay : public QOpenGLWidget, protected QOpenGLFunctions {
     Q_OBJECT
 
 public:
+    // 生命周期绑定当前对象，禁止复制或移动资源及回调所有者。
+    GpuImageDisplay(const GpuImageDisplay&) = delete;
+    auto operator=(const GpuImageDisplay&) -> GpuImageDisplay& = delete;
+    GpuImageDisplay(GpuImageDisplay&&) = delete;
+    auto operator=(GpuImageDisplay&&) -> GpuImageDisplay& = delete;
+
     /**
      * @brief 构造 GPU 图像显示控件。
      * @param parent Qt 父控件。

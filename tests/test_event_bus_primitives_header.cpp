@@ -11,6 +11,6 @@ struct CombinerWithoutAccumulator {};
 static_assert(Dss::Evt::detail::HasAccumulator<CombinerWithAccumulator>::value);
 static_assert(!Dss::Evt::detail::HasAccumulator<CombinerWithoutAccumulator>::value);
 
-} // namespace
+}  // namespace
 
 void eventBusPrimitivesHeaderCompilesStandalone() {}

@@ -166,6 +166,8 @@ struct ZoomChangeEvent {
 struct CloseEvent {};
 
 /// 系统日志级别
+// 保留公共枚举的既有整数表示和对象布局。
+// NOLINTNEXTLINE(performance-enum-size)
 enum class LogLevel {
     Info = 0,     ///< 普通信息
     Warning = 1,  ///< 警告信息

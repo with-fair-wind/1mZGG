@@ -19,6 +19,12 @@ namespace Dss::Network {
 /// 错误诊断服务，周期性通过 UDP 发送各子系统状态的 JSON 报文
 class ErrorDiagnostics : public INetworkChannel {
 public:
+    // 生命周期绑定当前对象，禁止复制或移动资源及回调所有者。
+    ErrorDiagnostics(const ErrorDiagnostics&) = delete;
+    auto operator=(const ErrorDiagnostics&) -> ErrorDiagnostics& = delete;
+    ErrorDiagnostics(ErrorDiagnostics&&) = delete;
+    auto operator=(ErrorDiagnostics&&) -> ErrorDiagnostics& = delete;
+
     using MessageBus = Dss::Core::MessageBus;  ///< 事件总线类型别名
 
     /**

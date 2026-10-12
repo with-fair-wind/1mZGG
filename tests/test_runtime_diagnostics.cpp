@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <utility>
 
 #include <gtest/gtest.h>
 
@@ -20,6 +21,10 @@ TEST(RuntimeDiagnostics, AggregatesBackendCountersAndErrorEvents) {
                  .trackSuccessfulWrites = [] { return std::uint64_t{6}; },
                  .trackFailedWrites = [&] { return trackFailures; },
                  .trackDroppedRequests = [] { return std::uint64_t{7}; },
+                 .processing = {},
+                 .imageStorage = {},
+                 .trackStorage = {},
+                 .imageSender = {},
              });
 
     bus.emit(Dss::Core::NetworkTransmissionErrorEvent{"gxtc", "closed", 10});
@@ -43,7 +48,9 @@ TEST(RuntimeDiagnostics, AggregatesBackendCountersAndErrorEvents) {
 TEST(RuntimeDiagnostics, OptionalResourceProvidersReturnLiveSnapshots) {
     Dss::Core::MessageBus bus;
     Dss::Core::ResourceSnapshot state;
-    Dss::App::RuntimeDiagnostics diagnostics(bus, {.processing = [&] { return state; }});
+    Dss::App::RuntimeDiagnosticsSources sources{};
+    sources.processing = [&] { return state; };
+    Dss::App::RuntimeDiagnostics diagnostics(bus, std::move(sources));
     EXPECT_EQ(diagnostics.snapshot().imageStorage.queuedBytes, 0U);
     EXPECT_EQ(diagnostics.snapshot().imageSender.activeBytes, 0U);
     state.queuedBytes = 4096;

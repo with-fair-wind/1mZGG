@@ -26,7 +26,7 @@ public:
      * @return 通道已满或已关闭时返回 false
      */
     bool tryPush(T value, std::size_t bytes = 0) {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         if (m_closed || m_count >= Capacity) {
             return false;
         }
@@ -50,7 +50,7 @@ public:
      */
     bool push(T value, std::stop_token token, std::size_t bytes = 0) {
         std::unique_lock lock(m_mutex);
-        if (!m_notFull.wait(lock, token, [this]() { return m_closed || m_count < Capacity; })) {
+        if (!m_notFull.wait(lock, token, [this] { return m_closed || m_count < Capacity; })) {
             return false;
         }
         if (m_closed) {
@@ -74,7 +74,7 @@ public:
      */
     auto pop(std::stop_token token) -> std::optional<T> {
         std::unique_lock lock(m_mutex);
-        if (!m_notEmpty.wait(lock, token, [this]() { return m_closed || m_count > 0; })) {
+        if (!m_notEmpty.wait(lock, token, [this] { return m_closed || m_count > 0; })) {
             return std::nullopt;
         }
         if (m_count == 0) {
@@ -94,7 +94,7 @@ public:
      * @return 取出的元素；通道为空时返回 std::nullopt。
      */
     [[nodiscard]] auto tryPop() -> std::optional<T> {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         if (m_count == 0) {
             return std::nullopt;
         }
@@ -109,19 +109,19 @@ public:
 
     /** @brief 获取当前元素数量。 @return 通道内尚未取出的元素数。 */
     [[nodiscard]] size_t size() const {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         return m_count;
     }
 
     /** @brief 查询通道是否为空。 @return 没有待取元素时返回 true。 */
     [[nodiscard]] bool empty() const {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         return m_count == 0;
     }
 
     /** @brief 获取本组件的资源采样。 @return 同一队列锁内采样的元素数和载荷字节指标。 */
     [[nodiscard]] auto resourceSnapshot() const -> Dss::Core::ResourceSnapshot {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         Dss::Core::ResourceSnapshot result{};
         result.queuedItems = m_count;
         result.queuedBytes = m_queuedBytes;          ///< 当前队列载荷字节总数。
@@ -131,7 +131,7 @@ public:
 
     /// 清空队列并唤醒所有等待线程
     void clear() {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         for (auto& value : m_buffer) {
             value = T{};
         }
@@ -146,7 +146,7 @@ public:
 
     /// 关闭通道，唤醒所有等待线程；关闭后 push 失败，pop 在排空后返回空
     void close() {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         m_closed = true;
         m_notFull.notify_all();
         m_notEmpty.notify_all();
@@ -154,7 +154,7 @@ public:
 
     /// 重新打开通道，允许继续入队
     void open() {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         m_closed = false;
     }
 

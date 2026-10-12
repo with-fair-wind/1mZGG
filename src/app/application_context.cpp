@@ -11,10 +11,11 @@ ApplicationContext::ApplicationContext() {
     m_bus.setExceptionHandler([](std::exception_ptr error) {
         std::string message = "unknown exception";
         try {
-            std::rethrow_exception(std::move(error));
+            std::rethrow_exception(error);
         } catch (const std::exception& exception) {
             message = exception.what();
         } catch (...) {
+            message = "non-standard exception";
         }
         Dss::Core::Logger::instance().error("Event subscriber failed: {}", message);
     });

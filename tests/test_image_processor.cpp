@@ -62,7 +62,7 @@ public:
 
 class ThrowingStrategy final : public Dss::Processing::IProcessingStrategy {
 public:
-    [[nodiscard]] auto process(const Dss::Processing::FramePacket&)
+    [[nodiscard]] auto process(const Dss::Processing::FramePacket& /*input*/)
         -> Dss::Processing::ProcessingResult override {
         throw std::runtime_error("processing failed");
     }
@@ -107,6 +107,12 @@ private:
 
 class CapturingTrackStrategy final : public Dss::Tracking::ITrackingStrategy {
 public:
+    CapturingTrackStrategy(const CapturingTrackStrategy&) = delete;
+    auto operator=(const CapturingTrackStrategy&) -> CapturingTrackStrategy& = delete;
+    CapturingTrackStrategy(CapturingTrackStrategy&&) = delete;
+    auto operator=(CapturingTrackStrategy&&) -> CapturingTrackStrategy& = delete;
+    ~CapturingTrackStrategy() override = default;
+
     explicit CapturingTrackStrategy(std::promise<Dss::Core::FrameMeasurements>& promise)
         : m_promise(promise) {}
 
@@ -253,7 +259,7 @@ TEST(ImageProcessor, LosslessSubmissionCanBeCanceledWhileWaitingForCapacity) {
 
     std::stop_source stopSource;
     auto pending = std::async(std::launch::async, [&processor, token = stopSource.get_token()] {
-        return processor.submitFrameBlocking({}, token);
+        return processor.submitFrameBlocking(Dss::Processing::FramePacket(), token);
     });
     ASSERT_EQ(pending.wait_for(50ms), std::future_status::timeout);
 
@@ -275,7 +281,7 @@ TEST(ImageProcessor, ClearsQueuedFramesBeforeRestart) {
     std::vector<uint64_t> completedFrames;
     auto connection = bus.subscribe<Dss::Core::ProcessingCompleteEvent>(
         [&completedMutex, &completedFrames](const auto& event) {
-            std::lock_guard lock(completedMutex);
+            std::scoped_lock lock(completedMutex);
             completedFrames.push_back(event.frameSeq);
         });
 
@@ -306,9 +312,8 @@ TEST(ImageProcessor, ClearsQueuedFramesBeforeRestart) {
     deadline = std::chrono::steady_clock::now() + 2s;
     while (std::chrono::steady_clock::now() < deadline) {
         {
-            std::lock_guard lock(completedMutex);
-            if (std::find(completedFrames.begin(), completedFrames.end(), 3U) !=
-                completedFrames.end()) {
+            std::scoped_lock lock(completedMutex);
+            if (std::ranges::find(completedFrames, 3U) != completedFrames.end()) {
                 break;
             }
         }
@@ -316,7 +321,7 @@ TEST(ImageProcessor, ClearsQueuedFramesBeforeRestart) {
     }
     processor.stop();
 
-    std::lock_guard lock(completedMutex);
+    std::scoped_lock lock(completedMutex);
     EXPECT_EQ(std::count(completedFrames.begin(), completedFrames.end(), 2U), 0);
     EXPECT_EQ(std::count(completedFrames.begin(), completedFrames.end(), 3U), 1);
 }
@@ -502,18 +507,24 @@ TEST(ImageProcessor, PassesValidatedTargetBlobsToTrackingWithoutProcessingBacken
 TEST(ImageProcessor, WorkerFailureReleasesBlockedSubmitWithoutExplicitStop) {
     class GatedFailure final : public Dss::Processing::IProcessingStrategy {
     public:
+        ~GatedFailure() override = default;
+        GatedFailure(const GatedFailure&) = delete;
+        auto operator=(const GatedFailure&) -> GatedFailure& = delete;
+        GatedFailure(GatedFailure&&) = delete;
+        auto operator=(GatedFailure&&) -> GatedFailure& = delete;
+
         GatedFailure(std::latch& entered, std::latch& release)
             : entered(entered), release(release) {}
-        auto process(const Dss::Processing::FramePacket&)
+        auto process(const Dss::Processing::FramePacket& /*input*/)
             -> Dss::Processing::ProcessingResult override {
             entered.count_down();
             release.wait();
             throw std::runtime_error("gated failure");
         }
-        auto name() const -> std::string_view override {
+        [[nodiscard]] auto name() const -> std::string_view override {
             return "gated-failure";
         }
-        auto mode() const -> Dss::Core::ProcessingMode override {
+        [[nodiscard]] auto mode() const -> Dss::Core::ProcessingMode override {
             return Dss::Core::ProcessingMode::Direct;
         }
         std::latch& entered;
@@ -521,15 +532,18 @@ TEST(ImageProcessor, WorkerFailureReleasesBlockedSubmitWithoutExplicitStop) {
     };
     Dss::Core::MessageBus bus;
     Dss::Processing::ImageProcessor processor(bus);
-    std::latch entered{1}, release{1};
+    std::latch entered{1};
+    std::latch release{1};
     processor.setProcessingStrategy(std::make_unique<GatedFailure>(entered, release));
     processor.start();
     ASSERT_TRUE(processor.submitFrame({}));
     entered.wait();
-    for (int i = 0; i < 4; ++i)
+    for (int i = 0; i < 4; ++i) {
         EXPECT_TRUE(processor.submitFrame({}));
-    auto blocked =
-        std::async(std::launch::async, [&] { return processor.submitFrameBlocking({}, {}); });
+    }
+    auto blocked = std::async(std::launch::async, [&] {
+        return processor.submitFrameBlocking(Dss::Processing::FramePacket(), std::stop_token());
+    });
     EXPECT_EQ(blocked.wait_for(50ms), std::future_status::timeout);
     release.count_down();
     const auto status = blocked.wait_for(2s);

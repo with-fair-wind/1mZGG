@@ -1,10 +1,15 @@
 #include <QCoreApplication>
 #include <QEventLoop>
+#include <QMetaMethod>
+#include <QMetaObject>
 #include <QStringList>
 #include <QThread>
+#include <algorithm>
+#include <array>
 #include <chrono>
 #include <future>
 #include <memory>
+#include <ranges>
 #include <thread>
 #include <vector>
 
@@ -13,7 +18,16 @@
 #include "dss/core/event/events.h"
 #include "dss/core/event/message_bus.h"
 #include "dss/core/service/service_registry.h"
+#include "dss/ui/view_model/data_exchange_view_model.h"
+#include "dss/ui/view_model/display_view_model.h"
 #include "dss/ui/view_model/log_view_model.h"
+#include "dss/ui/view_model/main_view_model.h"
+#include "dss/ui/view_model/network_view_model.h"
+#include "dss/ui/view_model/processing_view_model.h"
+#include "dss/ui/view_model/replay_view_model.h"
+#include "dss/ui/view_model/serial_port_view_model.h"
+#include "dss/ui/view_model/storage_view_model.h"
+#include "dss/ui/view_model/tracking_view_model.h"
 #include "dss/ui/view_model/view_model_context.h"
 
 namespace {
@@ -35,7 +49,7 @@ private:
     std::unique_ptr<QCoreApplication> m_app;
 };
 
-using MessageBus = Dss::Core::MessageBus;
+using Dss::Core::MessageBus;
 
 template <typename T>
 auto waitForReady(std::future<T>& future, std::chrono::milliseconds timeout = 2s) -> bool {
@@ -46,7 +60,7 @@ auto waitForReady(std::future<T>& future, std::chrono::milliseconds timeout = 2s
             return true;
         }
         if (app != nullptr) {
-            app->processEvents(QEventLoop::AllEvents, 10);
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
         }
         std::this_thread::sleep_for(5ms);
     }
@@ -66,20 +80,26 @@ TEST(LogViewModel, ForwardsCoreLogMessagesAndFiltersByMinimumLevel) {
     QObject::connect(&logs, &Dss::Ui::LogViewModel::logEntryAppended,
                      [&appended](const QString& text) { appended.push_back(text); });
 
-    bus.emit(Dss::Core::LogMessageEvent{.level = Dss::Core::LogLevel::Info,
-                                        .message = "[INFO] replay ready"});
+    bus.emit(Dss::Core::LogMessageEvent{
+        .level = Dss::Core::LogLevel::Info,
+        .message = "[INFO] replay ready",
+    });
     ASSERT_EQ(appended.size(), 1U);
     EXPECT_EQ(appended.front(), QString("[INFO] replay ready"));
     EXPECT_EQ(logs.visibleLogEntries(), QStringList{"[INFO] replay ready"});
 
     logs.setLogMinimumLevel(static_cast<int>(Dss::Core::LogLevel::Error));
-    bus.emit(Dss::Core::LogMessageEvent{.level = Dss::Core::LogLevel::Warning,
-                                        .message = "[WARN] hidden"});
+    bus.emit(Dss::Core::LogMessageEvent{
+        .level = Dss::Core::LogLevel::Warning,
+        .message = "[WARN] hidden",
+    });
     EXPECT_EQ(appended.size(), 1U);
     EXPECT_TRUE(logs.visibleLogEntries().isEmpty());
 
-    bus.emit(Dss::Core::LogMessageEvent{.level = Dss::Core::LogLevel::Error,
-                                        .message = "[ERROR] visible"});
+    bus.emit(Dss::Core::LogMessageEvent{
+        .level = Dss::Core::LogLevel::Error,
+        .message = "[ERROR] visible",
+    });
     ASSERT_EQ(appended.size(), 2U);
     EXPECT_EQ(appended.back(), QString("[ERROR] visible"));
     EXPECT_EQ(logs.visibleLogEntries(), QStringList{"[ERROR] visible"});
@@ -97,20 +117,30 @@ TEST(LogViewModel, ConvertsNetworkAndSerialErrorsToUiLogs) {
                      [&appended](const QString& text) { appended.push_back(text); });
 
     bus.emit(Dss::Core::NetworkTransmissionErrorEvent{
-        .channel = "image_sender", .message = "closed", .attemptedBytes = 16});
-    bus.emit(Dss::Core::SerialFrameErrorEvent{.channel = "display",
-                                              .message = "bad tail",
-                                              .expectedBytes = 20,
-                                              .actualBytes = 18,
-                                              .observedHeader = 0xAA,
-                                              .observedTail = 0x55});
-    bus.emit(Dss::Core::SerialDecodeErrorEvent{.channel = "servo",
-                                               .message = "short frame",
-                                               .field = "speed",
-                                               .byteOffset = 4,
-                                               .rawValue = 1});
+        .channel = "image_sender",
+        .message = "closed",
+        .attemptedBytes = 16,
+    });
+    bus.emit(Dss::Core::SerialFrameErrorEvent{
+        .channel = "display",
+        .message = "bad tail",
+        .expectedBytes = 20,
+        .actualBytes = 18,
+        .observedHeader = 0xAA,
+        .observedTail = 0x55,
+    });
+    bus.emit(Dss::Core::SerialDecodeErrorEvent{
+        .channel = "servo",
+        .message = "short frame",
+        .field = "speed",
+        .byteOffset = 4,
+        .rawValue = 1,
+    });
     bus.emit(Dss::Core::StorageWriteErrorEvent{
-        .backend = "image_storage", .path = "frame.raw", .message = "disk full"});
+        .backend = "image_storage",
+        .path = "frame.raw",
+        .message = "disk full",
+    });
 
     ASSERT_EQ(appended.size(), 4U);
     EXPECT_TRUE(appended[0].contains("Network send failed"));
@@ -135,10 +165,35 @@ TEST(LogViewModel, ErrorEventFromWorkerThreadUpdatesOnObjectThread) {
 
     std::jthread worker([&bus] {
         bus.emit(Dss::Core::StorageWriteErrorEvent{
-            .backend = "image_storage", .path = "frame.raw", .message = "disk full"});
+            .backend = "image_storage",
+            .path = "frame.raw",
+            .message = "disk full",
+        });
     });
     worker.join();
 
     ASSERT_TRUE(waitForReady(signalThreadFuture));
     EXPECT_EQ(signalThreadFuture.get(), logs.thread());
+}
+
+TEST(LogViewModel, PreservesViewModelSlotMetadata) {
+    const std::array metas{
+        &Dss::Ui::LogViewModel::staticMetaObject,
+        &Dss::Ui::DataExchangeViewModel::staticMetaObject,
+        &Dss::Ui::DisplayViewModel::staticMetaObject,
+        &Dss::Ui::MainViewModel::staticMetaObject,
+        &Dss::Ui::NetworkViewModel::staticMetaObject,
+        &Dss::Ui::ProcessingViewModel::staticMetaObject,
+        &Dss::Ui::ReplayViewModel::staticMetaObject,
+        &Dss::Ui::SerialPortViewModel::staticMetaObject,
+        &Dss::Ui::StorageViewModel::staticMetaObject,
+        &Dss::Ui::TrackingViewModel::staticMetaObject,
+    };
+    for (const auto* meta : metas) {
+        const auto hasSlot = std::ranges::any_of(
+            std::views::iota(meta->methodOffset(), meta->methodCount()),
+            [meta](int index) { return meta->method(index).methodType() == QMetaMethod::Slot; });
+        EXPECT_TRUE(hasSlot) << meta->className();
+    }
+    EXPECT_GE(Dss::Ui::LogViewModel::staticMetaObject.indexOfSlot("setLogMinimumLevel(int)"), 0);
 }

@@ -33,6 +33,12 @@ class ReplayViewModel : public QObject {
                    runtimeDiagnosticsTextChanged)
 
 public:
+    // 生命周期绑定当前对象，禁止复制或移动资源及回调所有者。
+    ReplayViewModel(const ReplayViewModel&) = delete;
+    auto operator=(const ReplayViewModel&) -> ReplayViewModel& = delete;
+    ReplayViewModel(ReplayViewModel&&) = delete;
+    auto operator=(ReplayViewModel&&) -> ReplayViewModel& = delete;
+
     /**
      * @brief 构造回放子 ViewModel 并订阅帧刷新事件。
      * @param context UI 子 ViewModel 共享的后端上下文。
@@ -78,6 +84,9 @@ public:
      */
     [[nodiscard]] auto runtimeDiagnosticsText() const -> QString;
 
+    // Qt
+    // 槽区段参与元对象生成，必须保留。
+    // NOLINTNEXTLINE(readability-redundant-access-specifiers)
 public Q_SLOTS:
     /**
      * @brief 异步登记回放序列并清理旧历史；完成后更新计数，不解码图像。

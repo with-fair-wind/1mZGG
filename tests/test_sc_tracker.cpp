@@ -113,9 +113,11 @@ TEST(ScTracker, CompressesTransitiveInitialMeasurementReuseLikeLegacyAssoc3) {
                                          makeBlob(3065.0F, 3063.0F, 1.11F, 2.01F)}))
                     .empty());
 
-    const auto targets = tracker.track(makeFrame(
-        3, {makeBlob(3068.0F, 3066.0F, 1.02F, 2.02F), makeBlob(3070.0F, 3066.0F, 1.12F, 2.02F),
-            makeBlob(3069.0F, 3066.0F, 1.13F, 2.02F)}));
+    const auto targets = tracker.track(makeFrame(3, {
+                                                        makeBlob(3068.0F, 3066.0F, 1.02F, 2.02F),
+                                                        makeBlob(3070.0F, 3066.0F, 1.12F, 2.02F),
+                                                        makeBlob(3069.0F, 3066.0F, 1.13F, 2.02F),
+                                                    }));
 
     ASSERT_EQ(targets.size(), 1U);
     const auto& target = targets.front();
@@ -209,16 +211,17 @@ TEST(ScTracker, LongTrackBoundsHistoryAndRediscoversAfterLoss) {
     for (std::uint64_t seq = 1; seq <= 1000; ++seq) {
         const auto index = static_cast<float>(seq - 1);
         const auto targets =
-            tracker.track(makeFrame(seq, makeBlob(3060 + index / 128, 3060 + index / 64,
-                                                  1 + index * 0.01F, 2 + index * 0.01F)));
+            tracker.track(makeFrame(seq, makeBlob(3060 + (index / 128), 3060 + (index / 64),
+                                                  1 + (index * 0.01F), 2 + (index * 0.01F))));
         if (seq < 3) {
             ASSERT_TRUE(targets.empty());
             continue;
         }
         ASSERT_EQ(targets.size(), 1U) << "seq=" << seq;
         const auto& target = targets.front();
-        if (seq == 3)
+        if (seq == 3) {
             id = target.targetId;
+        }
         ASSERT_TRUE(target.living);
         ASSERT_EQ(target.targetId, id);
         ASSERT_EQ(target.totalFrameCount(), seq);
@@ -229,7 +232,7 @@ TEST(ScTracker, LongTrackBoundsHistoryAndRediscoversAfterLoss) {
     for (std::uint64_t seq = 1002; seq <= 1005; ++seq) {
         const auto index = static_cast<float>(seq - 1002);
         const auto targets = tracker.track(makeFrame(
-            seq, makeBlob(3060 + index, 3060 + index, 1 + index * 0.01F, 2 + index * 0.01F)));
+            seq, makeBlob(3060 + index, 3060 + index, 1 + (index * 0.01F), 2 + (index * 0.01F))));
         if (seq == 1005) {
             ASSERT_EQ(targets.size(), 1U);
             EXPECT_EQ(targets.front().totalFrameCount(), 4U);

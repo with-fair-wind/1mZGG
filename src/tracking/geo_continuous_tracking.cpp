@@ -94,14 +94,18 @@ void updatePredictionFromHistory(Dss::Core::TargetInfo& target, float frameFrequ
         const auto& previous = target.frameInfos[index - 1U].measuredBlob;
         const auto currentPosition = positionOf(current);
         const auto previousPosition = positionOf(previous);
-        return Dss::Core::Vec2f{currentPosition.x - previousPosition.x,
-                                currentPosition.y - previousPosition.y};
+        return Dss::Core::Vec2f{
+            currentPosition.x - previousPosition.x,
+            currentPosition.y - previousPosition.y,
+        };
     };
     const auto aeMotionAt = [&](std::size_t index) {
         const auto& current = target.frameInfos[index].measuredBlob;
         const auto& previous = target.frameInfos[index - 1U].measuredBlob;
-        return Dss::Core::Vec2f{current.posAe.x - previous.posAe.x,
-                                current.posAe.y - previous.posAe.y};
+        return Dss::Core::Vec2f{
+            current.posAe.x - previous.posAe.x,
+            current.posAe.y - previous.posAe.y,
+        };
     };
 
     auto frameMotion = motionAt(lastIndex);
@@ -110,14 +114,18 @@ void updatePredictionFromHistory(Dss::Core::TargetInfo& target, float frameFrequ
         const auto motion1 = motionAt(lastIndex);
         const auto motion2 = motionAt(lastIndex - 1U);
         const auto motion3 = motionAt(lastIndex - 2U);
-        frameMotion = Dss::Core::Vec2f{median3(motion1.x, motion2.x, motion3.x),
-                                       median3(motion1.y, motion2.y, motion3.y)};
+        frameMotion = Dss::Core::Vec2f{
+            median3(motion1.x, motion2.x, motion3.x),
+            median3(motion1.y, motion2.y, motion3.y),
+        };
 
         const auto aeMotion1 = aeMotionAt(lastIndex);
         const auto aeMotion2 = aeMotionAt(lastIndex - 1U);
         const auto aeMotion3 = aeMotionAt(lastIndex - 2U);
-        aeMotion = Dss::Core::Vec2f{median3(aeMotion1.x, aeMotion2.x, aeMotion3.x),
-                                    median3(aeMotion1.y, aeMotion2.y, aeMotion3.y)};
+        aeMotion = Dss::Core::Vec2f{
+            median3(aeMotion1.x, aeMotion2.x, aeMotion3.x),
+            median3(aeMotion1.y, aeMotion2.y, aeMotion3.y),
+        };
     }
 
     target.predictedSpdFrame = frameMotion;
@@ -125,8 +133,10 @@ void updatePredictionFromHistory(Dss::Core::TargetInfo& target, float frameFrequ
     target.predictedPosFrame =
         Dss::Core::Vec2f{latestPosition.x + frameMotion.x, latestPosition.y + frameMotion.y};
     target.predictedSpdAe = Dss::Core::Vec2f{aeMotion.x / period, aeMotion.y / period};
-    target.predictedPosAe = Dss::Core::Vec2f{latest.posAe.x + target.predictedSpdAe.x * period,
-                                             latest.posAe.y + target.predictedSpdAe.y * period};
+    target.predictedPosAe = Dss::Core::Vec2f{
+        latest.posAe.x + (target.predictedSpdAe.x * period),
+        latest.posAe.y + (target.predictedSpdAe.y * period),
+    };
     target.lastRmDm = Dss::Core::Vec2f{latest.distAzi, latest.distEle};
 }
 

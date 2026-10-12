@@ -1,7 +1,7 @@
 #pragma once
 
-#include "dss/comm/protocol/serial_protocol_codec.h"
 #include "dss/comm/channel/serial_worker_base.h"
+#include "dss/comm/protocol/serial_protocol_codec.h"
 
 namespace Dss::Comm {
 

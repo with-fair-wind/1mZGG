@@ -35,9 +35,10 @@ inline constexpr float kAngleAwayFromStarDegrees = 5.0F;
 }
 
 [[nodiscard]] auto timestampSeconds(const Dss::Core::Timestamp& timestamp) -> double {
-    return static_cast<double>(timestamp.hour * 3600 + timestamp.minute * 60 + timestamp.second) +
-           static_cast<double>(timestamp.millisecond) * 0.001 +
-           static_cast<double>(timestamp.microsecond) * 0.000001;
+    return static_cast<double>((timestamp.hour * 3600) + (timestamp.minute * 60) +
+                               timestamp.second) +
+           (static_cast<double>(timestamp.millisecond) * 0.001) +
+           (static_cast<double>(timestamp.microsecond) * 0.000001);
 }
 
 [[nodiscard]] auto framePeriodSeconds(const Dss::Core::FrameMeasurements& previous,
@@ -97,14 +98,6 @@ inline constexpr float kAngleAwayFromStarDegrees = 5.0F;
     return std::pair{bestMotion, bestCount};
 }
 
-/**
- * @brief 由相邻两帧恒星测量估算背景恒星速度。
- *
- *
- * 在视场中心区域内匹配恒星对，统计出现频率最高的像素位移作为背景像面速度，
-
- * 并结合视场中心方位/俯仰变化换算 AE 速度。
- */
 [[nodiscard]] auto estimateGeoStarSpeedFromPair(const Dss::Core::FrameMeasurements& previous,
                                                 const Dss::Core::FrameMeasurements& current,
                                                 float ratioFov, float radius,
@@ -126,7 +119,8 @@ inline constexpr float kAngleAwayFromStarDegrees = 5.0F;
 
             const auto dx = truncateTowardZero(currentStar.centroid.x - previousStar.centroid.x);
             const auto dy = truncateTowardZero(currentStar.centroid.y - previousStar.centroid.y);
-            if (std::abs(dx) < radius && std::abs(dy) < radius) {
+            if (static_cast<float>(std::abs(dx)) < radius &&
+                static_cast<float>(std::abs(dy)) < radius) {
                 candidateMotions.emplace_back(dx, dy);
             }
         }
@@ -144,10 +138,10 @@ inline constexpr float kAngleAwayFromStarDegrees = 5.0F;
         Dss::Core::Vec2f{static_cast<float>(motion.first), static_cast<float>(motion.second)};
     const auto aeSpeed = Dss::Core::Vec2f{
         static_cast<float>(((current.fovCenterAe.x - previous.fovCenterAe.x) +
-                            frameSpeed.x * opticParams.pixelScale) *
+                            (frameSpeed.x * opticParams.pixelScale)) *
                            frameFrequency),
         static_cast<float>(((current.fovCenterAe.y - previous.fovCenterAe.y) +
-                            frameSpeed.y * opticParams.pixelScale) *
+                            (frameSpeed.y * opticParams.pixelScale)) *
                            frameFrequency),
     };
 
@@ -232,7 +226,9 @@ inline constexpr float kAngleAwayFromStarDegrees = 5.0F;
                                              const Dss::Core::TrackingSettings& settings) {
     const auto raThreshold = arcsecToRad(settings.geoRaThresholdArcsec);
     const auto decThreshold = arcsecToRad(settings.geoDecThresholdArcsec);
-    return !(std::abs(motion.x) < raThreshold && std::abs(motion.y) < decThreshold);
+    const bool belowThreshold =
+        std::abs(motion.x) < raThreshold && std::abs(motion.y) < decThreshold;
+    return !belowThreshold;
 }
 
 [[nodiscard]] bool matchesRaDecSpeedConsistency(const Dss::Core::Vec2f& motion,
@@ -297,6 +293,57 @@ inline constexpr float kAngleAwayFromStarDegrees = 5.0F;
  * 过滤与背景恒星运动一致的候选，并在当前测量空间中去除重复关联链。
 
  */
+namespace {
+struct FourFrameAssociationContext {
+    std::array<const Dss::Core::FrameMeasurements*, 4> frames{};
+    GeoTrackingSpace space = GeoTrackingSpace::Frame;
+    CandidateMeasurementSpace measurementSpace = CandidateMeasurementSpace::Centroid;
+    Dss::Core::Vec2f starSpeed{};
+    float radius = 0;
+    float frequency = 0;
+    const Dss::Core::TrackingSettings* settings = nullptr;
+};
+
+/// @brief 对已通过首段运动筛选的像斑对补齐第三、第四帧匹配；保持原遍历顺序。
+/// @param context 四帧及不可变参数的借用快照。
+/// @param blob0 首帧像斑。
+/// @param blob1 第二帧像斑。
+/// @param motion10 首段运动。
+/// @param associatedTargets 按原顺序追加的候选目标。
+void appendRemainingFrameMatches(const FourFrameAssociationContext& context,
+                                 const Dss::Core::MeasuredBlob& blob0,
+                                 const Dss::Core::MeasuredBlob& blob1,
+                                 const Dss::Core::Vec2f& motion10,
+                                 std::vector<Dss::Core::TargetInfo>& associatedTargets) {
+    for (const auto& blob2 : context.frames[2]->targetBlobs) {
+        const auto motion21 = measurementMotion(blob2, blob1, context.measurementSpace);
+        if (!motion21.has_value() ||
+            !matchesSecondAssociationMotion(*motion21, motion10, context.space, context.starSpeed,
+                                            context.radius, *context.settings)) {
+            continue;
+        }
+
+        for (const auto& blob3 : context.frames[3]->targetBlobs) {
+            const auto motion32 = measurementMotion(blob3, blob2, context.measurementSpace);
+            if (!motion32.has_value() ||
+                !matchesThirdAssociationMotion(*motion32, *motion21, motion10, context.space,
+                                               context.starSpeed, context.radius,
+                                               *context.settings)) {
+                continue;
+            }
+
+            const std::array blobs{&blob0, &blob1, &blob2, &blob3};
+            if (hasRepeatedEquatorialPoint(blobs)) {
+                continue;
+            }
+
+            associatedTargets.push_back(
+                makeAssociatedTarget(context.frames, blobs, context.frequency, *context.settings));
+        }
+    }
+}
+}  // namespace
+
 [[nodiscard]] auto associateFourFrameTargets(
     const std::deque<Dss::Core::FrameMeasurements>& fifoTarget, int starMatchCount,
     const Dss::Core::Vec2f& starSpeed, float frameFrequency,
@@ -329,6 +376,15 @@ inline constexpr float kAngleAwayFromStarDegrees = 5.0F;
     const auto measurementSpace = candidateMeasurementSpace(space);
     const auto frameRadius = associationRadius(settings, starMatchCount, frame3.targetBlobs.size());
     std::vector<Dss::Core::TargetInfo> associatedTargets;
+    const FourFrameAssociationContext context{
+        .frames = {&frame0, &frame1, &frame2, &frame3},
+        .space = space,
+        .measurementSpace = measurementSpace,
+        .starSpeed = starSpeed,
+        .radius = frameRadius,
+        .frequency = frameFrequency,
+        .settings = &settings,
+    };
 
     for (const auto& blob0 : frame0.targetBlobs) {
         for (const auto& blob1 : frame1.targetBlobs) {
@@ -338,31 +394,7 @@ inline constexpr float kAngleAwayFromStarDegrees = 5.0F;
                 continue;
             }
 
-            for (const auto& blob2 : frame2.targetBlobs) {
-                const auto motion21 = measurementMotion(blob2, blob1, measurementSpace);
-                if (!motion21.has_value() ||
-                    !matchesSecondAssociationMotion(*motion21, *motion10, space, starSpeed,
-                                                    frameRadius, settings)) {
-                    continue;
-                }
-
-                for (const auto& blob3 : frame3.targetBlobs) {
-                    const auto motion32 = measurementMotion(blob3, blob2, measurementSpace);
-                    if (!motion32.has_value() ||
-                        !matchesThirdAssociationMotion(*motion32, *motion21, *motion10, space,
-                                                       starSpeed, frameRadius, settings)) {
-                        continue;
-                    }
-
-                    const std::array blobs{&blob0, &blob1, &blob2, &blob3};
-                    if (hasRepeatedEquatorialPoint(blobs)) {
-                        continue;
-                    }
-                    const std::array frames{&frame0, &frame1, &frame2, &frame3};
-                    associatedTargets.push_back(
-                        makeAssociatedTarget(frames, blobs, frameFrequency, settings));
-                }
-            }
+            appendRemainingFrameMatches(context, blob0, blob1, *motion10, associatedTargets);
         }
     }
 

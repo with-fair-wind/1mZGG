@@ -11,6 +11,8 @@
 namespace Dss::Acquisition {
 
 /// @brief 应用可选择的帧源模式。
+// 保留公共枚举的既有整数表示和对象布局。
+// NOLINTNEXTLINE(performance-enum-size)
 enum class FrameSourceMode {
     Replay,  ///< 本地图像序列回放
     Live,    ///< 实时相机采集
@@ -23,7 +25,14 @@ enum class FrameSourceMode {
  */
 class FrameSourceCoordinator final : public IFrameSource {
 public:
-    /// @brief 停止所有帧源后销毁协调器。
+    // 生命周期绑定当前对象，禁止复制或移动资源及回调所有者。
+    FrameSourceCoordinator() = default;
+    FrameSourceCoordinator(const FrameSourceCoordinator&) = delete;
+    auto operator=(const FrameSourceCoordinator&) -> FrameSourceCoordinator& = delete;
+    FrameSourceCoordinator(FrameSourceCoordinator&&) = delete;
+    auto operator=(FrameSourceCoordinator&&) -> FrameSourceCoordinator& = delete;
+
+    /// @brief 尝试停止所有帧源后销毁协调器；停止失败仅记录紧急诊断。
     ~FrameSourceCoordinator() override;
 
     /**
@@ -50,6 +59,8 @@ public:
 
     auto init() -> std::expected<void, std::string> override;
     void start() override;
+    /// @note 某个帧源失败不会跳过其余帧源；仍需由各实现保证 stop 能真正结束其工作。
+    /// @throws std::exception 停止失败时重新抛出首次异常；非标准异常按原类型传播。
     void stop() override;
     void setFrameCallback(FrameCallback callback) override;
     [[nodiscard]] bool isRunning() const override;
@@ -60,6 +71,10 @@ private:
     /// @brief 串行化生命周期操作，但不在调用帧源时持有状态互斥锁。
     class LifecycleOperation {
     public:
+        // 生命周期绑定当前对象，禁止复制或移动资源及回调所有者。
+        LifecycleOperation(LifecycleOperation&&) = delete;
+        auto operator=(LifecycleOperation&&) -> LifecycleOperation& = delete;
+
         /**
          * @brief 等待并取得一次生命周期操作权。
          * @param owner 待串行化生命周期操作的协调器。

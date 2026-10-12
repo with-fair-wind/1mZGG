@@ -14,7 +14,7 @@ Heartbeat::~Heartbeat() {
 }
 
 auto Heartbeat::open(const UdpEndpointConfig& config) -> std::expected<void, std::string> {
-    std::lock_guard lock(m_lifecycleMutex);
+    std::scoped_lock lock(m_lifecycleMutex);
     closeLocked();
     auto result = m_channel.bind(config);
     if (!result) {
@@ -28,7 +28,7 @@ auto Heartbeat::open(const UdpEndpointConfig& config) -> std::expected<void, std
 }
 
 void Heartbeat::close() {
-    std::lock_guard lock(m_lifecycleMutex);
+    std::scoped_lock lock(m_lifecycleMutex);
     closeLocked();
 }
 

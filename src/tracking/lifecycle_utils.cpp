@@ -101,7 +101,7 @@ void updateValidityWithLatestFrame(Core::TargetInfo& target) {
 
     const auto sampleCount = static_cast<float>(target.totalFrameCount());
     const auto latestValid = latestFrameIsValid(target) ? 1.0F : 0.0F;
-    target.validity = ((sampleCount - 1.0F) * target.validity + latestValid) / sampleCount;
+    target.validity = (((sampleCount - 1.0F) * target.validity) + latestValid) / sampleCount;
 }
 
 }  // namespace Dss::Tracking

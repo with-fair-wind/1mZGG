@@ -11,6 +11,8 @@
 namespace Dss::App {
 
 /// @brief 观测会话的触发来源。
+// 保留公共枚举的既有整数表示和对象布局。
+// NOLINTNEXTLINE(performance-enum-size)
 enum class ObservationSessionSource {
     MasterControl,  ///< 由主控指令创建
     LocalReplay,    ///< 由本地回放创建

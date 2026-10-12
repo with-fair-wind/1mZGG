@@ -30,7 +30,8 @@ public:
      * @param height 图像高度（像素）
      * @return 满足面积约束的光斑列表；尺寸不匹配时返回空列表
      */
-    auto labelAndExtract(std::span<const uint8_t> binaryImage, uint32_t width, uint32_t height)
+    [[nodiscard]] auto labelAndExtract(std::span<const uint8_t> binaryImage, uint32_t width,
+                                       uint32_t height) const
         -> std::vector<Dss::Core::MeasuredBlob>;
 
     /**

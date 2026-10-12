@@ -57,6 +57,9 @@ public:
      */
     [[nodiscard]] bool isSerialChannelOpen(const QString& key);
 
+    // Qt
+    // 槽区段参与元对象生成，必须保留。
+    // NOLINTNEXTLINE(readability-redundant-access-specifiers)
 public Q_SLOTS:
     /**
      * @brief 显式打开指定串口通道服务。

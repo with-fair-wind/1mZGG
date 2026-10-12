@@ -133,7 +133,7 @@ TEST(ImageDisplay, MiddleButtonDragClampsZoomedImageAtViewportEdges) {
     EXPECT_NEAR(display.imageOffset().y(), 0.0, 1.0e-6);
 
     sendMiddleDrag(display, QPointF{512.0, 512.0}, QPointF{-5000.0, -5000.0});
-    const auto minimumOffset = 1024.0 - 6144.0 * display.imageScaleFactor();
+    const auto minimumOffset = 1024.0 - (6144.0 * display.imageScaleFactor());
     EXPECT_NEAR(display.imageOffset().x(), minimumOffset, 1.0e-6);
     EXPECT_NEAR(display.imageOffset().y(), minimumOffset, 1.0e-6);
 }

@@ -33,11 +33,18 @@ namespace {
     Dss::Core::TargetFrameInfo frame{};
     frame.frameSeq = 123;
     frame.timestamp = {
-        .year = 2026, .month = 6, .day = 2, .hour = 3, .minute = 4, .second = 5, .millisecond = 6};
+        .year = 2026,
+        .month = 6,
+        .day = 2,
+        .hour = 3,
+        .minute = 4,
+        .second = 5,
+        .millisecond = 6,
+    };
     frame.fovCenterAe = Dss::Core::Vec2f{10.1234567F, -20.5F};
     frame.opticCenter = Dss::Core::Vec2f{3000.0F, 3001.0F};
     frame.exposureTime = 0.0125F;
-    frame.measuredBlob = blob;
+    frame.measuredBlob = std::move(blob);
     frame.valid = true;
 
     Dss::Core::TargetInfo target{};
@@ -108,7 +115,14 @@ TEST(TrackDataStorageBackend, DrainsTrackDataWritesWhenStopped) {
     Dss::Storage::TrackDataRecord record{};
     record.frameSeq = 123;
     record.timestamp = {
-        .year = 2026, .month = 6, .day = 2, .hour = 3, .minute = 4, .second = 5, .millisecond = 6};
+        .year = 2026,
+        .month = 6,
+        .day = 2,
+        .hour = 3,
+        .minute = 4,
+        .second = 5,
+        .millisecond = 6,
+    };
     record.fovCenterAe = Dss::Core::Vec2f{10.1234567F, -20.5F};
     record.blobPosition = Dss::Core::Vec2f{3100.5F, 3065.75F};
     record.opticCenter = Dss::Core::Vec2f{3000.0F, 3001.0F};

@@ -179,7 +179,7 @@ void DisplayViewModel::setupSubscriptions() {
 void DisplayViewModel::onDisplayRefresh(const Dss::Core::DisplayRefreshEvent& event) {
     if (!isObjectThread(this)) {
         {
-            std::lock_guard lock(m_pendingMutex);
+            std::scoped_lock lock(m_pendingMutex);
             if (m_pendingFrame) {
                 ++m_resources.replacedItems;
             }
@@ -228,7 +228,7 @@ void DisplayViewModel::displayFrame(const Dss::Core::DisplayRefreshEvent& event,
 void DisplayViewModel::onProcessingComplete(const Dss::Core::ProcessingCompleteEvent& event) {
     if (!isObjectThread(this)) {
         {
-            std::lock_guard lock(m_pendingMutex);
+            std::scoped_lock lock(m_pendingMutex);
             m_pendingStats = event;
             if (m_flushQueued) {
                 return;
@@ -253,7 +253,7 @@ void DisplayViewModel::flushPendingUpdates() {
     std::optional<Dss::Core::ProcessingCompleteEvent> stats;
     std::uint64_t revision = 0;
     {
-        std::lock_guard lock(m_pendingMutex);
+        std::scoped_lock lock(m_pendingMutex);
         frame = std::exchange(m_pendingFrame, std::nullopt);
         stats = std::exchange(m_pendingStats, std::nullopt);
         revision = m_sessionRevision.load();
@@ -301,7 +301,7 @@ bool DisplayViewModel::emitCurrentRawDisplayFrame() {
     int high = m_displayStretchHigh;
     std::uint64_t revision = 0;
     {
-        std::lock_guard lock(m_currentDisplayMutex);
+        std::scoped_lock lock(m_currentDisplayMutex);
         revision = m_sessionRevision.load();
         rawImage = m_currentRawImage;
         width = m_currentDisplayWidth;
@@ -336,7 +336,7 @@ bool DisplayViewModel::refreshCurrentDisplayFromStretch() {
     std::uint32_t height = 0;
     std::uint64_t revision = 0;
     {
-        std::lock_guard lock(m_currentDisplayMutex);
+        std::scoped_lock lock(m_currentDisplayMutex);
         revision = m_sessionRevision.load();
         rawImage = m_currentRawImage;
         width = m_currentDisplayWidth;
@@ -356,7 +356,8 @@ bool DisplayViewModel::refreshCurrentDisplayFromStretch() {
     const auto settings =
         makeDisplayStretchSettings(m_displayAutoStretch, m_displayStretchLow, m_displayStretchHigh);
     if (settings.mode == Dss::Processing::DisplayStretchMode::Manual) {
-        const auto window = Dss::Processing::resolveDisplayStretchWindow({}, settings);
+        const auto window =
+            Dss::Processing::resolveDisplayStretchWindow(Dss::Core::ImageStats(), settings);
         displayImage = Dss::Processing::stretchDisplayImage(*rawImage, window);
     } else {
         auto display = Dss::Processing::buildDisplayImage(*rawImage, settings);

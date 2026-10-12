@@ -43,7 +43,7 @@ void main() {
         return false;
     }
     const auto requiredSize =
-        static_cast<std::size_t>(stride) * static_cast<std::size_t>(height - 1U) +
+        (static_cast<std::size_t>(stride) * static_cast<std::size_t>(height - 1U)) +
         static_cast<std::size_t>(width);
     return rawImage->size() >= requiredSize;
 }
@@ -136,7 +136,7 @@ void GpuImageDisplay::setRawFrame(std::shared_ptr<const std::vector<std::uint16_
     update();
 }
 
-void GpuImageDisplay::setDisplayStretch(bool, int low, int high) {
+void GpuImageDisplay::setDisplayStretch(bool /*unused*/, int low, int high) {
     m_stretchLow = low;
     m_stretchHigh = std::max(high, low + 1);
     update();
@@ -191,10 +191,10 @@ void GpuImageDisplay::paintGL() {
 
     const QRectF targetRect(m_viewport.imageToWidget(sourceRect.topLeft()),
                             sourceRect.size() * m_viewport.scaleFactor());
-    const auto left = static_cast<float>((targetRect.left() / width()) * 2.0 - 1.0);
-    const auto right = static_cast<float>((targetRect.right() / width()) * 2.0 - 1.0);
-    const auto top = static_cast<float>(1.0 - (targetRect.top() / height()) * 2.0);
-    const auto bottom = static_cast<float>(1.0 - (targetRect.bottom() / height()) * 2.0);
+    const auto left = static_cast<float>(((targetRect.left() / width()) * 2.0) - 1.0);
+    const auto right = static_cast<float>(((targetRect.right() / width()) * 2.0) - 1.0);
+    const auto top = static_cast<float>(1.0 - ((targetRect.top() / height()) * 2.0));
+    const auto bottom = static_cast<float>(1.0 - ((targetRect.bottom() / height()) * 2.0));
     const auto u0 = static_cast<float>(sourceRect.left() / imageBounds.width());
     const auto u1 = static_cast<float>(sourceRect.right() / imageBounds.width());
     const auto v0 = static_cast<float>(sourceRect.top() / imageBounds.height());

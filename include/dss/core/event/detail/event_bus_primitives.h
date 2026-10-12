@@ -12,6 +12,8 @@
 #include <utility>
 #include <vector>
 
+#include "dss/core/diagnostics/emergency_report.h"
+
 namespace Dss::Evt {
 
 /// 无锁策略（单线程或外部同步场景）
@@ -53,6 +55,10 @@ namespace detail {
 /// 独占锁 RAII 守卫
 template <typename L>
 struct UniqueLockGuard {
+    // 生命周期绑定当前对象，禁止复制或移动资源及回调所有者。
+    UniqueLockGuard(UniqueLockGuard&&) = delete;
+    auto operator=(UniqueLockGuard&&) -> UniqueLockGuard& = delete;
+
     const L& lk;  ///< 锁策略引用
 
     /**
@@ -74,6 +80,10 @@ struct UniqueLockGuard {
 /// 共享锁 RAII 守卫
 template <typename L>
 struct SharedLockGuard {
+    // 生命周期绑定当前对象，禁止复制或移动资源及回调所有者。
+    SharedLockGuard(SharedLockGuard&&) = delete;
+    auto operator=(SharedLockGuard&&) -> SharedLockGuard& = delete;
+
     const L& lk;  ///< 锁策略引用
 
     /**
@@ -132,6 +142,8 @@ struct MovePolicy<false> {
  * @param fn 对每个处理器执行的回调。
  */
 template <typename Iter, typename Fn>
+// 同一回调反复作为左值调用，不能逐次转移其状态。
+// NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward)
 void forEachSafe(Iter begin, Iter end, Fn&& fn) {
     std::exception_ptr firstEx;
     for (auto it = begin; it != end; ++it) {
@@ -160,7 +172,7 @@ struct CombinerAdapter;
 /// @brief 复用组合器自定义累加器的适配器特化。
 template <typename Combiner, typename R>
 struct CombinerAdapter<Combiner, R, true> {
-    using Accumulator = typename Combiner::Accumulator;  ///< 组合器提供的累加器类型。
+    using Accumulator = Combiner::Accumulator;  ///< 组合器提供的累加器类型。
 };
 
 /// @brief 为未提供累加器的组合器生成默认收集实现。
@@ -198,7 +210,7 @@ struct CombinerAdapter<Combiner, R, false> {
          * @brief 组合已收集的返回值。
          * @return 组合器生成的最终结果。
          */
-        typename Combiner::result_type finalize() {
+        Combiner::result_type finalize() {
             return Combiner::combine(std::move(results));
         }
     };
@@ -220,7 +232,7 @@ struct EmptyResultAdapter<Combiner, true> {
      * @brief 获取组合器定义的空结果。
      * @return 组合器的空结果值。
      */
-    static typename Combiner::result_type get() {
+    static Combiner::result_type get() {
         return Combiner::emptyResult();
     }
 };
@@ -233,7 +245,7 @@ struct EmptyResultAdapter<Combiner, false> {
      * @return 此函数不会返回。
      * @throws std::logic_error 组合器要求至少一个处理器时抛出。
      */
-    [[noreturn]] static typename Combiner::result_type get() {
+    [[noreturn]] static Combiner::result_type get() {
         throw std::logic_error(
             "Dss::Evt::Event::emit() called with no handlers on a Combiner that "
             "requires at least one");
@@ -315,6 +327,7 @@ private:
         try {
             disconnect();
         } catch (...) {
+            Dss::Core::reportEmergencyFailure("DSS: subscription disconnect failed\n");
         }
     }
 
@@ -436,6 +449,8 @@ struct CollectAll {
      * @param results 已收集的返回值列表。
      * @return 合并后的返回值列表。
      */
+    // 只转移末尾元素，容器归调用者管理。
+    // NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved)
     static result_type combine(std::vector<R>&& results) {
         return std::move(results);
     }
@@ -492,6 +507,8 @@ struct LastValue {
      * @param results 非空返回值列表。
      * @return 列表末尾的返回值。
      */
+    // 只转移末尾元素，容器归调用者管理。
+    // NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved)
     static result_type combine(std::vector<R>&& results) {
         assert(!results.empty());
         return std::move(results.back());

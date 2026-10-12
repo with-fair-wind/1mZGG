@@ -55,7 +55,7 @@ namespace Detail {
  */
 inline void writeBigEndian16(std::span<std::uint8_t> output, std::size_t offset,
                              std::uint32_t value) {
-    output[offset] = static_cast<std::uint8_t>((value >> 8) & 0xFFU);
+    output[offset] = static_cast<std::uint8_t>((value >> 8U) & 0xFFU);
     output[offset + 1] = static_cast<std::uint8_t>(value & 0xFFU);
 }
 
@@ -67,8 +67,8 @@ inline void writeBigEndian16(std::span<std::uint8_t> output, std::size_t offset,
  */
 inline void writeBigEndian24(std::span<std::uint8_t> output, std::size_t offset,
                              std::uint32_t value) {
-    output[offset] = static_cast<std::uint8_t>((value >> 16) & 0xFFU);
-    output[offset + 1] = static_cast<std::uint8_t>((value >> 8) & 0xFFU);
+    output[offset] = static_cast<std::uint8_t>((value >> 16U) & 0xFFU);
+    output[offset + 1] = static_cast<std::uint8_t>((value >> 8U) & 0xFFU);
     output[offset + 2] = static_cast<std::uint8_t>(value & 0xFFU);
 }
 
@@ -80,7 +80,7 @@ inline void writeBigEndian24(std::span<std::uint8_t> output, std::size_t offset,
  */
 inline auto readBigEndian16(std::span<const std::uint8_t> input, std::size_t offset)
     -> std::uint32_t {
-    return static_cast<std::uint32_t>(input[offset]) * 256U +
+    return (static_cast<std::uint32_t>(input[offset]) * 256U) +
            static_cast<std::uint32_t>(input[offset + 1]);
 }
 
@@ -92,8 +92,8 @@ inline auto readBigEndian16(std::span<const std::uint8_t> input, std::size_t off
  */
 inline auto readBigEndian24(std::span<const std::uint8_t> input, std::size_t offset)
     -> std::uint32_t {
-    return static_cast<std::uint32_t>(input[offset]) * 65536U +
-           static_cast<std::uint32_t>(input[offset + 1]) * 256U +
+    return (static_cast<std::uint32_t>(input[offset]) * 65536U) +
+           (static_cast<std::uint32_t>(input[offset + 1]) * 256U) +
            static_cast<std::uint32_t>(input[offset + 2]);
 }
 
@@ -206,11 +206,12 @@ inline auto buildRawImageFile(const RawImageMetadata& metadata,
                               std::span<const std::uint16_t> pixels) -> std::vector<std::uint8_t> {
     const auto header = buildRawImageHeader(metadata);
     std::vector<std::uint8_t> file;
-    file.reserve(header.size() + pixels.size() * sizeof(std::uint16_t));
+    file.reserve(header.size() + (pixels.size() * sizeof(std::uint16_t)));
     file.insert(file.end(), header.begin(), header.end());
     for (const auto pixel : pixels) {
         file.push_back(static_cast<std::uint8_t>(pixel & 0xFFU));
-        file.push_back(static_cast<std::uint8_t>((pixel >> 8) & 0xFFU));
+        file.push_back(
+            static_cast<std::uint8_t>((static_cast<std::uint32_t>(pixel) >> 8U) & 0xFFU));
     }
     return file;
 }
@@ -282,7 +283,7 @@ inline auto decodeRawImageFile(std::span<const std::uint8_t> file) -> std::optio
          offset < kRawImageHeaderSize + static_cast<std::size_t>(payloadBytes); offset += 2) {
         decoded.pixels.push_back(
             static_cast<std::uint16_t>(static_cast<std::uint16_t>(file[offset]) |
-                                       static_cast<std::uint16_t>(file[offset + 1] << 8)));
+                                       static_cast<std::uint16_t>(file[offset + 1] << 8U)));
     }
     return decoded;
 }

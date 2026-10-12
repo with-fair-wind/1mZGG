@@ -10,9 +10,7 @@ namespace Dss::App {
 TrackResultDataExchangeBridge::TrackResultDataExchangeBridge(
     MessageBus& bus, GxtcSender sendGxtc, GdclSender sendGdcl,
     TrackResultDataExchangeBridgeOptions options)
-    : m_options(std::move(options)),
-      m_sendGxtc(std::move(sendGxtc)),
-      m_sendGdcl(std::move(sendGdcl)) {
+    : m_options(options), m_sendGxtc(std::move(sendGxtc)), m_sendGdcl(std::move(sendGdcl)) {
     m_connections.push_back(bus.subscribe<Dss::Core::MasterControlEvent>(
         [this](const Dss::Core::MasterControlEvent& event) { onMasterControl(event); }));
     m_connections.push_back(bus.subscribe<Dss::Core::TrackResultEvent>(
@@ -20,7 +18,7 @@ TrackResultDataExchangeBridge::TrackResultDataExchangeBridge(
 }
 
 void TrackResultDataExchangeBridge::onMasterControl(const Dss::Core::MasterControlEvent& event) {
-    std::lock_guard lock(m_mutex);
+    std::scoped_lock lock(m_mutex);
     m_masterControl = MasterControlState{
         .received = true,
         .track = event.track,
@@ -60,7 +58,7 @@ void TrackResultDataExchangeBridge::onTrackResult(const Dss::Core::TrackResultEv
 }
 
 auto TrackResultDataExchangeBridge::masterControlState() const -> MasterControlState {
-    std::lock_guard lock(m_mutex);
+    std::scoped_lock lock(m_mutex);
     return m_masterControl;
 }
 

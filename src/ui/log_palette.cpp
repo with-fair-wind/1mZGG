@@ -5,13 +5,13 @@ namespace Dss::Ui {
 auto logTextColor(Dss::Core::LogLevel level) -> QColor {
     switch (level) {
         case Dss::Core::LogLevel::Warning:
-            return QColor("#9A6700");
+            return {"#9A6700"};
         case Dss::Core::LogLevel::Error:
-            return QColor("#B42318");
+            return {"#B42318"};
         case Dss::Core::LogLevel::Info:
-            return QColor("#263238");
+            return {"#263238"};
     }
-    return QColor("#263238");
+    return {"#263238"};
 }
 
 auto inferLogLevelFromText(const QString& text) -> Dss::Core::LogLevel {

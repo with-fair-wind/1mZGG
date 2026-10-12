@@ -106,13 +106,13 @@ Logger::Logger() {
 Logger::~Logger() = default;
 
 void Logger::setBus(MessageBus* bus) {
-    std::lock_guard lock(m_mutex);
+    std::scoped_lock lock(m_mutex);
     m_bus = bus;
 }
 
 auto Logger::enableFileLogging(const std::filesystem::path& path)
     -> std::expected<void, std::string> {
-    return configureRotatingFileLogging(path, 10U * 1024U * 1024U, 5U);
+    return configureRotatingFileLogging(path, std::size_t{10} * 1024U * 1024U, 5U);
 }
 
 auto Logger::configureRotatingFileLogging(const std::filesystem::path& path,
@@ -137,7 +137,7 @@ auto Logger::configureRotatingFileLogging(const std::filesystem::path& path,
         fileSink->set_level(spdlog::level::trace);
         fileSink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] %v");
 
-        std::lock_guard lock(m_sinkMutex);
+        std::scoped_lock lock(m_sinkMutex);
         auto& sinks = m_logger->sinks();
         if (m_fileSink) {
             std::erase(sinks, m_fileSink);
@@ -153,38 +153,38 @@ auto Logger::configureRotatingFileLogging(const std::filesystem::path& path,
 }
 
 auto Logger::fileLogPath() const -> std::filesystem::path {
-    std::lock_guard lock(m_sinkMutex);
+    std::scoped_lock lock(m_sinkMutex);
     return m_fileLogPath;
 }
 
 void Logger::info(std::string_view msg) {
-    std::lock_guard lock(m_sinkMutex);
+    std::scoped_lock lock(m_sinkMutex);
     m_logger->info("{}", msg);
 }
 
 void Logger::warn(std::string_view msg) {
-    std::lock_guard lock(m_sinkMutex);
+    std::scoped_lock lock(m_sinkMutex);
     m_logger->warn("{}", msg);
 }
 
 void Logger::error(std::string_view msg) {
-    std::lock_guard lock(m_sinkMutex);
+    std::scoped_lock lock(m_sinkMutex);
     m_logger->error("{}", msg);
 }
 
 void Logger::flush() {
-    std::lock_guard lock(m_sinkMutex);
+    std::scoped_lock lock(m_sinkMutex);
     m_logger->flush();
 }
 
 void Logger::emitLog(LogLevel level, std::string message) {
     MessageBus* bus = nullptr;
     {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         bus = m_bus;
     }
 
-    if (bus) {
+    if (bus != nullptr) {
         bus->emit(LogMessageEvent{.level = level, .message = std::move(message)});
     }
 }

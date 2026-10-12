@@ -9,11 +9,12 @@
 #include <QVBoxLayout>
 #include <QWidget>
 #include <memory>
+#include <utility>
 #include <vector>
 
-#include "dss/ui/widget/communication_panels.h"
 #include "dss/ui/view_model/data_exchange_view_model.h"
 #include "dss/ui/view_model/network_view_model.h"
+#include "dss/ui/widget/communication_panels.h"
 #include "dss/ui/widget/wheel_guarded_spin_box.h"
 
 #ifdef DSS_HAS_ELA
@@ -40,8 +41,33 @@ auto makePortSpin(int value, QWidget* parent) -> QSpinBox* {
     spin->setValue(value);
     return spin;
 }
+/// @brief 用端点状态快照刷新现有编辑器，不重建 Qt 对象。
+void refreshEndpointEditors(NetworkViewModel& network, const std::vector<EndpointEditor>& editors) {
+    for (const auto& endpoint : network.networkEndpointConfigs()) {
+        for (const auto& editor : editors) {
+            if (editor.key != endpoint.key) {
+                continue;
+            }
+            editor.localIp->setText(endpoint.localIp);
+            editor.localPort->setValue(endpoint.localPort);
+            editor.remoteIp->setText(endpoint.remoteIp);
+            editor.remotePort->setValue(endpoint.remotePort);
+            QString state = "Service: use Data Exchange controls";
+            if (endpoint.canOpen) {
+                state = endpoint.isOpen ? "Service: opened" : "Service: closed";
+            }
+            editor.serviceState->setText(state);
+            if (editor.openButton != nullptr) {
+                editor.openButton->setEnabled(endpoint.canOpen && !endpoint.isOpen);
+                editor.closeButton->setEnabled(endpoint.canOpen && endpoint.isOpen);
+            }
+        }
+    }
+}
 }  // namespace
 
+// 声明式 Qt 布局与连接集中构建，保证对象树和回调所有权可审查。
+// NOLINTNEXTLINE(readability-function-size)
 auto createNetworkEndpointsPanel(NetworkViewModel& network, DataExchangeViewModel& dataExchange,
                                  QWidget* parent) -> QWidget* {
     auto* panel = new QWidget(parent);
@@ -53,7 +79,7 @@ auto createNetworkEndpointsPanel(NetworkViewModel& network, DataExchangeViewMode
     auto editors = std::make_shared<std::vector<EndpointEditor>>();
 
     const auto endpoints = network.networkEndpointConfigs();
-    for (int index = 0; index < static_cast<int>(endpoints.size()); ++index) {
+    for (int index = 0; std::cmp_less(index, endpoints.size()); ++index) {
         const auto& endpoint = endpoints[static_cast<std::size_t>(index)];
         auto* group = new QGroupBox(endpoint.displayName, panel);
         auto* form = new QFormLayout(group);
@@ -91,8 +117,17 @@ auto createNetworkEndpointsPanel(NetworkViewModel& network, DataExchangeViewMode
         form->addRow("Remote Port", remotePort);
         form->addRow(applyButton);
         form->addRow("Service", serviceRow);
-        editors->push_back({endpoint.key, localIp, localPort, remoteIp, remotePort, serviceState,
-                            openButton, closeButton, endpoint.canOpen});
+        editors->push_back({
+            endpoint.key,
+            localIp,
+            localPort,
+            remoteIp,
+            remotePort,
+            serviceState,
+            openButton,
+            closeButton,
+            endpoint.canOpen,
+        });
 
         QObject::connect(applyButton, &QPushButton::clicked, panel,
                          [&network, editors, key = endpoint.key] {
@@ -129,26 +164,7 @@ auto createNetworkEndpointsPanel(NetworkViewModel& network, DataExchangeViewMode
     actions->addStretch();
     layout->addLayout(actions);
 
-    auto refreshEndpoints = [&network, editors] {
-        for (const auto& endpoint : network.networkEndpointConfigs()) {
-            for (const auto& editor : *editors) {
-                if (editor.key != endpoint.key) {
-                    continue;
-                }
-                editor.localIp->setText(endpoint.localIp);
-                editor.localPort->setValue(endpoint.localPort);
-                editor.remoteIp->setText(endpoint.remoteIp);
-                editor.remotePort->setValue(endpoint.remotePort);
-                editor.serviceState->setText(
-                    endpoint.canOpen ? (endpoint.isOpen ? "Service: opened" : "Service: closed")
-                                     : "Service: use Data Exchange controls");
-                if (editor.openButton != nullptr) {
-                    editor.openButton->setEnabled(endpoint.canOpen && !endpoint.isOpen);
-                    editor.closeButton->setEnabled(endpoint.canOpen && endpoint.isOpen);
-                }
-            }
-        }
-    };
+    auto refreshEndpoints = [&network, editors] { refreshEndpointEditors(network, *editors); };
     auto refreshExchange = [&dataExchange, openExchange, closeExchange, exchangeState] {
         const auto open = dataExchange.isDataExchangeOpen();
         openExchange->setEnabled(!open);

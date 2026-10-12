@@ -218,10 +218,10 @@ TEST(LeoTracker, LongTrackBoundsHistoryAndRetainsFiveMissRetirement) {
     for (std::uint64_t seq = 1; seq <= 1000; ++seq) {
         const auto index = static_cast<float>(seq - 1);
         const bool valid = seq % 100 != 0;
-        const auto targets =
-            tracker.track(valid ? makeFrame(seq, makeBlob(100 + index * 0.125F, 200 + index * 0.25F,
-                                                          1 + index * 0.03F, 2 + index * 0.02F))
-                                : makeEmptyFrame(seq));
+        const auto targets = tracker.track(
+            valid ? makeFrame(seq, makeBlob(100 + (index * 0.125F), 200 + (index * 0.25F),
+                                            1 + (index * 0.03F), 2 + (index * 0.02F)))
+                  : makeEmptyFrame(seq));
         if (seq < 3) {
             ASSERT_TRUE(targets.empty());
             continue;
@@ -232,7 +232,7 @@ TEST(LeoTracker, LongTrackBoundsHistoryAndRetainsFiveMissRetirement) {
             id = target.targetId;
         } else {
             expectedValidity =
-                (static_cast<float>(seq - 1) * expectedValidity + (valid ? 1.0F : 0.0F)) /
+                ((static_cast<float>(seq - 1) * expectedValidity) + (valid ? 1.0F : 0.0F)) /
                 static_cast<float>(seq);
         }
         ASSERT_TRUE(target.living);
@@ -250,7 +250,7 @@ TEST(LeoTracker, LongTrackBoundsHistoryAndRetainsFiveMissRetirement) {
     for (std::uint64_t seq = 1; seq <= 4; ++seq) {
         const auto index = static_cast<float>(seq - 1);
         const auto targets = tracker.track(makeFrame(
-            seq, makeBlob(100 + index, 200 + index, 1 + index * 0.03F, 2 + index * 0.02F)));
+            seq, makeBlob(100 + index, 200 + index, 1 + (index * 0.03F), 2 + (index * 0.02F))));
         if (seq == 4) {
             ASSERT_EQ(targets.size(), 1U);
             EXPECT_EQ(targets.front().totalFrameCount(), 4U);

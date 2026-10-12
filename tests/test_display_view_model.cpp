@@ -33,7 +33,7 @@ private:
     std::unique_ptr<QCoreApplication> m_app;
 };
 
-using MessageBus = Dss::Core::MessageBus;
+using Dss::Core::MessageBus;
 
 [[nodiscard]] auto grayPixel(const QImage& image, int x, int y) -> std::uint8_t {
     return static_cast<std::uint8_t>(image.constScanLine(y)[x]);
@@ -79,14 +79,20 @@ TEST(DisplayViewModel, SlowUiRetainsOnlyLatestPendingFrame) {
             auto raw = std::make_shared<const std::vector<std::uint16_t>>(1, index);
             buffers.push_back(raw);
             auto image = std::make_shared<const std::vector<std::uint8_t>>(1, index);
-            bus.emit(Dss::Core::DisplayRefreshEvent{static_cast<std::uint64_t>(index), 1, 1, 1,
-                                                    image, raw});
+            bus.emit(Dss::Core::DisplayRefreshEvent{
+                static_cast<std::uint64_t>(index),
+                1,
+                1,
+                1,
+                image,
+                raw,
+            });
         }
     });
     producer.join();  // UI 未处理事件，生产线程已经投递 100 帧。
     int alive = 0;
     for (const auto& buffer : buffers) {
-        alive += !buffer.expired();
+        alive += static_cast<int>(!buffer.expired());
     }
     EXPECT_EQ(alive, 1);
     EXPECT_EQ(count, 0);

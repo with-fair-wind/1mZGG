@@ -32,8 +32,10 @@ using Json = nlohmann::json;
     if (!value.is_array() || value.size() != 2U) {
         throw std::runtime_error(std::string(path) + " must contain two numbers");
     }
-    return {finiteNumber(value[0], std::string(path) + "[0]"),
-            finiteNumber(value[1], std::string(path) + "[1]")};
+    return {
+        finiteNumber(value[0], std::string(path) + "[0]"),
+        finiteNumber(value[1], std::string(path) + "[1]"),
+    };
 }
 
 [[nodiscard]] auto blob(const Json& value, std::string_view path) -> Dss::Core::MeasuredBlob {
@@ -122,14 +124,18 @@ void readSettings(const Json& value, Dss::Core::TrackingSettings& settings) {
 }
 
 [[nodiscard]] auto modeFrom(std::string_view value) -> TrackingFixtureMode {
-    if (value == "geo")
+    if (value == "geo") {
         return TrackingFixtureMode::Geo;
-    if (value == "leo")
+    }
+    if (value == "leo") {
         return TrackingFixtureMode::Leo;
-    if (value == "sc")
+    }
+    if (value == "sc") {
         return TrackingFixtureMode::Sc;
-    if (value == "manual")
+    }
+    if (value == "manual") {
         return TrackingFixtureMode::Manual;
+    }
     throw std::runtime_error("mode must be geo, leo, sc, or manual");
 }
 

@@ -10,6 +10,8 @@
 namespace Dss::Comm {
 
 /// @brief 固定帧校验失败原因。
+// 保留公共枚举的既有整数表示和对象布局。
+// NOLINTNEXTLINE(performance-enum-size)
 enum class FrameValidationFailure {
     None,            ///< 未失败，帧合法
     SizeMismatch,    ///< 实际帧长与期望帧长不一致

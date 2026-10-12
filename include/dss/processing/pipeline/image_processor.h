@@ -3,6 +3,7 @@
 #include <atomic>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <stop_token>
 #include <thread>
 
@@ -19,6 +20,12 @@ namespace Dss::Processing {
 /// 图像处理器，在后台线程中异步处理帧并发布事件
 class ImageProcessor {
 public:
+    // 生命周期绑定当前对象，禁止复制或移动资源及回调所有者。
+    ImageProcessor(const ImageProcessor&) = delete;
+    auto operator=(const ImageProcessor&) -> ImageProcessor& = delete;
+    ImageProcessor(ImageProcessor&&) = delete;
+    auto operator=(ImageProcessor&&) -> ImageProcessor& = delete;
+
     /// 消息总线类型别名
     using MessageBus = Dss::Core::MessageBus;
 
@@ -119,6 +126,22 @@ private:
      * @param token 停止令牌，用于优雅退出
      */
     void workerLoop(std::stop_token token);
+
+    /// @brief 在当前处理线程执行一帧的处理、跟踪和结果发布；异常交由线程顶层收口。
+    /// @param[in,out] packet 当前活动帧，其图像及测量缓存可被转移。
+    void processFrame(FramePacket& packet);
+    /// @brief 在策略锁内提取测量并跟踪一帧。
+    /// @param[in,out] packet 未运行图像后端时提供直接测量。
+    /// @param[in,out] procResult 图像处理结果，其测量缓存可被转移。
+    /// @return 未执行跟踪时为空；执行后即使无目标也保留空列表。
+    auto trackFrame(FramePacket& packet, ProcessingResult& procResult)
+        -> std::optional<std::vector<Dss::Core::TargetInfo>>;
+    /// @brief 按既有顺序发布显示、处理完成、跟踪和按需发送事件。
+    /// @param[in,out] packet 当前帧，可转移回退显示缓存。
+    /// @param[in,out] procResult 图像处理结果，可转移显示缓存。
+    /// @param[in] trackResults 可选跟踪结果列表，事件接管列表内容。
+    void publishFrameResults(FramePacket& packet, ProcessingResult& procResult,
+                             std::optional<std::vector<Dss::Core::TargetInfo>> trackResults);
 
     /**
      * @brief 在处理线程中获取当前显示拉伸设置。

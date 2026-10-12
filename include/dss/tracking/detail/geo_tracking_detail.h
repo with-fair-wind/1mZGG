@@ -16,6 +16,8 @@ namespace Dss::Tracking::GeoDetail {
 /// GEO 搜索半径失配统计的窗口；历史保留容量必须覆盖此值。
 inline constexpr int kGeoTrackingInvalidSearchWindow = 10;
 
+// 保留公共枚举的既有整数表示和对象布局。
+// NOLINTNEXTLINE(performance-enum-size)
 enum class GeoTrackingSpace {
     Frame,
     RaDec,
@@ -28,6 +30,13 @@ enum class GeoTrackingSpace {
 [[nodiscard]] auto median3(float a, float b, float c) -> float;
 [[nodiscard]] auto framePeriodSeconds(const Dss::Core::FrameMeasurements& previous,
                                       const Dss::Core::FrameMeasurements& current) -> double;
+/// @brief 在视场中心匹配相邻两帧恒星对，估算背景像面及 AE 速度。
+/// @param previous 前一帧测量。
+/// @param current 当前帧测量。
+/// @param ratioFov 中心视场筛选比例。
+/// @param radius 像素匹配半径。
+/// @param opticParams 光学与坐标换算参数。
+/// @return 星速状态与估算值；星数不足或无候选时返回对应失败状态。
 [[nodiscard]] auto estimateGeoStarSpeedFromPair(const Dss::Core::FrameMeasurements& previous,
                                                 const Dss::Core::FrameMeasurements& current,
                                                 float ratioFov, float radius,

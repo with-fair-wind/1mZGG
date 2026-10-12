@@ -3,6 +3,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdlib>
+#include <exception>
 #include <iostream>
 #include <mutex>
 #include <stdexcept>
@@ -11,6 +12,8 @@
 #include <vector>
 
 #include <nlohmann/json.hpp>
+
+#include "dss/core/diagnostics/emergency_report.h"
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -61,29 +64,36 @@ struct Gate {
         require(cv.wait_for(lock, 10s, [&] { return entered; }), "worker did not enter gate");
     }
     void release() {
-        std::lock_guard lock(mutex);
+        std::scoped_lock lock(mutex);
         released = true;
         cv.notify_all();
     }
 };
 
 Json resources(const Snapshot& s) {
-    return {{"queued_items", s.queuedItems},          {"queued_bytes", s.queuedBytes},
-            {"active_items", s.activeItems},          {"active_bytes", s.activeBytes},
-            {"peak_queued_bytes", s.peakQueuedBytes}, {"completed_items", s.completedItems},
-            {"replaced_items", s.replacedItems},      {"last_work_us", s.lastWorkMicroseconds},
-            {"max_work_us", s.maxWorkMicroseconds},   {"last_stop_us", s.lastStopMicroseconds}};
+    return {
+        {"queued_items", s.queuedItems},          {"queued_bytes", s.queuedBytes},
+        {"active_items", s.activeItems},          {"active_bytes", s.activeBytes},
+        {"peak_queued_bytes", s.peakQueuedBytes}, {"completed_items", s.completedItems},
+        {"replaced_items", s.replacedItems},      {"last_work_us", s.lastWorkMicroseconds},
+        {"max_work_us", s.maxWorkMicroseconds},   {"last_stop_us", s.lastStopMicroseconds},
+    };
 }
 
 Json memory() {
 #ifdef _WIN32
     PROCESS_MEMORY_COUNTERS_EX counters{};
+    // Win32 以基础结构指针接收扩展内存计数器，cb/size 保留真实结构大小。
+    // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast)
     if (GetProcessMemoryInfo(GetCurrentProcess(),
                              reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&counters),
                              sizeof(counters))) {
-        return {{"working_set_bytes", counters.WorkingSetSize},
-                {"peak_working_set_bytes", counters.PeakWorkingSetSize},
-                {"private_bytes", counters.PrivateUsage}};
+        // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
+        return {
+            {"working_set_bytes", counters.WorkingSetSize},
+            {"peak_working_set_bytes", counters.PeakWorkingSetSize},
+            {"private_bytes", counters.PrivateUsage},
+        };
     }
 #endif
     return nullptr;
@@ -112,8 +122,14 @@ struct Frames {
 
 class GatedStrategy final : public Dss::Processing::IProcessingStrategy {
 public:
+    ~GatedStrategy() override = default;
+    GatedStrategy(const GatedStrategy&) = delete;
+    auto operator=(const GatedStrategy&) -> GatedStrategy& = delete;
+    GatedStrategy(GatedStrategy&&) = delete;
+    auto operator=(GatedStrategy&&) -> GatedStrategy& = delete;
+
     explicit GatedStrategy(Gate& gate) : m_gate(gate) {}
-    auto process(const Dss::Processing::FramePacket&)
+    auto process(const Dss::Processing::FramePacket& /*input*/)
         -> Dss::Processing::ProcessingResult override {
         if (m_first) {
             m_first = false;
@@ -124,10 +140,10 @@ public:
         result.rawStatsValid = true;
         return result;
     }
-    auto name() const -> std::string_view override {
+    [[nodiscard]] auto name() const -> std::string_view override {
         return "resource-stress-gate";
     }
-    auto mode() const -> Dss::Core::ProcessingMode override {
+    [[nodiscard]] auto mode() const -> Dss::Core::ProcessingMode override {
         return Dss::Core::ProcessingMode::Direct;
     }
 
@@ -161,11 +177,13 @@ Json processing(Frames& frames, std::size_t count) {
         stopped.queuedBytes == 0 && stopped.activeBytes == 0 && stopped.completedItems == accepted,
         "processing drain did not release or complete accepted frames");
     frames.verifyReleased();
-    return {{"blocked", resources(blocked)},
-            {"stopped", resources(stopped)},
-            {"accepted", accepted},
-            {"dropped", processor.droppedFrames()},
-            {"blocked_memory", blockedMemory}};
+    return {
+        {"blocked", resources(blocked)},
+        {"stopped", resources(stopped)},
+        {"accepted", accepted},
+        {"dropped", processor.droppedFrames()},
+        {"blocked_memory", blockedMemory},
+    };
 }
 
 Json storage(Frames& frames, std::size_t count, std::size_t budget) {
@@ -204,11 +222,13 @@ Json storage(Frames& frames, std::size_t count, std::size_t budget) {
                 queue.successfulWrites() == accepted,
             "storage drain lost an accepted frame or retained payload");
     frames.verifyReleased();
-    return {{"blocked", resources(blocked)},
-            {"stopped", resources(stopped)},
-            {"accepted", accepted},
-            {"dropped", queue.droppedRequests()},
-            {"blocked_memory", blockedMemory}};
+    return {
+        {"blocked", resources(blocked)},
+        {"stopped", resources(stopped)},
+        {"accepted", accepted},
+        {"dropped", queue.droppedRequests()},
+        {"blocked_memory", blockedMemory},
+    };
 }
 
 Json display(Frames& frames, std::size_t count) {
@@ -239,10 +259,12 @@ Json display(Frames& frames, std::size_t count) {
     require(delivered.queuedItems == 0 && delivered.completedItems == 1, "display delivery failed");
     require(stopped.queuedBytes == 0 && stopped.activeBytes == 0, "display reset retained payload");
     frames.verifyReleased();
-    return {{"blocked", resources(blocked)},
-            {"delivered", resources(delivered)},
-            {"stopped", resources(stopped)},
-            {"blocked_memory", blockedMemory}};
+    return {
+        {"blocked", resources(blocked)},
+        {"delivered", resources(delivered)},
+        {"stopped", resources(stopped)},
+        {"blocked_memory", blockedMemory},
+    };
 }
 
 Json network(Frames& frames, std::size_t count) {
@@ -282,9 +304,11 @@ Json network(Frames& frames, std::size_t count) {
             "sender slot bounds failed");
     require(stopped.queuedBytes == 0 && stopped.activeBytes == 0, "sender close retained payload");
     frames.verifyReleased();
-    return {{"blocked", resources(blocked)},
-            {"stopped", resources(stopped)},
-            {"blocked_memory", blockedMemory}};
+    return {
+        {"blocked", resources(blocked)},
+        {"stopped", resources(stopped)},
+        {"blocked_memory", blockedMemory},
+    };
 }
 
 std::size_t number(const char* text, std::size_t low, std::size_t high) {
@@ -296,7 +320,7 @@ std::size_t number(const char* text, std::size_t low, std::size_t high) {
 }
 }  // namespace
 
-int main(int argc, char** argv) {
+int main(int argc, char** argv) try {
     QCoreApplication app(argc, argv);
     try {
         require(argc == 1 || argc == 6,
@@ -307,23 +331,28 @@ int main(int argc, char** argv) {
         const auto cycles = argc > 1 ? number(argv[4], 1, 100) : 3;
         const auto budget = (argc > 1 ? number(argv[5], 1, 512) : 256) * 1024U * 1024U;
         require(width * height * 2 <= budget, "budget must hold at least one RAW frame");
-        Json report{{"schema_version", 1},
-                    {"kind", "controlled_backpressure"},
-                    {"width", width},
-                    {"height", height},
-                    {"frames_per_scenario", count},
-                    {"cycles", cycles},
-                    {"storage_budget_bytes", budget},
-                    {"memory_before", memory()},
+        Json report{
+            {"schema_version", 1},
+            {"kind", "controlled_backpressure"},
+            {"width", width},
+            {"height", height},
+            {"frames_per_scenario", count},
+            {"cycles", cycles},
+            {"storage_budget_bytes", budget},
+            {"memory_before", memory()},
 #ifdef NDEBUG
-                    {"build_type", "Release"},
+            {"build_type", "Release"},
 #else
-                    {"build_type", "Debug"},
+            {"build_type", "Debug"},
 #endif
-                    {"runs", Json::array()}};
+            {"runs", Json::array()},
+        };
         for (std::size_t cycle = 0; cycle < cycles; ++cycle) {
             Frames frames{
-                static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height), {}};
+                static_cast<std::uint32_t>(width),
+                static_cast<std::uint32_t>(height),
+                {},
+            };
             Json run;
             run["processing"] = processing(frames, count);
             run["storage"] = storage(frames, count, budget);
@@ -340,12 +369,14 @@ int main(int argc, char** argv) {
             std::ranges::sort(samples);
             // Nearest-rank percentiles across lifecycle cycles, after gate release.
             const auto rank = [&](std::size_t percentile) {
-                return samples[(samples.size() * percentile + 99U) / 100U - 1U];
+                return samples[(((samples.size() * percentile) + 99U) / 100U) - 1U];
             };
-            report["stop_after_release_us"][component] = {{"samples", samples.size()},
-                                                          {"p50", rank(50)},
-                                                          {"p95", rank(95)},
-                                                          {"max", samples.back()}};
+            report["stop_after_release_us"][component] = {
+                {"samples", samples.size()},
+                {"p50", rank(50)},
+                {"p95", rank(95)},
+                {"max", samples.back()},
+            };
         }
         report["invariants_passed"] = true;
         report["memory_after"] = memory();
@@ -355,4 +386,11 @@ int main(int argc, char** argv) {
         std::cerr << Json{{"invariants_passed", false}, {"error", error.what()}}.dump() << '\n';
         return EXIT_FAILURE;
     }
+} catch (const std::exception& error) {
+    Dss::Core::reportEmergencyFailure(error.what());
+    Dss::Core::reportEmergencyFailure("\n");
+    return 1;
+} catch (...) {
+    Dss::Core::reportEmergencyFailure("DSS: unhandled entry-point failure\n");
+    return 1;
 }

@@ -45,6 +45,9 @@ public:
      */
     [[nodiscard]] QStringList visibleLogEntries() const;
 
+    // Qt
+    // 槽区段参与元对象生成，必须保留。
+    // NOLINTNEXTLINE(readability-redundant-access-specifiers)
 public Q_SLOTS:
     /**
      * @brief 设置日志页最小显示级别。

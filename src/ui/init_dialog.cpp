@@ -10,23 +10,24 @@
 
 namespace Dss::Ui {
 
-InitDialog::InitDialog(QWidget* parent) : QDialog(parent) {
+InitDialog::InitDialog(QWidget* parent)
+    : QDialog(parent),
+#ifdef DSS_HAS_ELA
+      m_progress(new ElaProgressBar(this)),
+#else
+      m_progress(new QProgressBar(this)),
+#endif
+      m_statusList(new QVBoxLayout) {
     setWindowTitle("DSS_QT - System Initialization");
     setMinimumSize(400, 300);
 
     auto* mainLayout = new QVBoxLayout(this);
     mainLayout->addWidget(new QLabel("Initializing modules..."));
 
-#ifdef DSS_HAS_ELA
-    m_progress = new ElaProgressBar;
-#else
-    m_progress = new QProgressBar;
-#endif
     m_progress->setRange(0, 100);
     m_progress->setValue(0);
     mainLayout->addWidget(m_progress);
 
-    m_statusList = new QVBoxLayout;
     mainLayout->addLayout(m_statusList);
     mainLayout->addStretch();
 

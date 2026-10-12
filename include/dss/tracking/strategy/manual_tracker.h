@@ -40,11 +40,11 @@ public:
     void setManualTarget(const Dss::Core::MeasuredBlob& blob);
 
 private:
-    Dss::Core::TrackingSettings m_settings;           ///< 跟踪算法参数
-    Dss::Core::TargetInfo m_currentTarget{};          ///< 当前手动跟踪目标
-    Dss::Core::MeasuredBlob m_manualBlob{};           ///< 操作员指定的目标像斑
-    bool m_hasManualBlob = false;                     ///< 是否已设置手动目标
-    std::mutex m_blobMutex;                           ///< 保护手动目标数据的互斥锁
+    Dss::Core::TrackingSettings m_settings;   ///< 跟踪算法参数
+    Dss::Core::TargetInfo m_currentTarget{};  ///< 当前手动跟踪目标
+    Dss::Core::MeasuredBlob m_manualBlob{};   ///< 操作员指定的目标像斑
+    bool m_hasManualBlob = false;             ///< 是否已设置手动目标
+    std::mutex m_blobMutex;                   ///< 保护手动目标数据的互斥锁
 };
 
 }  // namespace Dss::Tracking

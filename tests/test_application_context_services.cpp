@@ -86,7 +86,7 @@ protected:
     frame.timestamp = {.year = 2026, .month = 6, .day = 4, .hour = 1, .minute = 2, .second = 3};
     frame.fovCenterAe = Dss::Core::Vec2f{1.0F, 2.0F};
     frame.exposureTime = 0.02F;
-    frame.measuredBlob = blob;
+    frame.measuredBlob = std::move(blob);
     frame.valid = true;
 
     Dss::Core::TargetInfo target{};
@@ -348,6 +348,7 @@ TEST(ApplicationContextServices, RoutesReadyImagesToImageSender) {
         .width = 2U,
         .height = 2U,
         .image = std::move(image),
+        .imageFactory = {},
     });
 
     ASSERT_EQ(completedFuture.wait_for(std::chrono::seconds{2}), std::future_status::ready);
@@ -362,8 +363,8 @@ TEST(ApplicationContextServices, ConfiguresRotatingLoggerAfterLoadingConfig) {
     const auto logPath = dir / "logs" / "dss.log";
     {
         std::ofstream output(configPath);
-        output << "{\"logging\":{\"enabled\":true,\"filePath\":\"" << logPath.generic_string()
-               << "\",\"maxFileSizeBytes\":4096,\"maxFiles\":2}}";
+        output << R"({"logging":{"enabled":true,"filePath":")" << logPath.generic_string()
+               << R"(","maxFileSizeBytes":4096,"maxFiles":2}})";
     }
 
     Dss::App::ApplicationContext context;

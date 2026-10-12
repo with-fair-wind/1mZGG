@@ -80,8 +80,8 @@ inline constexpr double AngleCodeDenominator =
  * @param value 待写入的值
  */
 constexpr void writeU16Le(std::span<uint8_t> data, std::size_t offset, uint16_t value) {
-    data[offset] = static_cast<uint8_t>(value & 0xFFU);
-    data[offset + 1U] = static_cast<uint8_t>((value >> 8U) & 0xFFU);
+    data[offset] = static_cast<uint8_t>(static_cast<std::uint32_t>(value) & 0xFFU);
+    data[offset + 1U] = static_cast<uint8_t>((static_cast<std::uint32_t>(value) >> 8U) & 0xFFU);
 }
 
 /**
@@ -91,9 +91,9 @@ constexpr void writeU16Le(std::span<uint8_t> data, std::size_t offset, uint16_t 
  * @param value 待写入的值
  */
 constexpr void writeU24Le(std::span<uint8_t> data, std::size_t offset, uint32_t value) {
-    data[offset] = static_cast<uint8_t>(value & 0xFFU);
-    data[offset + 1U] = static_cast<uint8_t>((value >> 8U) & 0xFFU);
-    data[offset + 2U] = static_cast<uint8_t>((value >> 16U) & 0xFFU);
+    data[offset] = static_cast<uint8_t>(static_cast<std::uint32_t>(value) & 0xFFU);
+    data[offset + 1U] = static_cast<uint8_t>((static_cast<std::uint32_t>(value) >> 8U) & 0xFFU);
+    data[offset + 2U] = static_cast<uint8_t>((static_cast<std::uint32_t>(value) >> 16U) & 0xFFU);
 }
 
 /**
@@ -103,10 +103,10 @@ constexpr void writeU24Le(std::span<uint8_t> data, std::size_t offset, uint32_t 
  * @param value 待写入的值
  */
 constexpr void writeU32Le(std::span<uint8_t> data, std::size_t offset, uint32_t value) {
-    data[offset] = static_cast<uint8_t>(value & 0xFFU);
-    data[offset + 1U] = static_cast<uint8_t>((value >> 8U) & 0xFFU);
-    data[offset + 2U] = static_cast<uint8_t>((value >> 16U) & 0xFFU);
-    data[offset + 3U] = static_cast<uint8_t>((value >> 24U) & 0xFFU);
+    data[offset] = static_cast<uint8_t>(static_cast<std::uint32_t>(value) & 0xFFU);
+    data[offset + 1U] = static_cast<uint8_t>((static_cast<std::uint32_t>(value) >> 8U) & 0xFFU);
+    data[offset + 2U] = static_cast<uint8_t>((static_cast<std::uint32_t>(value) >> 16U) & 0xFFU);
+    data[offset + 3U] = static_cast<uint8_t>((static_cast<std::uint32_t>(value) >> 24U) & 0xFFU);
 }
 
 /**
@@ -115,25 +115,28 @@ constexpr void writeU32Le(std::span<uint8_t> data, std::size_t offset, uint32_t 
  * @return 0–99 范围内的十进制值
  */
 [[nodiscard]] constexpr auto decodeBcd(uint8_t value) -> int {
-    return static_cast<int>(((value >> 4U) & 0x0FU) * 10U + (value & 0x0FU));
+    return static_cast<int>((((static_cast<std::uint32_t>(value) >> 4U) & 0x0FU) * 10U) +
+                            (static_cast<std::uint32_t>(value) & 0x0FU));
 }
 
 /// @brief 判断字节是否符合 BCD 编码。
 /// @param value 待检查字节。
 /// @return 高低半字节均为 0-9 时返回 true。
 [[nodiscard]] constexpr auto isBcdByte(uint8_t value) -> bool {
-    return ((value >> 4U) & 0x0FU) <= 9U && (value & 0x0FU) <= 9U;
+    return ((static_cast<std::uint32_t>(value) >> 4U) & 0x0FU) <= 9U &&
+           (static_cast<std::uint32_t>(value) & 0x0FU) <= 9U;
 }
 
 /// @brief 将单字节格式化为 0xNN 文本。
 /// @param value 待格式化字节。
 /// @return 十六进制字符串。
 [[nodiscard]] inline auto hexByte(uint8_t value) -> std::string {
-    constexpr std::array digits{'0', '1', '2', '3', '4', '5', '6', '7',
-                                '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+    constexpr std::array digits{
+        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F',
+    };
     std::string text = "0x00";
-    text[2] = digits[(value >> 4U) & 0x0FU];
-    text[3] = digits[value & 0x0FU];
+    text[2] = digits[(static_cast<std::uint32_t>(value) >> 4U) & 0x0FU];
+    text[3] = digits[static_cast<std::uint32_t>(value) & 0x0FU];
     return text;
 }
 
@@ -185,7 +188,8 @@ constexpr void writeU32Le(std::span<uint8_t> data, std::size_t offset, uint32_t 
 /// @return BCD 编码字节。
 [[nodiscard]] constexpr auto encodeBcd(int value) -> uint8_t {
     const auto clamped = std::clamp(value, 0, 99);
-    return static_cast<uint8_t>(((clamped / 10) << 4U) | (clamped % 10));
+    return static_cast<uint8_t>(((static_cast<std::uint32_t>(clamped) / 10U) << 4U) |
+                                (static_cast<std::uint32_t>(clamped) % 10U));
 }
 
 /**
@@ -270,7 +274,8 @@ inline void encodeSignedMagnitude16(std::span<uint8_t> frame, std::size_t offset
     const auto magnitude = static_cast<uint16_t>(
         std::min<uint32_t>(static_cast<uint32_t>(std::lround(std::fabs(value) * scale)), 0x7FFFU));
     frame[offset] = static_cast<uint8_t>(magnitude & 0xFFU);
-    frame[offset + 1U] = static_cast<uint8_t>((magnitude >> 8U) & 0x7FU);
+    frame[offset + 1U] =
+        static_cast<uint8_t>((static_cast<std::uint32_t>(magnitude) >> 8U) & 0x7FU);
     if (value < 0.0F) {
         frame[offset + 1U] = static_cast<uint8_t>(frame[offset + 1U] | 0x80U);
     }
@@ -286,7 +291,8 @@ inline void encodeSignedMagnitude24(std::span<uint8_t> frame, std::size_t offset
     const auto magnitude =
         std::min<uint32_t>(static_cast<uint32_t>(std::lround(std::fabs(value))), 0x7FFFFFU);
     frame[offset] = static_cast<uint8_t>(magnitude & 0xFFU);
-    frame[offset + 1U] = static_cast<uint8_t>((magnitude >> 8U) & 0xFFU);
+    frame[offset + 1U] =
+        static_cast<uint8_t>((static_cast<std::uint32_t>(magnitude) >> 8U) & 0xFFU);
     frame[offset + 2U] = static_cast<uint8_t>((magnitude >> 16U) & 0x7FU);
     if (value < 0.0F) {
         frame[offset + 2U] = static_cast<uint8_t>(frame[offset + 2U] | 0x80U);

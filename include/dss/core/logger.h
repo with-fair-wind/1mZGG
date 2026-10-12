@@ -25,6 +25,13 @@ namespace Dss::Core {
 /// 全局日志门面，通过 spdlog 写入后端并向事件总线发布 LogMessageEvent
 class Logger {
 public:
+    Logger(const Logger&) = delete;
+    auto operator=(const Logger&) -> Logger& = delete;
+
+    // 生命周期绑定当前对象，禁止复制或移动资源及回调所有者。
+    Logger(Logger&&) = delete;
+    auto operator=(Logger&&) -> Logger& = delete;
+
     using MessageBus = Dss::Core::MessageBus;  ///< 消息总线类型
 
     /**
@@ -122,8 +129,6 @@ private:
     Logger();
     /// @brief 释放日志后端资源。
     ~Logger();
-    Logger(const Logger&) = delete;
-    auto operator=(const Logger&) -> Logger& = delete;
 
     /**
      * @brief 通过消息总线发布日志事件。

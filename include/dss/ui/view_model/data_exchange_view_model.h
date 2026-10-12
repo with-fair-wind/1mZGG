@@ -56,6 +56,9 @@ public:
      */
     void closeForEndpointReconfigure();
 
+    // Qt
+    // 槽区段参与元对象生成，必须保留。
+    // NOLINTNEXTLINE(readability-redundant-access-specifiers)
 public Q_SLOTS:
     /**
      * @brief 应用 GXTC/GDCL 数据交换端点配置。

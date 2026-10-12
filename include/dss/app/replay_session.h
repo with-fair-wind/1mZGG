@@ -34,9 +34,19 @@ namespace Dss::App {
  */
 class ReplaySession final {
 public:
+    // 生命周期绑定当前对象，禁止复制或移动资源及回调所有者。
+    ReplaySession(const ReplaySession&) = delete;
+    auto operator=(const ReplaySession&) -> ReplaySession& = delete;
+    ReplaySession(ReplaySession&&) = delete;
+    auto operator=(ReplaySession&&) -> ReplaySession& = delete;
+
     /// 会话状态；Closed 为不可恢复的关闭状态。
+    // 保留公共枚举的既有整数表示和对象布局。
+    // NOLINTNEXTLINE(performance-enum-size)
     enum class State { Idle, Loading, Running, Stopping, Completed, Failed, Closed };
     /// 供展示层映射文本的业务结果，不携带 Qt 类型。
+    // 保留公共枚举的既有整数表示和对象布局。
+    // NOLINTNEXTLINE(performance-enum-size)
     enum class Notice {
         None,
         Loading,
@@ -47,7 +57,7 @@ public:
         Ready,
         Positioned,
         Finished,
-        Error
+        Error,
     };
     /// 在同一锁内取得的一致快照；终态发布前已完成源停止和处理器回收。
     struct Snapshot {
@@ -106,6 +116,8 @@ public:
 
 private:
     /// 单槽工作指令，Stop 使用独立优先标志，避免被普通命令覆盖。
+    // 保留公共枚举的既有整数表示和对象布局。
+    // NOLINTNEXTLINE(performance-enum-size)
     enum class Operation { Select, Start, Forward, Backward, Seek };
     /// 接收命令时冻结的参数与恢复意图。
     struct Command {
@@ -121,6 +133,10 @@ private:
     auto submit(Command command) -> std::expected<void, std::string>;
     /// 等待命令；仅 Running 时周期检查源 EOF/处理失败。
     void run();
+    /// @brief 在服务线程排空停止请求，完成后才重新开放普通命令准入。
+    void finishStopRequest();
+    /// @brief 在服务线程检测 EOF 或处理失败，已接受的新命令优先于观测结果。
+    void pollCompletion();
     /// 在服务线程执行命令；错误交由 run 收口。
     /// @param command 已接受的指令。
     /// @param token 当前指令的取消令牌。

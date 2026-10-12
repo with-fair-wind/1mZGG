@@ -33,8 +33,8 @@ using CameraCommand = std::array<uint8_t, 3>;
     const auto value = (static_cast<uint32_t>(data) << 8U) | static_cast<uint32_t>(address);
     return CameraCommand{
         static_cast<uint8_t>((value << 4U) | (static_cast<uint32_t>(registerBank) << 2U) | 1U),
-        static_cast<uint8_t>(((value >> 4U) << 2U) | 3U),
-        static_cast<uint8_t>(((value >> 10U) << 2U) | 3U),
+        static_cast<uint8_t>(((static_cast<std::uint32_t>(value) >> 4U) << 2U) | 3U),
+        static_cast<uint8_t>(((static_cast<std::uint32_t>(value) >> 10U) << 2U) | 3U),
     };
 }
 
@@ -66,7 +66,9 @@ using CameraCommand = std::array<uint8_t, 3>;
     constexpr uint8_t legacyGain = 14;
     constexpr uint8_t registerBank = 1;
     return {
-        encodeRegisterCommand(registerBank, 0x0F, static_cast<uint8_t>((legacyGain << 4U) | 0x02U)),
+        encodeRegisterCommand(
+            registerBank, 0x0F,
+            static_cast<uint8_t>((static_cast<std::uint32_t>(legacyGain) << 4U) | 0x02U)),
         encodeRegisterCommand(registerBank, 0x10,
                               static_cast<uint8_t>(((legacyGain & 0x30U) >> 4U) | 0x30U)),
         encodeRegisterCommand(registerBank, 0x25, static_cast<uint8_t>((legacyGain & 0x3FU) << 1U)),
@@ -124,9 +126,9 @@ using CameraCommand = std::array<uint8_t, 3>;
 
     const auto value = static_cast<uint32_t>((((data[0] & 0x7FU) << 8U) | (data[1] & 0xF8U)) >> 3U);
     if (data[0] < 128U) {
-        return static_cast<float>(value) / 10.0F - 75.0F;
+        return (static_cast<float>(value) / 10.0F) - 75.0F;
     }
-    return (static_cast<float>(value) - 4096.0F) / 10.0F - 75.0F;
+    return ((static_cast<float>(value) - 4096.0F) / 10.0F) - 75.0F;
 }
 
 }  // namespace Dss::Acquisition

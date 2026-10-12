@@ -151,8 +151,10 @@ TEST(TrackingLifecycleUtils, BoundedHistoryMatchesFullHistoryValidityAndLivingRu
             ASSERT_FLOAT_EQ(bounded.validity, full.validity);
             ASSERT_EQ(Dss::Tracking::countRecentInvalidFrames(bounded, capacity),
                       Dss::Tracking::countRecentInvalidFrames(full, capacity));
-            for (const auto mode : {Dss::Tracking::RecentFrameWindowMode::RequireFullWindow,
-                                    Dss::Tracking::RecentFrameWindowMode::UseAvailableFrames}) {
+            for (const auto mode : {
+                     Dss::Tracking::RecentFrameWindowMode::RequireFullWindow,
+                     Dss::Tracking::RecentFrameWindowMode::UseAvailableFrames,
+                 }) {
                 ASSERT_EQ(Dss::Tracking::latestFramesAreAllInvalid(bounded, capacity, mode),
                           Dss::Tracking::latestFramesAreAllInvalid(full, capacity, mode));
             }

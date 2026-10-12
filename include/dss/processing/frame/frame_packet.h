@@ -45,8 +45,8 @@ struct FramePacket {
 /// 帧中图像 vector 的保留容量；不含 blob、元数据及策略临时缓冲。
 [[nodiscard]] inline auto imagePayloadBytes(const FramePacket& packet) -> std::size_t {
     return (packet.rawImage ? packet.rawImage->capacity() * sizeof(std::uint16_t) : 0) +
-           packet.rotatedImage.capacity() * sizeof(std::uint16_t) + packet.displayImage.capacity() +
-           packet.photometryImage.capacity() * sizeof(float);
+           (packet.rotatedImage.capacity() * sizeof(std::uint16_t)) +
+           packet.displayImage.capacity() + (packet.photometryImage.capacity() * sizeof(float));
 }
 
 }  // namespace Dss::Processing

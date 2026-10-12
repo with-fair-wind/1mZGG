@@ -45,7 +45,7 @@ TEST(ImageViewport, PanClampsAtViewportEdges) {
     EXPECT_NEAR(viewport.offset().y(), 0.0, 1.0e-6);
 
     viewport.panBy(QPointF{-10000.0, -10000.0});
-    const auto minimumOffset = 1024.0 - 6144.0 * viewport.scaleFactor();
+    const auto minimumOffset = 1024.0 - (6144.0 * viewport.scaleFactor());
     EXPECT_NEAR(viewport.offset().x(), minimumOffset, 1.0e-6);
     EXPECT_NEAR(viewport.offset().y(), minimumOffset, 1.0e-6);
 }

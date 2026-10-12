@@ -18,7 +18,7 @@ SerialWorkerBase::~SerialWorkerBase() {
 }
 
 auto SerialWorkerBase::open(const SerialConfig& config) -> std::expected<void, std::string> {
-    std::lock_guard lifecycleLock(m_lifecycleMutex);
+    std::scoped_lock lifecycleLock(m_lifecycleMutex);
     closeLocked();
     m_config = config;
     std::promise<std::expected<void, std::string>> initPromise;
@@ -37,7 +37,7 @@ auto SerialWorkerBase::open(const SerialConfig& config) -> std::expected<void, s
 }
 
 void SerialWorkerBase::close() {
-    std::lock_guard lifecycleLock(m_lifecycleMutex);
+    std::scoped_lock lifecycleLock(m_lifecycleMutex);
     closeLocked();
 }
 
@@ -50,7 +50,7 @@ void SerialWorkerBase::closeLocked() {
     // worker 已 join,清空旧会话残留的半帧,防重连后与新字节拼接导致首帧丢失/误解码
     m_rxAccumulator.clear();
     {
-        std::lock_guard lock(m_sendMutex);
+        std::scoped_lock lock(m_sendMutex);
         m_sendRequested = false;
     }
     m_open.store(false);
@@ -66,7 +66,7 @@ auto SerialWorkerBase::status() const -> Dss::Core::Status {
 }
 
 void SerialWorkerBase::requestSend() {
-    std::lock_guard lock(m_sendMutex);
+    std::scoped_lock lock(m_sendMutex);
     m_sendRequested = true;
 }
 
@@ -111,7 +111,7 @@ void SerialWorkerBase::workerLoop(std::stop_token token,
 
         bool sendRequested = false;
         {
-            std::lock_guard lock(m_sendMutex);
+            std::scoped_lock lock(m_sendMutex);
             sendRequested = m_sendRequested;
             m_sendRequested = false;
         }
@@ -136,8 +136,11 @@ void SerialWorkerBase::onDataReceived(QSerialPort& serialPort) {
         return;
     }
     const QByteArray chunk = serialPort.readAll();
-    processReceivedBytes(
-        {reinterpret_cast<const uint8_t*>(chunk.constData()), static_cast<std::size_t>(chunk.size())});
+    // 字节 I/O
+    // 或平台句柄边界，表示由外部 API 规定。
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+    processReceivedBytes({reinterpret_cast<const uint8_t*>(chunk.constData()),
+                          static_cast<std::size_t>(chunk.size())});
 }
 
 void SerialWorkerBase::processReceivedBytes(std::span<const uint8_t> bytes) {
@@ -202,16 +205,19 @@ void SerialWorkerBase::sendFrameInternal(QSerialPort& serialPort) {
     }
 
     // 循环写完整帧:部分写时续写剩余字节,避免截断帧破坏对端帧对齐(触发 A3 类失步)
+    // 字节 I/O
+    // 或平台句柄边界，表示由外部 API 规定。
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
     const char* cursor = reinterpret_cast<const char*>(buffer.data());
-    qint64 remaining = static_cast<qint64>(buffer.size());
+    auto remaining = static_cast<qint64>(buffer.size());
     while (remaining > 0) {
         const auto written = serialPort.write(cursor, remaining);
         if (written <= 0) {
             m_bus.emit(Dss::Core::SerialFrameErrorEvent{
                 .channel = std::string(channelName()),
-                .message = "serial write failed: " +
-                           (written < 0 ? serialPort.errorString().toStdString()
-                                        : std::string("wrote zero bytes")),
+                .message =
+                    "serial write failed: " + (written < 0 ? serialPort.errorString().toStdString()
+                                                           : std::string("wrote zero bytes")),
                 .expectedBytes = static_cast<uint64_t>(buffer.size()),
                 .actualBytes = static_cast<uint64_t>(buffer.size() - remaining),
                 .observedHeader = buffer.front(),

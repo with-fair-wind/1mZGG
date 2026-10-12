@@ -198,9 +198,11 @@ TEST(TrackingPredictionUtils, UpdatesPredictionFromRecentFourWithMedianMotion) {
 TEST(TrackingPredictionUtils, FindsNearestBlobInFrameOrAeSpaceWithOptionalFovGate) {
     const auto settings = makeSettings();
     const auto frame = makeFrame(10U, 10.0F,
-                                 {makeBlob("outside-near", 3200.0F, 3072.0F, 5.0F, 6.0F),
-                                  makeBlob("inside-near", 3070.0F, 3071.0F, 1.0F, 2.0F),
-                                  makeBlob("inside-ae", 3060.0F, 3060.0F, 4.9F, 6.1F)});
+                                 {
+                                     makeBlob("outside-near", 3200.0F, 3072.0F, 5.0F, 6.0F),
+                                     makeBlob("inside-near", 3070.0F, 3071.0F, 1.0F, 2.0F),
+                                     makeBlob("inside-ae", 3060.0F, 3060.0F, 4.9F, 6.1F),
+                                 });
 
     Dss::Core::TargetInfo target{};
     target.predictedPosFrame = Dss::Core::Vec2f{3200.0F, 3072.0F};
@@ -313,7 +315,8 @@ TEST(TrackingPredictionUtils, BoundedPredictionMatchesFullHistoryForLongVariable
         const auto noise = seq % 13 == 0 ? 0.25F : 0.0F;
         auto frame = Dss::Tracking::makeTargetFrameInfo(
             makeFrame(seq, seq % 2 == 0 ? 10.0F : 20.0F, {}),
-            makeBlob("target", value * 0.5F + noise, value * 0.25F, value * 0.001F, value * 0.002F),
+            makeBlob("target", (value * 0.5F) + noise, value * 0.25F, value * 0.001F,
+                     value * 0.002F),
             settings);
         frame.valid = seq % 23 > 4;
         full.frameInfos.push_back(frame);

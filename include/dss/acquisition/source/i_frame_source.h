@@ -12,6 +12,8 @@
 namespace Dss::Acquisition {
 
 /// @brief 帧源向处理管线提交帧时采用的背压策略。
+// 保留公共枚举的既有整数表示和对象布局。
+// NOLINTNEXTLINE(performance-enum-size)
 enum class FrameDeliveryPolicy {
     DropIfBusy,  ///< 实时采集：处理队列繁忙时允许丢弃当前帧。
     Lossless,    ///< 离线回放：处理队列繁忙时等待，保证帧按序入队。

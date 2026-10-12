@@ -21,13 +21,20 @@ namespace {
 
     Dss::Core::TargetFrameInfo frame{};
     frame.timestamp = {
-        .year = 2026, .month = 6, .day = 12, .hour = 1, .minute = 2, .second = 3, .millisecond = 4};
+        .year = 2026,
+        .month = 6,
+        .day = 12,
+        .hour = 1,
+        .minute = 2,
+        .second = 3,
+        .millisecond = 4,
+    };
     frame.frameSeq = frameSeq;
     frame.fovCenterAe = Dss::Core::Vec2f{7.0F, 8.0F};
     frame.opticCenter = Dss::Core::Vec2f{3072.0F, 3073.0F};
     frame.exposureTime = 0.02F;
     frame.frameFreq = 50.0F;
-    frame.measuredBlob = blob;
+    frame.measuredBlob = std::move(blob);
     frame.posZxdw = Dss::Core::Vec2f{3.0F, 4.0F};
     frame.posTwdw = Dss::Core::Vec2f{5.0F, 6.0F};
     frame.magnitude = 11.25F;

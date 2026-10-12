@@ -36,7 +36,7 @@ option(DSS_ENABLE_OPENCV   "Build OpenCV processing backend"        ON)
 option(DSS_ENABLE_SAPERA   "Build with Sapera SDK support"          OFF)
 option(DSS_ENABLE_STARLIBS "Build with StarMap/Photometry support"  OFF)
 option(DSS_ENABLE_COLOR_DIAGNOSTICS "Enable colored compiler diagnostics where supported" ON)
-option(DSS_CLANG_TIDY_WARNINGS_AS_ERRORS "Treat clang-tidy diagnostics as errors in tidy-check" OFF)
+option(DSS_CLANG_TIDY_WARNINGS_AS_ERRORS "Treat clang-tidy diagnostics as errors in tidy-check" ON)
 
 if(DSS_ENABLE_COLOR_DIAGNOSTICS)
     set(CMAKE_COLOR_DIAGNOSTICS ON CACHE BOOL "Enable colored compiler diagnostics" FORCE)
@@ -338,6 +338,7 @@ if(DSS_BUILD_APP)
         if(MSVC AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND Qt6_VERSION VERSION_GREATER_EQUAL 6.11)
             # Qt supplies asInvoker in its manifest. Avoid lld merging a second
             # UAC section, which can incorrectly qualify the level attribute.
+            target_link_options(dss_resource_stress PRIVATE /MANIFESTUAC:NO)
             target_link_options(dss_tracking_io_baseline PRIVATE /MANIFESTUAC:NO)
         endif()
         if(WIN32)

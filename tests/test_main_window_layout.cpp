@@ -87,8 +87,10 @@ TEST(MainWindowLayout, CreatesNativeDockWorkspaceForAllPages) {
     Dss::Ui::MainViewModel mainViewModel(bus, registry);
     Dss::Ui::MainWindow window(mainViewModel);
 
-    constexpr std::array dockNames{"control_dock",       "display_dock",  "analysis_dock",
-                                   "communication_dock", "settings_dock", "logs_dock"};
+    constexpr std::array dockNames{
+        "control_dock",       "display_dock",  "analysis_dock",
+        "communication_dock", "settings_dock", "logs_dock",
+    };
     for (const auto* dockName : dockNames) {
         auto* dock = findDock(window, dockName);
         ASSERT_NE(dock, nullptr) << dockName;
@@ -138,8 +140,13 @@ TEST(MainWindowLayout, TabifiedDockUsesSingleTitleSurfaceAndDoubleClickFloats) {
     EXPECT_FALSE(displayDock->windowFlags().testFlag(Qt::FramelessWindowHint));
     EXPECT_TRUE(displayDock->windowFlags().testFlag(Qt::WindowTitleHint));
 #ifdef Q_OS_WIN
+    // Qt WId 保存 Win32 HWND 的整数表示，平台 API 需要还原该句柄。
+    // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast,performance-no-int-to-ptr)
     const auto nativeStyle =
-        GetWindowLongPtrW(reinterpret_cast<HWND>(displayDock->winId()), GWL_STYLE);
+        // Qt WId 是 HWND 的整数表示，Win32 API 要求还原句柄。
+        static_cast<std::uintptr_t>(
+            GetWindowLongPtrW(reinterpret_cast<HWND>(displayDock->winId()), GWL_STYLE));
+    // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast,performance-no-int-to-ptr)
     EXPECT_NE(nativeStyle & WS_CAPTION, 0);
 #endif
     clearWorkspaceSettings();
@@ -375,8 +382,14 @@ TEST(MainWindowLayout, ViewMenuRestoresHiddenDockAndResetsDefaultLayout) {
     resetAction->trigger();
     QApplication::processEvents();
 
-    for (const auto* dockName : {"control_dock", "display_dock", "analysis_dock",
-                                 "communication_dock", "settings_dock", "logs_dock"}) {
+    for (const auto* dockName : {
+             "control_dock",
+             "display_dock",
+             "analysis_dock",
+             "communication_dock",
+             "settings_dock",
+             "logs_dock",
+         }) {
         auto* dock = findDock(window, dockName);
         ASSERT_NE(dock, nullptr);
         EXPECT_TRUE(dock->isVisible()) << dockName;

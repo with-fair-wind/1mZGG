@@ -32,6 +32,8 @@ using Dss::Tests::TrackingFixtureMode;
     return {};
 }
 
+// 同一黄金样例的完整字段断言集中核对。
+// NOLINTNEXTLINE(readability-function-size)
 void verifyFixture(const TrackingFixture& fixture) {
     auto tracker = makeTracker(fixture);
     ASSERT_NE(tracker, nullptr);

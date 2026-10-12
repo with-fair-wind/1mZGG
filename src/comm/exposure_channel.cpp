@@ -7,13 +7,13 @@ namespace Dss::Comm {
 ExposureChannel::ExposureChannel(MessageBus& bus) : SerialWorkerBase(bus) {}
 
 auto ExposureChannel::latestData() const -> Dss::Core::ExposureDisplayData {
-    std::lock_guard lock(m_dataMutex);
+    std::scoped_lock lock(m_dataMutex);
     return m_latestData;
 }
 
 void ExposureChannel::sendExposureCommand(const ExposureCommand& command) {
     {
-        std::lock_guard lock(m_commandMutex);
+        std::scoped_lock lock(m_commandMutex);
         m_pendingCommand = command;
     }
     requestSend();
@@ -28,7 +28,7 @@ void ExposureChannel::decodeFrame(std::span<const uint8_t> data) {
     }
 
     {
-        std::lock_guard lock(m_dataMutex);
+        std::scoped_lock lock(m_dataMutex);
         m_latestData = *decoded;
     }
 
@@ -36,7 +36,7 @@ void ExposureChannel::decodeFrame(std::span<const uint8_t> data) {
 }
 
 void ExposureChannel::encodeFrame(std::span<uint8_t> buffer) {
-    std::lock_guard lock(m_commandMutex);
+    std::scoped_lock lock(m_commandMutex);
     (void)encodeExposureCommand(m_pendingCommand, buffer);
 }
 

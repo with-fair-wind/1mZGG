@@ -8,7 +8,7 @@
 
 namespace Dss::Network {
 
-using UdpEndpointConfig = Dss::Core::UdpEndpointConfig;  ///< UDP 端点配置类型别名
+using Dss::Core::UdpEndpointConfig;  ///< UDP 端点配置类型别名
 
 /// 网络通道抽象接口，定义 UDP 端点的打开/关闭及状态查询能力
 class INetworkChannel {

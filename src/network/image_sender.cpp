@@ -16,24 +16,24 @@ constexpr uint8_t EightBitDepth = 8U;               ///< 8 位像素深度
 
 /// 向缓冲区指定偏移写入大端序 16 位无符号整数
 void writeU16Be(std::vector<uint8_t>& buffer, size_t offset, uint16_t value) {
-    buffer[offset] = static_cast<uint8_t>((value >> 8U) & 0xFFU);
-    buffer[offset + 1U] = static_cast<uint8_t>(value & 0xFFU);
+    buffer[offset] = static_cast<uint8_t>((static_cast<std::uint32_t>(value) >> 8U) & 0xFFU);
+    buffer[offset + 1U] = static_cast<uint8_t>(static_cast<std::uint32_t>(value) & 0xFFU);
 }
 
 /// 向缓冲区指定偏移写入大端序 32 位无符号整数
 void writeU32Be(std::vector<uint8_t>& buffer, size_t offset, uint32_t value) {
-    buffer[offset] = static_cast<uint8_t>((value >> 24U) & 0xFFU);
-    buffer[offset + 1U] = static_cast<uint8_t>((value >> 16U) & 0xFFU);
-    buffer[offset + 2U] = static_cast<uint8_t>((value >> 8U) & 0xFFU);
-    buffer[offset + 3U] = static_cast<uint8_t>(value & 0xFFU);
+    buffer[offset] = static_cast<uint8_t>((static_cast<std::uint32_t>(value) >> 24U) & 0xFFU);
+    buffer[offset + 1U] = static_cast<uint8_t>((static_cast<std::uint32_t>(value) >> 16U) & 0xFFU);
+    buffer[offset + 2U] = static_cast<uint8_t>((static_cast<std::uint32_t>(value) >> 8U) & 0xFFU);
+    buffer[offset + 3U] = static_cast<uint8_t>(static_cast<std::uint32_t>(value) & 0xFFU);
 }
 
 /// 向缓冲区指定偏移写入小端序 32 位无符号整数
 void writeU32Le(std::vector<uint8_t>& buffer, size_t offset, uint32_t value) {
-    buffer[offset] = static_cast<uint8_t>(value & 0xFFU);
-    buffer[offset + 1U] = static_cast<uint8_t>((value >> 8U) & 0xFFU);
-    buffer[offset + 2U] = static_cast<uint8_t>((value >> 16U) & 0xFFU);
-    buffer[offset + 3U] = static_cast<uint8_t>((value >> 24U) & 0xFFU);
+    buffer[offset] = static_cast<uint8_t>(static_cast<std::uint32_t>(value) & 0xFFU);
+    buffer[offset + 1U] = static_cast<uint8_t>((static_cast<std::uint32_t>(value) >> 8U) & 0xFFU);
+    buffer[offset + 2U] = static_cast<uint8_t>((static_cast<std::uint32_t>(value) >> 16U) & 0xFFU);
+    buffer[offset + 3U] = static_cast<uint8_t>((static_cast<std::uint32_t>(value) >> 24U) & 0xFFU);
 }
 
 /**
@@ -52,7 +52,7 @@ void writeU32Le(std::vector<uint8_t>& buffer, size_t offset, uint32_t value) {
     writeU16Be(encoded, 6U, static_cast<uint16_t>(height));
     encoded[8U] = MonoChannelCount;
     encoded[9U] = EightBitDepth;
-    std::copy(imageData.begin(), imageData.end(), encoded.begin() + ImageSender::ImageHeaderSize);
+    std::ranges::copy(imageData, encoded.begin() + ImageSender::ImageHeaderSize);
     return encoded;
 }
 
@@ -65,7 +65,7 @@ ImageSender::~ImageSender() {
 }
 
 auto ImageSender::open(const UdpEndpointConfig& config) -> std::expected<void, std::string> {
-    std::lock_guard lifecycleLock(m_lifecycleMutex);
+    std::scoped_lock lifecycleLock(m_lifecycleMutex);
     closeLocked();
     auto result = m_channel.bind(config);
     if (!result) {
@@ -73,7 +73,7 @@ auto ImageSender::open(const UdpEndpointConfig& config) -> std::expected<void, s
     }
 
     {
-        std::lock_guard lock(m_bufferMutex);
+        std::scoped_lock lock(m_bufferMutex);
         m_accepting = true;
         m_hasPending = false;
         m_pendingImage.reset();
@@ -81,7 +81,7 @@ auto ImageSender::open(const UdpEndpointConfig& config) -> std::expected<void, s
     }
     m_workerThread = std::jthread([this](std::stop_token token) {
         Dss::Core::runBackgroundTask(m_bus, "image_sender", [this, token] { workerLoop(token); });
-        std::lock_guard lock(m_bufferMutex);
+        std::scoped_lock lock(m_bufferMutex);
         m_accepting = false;
         m_hasPending = false;
         m_pendingImage.reset();
@@ -95,14 +95,14 @@ auto ImageSender::open(const UdpEndpointConfig& config) -> std::expected<void, s
 }
 
 void ImageSender::close() {
-    std::lock_guard lifecycleLock(m_lifecycleMutex);
+    std::scoped_lock lifecycleLock(m_lifecycleMutex);
     closeLocked();
 }
 
 void ImageSender::closeLocked() {
     const auto started = std::chrono::steady_clock::now();
     {
-        std::lock_guard lock(m_bufferMutex);
+        std::scoped_lock lock(m_bufferMutex);
         m_resources.queuedItems = 0;
         m_resources.queuedBytes = 0;
         m_accepting = false;
@@ -116,7 +116,7 @@ void ImageSender::closeLocked() {
         m_workerThread.join();
     }
     m_channel.close();
-    std::lock_guard lock(m_bufferMutex);
+    std::scoped_lock lock(m_bufferMutex);
     m_resources.queuedItems = 0;
     m_resources.queuedBytes = 0;
     m_resources.lastStopMicroseconds = Dss::Core::elapsedMicroseconds(started);
@@ -153,7 +153,7 @@ void ImageSender::submitForSend(uint64_t frameSeq,
         return;
     }
     {
-        std::lock_guard lock(m_bufferMutex);
+        std::scoped_lock lock(m_bufferMutex);
         if (!m_accepting) {
             return;
         }
@@ -176,7 +176,7 @@ void ImageSender::submitForSend(uint64_t frameSeq,
 }
 
 auto ImageSender::resourceSnapshot() const -> Dss::Core::ResourceSnapshot {
-    std::lock_guard lock(m_bufferMutex);
+    std::scoped_lock lock(m_bufferMutex);
     return m_resources;
 }
 
@@ -224,7 +224,7 @@ void ImageSender::workerLoop(std::stop_token token) {
 
         {
             std::unique_lock lock(m_bufferMutex);
-            m_bufferCv.wait(lock, token, [this]() { return m_hasPending; });
+            m_bufferCv.wait(lock, token, [this] { return m_hasPending; });
 
             if (token.stop_requested()) {
                 break;
@@ -243,7 +243,7 @@ void ImageSender::workerLoop(std::stop_token token) {
         }
         const auto started = std::chrono::steady_clock::now();
         const auto finishWork = [this, started] {
-            std::lock_guard lock(m_bufferMutex);
+            std::scoped_lock lock(m_bufferMutex);
             m_resources.activeItems = 0;
             m_resources.activeBytes = 0;
             ++m_resources.completedItems;
@@ -264,7 +264,7 @@ void ImageSender::workerLoop(std::stop_token token) {
 
         auto packets = buildPackets(*image, w, h);
         {
-            std::lock_guard lock(m_bufferMutex);
+            std::scoped_lock lock(m_bufferMutex);
             m_resources.activeBytes = image->capacity();
             for (const auto& packet : packets) {
                 m_resources.activeBytes += packet.capacity();

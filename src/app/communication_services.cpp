@@ -1,3 +1,5 @@
+#include <stdexcept>
+
 #include "dss/app/application_context.h"
 
 #ifdef DSS_BUILD_APP
@@ -33,6 +35,8 @@
 
 namespace Dss::App {
 
+// 组合根集中声明服务所有权与接线，保留初始化顺序。
+// NOLINTNEXTLINE(readability-function-size)
 void ApplicationContext::registerCommunicationServices() {
 #ifdef DSS_BUILD_APP
     auto display = std::make_shared<Dss::Comm::DisplayChannel>(m_bus);
@@ -79,12 +83,16 @@ void ApplicationContext::registerCommunicationServices() {
         [dataExchange](const Dss::Network::GxtcMetadata& metadata,
                        std::span<const Dss::Network::GxtcTarget> targets) {
             if (dataExchange->isOpen()) {
-                (void)dataExchange->sendGxtc(metadata, targets);
+                if (auto result = dataExchange->sendGxtc(metadata, targets); !result) {
+                    return;  // 发送失败已由 DataExchange 发布诊断事件。
+                }
             }
         },
         [dataExchange](const Dss::Network::GdclMeasurement& measurement) {
             if (dataExchange->isOpen()) {
-                (void)dataExchange->sendGdcl(measurement);
+                if (auto result = dataExchange->sendGdcl(measurement); !result) {
+                    return;  // 发送失败已由 DataExchange 发布诊断事件。
+                }
             }
         });
     m_registry.registerService<Dss::App::TrackResultDataExchangeBridge>(
@@ -106,7 +114,11 @@ void ApplicationContext::registerCommunicationServices() {
     auto imageProcessor = std::make_shared<Dss::Processing::ImageProcessor>(m_bus);
     auto replaySource = std::make_shared<Dss::Acquisition::ImageSequenceFrameSource>();
     auto frameSource = std::make_shared<Dss::Acquisition::FrameSourceCoordinator>();
-    (void)frameSource->registerSource(Dss::Acquisition::FrameSourceMode::Replay, replaySource);
+    if (auto result =
+            frameSource->registerSource(Dss::Acquisition::FrameSourceMode::Replay, replaySource);
+        !result) {
+        throw std::runtime_error(result.error());
+    }
 #ifdef DSS_HAS_SAPERA
     auto liveSource = std::make_shared<Dss::Acquisition::SaperaFrameSource>(
         Dss::Acquisition::SaperaConfig{
@@ -129,6 +141,8 @@ void ApplicationContext::registerCommunicationServices() {
                 metadata.exposureTimeMilliseconds =
                     static_cast<double>(packet.metadata.exposureTime) * 1000.0;
                 metadata.frameFrequency = packet.metadata.frameFrequency;
+                // 容量拒绝计入后端计数，写入失败由存储诊断事件报告；不阻塞帧投递。
+                // NOLINTNEXTLINE(bugprone-unused-return-value)
                 (void)localImageStorage->enqueueSessionFrame(packet.frameSeq, metadata,
                                                              packet.rawImage, storageGeneration);
             }
@@ -141,6 +155,8 @@ void ApplicationContext::registerCommunicationServices() {
         [trackDataStorage](const Dss::Core::TrackResultEvent& event) {
             const auto generation = trackDataStorage->sessionGeneration();
             if (trackDataStorage->isRunning()) {
+                // 非阻塞轨迹准入的拒绝已有计数，写入错误通过事件报告。
+                // NOLINTNEXTLINE(bugprone-unused-return-value)
                 (void)trackDataStorage->enqueueTrackResult(event, generation);
             }
         }));

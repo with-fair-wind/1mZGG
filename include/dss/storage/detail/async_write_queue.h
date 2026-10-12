@@ -16,6 +16,7 @@
 #include <thread>
 #include <utility>
 
+#include "dss/core/diagnostics/emergency_report.h"
 #include "dss/core/diagnostics/resource_snapshot.h"
 
 namespace Dss::Storage {
@@ -41,9 +42,8 @@ public:
      * @param maxPendingRequests 队列允许的最大待处理请求数。
      * @param maxPendingBytes 等待与正在写入的载荷总字节预算。
      */
-    explicit AsyncWriteQueue(
-        std::size_t maxPendingRequests = 1024,
-        std::size_t maxPendingBytes = (std::numeric_limits<std::size_t>::max)())
+    explicit AsyncWriteQueue(std::size_t maxPendingRequests = 1024,
+                             std::size_t maxPendingBytes = std::numeric_limits<std::size_t>::max())
         : m_maxPendingRequests(maxPendingRequests), m_maxPendingBytes(maxPendingBytes) {}
 
     /** @brief 停止并排空队列后销毁。 */
@@ -64,7 +64,7 @@ public:
      */
     auto start(Writer writer, FailureHandler failureHandler = {})
         -> std::expected<void, std::string> {
-        std::lock_guard lifecycleLock(m_lifecycleMutex);
+        std::scoped_lock lifecycleLock(m_lifecycleMutex);
         if (!writer) {
             return std::unexpected("async write queue writer is not configured");
         }
@@ -78,7 +78,7 @@ public:
         m_writer = std::move(writer);
         m_failureHandler = std::move(failureHandler);
         {
-            std::lock_guard queueLock(m_queueMutex);
+            std::scoped_lock queueLock(m_queueMutex);
             m_accepting = true;
         }
         m_running.store(true);
@@ -88,7 +88,7 @@ public:
             } catch (...) {
                 // Protect the boundary even if moving a request or allocating diagnostics fails.
                 m_failedWrites.fetch_add(1);
-                std::lock_guard lock(m_queueMutex);
+                std::scoped_lock lock(m_queueMutex);
                 m_queue.clear();
                 m_pendingBytes = 0;
                 m_resources.activeItems = 0;
@@ -103,7 +103,7 @@ public:
     /** @brief 关闭准入并唤醒 worker，继续排空已接受请求；不等待磁盘写入。 */
     void requestStop() {
         {
-            std::lock_guard queueLock(m_queueMutex);
+            std::scoped_lock queueLock(m_queueMutex);
             m_accepting = false;
             m_running.store(false);
         }
@@ -113,14 +113,14 @@ public:
     /** @brief 请求后台线程停止，并等待队列排空后退出。 */
     void stop() {
         const auto started = std::chrono::steady_clock::now();
-        std::lock_guard lifecycleLock(m_lifecycleMutex);
+        std::scoped_lock lifecycleLock(m_lifecycleMutex);
         requestStop();
         if (m_worker.joinable()) {
             m_worker.request_stop();
             m_queueCv.notify_all();
             m_worker.join();
         }
-        std::lock_guard queueLock(m_queueMutex);
+        std::scoped_lock queueLock(m_queueMutex);
         m_resources.lastStopMicroseconds = Dss::Core::elapsedMicroseconds(started);
     }
 
@@ -137,7 +137,7 @@ public:
      */
     auto enqueue(Request request, std::size_t bytes = 0) -> std::expected<void, std::string> {
         {
-            std::lock_guard lock(m_queueMutex);
+            std::scoped_lock lock(m_queueMutex);
             if (!m_accepting) {
                 return std::unexpected("async write queue is not running");
             }
@@ -177,13 +177,13 @@ public:
     /** @brief 待写和正在写入的请求共持有的载荷字节数。 */
     /// @return 等待及正在写入请求的载荷总字节数。
     [[nodiscard]] auto pendingBytes() const -> std::size_t {
-        std::lock_guard lock(m_queueMutex);
+        std::scoped_lock lock(m_queueMutex);
         return m_pendingBytes;
     }
 
     /** @brief 获取本组件的资源采样。 @return 队列锁内采样的等待/活动载荷、完成数与耗时。 */
     [[nodiscard]] auto resourceSnapshot() const -> Dss::Core::ResourceSnapshot {
-        std::lock_guard lock(m_queueMutex);
+        std::scoped_lock lock(m_queueMutex);
         auto result = m_resources;
         result.queuedItems = m_queue.size();
         result.queuedBytes = m_pendingBytes - result.activeBytes;
@@ -234,14 +234,14 @@ private:
                     try {
                         m_failureHandler(entry->request, result.error());
                     } catch (...) {
-                        // Reporting failure must not terminate the worker or prevent draining.
+                        Dss::Core::reportEmergencyFailure("DSS: storage error callback failed\n");
                     }
                 }
             }
             const auto bytes = entry->bytes;
             entry.reset();
             {
-                std::lock_guard lock(m_queueMutex);
+                std::scoped_lock lock(m_queueMutex);
                 m_pendingBytes -= bytes;
                 m_resources.activeItems = 0;
                 m_resources.activeBytes = 0;

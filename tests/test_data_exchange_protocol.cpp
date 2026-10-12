@@ -68,7 +68,7 @@ TEST(DataExchangeProtocol, BuildsGxtcPacketWithLegacyPackedLayout) {
     const auto packet = Dss::Network::buildGxtcPacket(metadata, targets);
 
     ASSERT_EQ(packet.size(),
-              Dss::Network::GxtcHeaderSize + targets.size() * Dss::Network::GxtcTargetSize);
+              Dss::Network::GxtcHeaderSize + (targets.size() * Dss::Network::GxtcTargetSize));
     EXPECT_EQ(readI32Le(packet, 0), 2);
     EXPECT_EQ(readI32Le(packet, 4), 123456);
     EXPECT_EQ(packet[8], 1U);

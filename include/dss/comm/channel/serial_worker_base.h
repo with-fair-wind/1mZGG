@@ -24,6 +24,10 @@ namespace Dss::Comm {
 /// 串口工作线程基类，在独立线程中完成帧收发与编解码
 class SerialWorkerBase : public ISerialChannel {
 public:
+    // 生命周期绑定当前对象，禁止复制或移动资源及回调所有者。
+    SerialWorkerBase(SerialWorkerBase&&) = delete;
+    auto operator=(SerialWorkerBase&&) -> SerialWorkerBase& = delete;
+
     using MessageBus = Dss::Core::MessageBus;  ///< 事件总线类型别名
 
     /**
@@ -71,10 +75,10 @@ public:
 
 protected:
     /** @brief 获取本通道接收帧长度。 @return 协议定义的固定字节数。 */
-    [[nodiscard]] virtual auto recvFrameSize() const -> size_t override = 0;
+    [[nodiscard]] auto recvFrameSize() const -> size_t override = 0;
 
     /** @brief 获取本通道发送帧长度。 @return 协议定义的固定字节数。 */
-    [[nodiscard]] virtual auto sendFrameSize() const -> size_t override = 0;
+    [[nodiscard]] auto sendFrameSize() const -> size_t override = 0;
 
     /**
      * @brief 解码接收到的完整原始帧。

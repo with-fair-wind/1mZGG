@@ -14,6 +14,10 @@ namespace {
 /// @brief 在测试生命周期内临时绑定 Logger 的事件总线。
 class ScopedLoggerBus {
 public:
+    // 生命周期绑定当前对象，禁止复制或移动资源及回调所有者。
+    ScopedLoggerBus(ScopedLoggerBus&&) = delete;
+    auto operator=(ScopedLoggerBus&&) -> ScopedLoggerBus& = delete;
+
     /// @brief 绑定指定消息总线。
     explicit ScopedLoggerBus(Dss::Core::Logger::MessageBus& bus) {
         Dss::Core::Logger::instance().setBus(&bus);

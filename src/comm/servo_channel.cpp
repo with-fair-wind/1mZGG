@@ -21,7 +21,7 @@ void ServoChannel::setTrackResult(const Dss::Core::TargetInfo& target) {
 
 void ServoChannel::sendServoCorrection(const ServoCorrection& correction) {
     {
-        std::lock_guard lock(m_correctionMutex);
+        std::scoped_lock lock(m_correctionMutex);
         m_pendingCorrection = correction;
     }
     requestSend();
@@ -30,7 +30,7 @@ void ServoChannel::sendServoCorrection(const ServoCorrection& correction) {
 void ServoChannel::decodeFrame(std::span<const uint8_t> /*data*/) {}
 
 void ServoChannel::encodeFrame(std::span<uint8_t> buffer) {
-    std::lock_guard lock(m_correctionMutex);
+    std::scoped_lock lock(m_correctionMutex);
     (void)encodeServoCorrection(m_pendingCorrection, buffer);
 }
 

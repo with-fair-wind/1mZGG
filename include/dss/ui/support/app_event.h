@@ -13,6 +13,9 @@ public:
     /** @brief 获取全局 UI 事件实例。 @return 进程级事件对象的引用。 */
     [[nodiscard]] static auto instance() -> AppEvent&;
 
+    // Qt
+    // 槽区段参与元对象生成，必须保留。
+    // NOLINTNEXTLINE(readability-redundant-access-specifiers)
 public slots:
     /**
      * @brief 发布目标位置选中事件。

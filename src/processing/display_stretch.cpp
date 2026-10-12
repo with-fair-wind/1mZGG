@@ -9,20 +9,19 @@
 namespace Dss::Processing {
 namespace {
 
-using DisplayLookupTable = std::array<
-    std::uint8_t,
-    static_cast<std::size_t>(std::numeric_limits<std::uint16_t>::max()) + 1U>;
+using DisplayLookupTable =
+    std::array<std::uint8_t,
+               static_cast<std::size_t>(std::numeric_limits<std::uint16_t>::max()) + 1U>;
 
-[[nodiscard]] auto clampToWindowLimit(double value, std::uint16_t minimum,
-                                      std::uint16_t maximum) -> std::uint16_t {
-    const auto clamped = std::clamp(value, static_cast<double>(minimum),
-                                   static_cast<double>(maximum));
+[[nodiscard]] auto clampToWindowLimit(double value, std::uint16_t minimum, std::uint16_t maximum)
+    -> std::uint16_t {
+    const auto clamped =
+        std::clamp(value, static_cast<double>(minimum), static_cast<double>(maximum));
     return static_cast<std::uint16_t>(clamped);
 }
 
 [[nodiscard]] auto normalizeWindow(std::uint16_t low, std::uint16_t high,
-                                   const DisplayStretchSettings& settings)
-    -> DisplayStretchWindow {
+                                   const DisplayStretchSettings& settings) -> DisplayStretchWindow {
     const auto boundedLow = std::clamp(low, settings.signalMin, settings.signalMax);
     auto boundedHigh = std::clamp(high, settings.signalMin, settings.signalMax);
     if (boundedHigh > boundedLow) {
@@ -34,10 +33,9 @@ using DisplayLookupTable = std::array<
         return DisplayStretchWindow{.low = boundedLow, .high = boundedHigh};
     }
 
-    const auto adjustedLow =
-        settings.signalMax > settings.signalMin
-            ? static_cast<std::uint16_t>(settings.signalMax - 1U)
-            : settings.signalMin;
+    const auto adjustedLow = settings.signalMax > settings.signalMin
+                                 ? static_cast<std::uint16_t>(settings.signalMax - 1U)
+                                 : settings.signalMin;
     return DisplayStretchWindow{.low = adjustedLow, .high = settings.signalMax};
 }
 
@@ -89,7 +87,7 @@ auto computeImageStats(std::span<const std::uint16_t> raw) -> Dss::Core::ImageSt
     const auto count = static_cast<long double>(raw.size());
     const auto mean = static_cast<long double>(sum) / count;
     const auto meanSquares = static_cast<long double>(sumSquares) / count;
-    const auto variance = std::max(0.0L, meanSquares - mean * mean);
+    const auto variance = std::max(0.0L, meanSquares - (mean * mean));
 
     stats.minVal = static_cast<double>(minValue);
     stats.maxVal = static_cast<double>(maxValue);
@@ -99,14 +97,13 @@ auto computeImageStats(std::span<const std::uint16_t> raw) -> Dss::Core::ImageSt
 }
 
 auto resolveDisplayStretchWindow(const Dss::Core::ImageStats& stats,
-                                 const DisplayStretchSettings& settings)
-    -> DisplayStretchWindow {
+                                 const DisplayStretchSettings& settings) -> DisplayStretchWindow {
     if (settings.mode == DisplayStretchMode::Manual) {
         return normalizeWindow(settings.low, settings.high, settings);
     }
 
-    const auto lowValue = stats.avg - settings.sigma * stats.stdDev;
-    const auto highValue = stats.avg + settings.sigma * stats.stdDev;
+    const auto lowValue = stats.avg - (settings.sigma * stats.stdDev);
+    const auto highValue = stats.avg + (settings.sigma * stats.stdDev);
     const auto low = clampToWindowLimit(lowValue, settings.signalMin, settings.signalMax);
     const auto high = clampToWindowLimit(highValue, settings.signalMin, settings.signalMax);
     if (high > low) {
@@ -130,8 +127,8 @@ auto stretchDisplayImage(std::span<const std::uint16_t> raw, DisplayStretchWindo
     return display;
 }
 
-auto buildDisplayImage(std::span<const std::uint16_t> raw,
-                       const DisplayStretchSettings& settings) -> DisplayStretchResult {
+auto buildDisplayImage(std::span<const std::uint16_t> raw, const DisplayStretchSettings& settings)
+    -> DisplayStretchResult {
     DisplayStretchResult result{};
     result.stats = computeImageStats(raw);
     result.window = resolveDisplayStretchWindow(result.stats, settings);

@@ -1,4 +1,5 @@
 #include <cmath>
+#include <limits>
 
 #include <gtest/gtest.h>
 
@@ -53,7 +54,7 @@ TEST(ManualTracker, EmitsManualTargetAtSelectedPixel) {
 
     const auto expectedElevation = 45.01F;
     const auto expectedAzimuth =
-        100.0F + 0.01F / std::cos(static_cast<double>(expectedElevation) * Dss::Core::DegToRad);
+        100.0F + (0.01F / std::cos(static_cast<double>(expectedElevation) * Dss::Core::DegToRad));
     EXPECT_NEAR(target.predictedPosAe.x, expectedAzimuth, 1.0e-5F);
     EXPECT_NEAR(target.predictedPosAe.y, expectedElevation, 1.0e-5F);
 
@@ -95,4 +96,24 @@ TEST(ManualTracker, LongSequenceRetainsOnlyPredictionWindow) {
         EXPECT_LE(targets.front().frameInfos.size(), Dss::Tracking::ManualTracker::historyCapacity);
         EXPECT_FLOAT_EQ(targets.front().predictedPosFrame.x, 1.0F);
     }
+}
+
+TEST(ManualTracker, RepairsUnorderedManualBounds) {
+    Dss::Tracking::ManualTracker tracker(makeSettings());
+    Dss::Core::MeasuredBlob selected{};
+    selected.centroid = {3082.0F, 3062.0F};
+    selected.minX = 3072.0F;
+    selected.maxX = std::numeric_limits<float>::quiet_NaN();
+    selected.minY = 3052.0F;
+    selected.maxY = 3072.0F;
+    tracker.setManualTarget(selected);
+
+    const auto targets = tracker.track(makeMeasurements(1));
+    ASSERT_EQ(targets.size(), 1U);
+    ASSERT_EQ(targets.front().frameInfos.size(), 1U);
+    const auto& blob = targets.front().frameInfos.front().measuredBlob;
+    EXPECT_FLOAT_EQ(blob.minX, 3072.0F);
+    EXPECT_FLOAT_EQ(blob.maxX, 3092.0F);
+    EXPECT_FLOAT_EQ(blob.minY, 3052.0F);
+    EXPECT_FLOAT_EQ(blob.maxY, 3072.0F);
 }

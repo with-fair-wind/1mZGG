@@ -6,7 +6,14 @@ TEST(TrackDataStorageFormat, BuildsLegacyTrackDataLine) {
     Dss::Storage::TrackDataRecord record{};
     record.frameSeq = 123;
     record.timestamp = {
-        .year = 2026, .month = 6, .day = 2, .hour = 3, .minute = 4, .second = 5, .millisecond = 6};
+        .year = 2026,
+        .month = 6,
+        .day = 2,
+        .hour = 3,
+        .minute = 4,
+        .second = 5,
+        .millisecond = 6,
+    };
     record.fovCenterAe = {.x = 10.1234567F, .y = -20.5F};
     record.blobPosition = {.x = 3100.5F, .y = 3065.75F};
     record.opticCenter = {.x = 3072.0F, .y = 3072.0F};
@@ -33,7 +40,14 @@ TEST(TrackDataStorageFormat, BuildsRecordFromResultPacket) {
     Dss::Core::ResultPacket packet{};
     packet.frameSeq = 321U;
     packet.timestamp = {
-        .year = 2026, .month = 6, .day = 12, .hour = 1, .minute = 2, .second = 3, .millisecond = 4};
+        .year = 2026,
+        .month = 6,
+        .day = 12,
+        .hour = 1,
+        .minute = 2,
+        .second = 3,
+        .millisecond = 4,
+    };
     packet.fovCenterAeModified = Dss::Core::Vec2f{11.25F, -22.5F};
     packet.targetPosFrame = Dss::Core::Vec2f{3100.0F, 3050.0F};
     packet.blob.area = 4.0F;

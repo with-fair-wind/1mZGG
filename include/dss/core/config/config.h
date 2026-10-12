@@ -21,10 +21,10 @@ struct PathConfig {
 
 /// 日志输出配置
 struct LoggingConfig {
-    bool enabled = true;                                 ///< 是否启用文件日志
-    std::filesystem::path filePath{"./logs/dss.log"};    ///< 日志文件路径
-    std::size_t maxFileSizeBytes = 10U * 1024U * 1024U;  ///< 单个日志文件的最大字节数
-    std::size_t maxFiles = 5U;                           ///< 保留的轮转日志文件数量
+    bool enabled = true;                                             ///< 是否启用文件日志
+    std::filesystem::path filePath{"./logs/dss.log"};                ///< 日志文件路径
+    std::size_t maxFileSizeBytes = std::size_t{10} * 1024U * 1024U;  ///< 单个日志文件的最大字节数
+    std::size_t maxFiles = 5U;                                       ///< 保留的轮转日志文件数量
 };
 
 /// 通信与网络配置

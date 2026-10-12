@@ -24,12 +24,16 @@ namespace Dss::Network {
 /// UDP 通道实现；使用 std::jthread 串行执行 QUdpSocket 的绑定、收发与销毁
 class UdpChannel {
 public:
+    // 生命周期绑定当前对象，禁止复制或移动资源及回调所有者。
+    UdpChannel(UdpChannel&&) = delete;
+    auto operator=(UdpChannel&&) -> UdpChannel& = delete;
+
     /** @brief 构造有界 UDP 通道，套接字在 bind 时创建。
      * @param maxPendingRequests 等待发送的条数上限，可设为零以拒绝排队。
      * @param maxPendingBytes 等待发送的载荷字节上限，不含当前执行的一条报文。
      */
     explicit UdpChannel(std::size_t maxPendingRequests = 64,
-                        std::size_t maxPendingBytes = 1024 * 1024);
+                        std::size_t maxPendingBytes = std::size_t{1024} * 1024U);
     /// 单报文载荷预算；实际可发送大小还取决于网络与操作系统。
     static constexpr std::size_t maxDatagramBytes = 65507;
     /// 发送队列的一致快照；计数在对象存续期间累计，重新 bind 不清零拒绝计数。

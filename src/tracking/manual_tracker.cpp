@@ -44,7 +44,8 @@ inline constexpr double kMinCosElevation = 1.0e-6;
         blob.id = "manual";
     }
 
-    if (!(blob.maxX > blob.minX && blob.maxY > blob.minY)) {
+    const bool validBounds = blob.maxX > blob.minX && blob.maxY > blob.minY;
+    if (!validBounds) {
         blob.minX = blob.centroid.x - kManualBlobHalfExtent;
         blob.maxX = blob.centroid.x + kManualBlobHalfExtent;
         blob.minY = blob.centroid.y - kManualBlobHalfExtent;
@@ -106,7 +107,7 @@ auto ManualTracker::track(const Dss::Core::FrameMeasurements& measurements)
     -> std::vector<Dss::Core::TargetInfo> {
     Dss::Core::MeasuredBlob blob{};
     {
-        std::lock_guard lock(m_blobMutex);
+        std::scoped_lock lock(m_blobMutex);
         if (!m_hasManualBlob) {
             return {};
         }
@@ -144,29 +145,34 @@ auto ManualTracker::track(const Dss::Core::FrameMeasurements& measurements)
 
     const auto period = framePeriodSeconds(measurements);
     const auto& previousBlob = previousInfo->measuredBlob;
-    m_currentTarget.predictedSpdFrame = Dss::Core::Vec2f{blob.centroid.x - previousBlob.centroid.x,
-                                                         blob.centroid.y - previousBlob.centroid.y};
-    m_currentTarget.predictedPosFrame =
-        Dss::Core::Vec2f{blob.centroid.x + m_currentTarget.predictedSpdFrame.x,
-                         blob.centroid.y + m_currentTarget.predictedSpdFrame.y};
-    m_currentTarget.predictedSpdAe =
-        Dss::Core::Vec2f{(blob.posAe.x - previousBlob.posAe.x) / period,
-                         (blob.posAe.y - previousBlob.posAe.y) / period};
-    m_currentTarget.predictedPosAe =
-        Dss::Core::Vec2f{blob.posAe.x + m_currentTarget.predictedSpdAe.x * period,
-                         blob.posAe.y + m_currentTarget.predictedSpdAe.y * period};
+    m_currentTarget.predictedSpdFrame = Dss::Core::Vec2f{
+        blob.centroid.x - previousBlob.centroid.x,
+        blob.centroid.y - previousBlob.centroid.y,
+    };
+    m_currentTarget.predictedPosFrame = Dss::Core::Vec2f{
+        blob.centroid.x + m_currentTarget.predictedSpdFrame.x,
+        blob.centroid.y + m_currentTarget.predictedSpdFrame.y,
+    };
+    m_currentTarget.predictedSpdAe = Dss::Core::Vec2f{
+        (blob.posAe.x - previousBlob.posAe.x) / period,
+        (blob.posAe.y - previousBlob.posAe.y) / period,
+    };
+    m_currentTarget.predictedPosAe = Dss::Core::Vec2f{
+        blob.posAe.x + (m_currentTarget.predictedSpdAe.x * period),
+        blob.posAe.y + (m_currentTarget.predictedSpdAe.y * period),
+    };
     return {m_currentTarget};
 }
 
 void ManualTracker::reset() {
     m_currentTarget = {};
-    std::lock_guard lock(m_blobMutex);
+    std::scoped_lock lock(m_blobMutex);
     m_manualBlob = {};
     m_hasManualBlob = false;
 }
 
 void ManualTracker::setManualTarget(const Dss::Core::MeasuredBlob& blob) {
-    std::lock_guard lock(m_blobMutex);
+    std::scoped_lock lock(m_blobMutex);
     m_manualBlob = blob;
     m_hasManualBlob = true;
 }

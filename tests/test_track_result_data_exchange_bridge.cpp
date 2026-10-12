@@ -9,7 +9,7 @@
 
 namespace {
 
-using MessageBus = Dss::Core::MessageBus;
+using Dss::Core::MessageBus;
 
 struct CapturedExchange {
     std::vector<Dss::Network::GxtcMetadata> gxtcMetadata;
@@ -35,7 +35,7 @@ struct CapturedExchange {
         .millisecond = 230,
     };
     frame.frameSeq = 9;
-    frame.measuredBlob = blob;
+    frame.measuredBlob = std::move(blob);
     frame.posZxdw = Dss::Core::Vec2f{1.25F, -2.5F};
     frame.posTwdw = Dss::Core::Vec2f{-0.1F, 0.2F};
     frame.magnitude = -1.25F;

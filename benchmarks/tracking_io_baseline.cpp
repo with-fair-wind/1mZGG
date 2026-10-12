@@ -1,3 +1,6 @@
+#include <exception>
+
+#include "dss/core/diagnostics/emergency_report.h"
 /**
  * @file
  * @brief GEO 多目标、实际文件写入和 UDP 回环基线。
@@ -15,6 +18,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -40,8 +44,9 @@ using Clock = std::chrono::steady_clock;
 using Json = nlohmann::json;
 
 void require(bool condition, const char* message) {
-    if (!condition)
+    if (!condition) {
         throw std::runtime_error(message);
+    }
 }
 
 double elapsed(Clock::time_point start) {
@@ -50,34 +55,44 @@ double elapsed(Clock::time_point start) {
 
 Json percentiles(std::vector<double> samples) {
     std::ranges::sort(samples);
-    if (samples.empty())
+    if (samples.empty()) {
         return nullptr;
-    return {{"p50_us", samples[(samples.size() - 1) * 50 / 100]},
-            {"p95_us", samples[(samples.size() - 1) * 95 / 100]},
-            {"p99_us", samples[(samples.size() - 1) * 99 / 100]},
-            {"max_us", samples.back()}};
+    }
+    return {
+        {"p50_us", samples[(samples.size() - 1) * 50 / 100]},
+        {"p95_us", samples[(samples.size() - 1) * 95 / 100]},
+        {"p99_us", samples[(samples.size() - 1) * 99 / 100]},
+        {"max_us", samples.back()},
+    };
 }
 
 Json memory() {
 #ifdef _WIN32
     PROCESS_MEMORY_COUNTERS_EX counters{};
+    // Win32 以基础结构指针接收扩展内存计数器，cb/size 保留真实结构大小。
+    // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast)
     if (GetProcessMemoryInfo(GetCurrentProcess(),
                              reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&counters),
                              sizeof(counters))) {
-        return {{"working_set_bytes", counters.WorkingSetSize},
-                {"peak_working_set_bytes", counters.PeakWorkingSetSize},
-                {"private_bytes", counters.PrivateUsage}};
+        // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
+        return {
+            {"working_set_bytes", counters.WorkingSetSize},
+            {"peak_working_set_bytes", counters.PeakWorkingSetSize},
+            {"private_bytes", counters.PrivateUsage},
+        };
     }
 #endif
     return nullptr;
 }
 
 Json queue(const Dss::Core::ResourceSnapshot& snapshot) {
-    return {{"peak_queued_bytes", snapshot.peakQueuedBytes},
-            {"completed_items", snapshot.completedItems},
-            {"max_work_us", snapshot.maxWorkMicroseconds},
-            {"stop_us", snapshot.lastStopMicroseconds},
-            {"remaining_items", snapshot.queuedItems + snapshot.activeItems}};
+    return {
+        {"peak_queued_bytes", snapshot.peakQueuedBytes},
+        {"completed_items", snapshot.completedItems},
+        {"max_work_us", snapshot.maxWorkMicroseconds},
+        {"stop_us", snapshot.lastStopMicroseconds},
+        {"remaining_items", snapshot.queuedItems + snapshot.activeItems},
+    };
 }
 
 int number(char* value, int maximum) {
@@ -87,9 +102,60 @@ int number(char* value, int maximum) {
             "argument outside supported range");
     return result;
 }
+/// @brief 生成基准中的确定性合成测量帧。
+auto makeSyntheticFrame(int index, int targetCount) -> Dss::Core::FrameMeasurements {
+    Dss::Core::FrameMeasurements frame;
+    frame.frameSeq = static_cast<std::uint64_t>(index) + 1U;
+    frame.frameFreq = 1;
+    frame.timestamp = {.year = 2026, .month = 9, .day = 22};
+    for (int item = 0; item < targetCount; ++item) {
+        Dss::Core::MeasuredBlob blob;
+        blob.centroid = {
+            100.0F + (static_cast<float>(item) * 100.0F) + (static_cast<float>(index) * 5.0F),
+            100.0F + (static_cast<float>(item) * 100.0F) + (static_cast<float>(index) * 4.0F),
+        };
+        blob.posAe = {blob.centroid.x * 0.01F, blob.centroid.y * 0.01F};
+        blob.area = 16;
+        frame.targetBlobs.push_back(blob);
+    }
+    return frame;
+}
+
+/// @brief 核对一帧的目标数、身份、累计样本与历史预算。
+void verifyTargetHistory(const std::vector<Dss::Core::TargetInfo>& targets,
+                         std::uint64_t frameSequence, int targetCount,
+                         const Dss::Core::TrackingSettings& settings,
+                         std::vector<std::string>& targetIds, std::size_t& maxHistory) {
+    if (frameSequence >= 4U) {
+        require(targets.size() == static_cast<std::size_t>(targetCount), "unexpected target count");
+    }
+    for (std::size_t item = 0; item < targets.size(); ++item) {
+        const auto& target = targets[item];
+        if (frameSequence == 4U) {
+            targetIds.push_back(target.targetId);
+        }
+        require(target.living && target.targetId == targetIds[item],
+                "target retired or changed identity");
+        require(target.frameInfos.size() <=
+                    static_cast<std::size_t>((std::max)(10, settings.numFramesLiving)),
+                "history window exceeded");
+        require(target.totalFrameCount() == frameSequence, "cumulative count changed");
+        maxHistory = (std::max)(maxHistory, target.frameInfos.size());
+    }
+}
+/// @brief 按累计期限等待下一帧，零周期保持无节流。
+void waitForNextFrame(Clock::time_point start, int index, int periodUs) {
+    if (periodUs <= 0) {
+        return;
+    }
+    std::this_thread::sleep_until(
+        start + std::chrono::microseconds{(static_cast<std::int64_t>(index) + 1) * periodUs});
+}
 }  // namespace
 
-int main(int argc, char** argv) {
+// 基准场景的初始化、运行与报告按执行顺序集中声明。
+// NOLINTNEXTLINE(readability-function-size)
+int main(int argc, char** argv) try {
     QCoreApplication app(argc, argv);
     try {
         require(argc == 6 || argc == 7,
@@ -105,19 +171,21 @@ int main(int argc, char** argv) {
         require(std::filesystem::create_directory(output),
                 "output directory must be new and its parent must exist");
 
-        Json result{{"frames", frames},
-                    {"targets", targetCount},
-                    {"frame_period_us", framePeriodUs},
-                    {"raw_side", side},
-                    {"raw_frames", rawFrames},
-                    {"qt_version", qVersion()},
-                    {"compiler", DSS_BASELINE_COMPILER},
+        Json result{
+            {"frames", frames},
+            {"targets", targetCount},
+            {"frame_period_us", framePeriodUs},
+            {"raw_side", side},
+            {"raw_frames", rawFrames},
+            {"qt_version", qVersion()},
+            {"compiler", DSS_BASELINE_COMPILER},
 #ifdef NDEBUG
-                    {"build", "Release"},
+            {"build", "Release"},
 #else
-                    {"build", "Debug"},
+            {"build", "Debug"},
 #endif
-                    {"memory_start", memory()}};
+            {"memory_start", memory()},
+        };
         Dss::Core::MessageBus bus;
         QUdpSocket receiver;
         require(receiver.bind(QHostAddress(QHostAddress::LocalHost), 0),
@@ -137,49 +205,31 @@ int main(int argc, char** argv) {
                 "image storage start failed");
         Dss::Core::TrackingSettings settings;
         settings.searchRadius = 20;
-        settings.opticParams.imageWidth = frames * 5 + targetCount * 100 + 1000;
-        settings.opticParams.imageHeight = frames * 4 + targetCount * 100 + 1000;
+        settings.opticParams.imageWidth = (frames * 5) + (targetCount * 100) + 1000;
+        settings.opticParams.imageHeight = (frames * 4) + (targetCount * 100) + 1000;
         Dss::Tracking::GeoTracker tracker(settings);
-        std::vector<double> trackTimes, udpTimes, frameTimes;
+        std::vector<double> trackTimes;
+        std::vector<double> udpTimes;
+        std::vector<double> frameTimes;
         trackTimes.reserve(frames);
         udpTimes.reserve(frames);
         frameTimes.reserve(frames);
-        std::size_t maxTargets = 0, maxHistory = 0, trackAccepted = 0, rawAccepted = 0,
-                    received = 0;
+        std::size_t maxTargets = 0;
+        std::size_t maxHistory = 0;
+        std::size_t trackAccepted = 0;
+        std::size_t rawAccepted = 0;
+        std::size_t received = 0;
         std::vector<std::string> targetIds;
         const auto start = Clock::now();
         for (int index = 0; index < frames; ++index) {
             const auto frameStart = Clock::now();
-            Dss::Core::FrameMeasurements frame;
-            frame.frameSeq = static_cast<std::uint64_t>(index + 1);
-            frame.frameFreq = 1;
-            frame.timestamp = {.year = 2026, .month = 9, .day = 22};
-            for (int item = 0; item < targetCount; ++item) {
-                Dss::Core::MeasuredBlob blob;
-                blob.centroid = {100.0F + item * 100 + index * 5, 100.0F + item * 100 + index * 4};
-                blob.posAe = {blob.centroid.x * 0.01F, blob.centroid.y * 0.01F};
-                blob.area = 16;
-                frame.targetBlobs.push_back(blob);
-            }
+            auto frame = makeSyntheticFrame(index, targetCount);
             const auto trackStart = Clock::now();
             const auto targets = tracker.track(frame);
             trackTimes.push_back(elapsed(trackStart));
-            if (index >= 3)
-                require(targets.size() == static_cast<std::size_t>(targetCount),
-                        "unexpected target count");
             maxTargets = (std::max)(maxTargets, targets.size());
-            for (std::size_t item = 0; item < targets.size(); ++item) {
-                const auto& target = targets[item];
-                if (index == 3)
-                    targetIds.push_back(target.targetId);
-                require(target.living && target.targetId == targetIds[item],
-                        "target retired or changed identity");
-                require(target.frameInfos.size() <=
-                            static_cast<std::size_t>((std::max)(10, settings.numFramesLiving)),
-                        "history window exceeded");
-                require(target.totalFrameCount() == frame.frameSeq, "cumulative count changed");
-                maxHistory = (std::max)(maxHistory, target.frameInfos.size());
-            }
+            verifyTargetHistory(targets, frame.frameSeq, targetCount, settings, targetIds,
+                                maxHistory);
             const auto packets = Dss::Core::makeResultPackets(targets);
             if (!packets.empty()) {
                 const auto metadata = Dss::Network::makeGxtcMetadata(packets.front());
@@ -187,22 +237,25 @@ int main(int argc, char** argv) {
                 const auto expected = Dss::Network::buildGxtcPacket(metadata, mapped);
                 const auto udpStart = Clock::now();
                 const auto sent = exchange.sendGxtc(metadata, mapped);
-                require(sent && *sent == static_cast<std::int64_t>(expected.size()),
-                        "UDP send failed");
+                require(sent && std::cmp_equal(*sent, expected.size()), "UDP send failed");
                 require(receiver.hasPendingDatagrams() || receiver.waitForReadyRead(1000),
                         "UDP receive timed out");
                 QByteArray data;
                 data.resize(static_cast<qsizetype>(receiver.pendingDatagramSize()));
                 require(receiver.readDatagram(data.data(), data.size()) == data.size(),
                         "UDP read failed");
+                // Qt QByteArray 提供 char 字节视图，核验时按相同字节表示读取。
+                // NOLINTBEGIN(cppcoreguidelines-pro-type-reinterpret-cast)
                 require(static_cast<std::size_t>(data.size()) == expected.size() &&
                             std::equal(expected.begin(), expected.end(),
                                        reinterpret_cast<const std::uint8_t*>(data.constData())),
                         "UDP content mismatch");
+                // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
                 udpTimes.push_back(elapsed(udpStart));
                 ++received;
-                if (tracks.enqueueTrackResult({frame.frameSeq, targets}))
+                if (tracks.enqueueTrackResult({frame.frameSeq, targets})) {
                     ++trackAccepted;
+                }
             }
             if (index < rawFrames) {
                 Dss::Storage::RawImageMetadata metadata;
@@ -210,15 +263,12 @@ int main(int argc, char** argv) {
                 metadata.height = side;
                 const std::vector<std::uint16_t> pixels(static_cast<std::size_t>(side) * side,
                                                         static_cast<std::uint16_t>(index));
-                if (images.enqueueRawFrame(std::to_string(index) + ".raw", metadata, pixels))
+                if (images.enqueueRawFrame(std::to_string(index) + ".raw", metadata, pixels)) {
                     ++rawAccepted;
+                }
             }
             frameTimes.push_back(elapsed(frameStart));
-            if (framePeriodUs > 0) {
-                std::this_thread::sleep_until(
-                    start + std::chrono::microseconds{static_cast<std::int64_t>(index + 1) *
-                                                      framePeriodUs});
-            }
+            waitForNextFrame(start, index, framePeriodUs);
         }
         const auto stopStart = Clock::now();
         tracks.stop();
@@ -235,32 +285,36 @@ int main(int argc, char** argv) {
             "accepted write lost");
         std::size_t trackLines = 0;
         std::ifstream records(tracks.outputPath());
-        for (std::string line; std::getline(records, line);)
+        for (std::string line; std::getline(records, line);) {
             ++trackLines;
+        }
         require(trackLines == trackAccepted * targetCount, "track archive record count mismatch");
         std::uintmax_t fileBytes = 0;
         for (const auto& entry : std::filesystem::recursive_directory_iterator(output)) {
-            if (entry.is_regular_file())
+            if (entry.is_regular_file()) {
                 fileBytes += entry.file_size();
+            }
         }
-        result.update({{"tracking", percentiles(trackTimes)},
-                       {"udp_round_trip", percentiles(udpTimes)},
-                       {"frame_submission", percentiles(frameTimes)},
-                       {"elapsed_us", totalUs},
-                       {"observed_frames_per_second", frames * 1000000.0 / totalUs},
-                       {"stop_us", stopUs},
-                       {"max_targets", maxTargets},
-                       {"max_history_per_target", maxHistory},
-                       {"udp_received", received},
-                       {"track_accepted", trackAccepted},
-                       {"track_rejected", tracks.droppedRequests()},
-                       {"track_archive_lines", trackLines},
-                       {"raw_accepted", rawAccepted},
-                       {"raw_rejected", images.droppedRequests()},
-                       {"files_bytes", fileBytes},
-                       {"track_queue", queue(tracks.resourceSnapshot())},
-                       {"raw_queue", queue(images.resourceSnapshot())},
-                       {"memory_end", memory()}});
+        result.update({
+            {"tracking", percentiles(trackTimes)},
+            {"udp_round_trip", percentiles(udpTimes)},
+            {"frame_submission", percentiles(frameTimes)},
+            {"elapsed_us", totalUs},
+            {"observed_frames_per_second", frames * 1000000.0 / totalUs},
+            {"stop_us", stopUs},
+            {"max_targets", maxTargets},
+            {"max_history_per_target", maxHistory},
+            {"udp_received", received},
+            {"track_accepted", trackAccepted},
+            {"track_rejected", tracks.droppedRequests()},
+            {"track_archive_lines", trackLines},
+            {"raw_accepted", rawAccepted},
+            {"raw_rejected", images.droppedRequests()},
+            {"files_bytes", fileBytes},
+            {"track_queue", queue(tracks.resourceSnapshot())},
+            {"raw_queue", queue(images.resourceSnapshot())},
+            {"memory_end", memory()},
+        });
         std::ofstream report(output / "report.json");
         report << result.dump(2) << '\n';
         require(static_cast<bool>(report), "report write failed");
@@ -270,4 +324,11 @@ int main(int argc, char** argv) {
         std::cerr << error.what() << '\n';
         return 1;
     }
+} catch (const std::exception& error) {
+    Dss::Core::reportEmergencyFailure(error.what());
+    Dss::Core::reportEmergencyFailure("\n");
+    return 1;
+} catch (...) {
+    Dss::Core::reportEmergencyFailure("DSS: unhandled entry-point failure\n");
+    return 1;
 }

@@ -65,6 +65,9 @@ public:
      */
     [[nodiscard]] bool rawDisplayEnabled() const;
 
+    // Qt
+    // 槽区段参与元对象生成，必须保留。
+    // NOLINTNEXTLINE(readability-redundant-access-specifiers)
 public Q_SLOTS:
     /**
      * @brief 通过事件总线发送缩放级别变化。

@@ -26,6 +26,12 @@ namespace Dss::Storage {
 /// 本地 RAW 图像异步存储后端，通过后台线程写入磁盘
 class LocalImageStorageBackend final : public IStorageBackend {
 public:
+    // 生命周期绑定当前对象，禁止复制或移动资源及回调所有者。
+    LocalImageStorageBackend(const LocalImageStorageBackend&) = delete;
+    auto operator=(const LocalImageStorageBackend&) -> LocalImageStorageBackend& = delete;
+    LocalImageStorageBackend(LocalImageStorageBackend&&) = delete;
+    auto operator=(LocalImageStorageBackend&&) -> LocalImageStorageBackend& = delete;
+
     using MessageBus = Dss::Core::MessageBus;  ///< 跨线程消息总线类型
     /**
      * @brief 构造本地图像存储后端。
@@ -35,7 +41,8 @@ public:
      */
     explicit LocalImageStorageBackend(std::filesystem::path baseDir,
                                       std::size_t maxPendingRequests = 1024,
-                                      std::size_t maxPendingBytes = 256U * 1024U * 1024U)
+                                      std::size_t maxPendingBytes = std::size_t{256} * 1024U *
+                                                                    1024U)
         : m_baseDir(std::move(baseDir)), m_writeQueue(maxPendingRequests, maxPendingBytes) {}
 
     /// @brief 停止后台写入线程后销毁后端。
@@ -75,8 +82,7 @@ public:
      * @return 成功时返回空值；未初始化时返回错误描述
      */
     auto start() -> std::expected<void, std::string> {
-        std::lock_guard lifecycleLock(m_lifecycleMutex);
-        std::lock_guard sessionLock(m_sessionMutex);
+        std::scoped_lock lock(m_lifecycleMutex, m_sessionMutex);
         if (m_stopping) {
             return std::unexpected("storage worker is draining");
         }
@@ -107,16 +113,16 @@ public:
 
     /// 停止后台写入工作线程并等待其退出
     void stop() {
-        std::lock_guard lifecycleLock(m_lifecycleMutex);
+        std::scoped_lock lifecycleLock(m_lifecycleMutex);
         requestStop();
         m_writeQueue.stop();
-        std::lock_guard sessionLock(m_sessionMutex);
+        std::scoped_lock sessionLock(m_sessionMutex);
         m_stopping = false;
     }
 
     /// 关闭当前代次的提交准入；stop() 随后负责等待排空。
     void requestStop() {
-        std::lock_guard lock(m_sessionMutex);
+        std::scoped_lock lock(m_sessionMutex);
         m_stopping = true;
         ++m_sessionGeneration;
         m_writeQueue.requestStop();
@@ -166,7 +172,7 @@ public:
 
     /** @brief 查询是否已配置观测会话。 @return 会话命名配置存在时返回 true。 */
     [[nodiscard]] bool hasSession() const {
-        std::lock_guard lock(m_sessionMutex);
+        std::scoped_lock lock(m_sessionMutex);
         return m_sessionNaming.has_value();
     }
 
@@ -175,7 +181,7 @@ public:
      * @return 会话目录路径；未配置会话时返回空路径。
      */
     [[nodiscard]] auto sessionPath() const -> std::filesystem::path {
-        std::lock_guard lock(m_sessionMutex);
+        std::scoped_lock lock(m_sessionMutex);
         if (!m_sessionNaming.has_value()) {
             return {};
         }
@@ -187,7 +193,7 @@ public:
      * @return 配置成功时为空；工作线程运行或文件创建失败时返回错误描述。
      */
     auto configureSession(ImageStorageNaming naming) -> std::expected<void, std::string> {
-        std::lock_guard lock(m_sessionMutex);
+        std::scoped_lock lock(m_sessionMutex);
         if (isRunning() || m_stopping) {
             return std::unexpected("cannot configure session while storage worker is running");
         }
@@ -222,7 +228,7 @@ public:
                              std::span<const std::uint16_t> pixels)
         -> std::expected<void, std::string> {
         return enqueueSessionFrame(
-            sequence, std::move(metadata),
+            sequence, metadata,
             std::make_shared<const std::vector<std::uint16_t>>(pixels.begin(), pixels.end()));
     }
 
@@ -239,15 +245,15 @@ public:
                              std::optional<std::uint64_t> generation = std::nullopt)
         -> std::expected<void, std::string> {
         const auto submittedGeneration = generation.value_or(m_sessionGeneration.load());
-        std::lock_guard lock(m_sessionMutex);
+        std::scoped_lock lock(m_sessionMutex);
         if (submittedGeneration != m_sessionGeneration.load()) {
             return std::unexpected("stale image storage session");
         }
         if (!m_sessionNaming.has_value()) {
             return std::unexpected("image storage session is not configured");
         }
-        return enqueueRawFrameLocked(buildImageFilePath(*m_sessionNaming, metadata, sequence),
-                                     std::move(metadata), std::move(pixels));
+        const auto path = buildImageFilePath(*m_sessionNaming, metadata, sequence);
+        return enqueueRawFrameLocked(path, metadata, std::move(pixels));
     }
 
     /**
@@ -261,7 +267,7 @@ public:
                          std::span<const std::uint16_t> pixels)
         -> std::expected<void, std::string> {
         return enqueueRawFrame(
-            std::move(relativePath), std::move(metadata),
+            std::move(relativePath), metadata,
             std::make_shared<const std::vector<std::uint16_t>>(pixels.begin(), pixels.end()));
     }
 
@@ -276,12 +282,11 @@ public:
                          std::shared_ptr<const std::vector<std::uint16_t>> pixels)
         -> std::expected<void, std::string> {
         const auto generation = m_sessionGeneration.load();
-        std::lock_guard lock(m_sessionMutex);
+        std::scoped_lock lock(m_sessionMutex);
         if (generation != m_sessionGeneration.load()) {
             return std::unexpected("stale image storage session");
         }
-        return enqueueRawFrameLocked(std::move(relativePath), std::move(metadata),
-                                     std::move(pixels));
+        return enqueueRawFrameLocked(std::move(relativePath), metadata, std::move(pixels));
     }
 
 private:
@@ -306,7 +311,7 @@ private:
 
         SaveRawFrameRequest request{};
         request.path = resolvePath(std::move(relativePath));
-        request.metadata = std::move(metadata);
+        request.metadata = metadata;
         request.pixels = std::move(pixels);
         const auto bytes = request.pixels->capacity() * sizeof(std::uint16_t);
         auto result = m_writeQueue.enqueue(std::move(request), bytes);
@@ -361,6 +366,9 @@ private:
             bmpMetadata.humidity = request.metadata.exposure.humidity;
             bmpMetadata.atmosPressure = request.metadata.exposure.atmosPressure;
             const auto pixelBytes = std::span<const std::uint8_t>(
+                // 字节 I/O
+                // 或平台句柄边界，表示由外部 API 规定。
+                // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
                 reinterpret_cast<const std::uint8_t*>(request.pixels->data()),
                 request.pixels->size() * sizeof(std::uint16_t));
             auto encoded = buildLegacyBmpFile(bmpMetadata, pixelBytes);
@@ -372,10 +380,15 @@ private:
             bytes = buildRawImageFile(request.metadata, *request.pixels);
         }
 
+        // 标准库 openmode 是位掩码类型，按位组合遵循 iostream API 契约。
+        // NOLINTNEXTLINE(bugprone-signed-bitwise)
         std::ofstream output(request.path, std::ios::binary | std::ios::trunc);
         if (!output) {
             return std::unexpected("failed to open storage file");
         }
+        // 字节 I/O
+        // 或平台句柄边界，表示由外部 API 规定。
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
         output.write(reinterpret_cast<const char*>(bytes.data()),
                      static_cast<std::streamsize>(bytes.size()));
         if (!output) {

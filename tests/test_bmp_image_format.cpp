@@ -12,14 +12,16 @@ auto attributeByteMetadata() -> Dss::Storage::LegacyBmpMetadata {
     Dss::Storage::LegacyBmpMetadata metadata{};
     metadata.targetId = 0x010203;
     metadata.telescopeId = 0x1234;
-    metadata.timestamp = {.year = 2026,
-                          .month = 6,
-                          .day = 2,
-                          .hour = 0,
-                          .minute = 0,
-                          .second = 1,
-                          .millisecond = 0,
-                          .microsecond = 0};
+    metadata.timestamp = {
+        .year = 2026,
+        .month = 6,
+        .day = 2,
+        .hour = 0,
+        .minute = 0,
+        .second = 1,
+        .millisecond = 0,
+        .microsecond = 0,
+    };
     metadata.ztCode = 0x0046;
     metadata.deltaX = 1.2;
     metadata.deltaY = -3.4;
@@ -86,7 +88,8 @@ TEST(BmpImageFormat, BuildsLegacyAttributeHeaderBytes) {
         0x0C,                    // cloud cover * 10
         0x7B, 0x00, 0x00,        // exposure * 10
         0x00, 0x00, 0x00, 0x00,  // reserved tail
-        0x00, 0x00, 0x00, 0x00};
+        0x00, 0x00, 0x00, 0x00,
+    };
 
     EXPECT_EQ(header, expected);
 }
@@ -181,8 +184,9 @@ TEST(BmpImageFormat, BuildsBitmapHeadersAndGrayPaletteForEightBitImages) {
 
 TEST(BmpImageFormat, BuildsCompleteLegacyBmpFileInMemory) {
     const auto metadata = smallBmpMetadata(16);
-    const std::vector<std::uint8_t> pixels{0x34, 0x12, 0x78, 0x56, 0xBC, 0x9A,
-                                           0xF0, 0xDE, 0x11, 0x22, 0x33, 0x44};
+    const std::vector<std::uint8_t> pixels{
+        0x34, 0x12, 0x78, 0x56, 0xBC, 0x9A, 0xF0, 0xDE, 0x11, 0x22, 0x33, 0x44,
+    };
 
     const auto file = Dss::Storage::buildLegacyBmpFile(metadata, pixels);
 
@@ -201,8 +205,9 @@ TEST(BmpImageFormat, BuildsCompleteLegacyBmpFileInMemory) {
 
 TEST(BmpImageFormat, DecodesCompleteLegacyBmpFilePixels) {
     const auto metadata = smallBmpMetadata(16);
-    const std::vector<std::uint8_t> pixels{0x34, 0x12, 0x78, 0x56, 0xBC, 0x9A,
-                                           0xF0, 0xDE, 0x11, 0x22, 0x33, 0x44};
+    const std::vector<std::uint8_t> pixels{
+        0x34, 0x12, 0x78, 0x56, 0xBC, 0x9A, 0xF0, 0xDE, 0x11, 0x22, 0x33, 0x44,
+    };
     const auto file = Dss::Storage::buildLegacyBmpFile(metadata, pixels);
     ASSERT_TRUE(file.has_value());
 

@@ -73,7 +73,7 @@ private:
      * @param index 标签索引。
      * @return 匹配的 Dock；索引无效或并非功能页标签时返回 nullptr。
      */
-    auto dockForTab(const QTabBar& tabBar, int index) const -> QDockWidget*;
+    [[nodiscard]] auto dockForTab(const QTabBar& tabBar, int index) const -> QDockWidget*;
     /**
      * @brief 将标签页 Dock 以合理的首次尺寸浮动到主窗口所在屏幕。
      * @param dock 需要浮动的功能页 Dock。

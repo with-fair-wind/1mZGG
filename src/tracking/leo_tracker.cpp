@@ -30,12 +30,14 @@ using Dss::Tracking::TrackMissPolicy;
 [[nodiscard]] bool passesLeoAssocGate(const Dss::Core::Vec2f& firstAeMotion,
                                       const Dss::Core::Vec2f& secondAeMotion,
                                       const Dss::Core::TrackingSettings& settings) {
-    const auto firstSpeed = static_cast<float>(std::hypot(firstAeMotion.x, firstAeMotion.y));
+    const auto firstSpeed = std::hypot(firstAeMotion.x, firstAeMotion.y);
     return firstSpeed > settings.spdLowAe &&
            std::abs(secondAeMotion.x - firstAeMotion.x) <= settings.thresholdAe &&
            std::abs(secondAeMotion.y - firstAeMotion.y) <= settings.thresholdAe;
 }
 
+// 显式映射 legacy 目标字段，便于逐项核对黄金数据。
+// NOLINTNEXTLINE(readability-function-size)
 [[nodiscard]] auto makeAssociatedTarget(
     const Dss::Core::FrameMeasurements& firstFrame, const Dss::Core::MeasuredBlob& firstBlob,
     const Dss::Core::FrameMeasurements& secondFrame, const Dss::Core::MeasuredBlob& secondBlob,
@@ -52,14 +54,22 @@ using Dss::Tracking::TrackMissPolicy;
     target.frameInfos.push_back(makeTargetFrameInfo(firstFrame, firstBlob, settings));
     target.frameInfos.push_back(makeTargetFrameInfo(secondFrame, secondBlob, settings));
     target.frameInfos.push_back(makeTargetFrameInfo(thirdFrame, thirdBlob, settings));
-    target.predictedSpdFrame = Dss::Core::Vec2f{(firstFrameMotion.x + secondFrameMotion.x) / 2.0F,
-                                                (firstFrameMotion.y + secondFrameMotion.y) / 2.0F};
-    target.predictedPosFrame = Dss::Core::Vec2f{thirdBlob.centroid.x + target.predictedSpdFrame.x,
-                                                thirdBlob.centroid.y + target.predictedSpdFrame.y};
-    target.predictedSpdAe = Dss::Core::Vec2f{(firstAeMotion.x + secondAeMotion.x) / period / 2.0F,
-                                             (firstAeMotion.y + secondAeMotion.y) / period / 2.0F};
-    target.predictedPosAe = Dss::Core::Vec2f{thirdBlob.posAe.x + target.predictedSpdAe.x * period,
-                                             thirdBlob.posAe.y + target.predictedSpdAe.y * period};
+    target.predictedSpdFrame = Dss::Core::Vec2f{
+        (firstFrameMotion.x + secondFrameMotion.x) / 2.0F,
+        (firstFrameMotion.y + secondFrameMotion.y) / 2.0F,
+    };
+    target.predictedPosFrame = Dss::Core::Vec2f{
+        thirdBlob.centroid.x + target.predictedSpdFrame.x,
+        thirdBlob.centroid.y + target.predictedSpdFrame.y,
+    };
+    target.predictedSpdAe = Dss::Core::Vec2f{
+        (firstAeMotion.x + secondAeMotion.x) / period / 2.0F,
+        (firstAeMotion.y + secondAeMotion.y) / period / 2.0F,
+    };
+    target.predictedPosAe = Dss::Core::Vec2f{
+        thirdBlob.posAe.x + (target.predictedSpdAe.x * period),
+        thirdBlob.posAe.y + (target.predictedSpdAe.y * period),
+    };
     target.validity = 1.0F;
     target.living = true;
     return target;
@@ -138,7 +148,7 @@ using Dss::Tracking::TrackMissPolicy;
 }
 
 [[nodiscard]] auto aeSpeedMagnitude(const Dss::Core::TargetInfo& target) -> float {
-    return static_cast<float>(std::hypot(target.predictedSpdAe.x, target.predictedSpdAe.y));
+    return std::hypot(target.predictedSpdAe.x, target.predictedSpdAe.y);
 }
 
 /// 在当前帧验证各候选目标，保留 AE 运动一致且最新帧有效的候选

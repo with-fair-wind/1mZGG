@@ -30,8 +30,8 @@ void discreteFourierTransform(std::span<const double> inputReal, std::span<const
                 2.0 * std::numbers::pi * static_cast<double>(k * t) / static_cast<double>(n);
             const auto cosAngle = std::cos(angle);
             const auto sinAngle = std::sin(angle);
-            sumReal += inputReal[t] * cosAngle + inputImag[t] * sinAngle;
-            sumImag += inputImag[t] * cosAngle - inputReal[t] * sinAngle;
+            sumReal += (inputReal[t] * cosAngle) + (inputImag[t] * sinAngle);
+            sumImag += (inputImag[t] * cosAngle) - (inputReal[t] * sinAngle);
         }
         outputReal[k] = sumReal;
         outputImag[k] = sumImag;
@@ -40,7 +40,7 @@ void discreteFourierTransform(std::span<const double> inputReal, std::span<const
 
 auto validFitInput(std::span<const double> x, std::span<const double> y, int order) -> bool {
     return order >= 0 && !x.empty() && x.size() == y.size() &&
-           x.size() >= static_cast<std::size_t>(order + 1);
+           x.size() >= static_cast<std::size_t>(order) + 1U;
 }
 
 /// 高斯消元法求解线性方程组，用于多项式最小二乘
@@ -48,9 +48,9 @@ auto solveLinearSystem(std::vector<double> matrix, std::vector<double> rhs, int 
     -> std::optional<std::vector<double>> {
     for (int column = 0; column < size; ++column) {
         auto pivotRow = column;
-        auto pivotAbs = std::abs(matrix[column * size + column]);
+        auto pivotAbs = std::abs(matrix[(column * size) + column]);
         for (int row = column + 1; row < size; ++row) {
-            const auto candidate = std::abs(matrix[row * size + column]);
+            const auto candidate = std::abs(matrix[(row * size) + column]);
             if (candidate > pivotAbs) {
                 pivotAbs = candidate;
                 pivotRow = row;
@@ -62,16 +62,16 @@ auto solveLinearSystem(std::vector<double> matrix, std::vector<double> rhs, int 
 
         if (pivotRow != column) {
             for (int index = 0; index < size; ++index) {
-                std::swap(matrix[column * size + index], matrix[pivotRow * size + index]);
+                std::swap(matrix[(column * size) + index], matrix[(pivotRow * size) + index]);
             }
             std::swap(rhs[column], rhs[pivotRow]);
         }
 
         for (int row = column + 1; row < size; ++row) {
-            const auto factor = matrix[row * size + column] / matrix[column * size + column];
-            matrix[row * size + column] = 0.0;
+            const auto factor = matrix[(row * size) + column] / matrix[(column * size) + column];
+            matrix[(row * size) + column] = 0.0;
             for (int index = column + 1; index < size; ++index) {
-                matrix[row * size + index] -= factor * matrix[column * size + index];
+                matrix[(row * size) + index] -= factor * matrix[(column * size) + index];
             }
             rhs[row] -= factor * rhs[column];
         }
@@ -81,9 +81,9 @@ auto solveLinearSystem(std::vector<double> matrix, std::vector<double> rhs, int 
     for (int row = size - 1; row >= 0; --row) {
         auto value = rhs[row];
         for (int column = row + 1; column < size; ++column) {
-            value -= matrix[row * size + column] * solution[column];
+            value -= matrix[(row * size) + column] * solution[column];
         }
-        const auto diagonal = matrix[row * size + row];
+        const auto diagonal = matrix[(row * size) + row];
         if (std::abs(diagonal) <= kSingularTolerance) {
             return std::nullopt;
         }
@@ -100,11 +100,12 @@ auto fitCoefficients(std::span<const double> x, std::span<const double> y, int o
     }
 
     const auto matrixSize = order + 1;
-    std::vector<double> matrix(matrixSize * matrixSize, 0.0);
+    std::vector<double> matrix(
+        static_cast<std::size_t>(matrixSize) * static_cast<std::size_t>(matrixSize), 0.0);
     std::vector<double> rhs(matrixSize, 0.0);
 
     for (std::size_t sample = 0; sample < x.size(); ++sample) {
-        std::vector<double> powers(static_cast<std::size_t>(order * 2 + 1), 1.0);
+        std::vector<double> powers((static_cast<std::size_t>(order) * 2U) + 1U, 1.0);
         for (std::size_t power = 1; power < powers.size(); ++power) {
             powers[power] = powers[power - 1] * x[sample];
         }
@@ -112,7 +113,8 @@ auto fitCoefficients(std::span<const double> x, std::span<const double> y, int o
         for (int row = 0; row < matrixSize; ++row) {
             rhs[row] += y[sample] * powers[static_cast<std::size_t>(row)];
             for (int column = 0; column < matrixSize; ++column) {
-                matrix[row * matrixSize + column] += powers[static_cast<std::size_t>(row + column)];
+                matrix[(row * matrixSize) + column] +=
+                    powers[static_cast<std::size_t>(row) + static_cast<std::size_t>(column)];
             }
         }
     }
@@ -141,7 +143,7 @@ auto buildFitResult(std::span<const double> x, std::span<const double> y,
     result.rmse = std::sqrt(result.sse / static_cast<double>(y.size()));
     const auto total = result.ssr + result.sse;
     if (total > std::numeric_limits<double>::epsilon()) {
-        result.rSquared = 1.0 - result.sse / total;
+        result.rSquared = 1.0 - (result.sse / total);
     } else {
         result.rSquared = (result.sse <= kSingularTolerance) ? 1.0 : 0.0;
     }
@@ -401,7 +403,7 @@ void ifft(std::span<const double> inputReal, std::span<const double> inputImag,
         for (size_t k = 0; k < n; ++k) {
             double angle =
                 2.0 * std::numbers::pi * static_cast<double>(k * t) / static_cast<double>(n);
-            sum += inputReal[k] * std::cos(angle) - inputImag[k] * std::sin(angle);
+            sum += (inputReal[k] * std::cos(angle)) - (inputImag[k] * std::sin(angle));
         }
         output[t] = sum / static_cast<double>(n);
     }
@@ -417,7 +419,7 @@ auto estimatePeriod(std::span<const double> signal, double sampleRate) -> double
     double maxMagnitude = 0.0;
     size_t maxIndex = 1;
     for (size_t k = 1; k < n / 2; ++k) {
-        double mag = std::sqrt(real[k] * real[k] + imag[k] * imag[k]);
+        double mag = std::sqrt((real[k] * real[k]) + (imag[k] * imag[k]));
         if (mag > maxMagnitude) {
             maxMagnitude = mag;
             maxIndex = k;

@@ -12,6 +12,8 @@ namespace Dss::Tracking {
 /**
  * @brief 候选目标测量比较所使用的坐标空间。
  */
+// 保留公共枚举的既有整数表示和对象布局。
+// NOLINTNEXTLINE(performance-enum-size)
 enum class CandidateMeasurementSpace {
     Centroid,  ///< 使用像面质心坐标比较测量点。
     RaDec,     ///< 使用赤经/赤纬坐标比较测量点。

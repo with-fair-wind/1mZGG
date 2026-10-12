@@ -127,7 +127,11 @@ cmake --build --preset clang-cl-debug --target format-check
 cmake --build --preset clang-cl-debug --target tidy-check
 ```
 
-项目遵循 `.clang-format`、`.clang-tidy` 和现代 C++ RAII/窄接口约定。`oldsrc/` 不在 clangd 索引或任何 CMake target 中。
+项目遵循 `.clang-format`、`.clang-tidy` 和现代 C++ RAII/窄接口约定。`format`/`tidy` 会修改代码，带 `-check` 的目标只检查；`tidy-check` 默认将 warning 作为失败条件，已有构建目录需重新配置或显式设置 `DSS_CLANG_TIDY_WARNINGS_AS_ERRORS=ON`。clangd 共用 `.clang-tidy` 规则。检查器版本不同仍可能产生不同诊断；本机 Scoop 升级后，应先用 CI 固定版本复现，再通过版本更新提交提升质量基线。
+
+`format-check` 检查受 Git 跟踪的项目 C/C++ 文件；`tidy-check` 分析当前编译数据库中的 `src`、`tests`、`tools` 和 `benchmarks` 翻译单元及项目头文件。旧代码、第三方及生成文件不作为扫描入口；编译数据库之外的 CUDA/Sapera 可选硬件配置需另行验收。复杂度规则忽略宏展开及宏参数（包括 GoogleTest 的测试体），普通函数的阈值仍为 30。Qt 槽标记、公共枚举 ABI 和必要的平台转换使用带原因的局部例外，不关闭整类检查；`tidy` 的自动修改必须审查并运行回归测试，特别注意引用类别、NaN 比较和 Qt 元对象。
+
+`.github/workflows/quality.yml` 在推送、PR 和手动触发时运行独立质量门禁：LLVM 23.1.3、Conan 2.32.0、CMake 4.4.3、Ninja 1.13.2、Qt 6.8.0；启用默认 Qt/OpenCV 和测试，使用 Ninja 并禁用 PCH，先验证格式与规则配置，再构建并运行 `format-check`/`tidy-check`。失败日志与工具版本保留 14 天。工具升级通过版本更新提交验证，最新稳定工具链兼容性任务继续独立运行。
 
 ## 文档索引
 

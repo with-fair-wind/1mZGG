@@ -20,10 +20,16 @@ namespace Dss::Acquisition {
 /// 从本地图像文件序列按序回放帧的帧源实现
 class ImageSequenceFrameSource final : public IFrameSource {
 public:
+    // 生命周期绑定当前对象，禁止复制或移动资源及回调所有者。
+    ImageSequenceFrameSource(const ImageSequenceFrameSource&) = delete;
+    auto operator=(const ImageSequenceFrameSource&) -> ImageSequenceFrameSource& = delete;
+    ImageSequenceFrameSource(ImageSequenceFrameSource&&) = delete;
+    auto operator=(ImageSequenceFrameSource&&) -> ImageSequenceFrameSource& = delete;
+
     /// 单文件读取预算，超过此值拒绝加载。
-    static constexpr std::uintmax_t maxFileBytes = 128U * 1024U * 1024U;
+    static constexpr std::uintmax_t maxFileBytes = std::size_t{128} * 1024U * 1024U;
     /// 单帧像素数预算，在分配解码缓冲前检查。
-    static constexpr std::uint64_t maxImagePixels = 64U * 1024U * 1024U;
+    static constexpr std::uint64_t maxImagePixels = std::size_t{64} * 1024U * 1024U;
     /// 连续回放的终态快照；空 error 表示正常 EOF，否则为失败原因。
     struct Completion {
         std::string error;  ///< 空串表示正常 EOF，否则为错误原因。
@@ -102,6 +108,15 @@ public:
     [[nodiscard]] auto frameHeight() const -> std::uint32_t override;
 
 private:
+    /// @brief 使用 start 冻结的快照执行连续回放，并提交完成或失败状态。
+    /// @param[in] token 回放取消令牌。
+    /// @param[in] files 当前序列快照。
+    /// @param[in] interval 帧间等待时长。
+    /// @param[in] startIndex 起始帧索引。
+    /// @param[in] callback 使用同一快照顺序投递各帧的回调。
+    void playFiles(std::stop_token token, std::vector<std::filesystem::path> files,
+                   std::chrono::milliseconds interval, std::size_t startIndex,
+                   FrameCallback callback);
     mutable std::mutex m_mutex;                  ///< 保护共享状态的互斥锁
     std::vector<std::filesystem::path> m_files;  ///< 待回放的图像文件路径列表
     FrameCallback m_callback;                    ///< 帧就绪回调

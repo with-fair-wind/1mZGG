@@ -6,6 +6,8 @@
 namespace Dss::Core {
 
 /// 初始化配置文件读取状态
+// 保留公共枚举的既有整数表示和对象布局。
+// NOLINTNEXTLINE(performance-enum-size)
 enum class InitStatus : int {
     Ok = 1,                     ///< 读取成功
     ErrorCommNetSettings = 0,   ///< 通信网络配置错误
@@ -18,6 +20,8 @@ enum class InitStatus : int {
 };
 
 /// 三态运行状态
+// 保留公共枚举的既有整数表示和对象布局。
+// NOLINTNEXTLINE(performance-enum-size)
 enum class Status : int {
     Init = -1,  ///< 初始化中
     Error = 0,  ///< 错误
@@ -25,12 +29,16 @@ enum class Status : int {
 };
 
 /// 相机触发模式
+// 保留公共枚举的既有整数表示和对象布局。
+// NOLINTNEXTLINE(performance-enum-size)
 enum class TriggerMode : int {
     External = 0,  ///< 外部触发
     Free = 1,      ///< 自由运行
 };
 
 /// 串口显示模式
+// 保留公共枚举的既有整数表示和对象布局。
+// NOLINTNEXTLINE(performance-enum-size)
 enum class CommDisplayMode : int {
     PortInit = 0,   ///< 端口初始化
     Recv = 1,       ///< 接收
@@ -39,6 +47,8 @@ enum class CommDisplayMode : int {
 };
 
 /// 图像处理模式
+// 保留公共枚举的既有整数表示和对象布局。
+// NOLINTNEXTLINE(performance-enum-size)
 enum class ProcessingMode : int {
     None = 0,    ///< 不处理
     Diff = 1,    ///< 差分处理
@@ -46,6 +56,8 @@ enum class ProcessingMode : int {
 };
 
 /// 跟踪模式
+// 保留公共枚举的既有整数表示和对象布局。
+// NOLINTNEXTLINE(performance-enum-size)
 enum class TrackMode : int {
     Init = -1,         ///< 未初始化
     Geo = 0,           ///< 地球同步轨道

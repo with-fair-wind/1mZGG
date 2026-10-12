@@ -36,8 +36,10 @@ void TrackingViewModel::setTrackMode(int mode) {
 
 void TrackingViewModel::selectTarget(QPointF pos) {
     m_manualTarget = makeManualTarget(pos);
-    m_bus.emit(Dss::Core::ManualTargetSelectEvent{static_cast<float>(pos.x()),
-                                                  static_cast<float>(pos.y())});
+    m_bus.emit(Dss::Core::ManualTargetSelectEvent{
+        static_cast<float>(pos.x()),
+        static_cast<float>(pos.y()),
+    });
     if (m_trackMode != static_cast<int>(Dss::Core::TrackMode::Manual)) {
         setTrackMode(static_cast<int>(Dss::Core::TrackMode::Manual));
     } else {
@@ -72,7 +74,7 @@ void TrackingViewModel::onTrackResult(const Dss::Core::TrackResultEvent& event) 
     }
     bool schedule = false;
     {
-        std::lock_guard lock(m_pendingMutex);
+        std::scoped_lock lock(m_pendingMutex);
         if (revision != m_sessionRevision.load()) {
             return;
         }
@@ -89,7 +91,7 @@ void TrackingViewModel::onTrackResult(const Dss::Core::TrackResultEvent& event) 
 void TrackingViewModel::flushPendingResult() {
     std::optional<DisplayResult> result;
     {
-        std::lock_guard lock(m_pendingMutex);
+        std::scoped_lock lock(m_pendingMutex);
         result = std::exchange(m_pendingResult, std::nullopt);
         m_updateQueued = false;
     }

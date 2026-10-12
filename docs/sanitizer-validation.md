@@ -24,7 +24,7 @@ python tools/run_sanitizer.py --sanitizer thread --build-dir build/ci-thread --h
 
 ## 覆盖与持续集成
 
-核心套件构建 12 个目标，覆盖有界通道、异步写入队列、处理异常、四种跟踪器及候选/预测/生命周期辅助函数、轨迹存储和结果网络映射。可选 Qt 套件再增加 ReplaySession、回放/主/显示 ViewModel、UdpChannel、DataExchange、ImageSender，共 19 个目标。CTest 每项超时 90 秒、无匹配测试即失败；生成构建目录中的 `sanitizer-results.xml` 和 `Testing/Temporary` 日志。
+核心套件构建 13 个目标，覆盖事件模板的引用类别和多播值复制、有界通道、异步写入队列、处理异常、四种跟踪器及候选/预测/生命周期辅助函数、轨迹存储和结果网络映射。可选 Qt 套件再增加 FrameSourceCoordinator、ReplaySession、回放/主/显示/日志 ViewModel（含槽元数据）、UdpChannel、DataExchange、ImageSender，共 22 个目标。CTest 每项超时 90 秒、无匹配测试即失败；生成构建目录中的 `sanitizer-results.xml` 和 `Testing/Temporary` 日志。
 
 `.github/workflows/sanitizers.yml` 配置 Windows core/qt ASan 矩阵与 Linux core TSan，在目标分支推送、PR 或手动触发时运行。Windows 固定 LLVM 23.1.2（官方 MSI 校验 SHA-256 后解包），Qt 固定为 6.8.0 / MSVC 2022，安装 qtcharts、qtserialport；每项保留独立 JUnit 和日志，失败不取消其他矩阵项。普通 MSVC Release CI 继续运行全量回归。
 
@@ -53,8 +53,6 @@ ASan 不检测数据竞争；TSan 也不能代替内存和业务正确性测试�
 
 ## 最新本机结果
 
-2026-09-29，Windows x64 / clang-cl 23.1.2 / VS 18/v145 / Qt 6.11.1：公共 Qt 入口增加 `--rebuild-deps` 强制重建依赖后 **119/119 CTest 通过，40.39 秒**，无 ASan 报告。另用 VS 自带 clang-cl 22.1.3 的 `Program Files` 路径复现原链接错误，修复后 Conan/CMake 配置、链接与 ASan 程序执行通过。显示测试内部有 9 个 GoogleTest 用例，覆盖 CPU/RAW 回调期间重置、拉伸重绘取消与新帧继续投递。此前普通 Debug 全量为 **263/263，74.84 秒**，Doxygen 零警告。
+2026-10-10，Windows x64 / clang-cl 23.1.3 / VS 18/v145 / Qt 6.11.1：项目及 Conan 插桩依赖使用同一编译器，公共 Qt 入口 **128/128 CTest 通过，108.20 秒（与 OpenCV 构建并行）**，无 ASan 报告。新增覆盖事件右值引用与多播值复制、帧源停止异常和 Qt 槽元数据；Manual 非有限边界回归也在此套件中执行。普通 Qt/OpenCV Debug 全量 **266/266，26.22 秒**，Doxygen 零警告。
 
-本机证据保存在已忽略目录 `build/architecture-review/latest-local-check.log`、`ci-asan-space-regression.log`、`display-fix-full-verified.log`；JUnit 在 `build/clang-cl-asan-replay/sanitizer-results.xml`。这些是本地记录，不随源码分发；其他环境应运行上述公共入口生成自己的证据。本机 Qt 版本与 CI 不同，远端证据见 [验证矩阵](validation-matrix.md)。
-
-2026-09-29，代码提交 `434f6c2` 的 [远端 sanitizer 工作流](https://github.com/with-fair-wind/1mZGG/actions/runs/36549769335) 全部通过：Windows core **107/107，7.89 秒**，Windows Qt **119/119，13.76 秒**，Linux TSan **107/107，2.25 秒**。Windows 日志确认依赖与项目均为 Clang 23.1.2，未混用 VS 自带的 Clang 19。修复包含库路径转义、MSVC 14.4x 映射、固定 LLVM 与编译器绝对路径；未过滤失败测试。普通 Release CI 同样通过，详情见 [验证矩阵](validation-matrix.md)。
+JUnit 位于 `build/clang-cl-asan-replay/sanitizer-results.xml`，CTest 日志位于相同目录的 `Testing/Temporary`；这些是被忽略的本机产物，其他环境应运行公共入口生成自己的证据。当前核心入口包含 13 个目标，Qt 入口共 22 个目标；历史 runner 的测试数量不能当作扩展后套件的结果。本机 Qt 版本与 CI 不同，远端证据及配置边界见 [验证矩阵](validation-matrix.md)。

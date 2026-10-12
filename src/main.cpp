@@ -1,8 +1,10 @@
 #include <QApplication>
 #include <QDebug>
+#include <exception>
 
 #include "dss/app/application_context.h"
 #include "dss/core/config/config.h"
+#include "dss/core/diagnostics/emergency_report.h"
 #include "dss/core/event/events.h"
 #include "dss/ui/view_model/main_view_model.h"
 #include "dss/ui/widget/init_dialog.h"
@@ -19,7 +21,7 @@
  * @param argv 命令行参数数组
  * @return 应用退出码
  */
-int main(int argc, char* argv[]) {
+int main(int argc, char* argv[]) try {
     // Display Dock 可浮动为顶层窗口，提前共享 OpenGL 上下文以保留纹理资源。
     QApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 #ifdef DSS_HAS_ELA
@@ -66,4 +68,11 @@ int main(int argc, char* argv[]) {
     mainViewModel.shutdown();
     context.shutdown();  // 先停所有后台 worker,再让栈对象逆序析构,避免关机竞态 UAF
     return exitCode;
+} catch (const std::exception& error) {
+    Dss::Core::reportEmergencyFailure(error.what());
+    Dss::Core::reportEmergencyFailure("\n");
+    return 1;
+} catch (...) {
+    Dss::Core::reportEmergencyFailure("DSS: unhandled entry-point failure\n");
+    return 1;
 }

@@ -10,6 +10,11 @@ namespace Dss::Core {
 /// @brief 使用 std::stop_token 提供可立即取消的定时等待。
 class InterruptibleWait {
 public:
+    // 生命周期绑定当前对象，禁止复制或移动资源及回调所有者。
+    ~InterruptibleWait() = default;
+    InterruptibleWait(InterruptibleWait&&) = delete;
+    auto operator=(InterruptibleWait&&) -> InterruptibleWait& = delete;
+
     InterruptibleWait() = default;
     InterruptibleWait(const InterruptibleWait&) = delete;
     auto operator=(const InterruptibleWait&) -> InterruptibleWait& = delete;

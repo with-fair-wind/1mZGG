@@ -13,8 +13,8 @@ namespace Dss::Ui {
  */
 class ProcessingViewModel : public QObject {
     Q_OBJECT
-    Q_PROPERTY(int processingMode READ processingMode WRITE setProcessingMode NOTIFY
-                   processingModeChanged)
+    Q_PROPERTY(
+        int processingMode READ processingMode WRITE setProcessingMode NOTIFY processingModeChanged)
 
 public:
     /**
@@ -35,6 +35,9 @@ public:
      */
     [[nodiscard]] int processingMode() const;
 
+    // Qt
+    // 槽区段参与元对象生成，必须保留。
+    // NOLINTNEXTLINE(readability-redundant-access-specifiers)
 public Q_SLOTS:
     /**
      * @brief 设置处理模式并同步到 ImageProcessor。
@@ -61,7 +64,7 @@ private:
      */
     void configureProcessingStrategy();
 
-    Dss::Core::ServiceRegistry& m_registry;  ///< 应用服务注册表。
+    Dss::Core::ServiceRegistry& m_registry;                                    ///< 应用服务注册表。
     int m_processingMode = static_cast<int>(Dss::Core::ProcessingMode::None);  ///< 当前处理模式。
 };
 

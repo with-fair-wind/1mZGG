@@ -25,6 +25,12 @@ namespace Dss::Storage {
 /// 跟踪数据异步存储后端，将跟踪结果追加写入遗留格式文本文件
 class TrackDataStorageBackend final : public IStorageBackend {
 public:
+    // 生命周期绑定当前对象，禁止复制或移动资源及回调所有者。
+    TrackDataStorageBackend(const TrackDataStorageBackend&) = delete;
+    auto operator=(const TrackDataStorageBackend&) -> TrackDataStorageBackend& = delete;
+    TrackDataStorageBackend(TrackDataStorageBackend&&) = delete;
+    auto operator=(TrackDataStorageBackend&&) -> TrackDataStorageBackend& = delete;
+
     using MessageBus = Dss::Core::MessageBus;  ///< 跨线程消息总线类型
     /**
      * @brief 构造跟踪数据存储后端。
@@ -72,7 +78,7 @@ public:
      * @return 会话 GAE 文件路径；未配置会话时返回默认文本路径。
      */
     [[nodiscard]] auto outputPath() const -> std::filesystem::path {
-        std::lock_guard lock(m_sessionMutex);
+        std::scoped_lock lock(m_sessionMutex);
         return m_sessionOutputPath.empty() ? m_baseDir / "track_data.txt" : m_sessionOutputPath;
     }
 
@@ -81,8 +87,7 @@ public:
      * @return 成功时返回空值；未初始化时返回错误描述
      */
     auto start() -> std::expected<void, std::string> {
-        std::lock_guard lifecycleLock(m_lifecycleMutex);
-        std::lock_guard sessionLock(m_sessionMutex);
+        std::scoped_lock lock(m_lifecycleMutex, m_sessionMutex);
         if (m_stopping) {
             return std::unexpected("track storage worker is draining");
         }
@@ -113,16 +118,16 @@ public:
 
     /// 停止后台写入工作线程并等待其退出
     void stop() {
-        std::lock_guard lifecycleLock(m_lifecycleMutex);
+        std::scoped_lock lifecycleLock(m_lifecycleMutex);
         requestStop();
         m_writeQueue.stop();
-        std::lock_guard sessionLock(m_sessionMutex);
+        std::scoped_lock sessionLock(m_sessionMutex);
         m_stopping = false;  ///< 由 m_sessionMutex 保护的异步停止状态。
     }
 
     /// 关闭当前代次的准入，不等待写入完成。
     void requestStop() {
-        std::lock_guard lock(m_sessionMutex);
+        std::scoped_lock lock(m_sessionMutex);
         m_stopping = true;      ///< 由 m_sessionMutex 保护的异步停止状态。
         ++m_sessionGeneration;  ///< 会话代数，停止/切换时递增，用于拒绝旧回调。
         m_writeQueue.requestStop();
@@ -170,7 +175,7 @@ public:
      * @return 配置成功时为空；工作线程运行或目录创建失败时返回错误描述。
      */
     auto configureSession(const ImageStorageNaming& naming) -> std::expected<void, std::string> {
-        std::lock_guard lock(m_sessionMutex);
+        std::scoped_lock lock(m_sessionMutex);
         if (isRunning() || m_stopping) {
             return std::unexpected(
                 "cannot configure session while track storage worker is running");
@@ -205,7 +210,7 @@ public:
         -> std::expected<void, std::string> {
         const auto submittedGeneration = generation.value_or(
             m_sessionGeneration.load());  ///< 会话代数，停止/切换时递增，用于拒绝旧回调。
-        std::lock_guard lock(m_sessionMutex);
+        std::scoped_lock lock(m_sessionMutex);
         if (submittedGeneration != m_sessionGeneration.load()) {
             return std::unexpected("stale track storage session");
         }

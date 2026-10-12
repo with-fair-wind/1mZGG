@@ -1,5 +1,6 @@
 #include <functional>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <utility>
 
@@ -138,4 +139,35 @@ TEST(FrameSourceCoordinator, DoesNotHoldStateMutexWhileCallingSources) {
     const auto switched = coordinator.selectSource(Dss::Acquisition::FrameSourceMode::Live);
 
     ASSERT_TRUE(switched.has_value()) << switched.error();
+}
+
+TEST(FrameSourceCoordinator, StopAttemptsAllSourcesBeforeReportingFailure) {
+    auto replay = std::make_shared<FakeFrameSource>();
+    auto live = std::make_shared<FakeFrameSource>();
+    Dss::Acquisition::FrameSourceCoordinator coordinator;
+    ASSERT_TRUE(coordinator.registerSource(Dss::Acquisition::FrameSourceMode::Replay, replay));
+    ASSERT_TRUE(coordinator.registerSource(Dss::Acquisition::FrameSourceMode::Live, live));
+    replay->onStop = [] { throw std::runtime_error("stop failed"); };
+    live->running = true;
+
+    EXPECT_THROW(coordinator.stop(), std::runtime_error);
+    EXPECT_EQ(replay->stopCount, 1);
+    EXPECT_EQ(live->stopCount, 1);
+    EXPECT_FALSE(live->running);
+    replay->onStop = {};
+}
+
+TEST(FrameSourceCoordinator, DestructorContainsStopFailureAndAttemptsRemainingSources) {
+    auto replay = std::make_shared<FakeFrameSource>();
+    auto live = std::make_shared<FakeFrameSource>();
+    auto coordinator = std::make_unique<Dss::Acquisition::FrameSourceCoordinator>();
+    ASSERT_TRUE(coordinator->registerSource(Dss::Acquisition::FrameSourceMode::Replay, replay));
+    ASSERT_TRUE(coordinator->registerSource(Dss::Acquisition::FrameSourceMode::Live, live));
+    replay->onStop = [] { throw std::runtime_error("stop failed"); };
+    live->running = true;
+
+    coordinator.reset();
+    EXPECT_EQ(replay->stopCount, 1);
+    EXPECT_EQ(live->stopCount, 1);
+    EXPECT_FALSE(live->running);
 }

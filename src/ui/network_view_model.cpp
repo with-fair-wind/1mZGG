@@ -1,5 +1,6 @@
 #include "dss/ui/view_model/network_view_model.h"
 
+#include <algorithm>
 #include <array>
 #include <expected>
 #include <memory>
@@ -33,28 +34,56 @@ struct NetworkServiceDescriptor {
 
 /// 可由 UI 编辑的 UDP 端点描述表。
 constexpr std::array kNetworkEndpointDescriptors{
-    NetworkEndpointDescriptor{"image_sender", "Image Sender",
-                              &Dss::Core::CommNetConfig::imageSender},
-    NetworkEndpointDescriptor{"error_diag", "Error Diagnostics",
-                              &Dss::Core::CommNetConfig::errorDiag},
+    NetworkEndpointDescriptor{
+        "image_sender",
+        "Image Sender",
+        &Dss::Core::CommNetConfig::imageSender,
+    },
+    NetworkEndpointDescriptor{
+        "error_diag",
+        "Error Diagnostics",
+        &Dss::Core::CommNetConfig::errorDiag,
+    },
     NetworkEndpointDescriptor{"atmos", "Atmos Receiver", &Dss::Core::CommNetConfig::atmos},
     NetworkEndpointDescriptor{"heartbeat", "Heartbeat", &Dss::Core::CommNetConfig::heartbeat},
-    NetworkEndpointDescriptor{"exchange_gxtc", "GXTC Data Exchange",
-                              &Dss::Core::CommNetConfig::exchangeGxtc},
-    NetworkEndpointDescriptor{"exchange_gdcl", "GDCL Data Exchange",
-                              &Dss::Core::CommNetConfig::exchangeGdcl},
+    NetworkEndpointDescriptor{
+        "exchange_gxtc",
+        "GXTC Data Exchange",
+        &Dss::Core::CommNetConfig::exchangeGxtc,
+    },
+    NetworkEndpointDescriptor{
+        "exchange_gdcl",
+        "GDCL Data Exchange",
+        &Dss::Core::CommNetConfig::exchangeGdcl,
+    },
 };
 
 /// 可由 UI 显式打开/关闭的网络服务描述表。
 constexpr std::array kNetworkServiceDescriptors{
-    NetworkServiceDescriptor{"image_sender", Dss::App::ServiceKey::imageSender, "Image Sender",
-                             &Dss::Core::CommNetConfig::imageSender},
-    NetworkServiceDescriptor{"error_diag", Dss::App::ServiceKey::errorDiagnostics,
-                             "Error Diagnostics", &Dss::Core::CommNetConfig::errorDiag},
-    NetworkServiceDescriptor{"atmos", Dss::App::ServiceKey::atmosReceiver, "Atmos Receiver",
-                             &Dss::Core::CommNetConfig::atmos},
-    NetworkServiceDescriptor{"heartbeat", Dss::App::ServiceKey::heartbeat, "Heartbeat",
-                             &Dss::Core::CommNetConfig::heartbeat},
+    NetworkServiceDescriptor{
+        "image_sender",
+        Dss::App::ServiceKey::imageSender,
+        "Image Sender",
+        &Dss::Core::CommNetConfig::imageSender,
+    },
+    NetworkServiceDescriptor{
+        "error_diag",
+        Dss::App::ServiceKey::errorDiagnostics,
+        "Error Diagnostics",
+        &Dss::Core::CommNetConfig::errorDiag,
+    },
+    NetworkServiceDescriptor{
+        "atmos",
+        Dss::App::ServiceKey::atmosReceiver,
+        "Atmos Receiver",
+        &Dss::Core::CommNetConfig::atmos,
+    },
+    NetworkServiceDescriptor{
+        "heartbeat",
+        Dss::App::ServiceKey::heartbeat,
+        "Heartbeat",
+        &Dss::Core::CommNetConfig::heartbeat,
+    },
 };
 
 /// @brief 查找网络端点描述。
@@ -118,12 +147,8 @@ constexpr std::array kNetworkServiceDescriptors{
 
 /// @brief 判断端点是否有对应的可控网络服务。
 [[nodiscard]] auto hasControllableService(std::string_view key) -> bool {
-    for (const auto& descriptor : kNetworkServiceDescriptors) {
-        if (descriptor.key == key) {
-            return true;
-        }
-    }
-    return false;
+    return std::ranges::any_of(kNetworkServiceDescriptors,
+                               [key](const auto& descriptor) { return descriptor.key == key; });
 }
 
 /// @brief 将端点配置转换为 UI 状态。
@@ -161,7 +186,7 @@ auto NetworkViewModel::networkEndpointConfigs() -> std::vector<NetworkEndpointSt
     endpoints.reserve(kNetworkEndpointDescriptors.size());
     for (const auto& descriptor : kNetworkEndpointDescriptors) {
         endpoints.push_back(
-            makeNetworkEndpointState(descriptor, commNet.*(descriptor.member),
+            makeNetworkEndpointState(descriptor, commNet.*descriptor.member,
                                      isNetworkEndpointOpen(descriptorText(descriptor.key))));
     }
     return endpoints;
@@ -195,7 +220,7 @@ bool NetworkViewModel::applyNetworkEndpointConfig(const QString& key, const QStr
     }
 
     auto& commNet = Dss::Core::Config::instance().mutableCommNet();
-    commNet.*(descriptor->member) = makeUdpEndpointConfig(localIp, localPort, remoteIp, remotePort);
+    commNet.*descriptor->member = makeUdpEndpointConfig(localIp, localPort, remoteIp, remotePort);
     if (descriptor->member == &Dss::Core::CommNetConfig::exchangeGxtc) {
         commNet.exchange = commNet.exchangeGxtc;
     }
@@ -222,7 +247,7 @@ bool NetworkViewModel::openNetworkEndpoint(const QString& key) {
     }
 
     const auto& commNet = Dss::Core::Config::instance().commNet();
-    const auto& endpoint = commNet.*(descriptor->member);
+    const auto& endpoint = commNet.*descriptor->member;
     auto result = openRegisteredNetworkService(m_registry, descriptor->serviceName, endpoint);
 
     const auto displayName = descriptorText(descriptor->displayName);

@@ -60,7 +60,8 @@ public:
 TEST(SaperaFrameSourceContract, CopiesSdkBufferBeforeCallbackReturns) {
     auto session = std::make_unique<FakeSaperaSession>();
     auto* sessionView = session.get();
-    Dss::Acquisition::SaperaFrameSource source({}, std::move(session));
+    Dss::Acquisition::SaperaFrameSource source(Dss::Acquisition::SaperaConfig(),
+                                               std::move(session));
     std::vector<Dss::Processing::FramePacket> packets;
     std::optional<Dss::Acquisition::FrameDeliveryPolicy> deliveryPolicy;
     source.setFrameCallback(
@@ -92,7 +93,8 @@ TEST(SaperaFrameSourceContract, ConvertsBackendErrorsAndPublishesAcquisitionEven
         [&](const auto& event) { errors.push_back(event); });
     auto session = std::make_unique<FakeSaperaSession>();
     session->startError = "transfer start failed";
-    Dss::Acquisition::SaperaFrameSource source({}, std::move(session), &bus);
+    Dss::Acquisition::SaperaFrameSource source(Dss::Acquisition::SaperaConfig(), std::move(session),
+                                               &bus);
 
     ASSERT_TRUE(source.init().has_value());
     const auto started = source.startCapture();
@@ -112,7 +114,8 @@ TEST(SaperaFrameSourceContract, RejectsWrongSdkBufferSize) {
         [&](const auto& event) { errors.push_back(event); });
     auto session = std::make_unique<FakeSaperaSession>();
     auto* sessionView = session.get();
-    Dss::Acquisition::SaperaFrameSource source({}, std::move(session), &bus);
+    Dss::Acquisition::SaperaFrameSource source(Dss::Acquisition::SaperaConfig(), std::move(session),
+                                               &bus);
     ASSERT_TRUE(source.init().has_value());
     ASSERT_TRUE(source.startCapture().has_value());
 

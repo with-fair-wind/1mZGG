@@ -2,19 +2,21 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdlib>
+#include <exception>
 #include <iostream>
 #include <mutex>
 #include <string>
 
 #include "dss/acquisition/source/sapera_frame_source.h"
+#include "dss/core/diagnostics/emergency_report.h"
 
-int main(int argc, char** argv) {
+int main(int argc, char** argv) try {
     if (argc < 2) {
         std::cerr << "usage: dss_sapera_smoke <camera.ccf> [frame-count] [timeout-seconds]\n";
         return 64;
     }
-    const auto requiredFrames = argc > 2 ? std::max(1, std::atoi(argv[2])) : 10;
-    const auto timeoutSeconds = argc > 3 ? std::max(1, std::atoi(argv[3])) : 15;
+    const auto requiredFrames = argc > 2 ? std::max(1, std::stoi(argv[2])) : 10;
+    const auto timeoutSeconds = argc > 3 ? std::max(1, std::stoi(argv[3])) : 15;
 
     std::mutex mutex;
     std::condition_variable ready;
@@ -55,4 +57,11 @@ int main(int argc, char** argv) {
     std::cout << "Sapera smoke passed: " << receivedFrames << " frames, " << source.frameWidth()
               << 'x' << source.frameHeight() << '\n';
     return 0;
+} catch (const std::exception& error) {
+    Dss::Core::reportEmergencyFailure(error.what());
+    Dss::Core::reportEmergencyFailure("\n");
+    return 1;
+} catch (...) {
+    Dss::Core::reportEmergencyFailure("DSS: unhandled entry-point failure\n");
+    return 1;
 }

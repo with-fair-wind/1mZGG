@@ -34,8 +34,8 @@ struct GeoTrackingGateOptions {
 
 [[nodiscard]] auto trackingSearchRadius(float baseRadius, int recentInvalidCount) -> float {
     return baseRadius +
-           static_cast<float>(std::min(recentInvalidCount, kGeoTrackingRadiusInvalidLimit)) *
-               kGeoTrackingRadiusInvalidStep;
+           (static_cast<float>(std::min(recentInvalidCount, kGeoTrackingRadiusInvalidLimit)) *
+            kGeoTrackingRadiusInvalidStep);
 }
 
 [[nodiscard]] auto trackingSpeedErrorThreshold(int recentInvalidCount) -> float {
@@ -80,12 +80,15 @@ struct GeoTrackingGateOptions {
         return false;
     }
 
-    const auto distanceFromPrediction =
-        Dss::Core::Vec2f{target.predictedPosFrame.x - candidate.centroid.x,
-                         target.predictedPosFrame.y - candidate.centroid.y};
+    const auto distanceFromPrediction = Dss::Core::Vec2f{
+        target.predictedPosFrame.x - candidate.centroid.x,
+        target.predictedPosFrame.y - candidate.centroid.y,
+    };
     const auto& latestBlob = target.frameInfos.back().measuredBlob;
-    const auto measuredFrameMotion = Dss::Core::Vec2f{candidate.centroid.x - latestBlob.centroid.x,
-                                                      candidate.centroid.y - latestBlob.centroid.y};
+    const auto measuredFrameMotion = Dss::Core::Vec2f{
+        candidate.centroid.x - latestBlob.centroid.x,
+        candidate.centroid.y - latestBlob.centroid.y,
+    };
     return std::abs(distanceFromPrediction.x) <= options.searchRadius &&
            std::abs(distanceFromPrediction.y) <= options.searchRadius &&
            std::abs(measuredFrameMotion.x - target.predictedSpdFrame.x) <
@@ -109,8 +112,10 @@ struct GeoTrackingGateOptions {
         return false;
     }
 
-    const auto measuredMotion = Dss::Core::Vec2f{candidatePosition->x - latestPosition->x,
-                                                 candidatePosition->y - latestPosition->y};
+    const auto measuredMotion = Dss::Core::Vec2f{
+        candidatePosition->x - latestPosition->x,
+        candidatePosition->y - latestPosition->y,
+    };
     return std::abs(target.predictedPosFrame.x - candidatePosition->x) <=
                options.raDecTrackingRadius &&
            std::abs(target.predictedPosFrame.y - candidatePosition->y) <=
@@ -147,7 +152,7 @@ struct GeoTrackingGateOptions {
         }
         const auto dx = candidatePosition->x - target.predictedPosFrame.x;
         const auto dy = candidatePosition->y - target.predictedPosFrame.y;
-        const auto distance = dx * dx + dy * dy;
+        const auto distance = (dx * dx) + (dy * dy);
         if (distance < bestDistance) {
             bestDistance = distance;
             bestBlob = blob;

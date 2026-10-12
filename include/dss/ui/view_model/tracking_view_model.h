@@ -41,6 +41,9 @@ public:
      */
     [[nodiscard]] int trackMode() const;
 
+    // Qt
+    // 槽区段参与元对象生成，必须保留。
+    // NOLINTNEXTLINE(readability-redundant-access-specifiers)
 public Q_SLOTS:
     /**
      * @brief 设置跟踪模式并同步到 ImageProcessor。

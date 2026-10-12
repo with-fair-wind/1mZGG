@@ -9,6 +9,8 @@
 namespace Dss::Tracking {
 
 /// 地球同步轨道恒星速度估算状态
+// 保留公共枚举的既有整数表示和对象布局。
+// NOLINTNEXTLINE(performance-enum-size)
 enum class GeoStarSpeedStatus {
     Ok,                  ///< 估算成功
     InsufficientFrames,  ///< 帧数不足
@@ -50,12 +52,15 @@ public:
      * @brief 处理单帧测量，执行恒星速度估算、目标关联与跟踪
      * @param measurements 当前帧测量数据
      * @return 活跃目标及本次调用刚失活目标的快照，刚失活目标仅返回一次。
+
+     * *
      * @note
      * 下次调用先移除上次失活目标；重发现分配新 ID，reset 后 ID 从头编号。
-     * 最终快照的
+
+     * * 最终快照的
      * living=false 不等价于最后测量无效，归档应检查 frameInfos.back().valid。
-     * @note
-     * 在线目标历史最多保留 max(10, numFramesLiving)
+ *
+     * @note 在线目标历史最多保留 max(10, numFramesLiving)
      * 帧，累计有效率仍使用总样本数；不提供完整轨迹归档。
      */
     auto track(const Dss::Core::FrameMeasurements& measurements)

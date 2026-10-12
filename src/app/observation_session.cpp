@@ -11,7 +11,7 @@ namespace {
 }
 
 [[nodiscard]] auto secondsSinceMidnight(const Dss::Core::TimeOfDay& time) -> int {
-    return time.hour * 3600 + time.minute * 60 + time.second;
+    return (time.hour * 3600) + (time.minute * 60) + time.second;
 }
 
 [[nodiscard]] auto formatTimestamp(std::chrono::sys_days date, const Dss::Core::TimeOfDay& time)

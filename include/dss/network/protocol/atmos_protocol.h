@@ -10,7 +10,7 @@
 namespace Dss::Network {
 
 inline constexpr size_t AtmosPacketSize =
-    sizeof(int32_t) + 3U * sizeof(double);  ///< 气象报文固定字节长度
+    sizeof(int32_t) + (3U * sizeof(double));  ///< 气象报文固定字节长度
 
 /// 解码后的气象采样数据
 struct AtmosSample {

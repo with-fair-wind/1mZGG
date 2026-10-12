@@ -8,12 +8,17 @@
 #include <optional>
 #include <utility>
 
+#include "dss/core/diagnostics/emergency_report.h"
+
 namespace Dss::Network {
 
 namespace {
 
 constexpr auto UdpPollInterval = std::chrono::milliseconds{5};
-thread_local UdpChannel* CurrentUdpChannel = nullptr;
+auto currentUdpChannel() -> UdpChannel*& {
+    static thread_local UdpChannel* current = nullptr;
+    return current;
+}
 
 [[nodiscard]] auto bindAddress(const UdpEndpointConfig& config) -> QHostAddress {
     if (config.localIp.empty()) {
@@ -24,6 +29,9 @@ thread_local UdpChannel* CurrentUdpChannel = nullptr;
 
 [[nodiscard]] auto sendDatagram(QUdpSocket& socket, std::span<const uint8_t> data,
                                 const std::string& host, uint16_t port) -> int64_t {
+    // 字节 I/O
+    // 或平台句柄边界，表示由外部 API 规定。
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
     return socket.writeDatagram(reinterpret_cast<const char*>(data.data()),
                                 static_cast<qint64>(data.size()),
                                 QHostAddress(QString::fromStdString(host)), port);
@@ -35,28 +43,49 @@ UdpChannel::UdpChannel(std::size_t maxPendingRequests, std::size_t maxPendingByt
     : m_maxPendingRequests(maxPendingRequests), m_maxPendingBytes(maxPendingBytes) {}
 
 auto UdpChannel::sendQueueSnapshot() const -> SendQueueSnapshot {
-    std::lock_guard lock(m_sendMutex);
+    std::scoped_lock lock(m_sendMutex);
     return {m_sendQueue.size(), m_pendingBytes, m_rejectedRequests, m_acceptingSends};
 }
 
 UdpChannel::~UdpChannel() {
-    close();
+    try {
+        close();
+    } catch (...) {
+        Dss::Core::reportEmergencyFailure("DSS: UDP channel shutdown failed\n");
+    }
 }
 
 auto UdpChannel::bind(const UdpEndpointConfig& config) -> std::expected<void, std::string> {
-    std::lock_guard lifecycleLock(m_lifecycleMutex);
+    std::scoped_lock lifecycleLock(m_lifecycleMutex);
     closeLocked();
     {
-        std::lock_guard sendLock(m_sendMutex);
+        std::scoped_lock sendLock(m_sendMutex);
         m_remoteIp = config.remoteIp;
         m_remotePort = config.remotePort;
     }
 
     std::promise<std::expected<void, std::string>> initPromise;
     auto initFuture = initPromise.get_future();
-    m_workerThread = std::jthread(
-        [this, config, promise = std::move(initPromise)](std::stop_token token) mutable {
-            workerLoop(token, config, std::move(promise));
+    m_workerThread =
+        std::jthread([this, config = UdpEndpointConfig(config),
+                      promise = std::move(initPromise)](std::stop_token token) mutable {
+            try {
+                workerLoop(token, std::move(config), std::move(promise));
+            } catch (...) {
+                Dss::Core::reportEmergencyFailure("DSS: UDP worker cleanup failed\n");
+                currentUdpChannel() = nullptr;
+                m_workerSocket.store(nullptr);
+                m_bound.store(false);
+                m_localPort.store(0);
+                try {
+                    std::scoped_lock sendLock(m_sendMutex);
+                    m_acceptingSends = false;
+                    m_sendQueue.clear();
+                    m_pendingBytes = 0;
+                } catch (...) {
+                    Dss::Core::reportEmergencyFailure("DSS: UDP queue cleanup failed\n");
+                }
+            }
         });
 
     auto result = initFuture.get();
@@ -72,13 +101,13 @@ auto UdpChannel::bind(const UdpEndpointConfig& config) -> std::expected<void, st
 }
 
 void UdpChannel::close() {
-    std::lock_guard lifecycleLock(m_lifecycleMutex);
+    std::scoped_lock lifecycleLock(m_lifecycleMutex);
     closeLocked();
 }
 
 void UdpChannel::closeLocked() {
     {
-        std::lock_guard sendLock(m_sendMutex);
+        std::scoped_lock sendLock(m_sendMutex);
         m_acceptingSends = false;
     }
     if (m_workerThread.joinable()) {
@@ -95,7 +124,7 @@ auto UdpChannel::send(std::span<const uint8_t> data) -> int64_t {
     std::string host;
     uint16_t port = 0;
     {
-        std::lock_guard lock(m_sendMutex);
+        std::scoped_lock lock(m_sendMutex);
         host = m_remoteIp;
         port = m_remotePort;
     }
@@ -104,11 +133,11 @@ auto UdpChannel::send(std::span<const uint8_t> data) -> int64_t {
 
 auto UdpChannel::sendTo(std::span<const uint8_t> data, const std::string& host, uint16_t port)
     -> int64_t {
-    const bool direct = CurrentUdpChannel == this;
+    const bool direct = currentUdpChannel() == this;
     SendRequest request;
     auto resultFuture = request.result.get_future();
     {
-        std::lock_guard lock(m_sendMutex);
+        std::scoped_lock lock(m_sendMutex);
         if (!m_acceptingSends || data.size() > maxDatagramBytes || host.size() > 256 ||
             (!direct && (m_sendQueue.size() >= m_maxPendingRequests ||
                          data.size() > m_maxPendingBytes - m_pendingBytes))) {
@@ -145,7 +174,7 @@ auto UdpChannel::localPort() const -> uint16_t {
 
 void UdpChannel::setReceiveCallback(
     std::function<void(std::span<const uint8_t>, const std::string&, uint16_t)> cb) {
-    std::lock_guard lock(m_callbackMutex);
+    std::scoped_lock lock(m_callbackMutex);
     m_recvCallback = std::move(cb);
 }
 
@@ -162,9 +191,9 @@ void UdpChannel::workerLoop(std::stop_token token, UdpEndpointConfig config,
         m_localPort.store(socket.localPort());
         m_bound.store(true);
         m_workerSocket.store(&socket);
-        CurrentUdpChannel = this;
+        currentUdpChannel() = this;
         {
-            std::lock_guard lock(m_sendMutex);
+            std::scoped_lock lock(m_sendMutex);
             m_acceptingSends = true;
         }
         initialized = true;
@@ -194,12 +223,12 @@ void UdpChannel::workerLoop(std::stop_token token, UdpEndpointConfig config,
         // 回调或分配异常不能逃出线程入口，未发送请求统一失败。
     }
     {
-        std::lock_guard lock(m_sendMutex);
+        std::scoped_lock lock(m_sendMutex);
         m_acceptingSends = false;
     }
     failPendingSends();
     socket.close();
-    CurrentUdpChannel = nullptr;
+    currentUdpChannel() = nullptr;
     m_workerSocket.store(nullptr);
     m_bound.store(false);
     m_localPort.store(0);
@@ -209,7 +238,7 @@ void UdpChannel::processPendingSends(QUdpSocket& socket) {
     for (std::size_t count = 0; count < 64; ++count) {
         std::optional<SendRequest> request;
         {
-            std::lock_guard lock(m_sendMutex);
+            std::scoped_lock lock(m_sendMutex);
             if (m_sendQueue.empty()) {
                 break;
             }
@@ -233,7 +262,7 @@ void UdpChannel::onReadyRead(QUdpSocket& socket, std::stop_token token) {
 
         decltype(m_recvCallback) callback;
         {
-            std::lock_guard lock(m_callbackMutex);
+            std::scoped_lock lock(m_callbackMutex);
             callback = m_recvCallback;
         }
         if (!callback) {
@@ -242,7 +271,13 @@ void UdpChannel::onReadyRead(QUdpSocket& socket, std::stop_token token) {
 
         const auto bytes = datagram.data();
         const std::vector<uint8_t> payload(
+            // 字节 I/O
+            // 或平台句柄边界，表示由外部 API 规定。
+            // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
             reinterpret_cast<const uint8_t*>(bytes.constData()),
+            // 字节 I/O
+            // 或平台句柄边界，表示由外部 API 规定。
+            // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
             reinterpret_cast<const uint8_t*>(bytes.constData()) + bytes.size());
         const auto sender = datagram.senderAddress().toString().toStdString();
         const auto port = static_cast<uint16_t>(datagram.senderPort());
@@ -253,7 +288,7 @@ void UdpChannel::onReadyRead(QUdpSocket& socket, std::stop_token token) {
 void UdpChannel::failPendingSends() {
     std::deque<SendRequest> pending;
     {
-        std::lock_guard lock(m_sendMutex);
+        std::scoped_lock lock(m_sendMutex);
         pending.swap(m_sendQueue);
         m_pendingBytes = 0;
     }

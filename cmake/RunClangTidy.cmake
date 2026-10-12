@@ -20,6 +20,12 @@ if(NOT MODE STREQUAL "fix" AND NOT MODE STREQUAL "check")
     message(FATAL_ERROR "RunClangTidy.cmake: MODE must be 'fix' or 'check'")
 endif()
 
+execute_process(
+    COMMAND "${CLANG_TIDY}" --verify-config
+    WORKING_DIRECTORY "${SOURCE_DIR}"
+    COMMAND_ERROR_IS_FATAL ANY
+)
+
 set(DSS_TIDY_EXTRA_ARGS "")
 if(MODE STREQUAL "fix")
     list(APPEND DSS_TIDY_EXTRA_ARGS -fix)
@@ -30,7 +36,7 @@ if(WARNINGS_AS_ERRORS)
 endif()
 
 string(REPLACE "\\" "/" DSS_SOURCE_DIR_RE "${SOURCE_DIR}")
-set(DSS_SOURCE_FILTER "${DSS_SOURCE_DIR_RE}/(src|tests)/.*")
+set(DSS_SOURCE_FILTER "${DSS_SOURCE_DIR_RE}/(src|tests|tools|benchmarks)/.*")
 
 if(NOT WIN32)
     get_filename_component(CLANG_TIDY_DIR "${CLANG_TIDY}" DIRECTORY)
@@ -79,7 +85,7 @@ if(DSS_COMPILE_COMMANDS_LENGTH GREATER 0)
         endif()
 
         string(REPLACE "\\" "/" normalized_file "${compile_file}")
-        if(normalized_file MATCHES "^${DSS_SOURCE_DIR_RE}/(src|tests)/.*\\.(cpp|cc|cxx)$")
+        if(normalized_file MATCHES "^${DSS_SOURCE_DIR_RE}/(src|tests|tools|benchmarks)/.*\\.(cpp|cc|cxx)$")
             list(APPEND DSS_TIDY_FILES "${compile_file}")
         endif()
     endforeach()
@@ -88,8 +94,7 @@ endif()
 list(REMOVE_DUPLICATES DSS_TIDY_FILES)
 
 if(NOT DSS_TIDY_FILES)
-    message(STATUS "No in-scope source files found in compile_commands.json; nothing to tidy.")
-    return()
+    message(FATAL_ERROR "No in-scope source files found in compile_commands.json.")
 endif()
 
 execute_process(

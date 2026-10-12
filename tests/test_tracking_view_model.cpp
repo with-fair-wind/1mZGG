@@ -38,7 +38,7 @@ auto waitForReady(QCoreApplication& app, std::future<T>& future,
         if (future.wait_for(0ms) == std::future_status::ready) {
             return true;
         }
-        app.processEvents(QEventLoop::AllEvents, 10);
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
         std::this_thread::sleep_for(5ms);
     }
     return future.wait_for(0ms) == std::future_status::ready;
@@ -144,7 +144,7 @@ TEST(TrackingViewModel, RepeatingSameModePreservesTrackingHistory) {
 }
 
 TEST(TrackingViewModel, ResetDiscardsQueuedResultsFromPreviousSession) {
-    auto& app = ensureApplication();
+    ensureApplication();
     Dss::Core::MessageBus bus;
     Dss::Core::ServiceRegistry registry;
     Dss::Ui::TrackingViewModel tracking({.bus = bus, .registry = registry});
@@ -158,7 +158,7 @@ TEST(TrackingViewModel, ResetDiscardsQueuedResultsFromPreviousSession) {
     });
     worker.join();
     bus.emit(Dss::Core::ProcessingSessionResetEvent{});
-    app.processEvents();
+    QCoreApplication::processEvents();
     EXPECT_EQ(counts, (std::vector<int>{0}));
 }
 
@@ -188,7 +188,7 @@ TEST(TrackingViewModel, TrackResultFromWorkerThreadUpdatesOnObjectThread) {
 }
 
 TEST(TrackingViewModel, CoalescesWorkerResultsWhileUiIsBusy) {
-    auto& app = ensureApplication();
+    ensureApplication();
     Dss::Core::MessageBus bus;
     Dss::Core::ServiceRegistry registry;
     Dss::Ui::TrackingViewModel tracking({.bus = bus, .registry = registry});
@@ -207,7 +207,7 @@ TEST(TrackingViewModel, CoalescesWorkerResultsWhileUiIsBusy) {
     });
     worker.join();
     EXPECT_TRUE(updates.empty());
-    app.processEvents();
+    QCoreApplication::processEvents();
     ASSERT_EQ(updates.size(), 1U);
     EXPECT_TRUE(updates.front().contains("Target: 99 |"));
 }

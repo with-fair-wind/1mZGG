@@ -38,7 +38,7 @@ ReplaySession::~ReplaySession() {
 }
 
 auto ReplaySession::snapshot() const -> Snapshot {
-    std::lock_guard lock(m_mutex);
+    std::scoped_lock lock(m_mutex);
     return m_snapshot;
 }
 
@@ -63,7 +63,7 @@ auto ReplaySession::seek(std::size_t index) -> std::expected<void, std::string> 
 }
 
 auto ReplaySession::submit(Command command) -> std::expected<void, std::string> {
-    std::lock_guard lock(m_mutex);
+    std::scoped_lock lock(m_mutex);
     if (m_closed) {
         return std::unexpected("Replay session is closed");
     }
@@ -91,7 +91,7 @@ auto ReplaySession::submit(Command command) -> std::expected<void, std::string> 
 void ReplaySession::stop() {
     std::stop_source cancel;
     {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         if (m_closed || m_stopRequested || m_snapshot.state == State::Stopping) {
             return;
         }
@@ -110,10 +110,10 @@ void ReplaySession::stop() {
 }
 
 void ReplaySession::shutdown() {
-    std::lock_guard shutdownLock(m_shutdownMutex);
+    std::scoped_lock shutdownLock(m_shutdownMutex);
     std::stop_source cancel;
     {
-        std::lock_guard lock(m_mutex);
+        std::scoped_lock lock(m_mutex);
         m_closed = true;
         cancel = m_cancel;
     }
@@ -125,7 +125,7 @@ void ReplaySession::shutdown() {
 }
 
 void ReplaySession::publish(State state, Notice notice, std::string error, std::size_t position) {
-    std::lock_guard lock(m_mutex);
+    std::scoped_lock lock(m_mutex);
     if (m_closed || m_stopRequested) {
         return;
     }
@@ -195,8 +195,10 @@ void ReplaySession::execute(Command command, std::stop_token token) {
     }
     if (command.operation == Operation::Seek || command.operation == Operation::Backward) {
         const auto next = m_source->nextFrameIndex();
-        const auto index =
-            command.operation == Operation::Seek ? command.index : (next > 1 ? next - 2 : 0);
+        auto index = next > 1 ? next - 2 : 0;
+        if (command.operation == Operation::Seek) {
+            index = command.index;
+        }
         m_processor->resetSession();
         requireSuccess(m_source->seek(index));
     }
@@ -232,6 +234,54 @@ void ReplaySession::execute(Command command, std::stop_token token) {
     publish(State::Idle, Notice::Ready);
 }
 
+void ReplaySession::finishStopRequest() {
+    stopSources();
+    m_processor->drain();
+    notifyStopped();
+    const auto completion = m_source->completion();
+    std::string error;
+    if (m_processor->hasFailed()) {
+        error = "processing failed; see diagnostics";
+    } else if (completion) {
+        error = completion->error;
+    }
+    // 回收结束前保持 Stopping，不能提前接收新命令。
+    std::scoped_lock lock(m_mutex);
+    m_stopRequested = false;
+    m_snapshot.state = error.empty() ? State::Idle : State::Failed;
+    m_snapshot.notice = error.empty() ? Notice::Stopped : Notice::Error;
+    m_snapshot.error = error;
+    m_snapshot.frameCount = m_files.size();
+    ++m_snapshot.revision;
+}
+
+void ReplaySession::pollCompletion() {
+    const auto completion = m_source->completion();
+    if (completion || m_processor->hasFailed()) {
+        {
+            std::scoped_lock lock(m_mutex);
+            // 查询 EOF 期间可能收到普通命令；已接受的命令优先，不能覆盖其 Loading。
+            if (m_closed || m_pending || m_stopRequested || m_snapshot.state != State::Running) {
+                return;
+            }
+            m_snapshot.state = State::Stopping;
+            m_snapshot.notice = Notice::Stopping;
+            ++m_snapshot.revision;
+        }
+        stopSources();
+        m_processor->drain();
+        notifyStopped();
+        std::string error;
+        if (m_processor->hasFailed()) {
+            error = "processing failed; see diagnostics";
+        } else if (completion) {
+            error = completion->error;
+        }
+        publish(error.empty() ? State::Completed : State::Failed,
+                error.empty() ? Notice::Finished : Notice::Error, error);
+    }
+}
+
 void ReplaySession::run() {
     for (;;) {
         std::optional<Command> command;
@@ -254,46 +304,11 @@ void ReplaySession::run() {
         }
         try {
             if (stopRequested) {
-                stopSources();
-                m_processor->drain();
-                notifyStopped();
-                const auto completion = m_source->completion();
-                const auto error = m_processor->hasFailed()
-                                       ? "processing failed; see diagnostics"
-                                       : (completion ? completion->error : std::string{});
-                // 回收结束前保持 Stopping，不能提前接收新命令。
-                std::lock_guard lock(m_mutex);
-                m_stopRequested = false;
-                m_snapshot.state = error.empty() ? State::Idle : State::Failed;
-                m_snapshot.notice = error.empty() ? Notice::Stopped : Notice::Error;
-                m_snapshot.error = error;
-                m_snapshot.frameCount = m_files.size();
-                ++m_snapshot.revision;
+                finishStopRequest();
             } else if (command) {
                 execute(std::move(*command), token);
             } else {
-                const auto completion = m_source->completion();
-                if (completion || m_processor->hasFailed()) {
-                    {
-                        std::lock_guard lock(m_mutex);
-                        // 查询 EOF 期间可能收到普通命令；已接受的命令优先，不能覆盖其 Loading。
-                        if (m_closed || m_pending || m_stopRequested ||
-                            m_snapshot.state != State::Running) {
-                            continue;
-                        }
-                        m_snapshot.state = State::Stopping;
-                        m_snapshot.notice = Notice::Stopping;
-                        ++m_snapshot.revision;
-                    }
-                    stopSources();
-                    m_processor->drain();
-                    notifyStopped();
-                    const auto error = m_processor->hasFailed()
-                                           ? "processing failed; see diagnostics"
-                                           : completion->error;
-                    publish(error.empty() ? State::Completed : State::Failed,
-                            error.empty() ? Notice::Finished : Notice::Error, error);
-                }
+                pollCompletion();
             }
         } catch (const std::exception& error) {
             stopSources();
@@ -310,7 +325,7 @@ void ReplaySession::run() {
     stopSources();
     m_processor->stop();
     notifyStopped();
-    std::lock_guard lock(m_mutex);
+    std::scoped_lock lock(m_mutex);
     m_pending.reset();
     m_snapshot.state = State::Closed;
     m_snapshot.notice = Notice::None;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <expected>
 #include <filesystem>
 #include <optional>
@@ -12,7 +13,7 @@
 
 namespace Dss::Tests {
 
-enum class TrackingFixtureMode { Geo, Leo, Sc, Manual };
+enum class TrackingFixtureMode : std::uint8_t { Geo, Leo, Sc, Manual };
 
 struct ExpectedTrackingTarget {
     std::string targetId;

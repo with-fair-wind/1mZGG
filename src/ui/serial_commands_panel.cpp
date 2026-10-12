@@ -10,8 +10,8 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-#include "dss/ui/widget/communication_panels.h"
 #include "dss/ui/view_model/serial_port_view_model.h"
+#include "dss/ui/widget/communication_panels.h"
 #include "dss/ui/widget/wheel_guarded_spin_box.h"
 
 #ifdef DSS_HAS_ELA

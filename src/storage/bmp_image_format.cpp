@@ -18,8 +18,9 @@ inline constexpr auto kRgbQuadSize = 4U;             ///< BMP 调色板单项字
  * @param value 待写入值
  */
 void writeLittleEndian16(std::span<std::uint8_t> output, std::size_t offset, std::uint16_t value) {
-    output[offset] = static_cast<std::uint8_t>(value & 0xFFU);
-    output[offset + 1] = static_cast<std::uint8_t>((value >> 8) & 0xFFU);
+    output[offset] = static_cast<std::uint8_t>(static_cast<std::uint32_t>(value) & 0xFFU);
+    output[offset + 1] =
+        static_cast<std::uint8_t>((static_cast<std::uint32_t>(value) >> 8U) & 0xFFU);
 }
 
 /**
@@ -30,8 +31,8 @@ void writeLittleEndian16(std::span<std::uint8_t> output, std::size_t offset, std
  */
 void writeLittleEndian24(std::span<std::uint8_t> output, std::size_t offset, std::uint32_t value) {
     output[offset] = static_cast<std::uint8_t>(value & 0xFFU);
-    output[offset + 1] = static_cast<std::uint8_t>((value >> 8) & 0xFFU);
-    output[offset + 2] = static_cast<std::uint8_t>((value >> 16) & 0xFFU);
+    output[offset + 1] = static_cast<std::uint8_t>((value >> 8U) & 0xFFU);
+    output[offset + 2] = static_cast<std::uint8_t>((value >> 16U) & 0xFFU);
 }
 
 /**
@@ -42,9 +43,9 @@ void writeLittleEndian24(std::span<std::uint8_t> output, std::size_t offset, std
  */
 void writeLittleEndian32(std::span<std::uint8_t> output, std::size_t offset, std::uint32_t value) {
     output[offset] = static_cast<std::uint8_t>(value & 0xFFU);
-    output[offset + 1] = static_cast<std::uint8_t>((value >> 8) & 0xFFU);
-    output[offset + 2] = static_cast<std::uint8_t>((value >> 16) & 0xFFU);
-    output[offset + 3] = static_cast<std::uint8_t>((value >> 24) & 0xFFU);
+    output[offset + 1] = static_cast<std::uint8_t>((value >> 8U) & 0xFFU);
+    output[offset + 2] = static_cast<std::uint8_t>((value >> 16U) & 0xFFU);
+    output[offset + 3] = static_cast<std::uint8_t>((value >> 24U) & 0xFFU);
 }
 
 /**
@@ -56,7 +57,7 @@ void writeLittleEndian32(std::span<std::uint8_t> output, std::size_t offset, std
 auto readLittleEndian16(std::span<const std::uint8_t> input, std::size_t offset) -> std::uint16_t {
     return static_cast<std::uint16_t>(
         static_cast<std::uint16_t>(input[offset]) |
-        static_cast<std::uint16_t>(static_cast<std::uint16_t>(input[offset + 1]) << 8U));
+        static_cast<std::uint32_t>(static_cast<std::uint16_t>(input[offset + 1]) << 8U));
 }
 
 /**
@@ -137,10 +138,10 @@ auto readScaledSigned16(std::span<const std::uint8_t> input, std::size_t offset,
  * @return 编码后的 tick 值
  */
 auto timestampTicks(const Dss::Core::Timestamp& timestamp) -> std::uint32_t {
-    const auto seconds = timestamp.hour * 3600 + timestamp.minute * 60 + timestamp.second;
+    const auto seconds = (timestamp.hour * 3600) + (timestamp.minute * 60) + timestamp.second;
     const auto totalSeconds = static_cast<double>(seconds) +
-                              static_cast<double>(timestamp.millisecond) * 0.001 +
-                              static_cast<double>(timestamp.microsecond) * 0.000001;
+                              (static_cast<double>(timestamp.millisecond) * 0.001) +
+                              (static_cast<double>(timestamp.microsecond) * 0.000001);
     return static_cast<std::uint32_t>(totalSeconds * 10000.0);
 }
 
@@ -540,7 +541,8 @@ auto decodeLegacyBmpFile(std::span<const std::uint8_t> file) -> std::optional<Le
             return std::nullopt;
         }
         for (std::size_t index = 0; index < pixelCount; ++index) {
-            decoded.pixels[index] = static_cast<std::uint16_t>(pixelBytes[index]) << 8U;
+            decoded.pixels[index] =
+                static_cast<std::uint32_t>(static_cast<std::uint16_t>(pixelBytes[index])) << 8U;
         }
     }
     return decoded;

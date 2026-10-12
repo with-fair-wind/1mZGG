@@ -196,7 +196,9 @@ auto SaperaFrameSource::startCapture() -> std::expected<void, std::string> {
 }
 
 void SaperaFrameSource::start() {
-    (void)startCapture();
+    if (auto result = startCapture(); !result) {
+        return;  // startCapture 已发布采集错误；void 帧源接口通过 isRunning/事件观察失败。
+    }
 }
 
 void SaperaFrameSource::stop() {

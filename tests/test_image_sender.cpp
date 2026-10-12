@@ -19,7 +19,7 @@ using namespace std::chrono_literals;
 namespace {
 
 [[nodiscard]] auto readU16Be(const std::vector<uint8_t>& packet, size_t offset) -> uint16_t {
-    return static_cast<uint16_t>((static_cast<uint16_t>(packet[offset]) << 8U) |
+    return static_cast<uint16_t>((static_cast<uint32_t>(packet[offset]) << 8U) |
                                  packet[offset + 1U]);
 }
 
@@ -154,7 +154,7 @@ TEST(ImageSender, FactoryFailureReleasesPendingAndActiveResources) {
         {.localIp = "127.0.0.1", .localPort = 0, .remoteIp = "127.0.0.1", .remotePort = 9}));
     sender.submitForSend(
         1, {},
-        []() -> std::shared_ptr<const std::vector<std::uint8_t>> {
+        [] -> std::shared_ptr<const std::vector<std::uint8_t>> {
             throw std::runtime_error("factory failure");
         },
         2, 2, 8);

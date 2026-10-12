@@ -9,7 +9,7 @@
 
 namespace Dss::Comm {
 
-using SerialConfig = Dss::Core::SerialConfig;  ///< 串口配置类型别名
+using Dss::Core::SerialConfig;  ///< 串口配置类型别名
 
 /// 串口通道抽象接口，定义打开/关闭及帧尺寸查询能力
 class ISerialChannel {

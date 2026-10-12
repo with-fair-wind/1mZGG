@@ -18,6 +18,8 @@
 #endif
 
 namespace Dss::Ui {
+// 声明式 Qt 对象树和连接保持在同一布局构建入口。
+// NOLINTNEXTLINE(readability-function-size)
 void MainWindow::setupControlPage() {
     m_controlPage = new QWidget;
     auto* layout = new QVBoxLayout(m_controlPage);

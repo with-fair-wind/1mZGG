@@ -88,11 +88,11 @@ struct DataExchangeMappingOptions {
 
     const auto days = std::chrono::sys_days{ymd} -
                       std::chrono::sys_days{std::chrono::year{1970} / std::chrono::January / 1};
-    const auto centiseconds = days.count() * 24LL * 3600LL * 100LL +
-                              static_cast<int64_t>(timestamp.hour) * 3600LL * 100LL +
-                              static_cast<int64_t>(timestamp.minute) * 60LL * 100LL +
-                              static_cast<int64_t>(timestamp.second) * 100LL +
-                              timestamp.millisecond / 10LL + timestamp.microsecond / 10000LL;
+    const auto centiseconds = (days.count() * 24LL * 3600LL * 100LL) +
+                              (static_cast<int64_t>(timestamp.hour) * 3600LL * 100LL) +
+                              (static_cast<int64_t>(timestamp.minute) * 60LL * 100LL) +
+                              (static_cast<int64_t>(timestamp.second) * 100LL) +
+                              (timestamp.millisecond / 10LL) + (timestamp.microsecond / 10000LL);
     return static_cast<int32_t>(centiseconds);
 }
 
@@ -303,7 +303,7 @@ inline void appendDoubleLe(std::vector<uint8_t>& output, double value) {
                                           std::span<const GxtcTarget> targets)
     -> std::vector<uint8_t> {
     std::vector<uint8_t> packet;
-    packet.reserve(GxtcHeaderSize + targets.size() * GxtcTargetSize);
+    packet.reserve(GxtcHeaderSize + (targets.size() * GxtcTargetSize));
 
     Detail::appendI32Le(packet, static_cast<int32_t>(targets.size()));
     Detail::appendI32Le(packet, metadata.jms1970Centiseconds);

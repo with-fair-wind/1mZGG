@@ -34,7 +34,7 @@ ErrorDiagnostics::~ErrorDiagnostics() {
 }
 
 auto ErrorDiagnostics::open(const UdpEndpointConfig& config) -> std::expected<void, std::string> {
-    std::lock_guard lock(m_lifecycleMutex);
+    std::scoped_lock lock(m_lifecycleMutex);
     closeLocked();
     auto result = m_channel.bind(config);
     if (!result) {
@@ -49,7 +49,7 @@ auto ErrorDiagnostics::open(const UdpEndpointConfig& config) -> std::expected<vo
 }
 
 void ErrorDiagnostics::close() {
-    std::lock_guard lock(m_lifecycleMutex);
+    std::scoped_lock lock(m_lifecycleMutex);
     closeLocked();
 }
 
@@ -85,6 +85,9 @@ void ErrorDiagnostics::workerLoop(std::stop_token token) {
     while (!token.stop_requested()) {
         const auto json = buildDiagnosticStatusJson(statusSnapshot());
         auto data =
+            // 字节 I/O
+            // 或平台句柄边界，表示由外部 API 规定。
+            // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
             std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(json.data()), json.size());
         m_channel.send(data);
 

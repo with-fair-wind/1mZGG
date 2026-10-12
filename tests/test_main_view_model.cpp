@@ -42,7 +42,7 @@ auto waitForReady(QCoreApplication& app, std::future<T>& future,
         if (future.wait_for(0ms) == std::future_status::ready) {
             return true;
         }
-        app.processEvents(QEventLoop::AllEvents, 10);
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
         std::this_thread::sleep_for(5ms);
     }
     return future.wait_for(0ms) == std::future_status::ready;
@@ -162,7 +162,7 @@ TEST(MainViewModel, MasterControlCreatesTaskSpecificStorageSession) {
     });
     const auto deadline = std::chrono::steady_clock::now() + 2s;
     while (viewModel.storage().isStopping() && std::chrono::steady_clock::now() < deadline) {
-        app.processEvents();
+        QCoreApplication::processEvents();
         std::this_thread::yield();
     }
     ASSERT_TRUE(viewModel.storage().isSaving());
@@ -175,7 +175,7 @@ TEST(MainViewModel, MasterControlCreatesTaskSpecificStorageSession) {
 }
 
 TEST(MainViewModel, StopSavingCommandCancelsSessionQueuedDuringDrain) {
-    auto& app = ensureQCoreApplication();
+    ensureQCoreApplication();
     Dss::Core::MessageBus bus;
     Dss::Core::ServiceRegistry registry;
     QTemporaryDir directory;
@@ -192,7 +192,7 @@ TEST(MainViewModel, StopSavingCommandCancelsSessionQueuedDuringDrain) {
     bus.emit(Dss::Core::MasterControlEvent{.save = false});
     const auto deadline = std::chrono::steady_clock::now() + 2s;
     while (vm.storage().isStopping() && std::chrono::steady_clock::now() < deadline) {
-        app.processEvents();
+        QCoreApplication::processEvents();
         std::this_thread::yield();
     }
     EXPECT_FALSE(vm.storage().isSaving());

@@ -9,10 +9,11 @@
 #include <QVBoxLayout>
 #include <QWidget>
 #include <memory>
+#include <utility>
 #include <vector>
 
-#include "dss/ui/widget/communication_panels.h"
 #include "dss/ui/view_model/serial_port_view_model.h"
+#include "dss/ui/widget/communication_panels.h"
 #include "dss/ui/widget/wheel_guarded_spin_box.h"
 
 #ifdef DSS_HAS_ELA
@@ -35,6 +36,8 @@ struct SerialEditor {
 };
 }  // namespace
 
+// 声明式 Qt 布局与连接集中构建，保证对象树和回调所有权可审查。
+// NOLINTNEXTLINE(readability-function-size)
 auto createSerialChannelsPanel(SerialPortViewModel& viewModel, QWidget* parent) -> QWidget* {
     auto* panel = new QWidget(parent);
     panel->setObjectName("serial_channels_panel");
@@ -45,7 +48,7 @@ auto createSerialChannelsPanel(SerialPortViewModel& viewModel, QWidget* parent) 
 
     auto editors = std::make_shared<std::vector<SerialEditor>>();
     const auto channels = viewModel.serialChannelConfigs();
-    for (int index = 0; index < static_cast<int>(channels.size()); ++index) {
+    for (int index = 0; std::cmp_less(index, channels.size()); ++index) {
         const auto& channel = channels[static_cast<std::size_t>(index)];
         auto* group = new QGroupBox(channel.displayName, panel);
         auto* form = new QFormLayout(group);
@@ -81,8 +84,18 @@ auto createSerialChannelsPanel(SerialPortViewModel& viewModel, QWidget* parent) 
         form->addRow(applyButton);
         form->addRow("Service", serviceRow);
 
-        editors->push_back({channel.key, portName, baudRate, dataBits, stopBits, frameSize,
-                            serviceState, applyButton, openButton, closeButton});
+        editors->push_back({
+            channel.key,
+            portName,
+            baudRate,
+            dataBits,
+            stopBits,
+            frameSize,
+            serviceState,
+            applyButton,
+            openButton,
+            closeButton,
+        });
         QObject::connect(applyButton, &QPushButton::clicked, panel,
                          [&viewModel, editors, key = channel.key] {
                              for (const auto& editor : *editors) {
@@ -113,9 +126,11 @@ auto createSerialChannelsPanel(SerialPortViewModel& viewModel, QWidget* parent) 
                 editor.stopBits->setValue(channel.stopBits);
                 editor.frameSize->setText(
                     QString("rx %1 / tx %2").arg(channel.recvFrameSize).arg(channel.sendFrameSize));
-                editor.serviceState->setText(
-                    channel.isRegistered ? (channel.isOpen ? "Service: opened" : "Service: closed")
-                                         : "Service: not registered");
+                QString state = "Service: not registered";
+                if (channel.isRegistered) {
+                    state = channel.isOpen ? "Service: opened" : "Service: closed";
+                }
+                editor.serviceState->setText(state);
                 editor.openButton->setEnabled(channel.isRegistered && !channel.isOpen);
                 editor.closeButton->setEnabled(channel.isRegistered && channel.isOpen);
             }

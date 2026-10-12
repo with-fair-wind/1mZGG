@@ -17,6 +17,12 @@ namespace Dss::Network {
 /// 心跳服务，周期性通过 UDP 发送固定格式心跳帧以维持链路存活
 class Heartbeat : public INetworkChannel {
 public:
+    // 生命周期绑定当前对象，禁止复制或移动资源及回调所有者。
+    Heartbeat(const Heartbeat&) = delete;
+    auto operator=(const Heartbeat&) -> Heartbeat& = delete;
+    Heartbeat(Heartbeat&&) = delete;
+    auto operator=(Heartbeat&&) -> Heartbeat& = delete;
+
     using MessageBus = Dss::Core::MessageBus;  ///< 事件总线类型别名
 
     /**

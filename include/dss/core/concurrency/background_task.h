@@ -17,6 +17,7 @@ namespace Dss::Core {
  * @param bus 用于发布失败事件的消息总线。
  * @param component 后台组件稳定名称。
  * @param task 待执行任务。
+ * @note 诊断事件发布失败时向标准错误输出尽力报告；任何异常均不会逃出线程边界。
  */
 template <typename F>
 void runBackgroundTask(MessageBus& bus, std::string_view component, F&& task) noexcept {
@@ -26,11 +27,13 @@ void runBackgroundTask(MessageBus& bus, std::string_view component, F&& task) no
         try {
             bus.emit(BackgroundTaskErrorEvent{std::string(component), error.what()});
         } catch (...) {
+            Dss::Core::reportEmergencyFailure("DSS: background diagnostic failed\n");
         }
     } catch (...) {
         try {
             bus.emit(BackgroundTaskErrorEvent{std::string(component), "unknown exception"});
         } catch (...) {
+            Dss::Core::reportEmergencyFailure("DSS: background diagnostic failed\n");
         }
     }
 }

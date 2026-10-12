@@ -176,7 +176,7 @@ public:
         ensureCore();
         Id id = m_core->addHandler(std::move(handler));
         std::weak_ptr<Core> weak = m_core;
-        return ScopedConnection([weak, id]() {
+        return ScopedConnection([weak, id] {
             if (auto core = weak.lock()) {
                 core->removeHandler(id);
             }
@@ -301,10 +301,10 @@ private:
 template <typename R, typename... Args, template <typename> class CombinerT, typename LockPolicy>
 class Event<R(Args...), CombinerT, LockPolicy> : private detail::MovePolicy<true> {
 public:
-    using Handler = Delegate<R(Args...)>;               ///< 处理器类型
-    using Id = std::size_t;                             ///< 槽位 ID
-    using Combiner = CombinerT<R>;                      ///< 组合器类型
-    using ResultType = typename Combiner::result_type;  ///< 组合结果类型
+    using Handler = Delegate<R(Args...)>;      ///< 处理器类型
+    using Id = std::size_t;                    ///< 槽位 ID
+    using Combiner = CombinerT<R>;             ///< 组合器类型
+    using ResultType = Combiner::result_type;  ///< 组合结果类型
 
 private:
     using Core = detail::EventCore<Handler, LockPolicy, Args...>;  ///< 事件核心类型。
@@ -325,7 +325,7 @@ public:
         ensureCore();
         Id id = m_core->addHandler(std::move(handler));
         std::weak_ptr<Core> weak = m_core;
-        return ScopedConnection([weak, id]() {
+        return ScopedConnection([weak, id] {
             if (auto core = weak.lock()) {
                 core->removeHandler(id);
             }
@@ -370,6 +370,8 @@ public:
      * @param args 事件参数
      * @return 组合器合并后的结果
      */
+    // 派发具有订阅者副作用，调用者允许忽略组合结果。
+    // NOLINTNEXTLINE(modernize-use-nodiscard)
     ResultType emit(Args... args) const {
         if (!m_core) {
             return emptyResult();
@@ -384,6 +386,8 @@ public:
         for (const auto& slot : *snap) {
             if (slot.handler.valid()) {
                 try {
+                    // Preserve reference categories and copy value arguments for each subscriber.
+                    // NOLINTNEXTLINE(readability-redundant-casting)
                     acc.add(slot.handler(static_cast<Args>(args)...));
                     if (acc.shouldStop()) {
                         break;

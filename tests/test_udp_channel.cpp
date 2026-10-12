@@ -14,8 +14,15 @@
 namespace {
 using namespace std::chrono_literals;
 using Channel = Dss::Network::UdpChannel;
-const Dss::Network::UdpEndpointConfig local{
-    .localIp = "127.0.0.1", .localPort = 0, .remoteIp = {}, .remotePort = 0};
+auto localEndpoint() -> const Dss::Network::UdpEndpointConfig& {
+    static const Dss::Network::UdpEndpointConfig value{
+        .localIp = "127.0.0.1",
+        .localPort = 0,
+        .remoteIp = {},
+        .remotePort = 0,
+    };
+    return value;
+}
 
 template <class Predicate>
 bool waitUntil(Predicate predicate) {
@@ -42,7 +49,7 @@ struct Gate {
         return cv.wait_for(lock, 3s, [&] { return entered; });
     }
     void release() {
-        std::lock_guard lock(mutex);
+        std::scoped_lock lock(mutex);
         released = true;
         cv.notify_all();
     }
@@ -51,12 +58,14 @@ struct Gate {
 
 TEST(UdpSendQueue, EnforcesCountAndByteLimitsAndDrainsAcceptedRequestsOnClose) {
     for (const auto byteLimit : {8U, 100U}) {
-        Channel sender(2, byteLimit), trigger, receiver;
+        Channel sender(2, byteLimit);
+        Channel trigger;
+        Channel receiver;
         auto gate = std::make_shared<Gate>();
         sender.setReceiveCallback([gate](auto, const auto&, auto) { gate->enter(); });
-        ASSERT_TRUE(sender.bind(local));
-        ASSERT_TRUE(trigger.bind(local));
-        ASSERT_TRUE(receiver.bind(local));
+        ASSERT_TRUE(sender.bind(localEndpoint()));
+        ASSERT_TRUE(trigger.bind(localEndpoint()));
+        ASSERT_TRUE(receiver.bind(localEndpoint()));
         const std::vector<std::uint8_t> packet{1, 2, 3, 4};
         ASSERT_EQ(trigger.sendTo(packet, "127.0.0.1", sender.localPort()), 4);
         ASSERT_TRUE(gate->waitEntered());
@@ -83,14 +92,14 @@ TEST(UdpSendQueue, EnforcesCountAndByteLimitsAndDrainsAcceptedRequestsOnClose) {
         EXPECT_EQ(sender.sendQueueSnapshot().pendingBytes, 0U);
         EXPECT_GE(sender.sendQueueSnapshot().rejectedRequests, 2U);
         EXPECT_FALSE(sender.isBound());
-        ASSERT_TRUE(sender.bind(local));
+        ASSERT_TRUE(sender.bind(localEndpoint()));
         EXPECT_EQ(send(), 4);
     }
 }
 
 TEST(UdpSendQueue, RejectsOversizedDatagramsBeforeQueueing) {
     Channel sender;
-    ASSERT_TRUE(sender.bind(local));
+    ASSERT_TRUE(sender.bind(localEndpoint()));
     const std::vector<std::uint8_t> packet(Channel::maxDatagramBytes + 1);
     EXPECT_EQ(sender.sendTo(packet, "127.0.0.1", 12345), -1);
     EXPECT_EQ(sender.sendQueueSnapshot().pendingBytes, 0U);
@@ -98,7 +107,8 @@ TEST(UdpSendQueue, RejectsOversizedDatagramsBeforeQueueing) {
 }
 
 TEST(UdpSendQueue, CallbackCanSendReplyWithoutWaitingForItsOwnWorker) {
-    Channel sender, receiver;
+    Channel sender;
+    Channel receiver;
     auto reply = std::make_shared<std::promise<std::vector<std::uint8_t>>>();
     auto result = reply->get_future();
     sender.setReceiveCallback(
@@ -106,8 +116,8 @@ TEST(UdpSendQueue, CallbackCanSendReplyWithoutWaitingForItsOwnWorker) {
     receiver.setReceiveCallback([&](auto bytes, const auto& host, auto port) {
         EXPECT_EQ(receiver.sendTo(bytes, host, port), static_cast<std::int64_t>(bytes.size()));
     });
-    ASSERT_TRUE(sender.bind(local));
-    ASSERT_TRUE(receiver.bind(local));
+    ASSERT_TRUE(sender.bind(localEndpoint()));
+    ASSERT_TRUE(receiver.bind(localEndpoint()));
     const std::vector<std::uint8_t> packet{0, 255, 42};
     ASSERT_EQ(sender.sendTo(packet, "127.0.0.1", receiver.localPort()), 3);
     ASSERT_EQ(result.wait_for(3s), std::future_status::ready);
@@ -117,14 +127,15 @@ TEST(UdpSendQueue, CallbackCanSendReplyWithoutWaitingForItsOwnWorker) {
 }
 
 TEST(UdpSendQueue, ThrowingCallbackFailsPendingSendAndAllowsRebind) {
-    Channel sender, trigger;
+    Channel sender;
+    Channel trigger;
     auto gate = std::make_shared<Gate>();
     sender.setReceiveCallback([gate](auto, const auto&, auto) {
         gate->enter();
         throw std::runtime_error("callback failure");
     });
-    ASSERT_TRUE(sender.bind(local));
-    ASSERT_TRUE(trigger.bind(local));
+    ASSERT_TRUE(sender.bind(localEndpoint()));
+    ASSERT_TRUE(trigger.bind(localEndpoint()));
     const std::vector<std::uint8_t> packet{1};
     ASSERT_EQ(trigger.sendTo(packet, "127.0.0.1", sender.localPort()), 1);
     ASSERT_TRUE(gate->waitEntered());
@@ -138,14 +149,14 @@ TEST(UdpSendQueue, ThrowingCallbackFailsPendingSendAndAllowsRebind) {
     ASSERT_TRUE(waitUntil([&] { return !sender.isBound(); }));
     sender.close();
     sender.setReceiveCallback({});
-    ASSERT_TRUE(sender.bind(local));
+    ASSERT_TRUE(sender.bind(localEndpoint()));
     EXPECT_EQ(sender.sendTo(packet, "127.0.0.1", trigger.localPort()), 1);
 }
 
 TEST(UdpSendQueue, RepeatedIdleCloseAndRebindCompletes) {
     Channel channel;
     for (int iteration = 0; iteration < 30; ++iteration) {
-        ASSERT_TRUE(channel.bind(local));
+        ASSERT_TRUE(channel.bind(localEndpoint()));
         channel.close();
         EXPECT_FALSE(channel.isBound());
         EXPECT_FALSE(channel.sendQueueSnapshot().accepting);
