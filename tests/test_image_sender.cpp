@@ -88,9 +88,10 @@ TEST(ImageSender, BuildPacketsFragmentsLargeImages) {
 }
 
 TEST(UdpChannel, SendsAndReceivesAcrossCallerThreads) {
-    Dss::Network::UdpChannel receiver;
     std::promise<std::vector<uint8_t>> receivedPromise;
     auto receivedFuture = receivedPromise.get_future();
+    // The callback state must outlive the channel, including early assertion exits.
+    Dss::Network::UdpChannel receiver;
     receiver.setReceiveCallback(
         [&receivedPromise](std::span<const uint8_t> data, const std::string&, uint16_t) {
             receivedPromise.set_value({data.begin(), data.end()});
@@ -123,9 +124,9 @@ TEST(UdpChannel, SendsAndReceivesAcrossCallerThreads) {
 
 TEST(ImageSender, PublishesCompletedEventWithSubmittedFrameSequence) {
     Dss::Network::ImageSender::MessageBus bus;
-    Dss::Network::ImageSender sender(bus);
     std::promise<Dss::Core::ImageSendCompletedEvent> completedPromise;
     auto completedFuture = completedPromise.get_future();
+    Dss::Network::ImageSender sender(bus);
     auto connection = bus.subscribe<Dss::Core::ImageSendCompletedEvent>(
         [&completedPromise](const auto& event) { completedPromise.set_value(event); });
 
@@ -145,9 +146,9 @@ TEST(ImageSender, PublishesCompletedEventWithSubmittedFrameSequence) {
 
 TEST(ImageSender, FactoryFailureReleasesPendingAndActiveResources) {
     Dss::Core::MessageBus bus;
-    Dss::Network::ImageSender sender(bus);
     std::promise<void> failed;
     auto future = failed.get_future();
+    Dss::Network::ImageSender sender(bus);
     auto connection = bus.subscribe<Dss::Core::BackgroundTaskErrorEvent>(
         [&](const auto&) { failed.set_value(); });
     ASSERT_TRUE(sender.open(

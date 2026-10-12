@@ -30,6 +30,8 @@ python tools/run_sanitizer.py --sanitizer thread --build-dir build/ci-thread --h
 
 ASan 不检测数据竞争；TSan 也不能代替内存和业务正确性测试。预编译 Qt DLL 内部未插桩；可选 Qt 套件不代表全量 UI、OpenCV、真实相机、CUDA 或生产网络验收。完整边界见 [验证矩阵](validation-matrix.md)。
 
+UDP、DataExchange、ImageSender 测试使用共同的 `QCoreApplication` 入口，应用对象先于 socket 等 Qt 对象构造，并在全部测试和工作线程结束后销毁。回调引用的 promise 也必须晚于通道销毁，涵盖断言提前退出路径；用独立进程重复运行才能验证进程清理，GoogleTest 输出通过本身不证明进程已退出。
+
 ## 最新稳定工具链兼容性
 
 独立工作流 `.github/workflows/toolchain-latest.yml` 在同样的推送、PR 和手动入口运行 Windows Qt ASan。每次解析 LLVM 官方 latest 稳定发布，校验 Windows x64 MSI 的 SHA-256 与实际编译器版本；Conan、CMake、Ninja 由 pip 安装当前 Python 3.12 可用的最新稳定版。Qt 暂时固定 6.8.0，runner 固定为 windows-2022；这不是整台环境所有组件都使用最新版，也不自动复制本机 Scoop 环境。
@@ -53,6 +55,6 @@ ASan 不检测数据竞争；TSan 也不能代替内存和业务正确性测试�
 
 ## 最新本机结果
 
-2026-10-10，Windows x64 / clang-cl 23.1.3 / VS 18/v145 / Qt 6.11.1：项目及 Conan 插桩依赖使用同一编译器，公共 Qt 入口 **128/128 CTest 通过，108.20 秒（与 OpenCV 构建并行）**，无 ASan 报告。新增覆盖事件右值引用与多播值复制、帧源停止异常和 Qt 槽元数据；Manual 非有限边界回归也在此套件中执行。普通 Qt/OpenCV Debug 全量 **266/266，26.22 秒**，Doxygen 零警告。
+2026-10-12，Windows x64 / clang-cl 23.1.3 / VS 18/v145 / Qt 6.11.1：项目及 Conan 插桩依赖使用同一编译器，公共 Qt 入口 **128/128 CTest 通过，36.22 秒**，无 ASan 报告。新增覆盖事件右值引用与多播值复制、帧源停止异常和 Qt 槽元数据；Manual 非有限边界回归也在此套件中执行。普通 Qt/OpenCV Debug 全量 **266/266，26.22 秒**，Doxygen 零警告。
 
 JUnit 位于 `build/clang-cl-asan-replay/sanitizer-results.xml`，CTest 日志位于相同目录的 `Testing/Temporary`；这些是被忽略的本机产物，其他环境应运行公共入口生成自己的证据。当前核心入口包含 13 个目标，Qt 入口共 22 个目标；历史 runner 的测试数量不能当作扩展后套件的结果。本机 Qt 版本与 CI 不同，远端证据及配置边界见 [验证矩阵](validation-matrix.md)。

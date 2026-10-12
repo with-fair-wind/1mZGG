@@ -1,12 +1,18 @@
 include(GoogleTest)
 
 function(dss_configure_test_target TEST_NAME TEST_SOURCE)
+    cmake_parse_arguments(PARSE_ARGV 2 DSS_TEST "QT_CORE_MAIN" "" "")
     add_executable(${TEST_NAME} ${TEST_SOURCE})
     dss_target_defaults(${TEST_NAME})
+    set(DSS_TEST_MAIN_LIBRARY GTest::gtest_main)
+    if(DSS_TEST_QT_CORE_MAIN)
+        target_sources(${TEST_NAME} PRIVATE qt_core_test_main.cpp)
+        set(DSS_TEST_MAIN_LIBRARY "")
+    endif()
     target_link_libraries(${TEST_NAME} PRIVATE
         GTest::gtest
-        GTest::gtest_main
-        ${ARGN}
+        ${DSS_TEST_MAIN_LIBRARY}
+        ${DSS_TEST_UNPARSED_ARGUMENTS}
     )
 endfunction()
 
@@ -83,10 +89,10 @@ if(TARGET dss_gpu_cuda)
 endif()
 
 if(TARGET dss_network_qt)
-    dss_add_qt_test(test_udp_channel test_udp_channel.cpp dss_network_qt)
+    dss_add_qt_test(test_udp_channel test_udp_channel.cpp dss_network_qt QT_CORE_MAIN)
     dss_add_test(test_error_diagnostics test_error_diagnostics.cpp dss_network_qt)
-    dss_add_test(test_data_exchange test_data_exchange.cpp dss_network_qt)
-    dss_add_test(test_image_sender test_image_sender.cpp dss_network_qt)
+    dss_add_test(test_data_exchange test_data_exchange.cpp dss_network_qt QT_CORE_MAIN)
+    dss_add_test(test_image_sender test_image_sender.cpp dss_network_qt QT_CORE_MAIN)
     dss_add_test(test_heartbeat test_heartbeat.cpp dss_network_qt)
 endif()
 
