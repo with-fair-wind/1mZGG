@@ -121,6 +121,16 @@ jobs:
             throw "Qt platform plugin was not deployed at $platformPlugin"
           }
 
+          foreach ($notice in @('LICENSE', 'THIRD_PARTY_NOTICES.md')) {
+            $noticePath = Join-Path $binDir $notice
+            if (!(Test-Path -LiteralPath $noticePath -PathType Leaf)) {
+              throw "License notice missing from deployment: $notice"
+            }
+            if ((Get-FileHash -LiteralPath $noticePath).Hash -ne (Get-FileHash -LiteralPath $notice).Hash) {
+              throw "License notice does not match the source: $notice"
+            }
+          }
+
           Get-ChildItem $binDir
 
       - name: Upload deployment artifact

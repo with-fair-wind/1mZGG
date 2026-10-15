@@ -18,6 +18,16 @@ function(dss_imported_location target_name output_var)
 endfunction()
 
 function(dss_enable_qt_deploy target_name)
+    # Legal notices accompany every app build, including builds without windeployqt.
+    # configure_file tracks notice edits and refreshes the copies on reconfigure.
+    foreach(notice_file IN ITEMS LICENSE THIRD_PARTY_NOTICES.md)
+        configure_file(
+            "${CMAKE_SOURCE_DIR}/${notice_file}"
+            "${DSS_RUNTIME_OUTPUT_DIR}/${notice_file}"
+            COPYONLY
+        )
+    endforeach()
+
     if(NOT WIN32 OR NOT DSS_ENABLE_QT_DEPLOY)
         return()
     endif()

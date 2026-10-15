@@ -5,6 +5,8 @@ from conan.tools.cmake import CMakeToolchain, CMakeDeps, cmake_layout
 class DSSQTConan(ConanFile):
     name = "dss_qt"
     version = "2.0.0"
+    license = "LicenseRef-DSS-QT-Private-Noncommercial-1.0"
+    exports = ("LICENSE", "THIRD_PARTY_NOTICES.md")
     settings = "os", "compiler", "build_type", "arch"
 
     options = {
