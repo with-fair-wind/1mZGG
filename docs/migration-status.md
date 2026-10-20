@@ -27,7 +27,7 @@
 - CMake/CMakePresets、模块化库、C++23、Qt 6、GoogleTest/CTest。
 - `Config` JSON 配置、`MessageBus`、`ServiceRegistry`、spdlog 文件日志和运行诊断。
 - 四路串口协议与显式开关；图像发送、心跳、诊断、大气、GXTC/GDCL 网络服务。
-- `ImageSequenceFrameSource` 回放，支持暂停续播、前进/后退、随机定位、运行中 seek 和进度快照。
+- `ImageSequenceFrameSource` 回放，支持停止续播、前进/后退、随机定位、运行中 seek 和进度快照；存储容量满时可取消等待，EOF/单步等待写入完成，实时保持有界拒绝与告警。显式停止/停止保存是有意截断。
 - `FrameSourceCoordinator` 在 replay/live 间显式切换；默认启动不打开串口、UDP 或采集硬件。
 - `LocalImageStorageBackend` 与 `TrackDataStorageBackend` 的会话写入、背压、drain 和错误事件；主控任务可映射到 `ObservationSession` 和会话命名。
 - OpenCV 与 CPU Diff 处理策略；处理参数可配置并由 `ProcessingViewModel` 创建策略快照。
@@ -63,7 +63,7 @@ Sapera/CUDA 的命令、门槛和结果回填表见 [硬件验证](hardware-vali
 ## 当前验收基线
 
 - 远端已验证快照 `2a56908`：2026-10-20 的 MSVC Release、Code quality、Windows core/Qt ASan、Linux TSan 与最新稳定工具链工作流均通过；完整执行范围和链接见 [验证矩阵](validation-matrix.md)。
-- 2026-10-20 本机 Windows 默认 Qt/OpenCV Debug/PCH、Release/PCH 均 272/272 CTest 通过；扩展后的 Qt ASan 141/141，包含窗口销毁、writer 阶段统计、目录恢复及图像失败恢复。远端快照中的轨迹 /dev/full 已由 Linux TSan 验证；图像/索引平台用例由扩展后的入口执行，Windows 本机不执行。此前 Release/无 PCH 的 266/266 结果保留为历史快照，未作为本轮同配置复测。Qt 测试部分按可执行文件注册，CTest 数量不等于 GoogleTest 用例数。
+- 2026-10-20 本机 Windows 默认 Qt/OpenCV Debug/PCH、Release/PCH 均 284/284 CTest 通过；扩展后的 Qt ASan 154/154，包含窗口销毁、writer 阶段统计、目录/图像失败恢复、无损回放存储与组合根真实接线。远端快照 b7ee10e 的轨迹/RAW /dev/full 及图像索引关闭失败已由 Linux TSan 124/124 验证；新策略远端结果须按对应提交核对，Windows 本机不执行这些平台用例。此前 Release/无 PCH 的 266/266 结果保留为历史快照，未作为本轮同配置复测。Qt 测试部分按可执行文件注册，CTest 数量不等于 GoogleTest 用例数。
 - Sapera 和 CUDA 都是显式启用能力，默认配置必须继续保持无硬件安全。
 - 硬件验收未执行前，不把 Sapera 标记为“硬件验证完成”，也不在 UI 暴露 CUDA 模式。
 

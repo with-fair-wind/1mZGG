@@ -94,7 +94,7 @@ def main():
                "test_local_image_storage_backend",
                "test_track_result_data_exchange_bridge"]
     if qt:
-        targets += ["test_main_window_lifetime", "test_log_view_model",
+        targets += ["test_application_context_services", "test_main_window_lifetime", "test_log_view_model",
                     "test_frame_source_coordinator", "test_replay_session", "test_replay_view_model",
                     "test_main_view_model", "test_display_view_model", "test_udp_channel",
                     "test_data_exchange", "test_image_sender"]
@@ -105,7 +105,7 @@ def main():
                r"TrackResultDataExchangeBridge)\.")
     pattern += r"|^test_event_headers$"
     if qt:
-        pattern += (r"|^(test_main_window_lifetime|test_log_view_model|test_replay_session|"
+        pattern += (r"|^(test_application_context_services|test_main_window_lifetime|test_log_view_model|test_replay_session|"
                     r"test_replay_view_model|test_main_view_model|test_display_view_model|"
                     r"test_udp_channel)$|^(DataExchange|ImageSender|UdpChannel|FrameSourceCoordinator)\.")
     run(["ctest", "--test-dir", build, "--output-on-failure", "--no-tests=error",

@@ -31,8 +31,11 @@ class IStorageBackend {
 |------|------|
 | `init(baseDir)` | 创建/设置存储根目录 |
 | `start()` / `stop()` | 启动/停止后台写入线程，停止时 drain 队列 |
-| `enqueueRawFrame(path, metadata, pixels)` | 入队 RAW 帧；共享指针重载不复制像素 |
+| `enqueueRawFrame(path, metadata, pixels)` | 非阻塞入队 RAW 帧；共享指针重载不复制像素 |
+| `enqueueSessionFrameBlocking(seq, metadata, pixels, token, generation)` | 校验会话后等待预算；取消、停止、旧会话及真实失败分别返回 |
 | `isRunning()` | 查询 worker 状态 |
+| `activeSessionGeneration()` | 读取逻辑保存会话代次；worker 失败不会把会话伪装为关闭 |
+| `waitUntilIdle(token)` | 可取消地等待已接受请求完成，报告本轮写入失败 |
 
 ### 3. TrackDataStorageBackend (`track_data_storage_backend.h`)
 
@@ -42,9 +45,12 @@ class IStorageBackend {
 |------|------|
 | `init(baseDir)` | 创建/设置轨迹数据目录 |
 | `start()` / `stop()` | 启动/停止后台写入线程，停止时 drain 队列 |
-| `enqueueTrackResult(event)` | 将 `TrackResultEvent` 先归一为 `ResultPacket`，再转为 legacy 轨迹文本记录并入队 |
+| `enqueueTrackResult(event)` | 非阻塞地归一为 `ResultPacket`，再转为 legacy 轨迹文本记录并入队 |
+| `enqueueTrackResultBlocking(event, token, generation)` | 保持相同格式，等待预算后准入；失败传回处理器 |
 | `outputPath()` | 返回当前 `track_data.txt` 输出路径 |
 | `isRunning()` | 查询 worker 状态 |
+| `activeSessionGeneration()` | 读取逻辑保存会话代次；worker 失败不会把会话伪装为关闭 |
+| `waitUntilIdle(token)` | 可取消地等待已接受请求完成，报告本轮写入失败 |
 
 ### 4. 图像存储格式 (`image_storage_format.h`)
 
@@ -107,7 +113,7 @@ flowchart LR
     APP["ApplicationContext"] --> STORE
     UI["StorageViewModel"] -->|"init/configure/start/stop"| STORE
     ACQ["帧回调"] -->|"raw frame"| IMG["LocalImageStorageBackend"]
-    BUS["TrackResultEvent"] --> TRACK["TrackDataStorageBackend"]
+    PROC["ImageProcessor 结果 sink"] --> TRACK["TrackDataStorageBackend"]
     STORE --> FS["std::filesystem / fstream"]
     STORE -->|"StorageWriteErrorEvent"| DIAG["Diagnostics"]
 ```
@@ -186,13 +192,15 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    FRAME["App 帧回调 FramePacket"] --> CHECK{"image storage 正在运行？"}
+    FRAME["App 帧回调 FramePacket"] --> CHECK{"图像保存会话存在？"}
     CHECK -->|"否"| SKIP["跳过保存"]
     CHECK -->|"是"| META["构造 RawImageMetadata"]
     META --> PATH["buildImageFilePath"]
-    PATH --> COPY["复制 pixels 到 SaveRawFrameRequest"]
-    COPY --> Q{"队列 < maxPendingRequests？"}
-    Q -->|"否"| DROP["droppedRequests++ / unexpected"]
+    PATH --> COPY["保留共享只读 pixels 到请求"]
+    COPY --> Q{"请求数与字节预算充足？"}
+    Q -->|"实时不足"| DROP["droppedRequests++ / 告警"]
+    Q -->|"回放不足"| WAIT["可取消等待；停止/重启/失败唤醒"]
+    WAIT --> Q
     Q -->|"是"| WORKER["workerLoop 取请求"]
     WORKER --> FORMAT{"扩展名/格式"}
     FORMAT -->|"BMP"| BMP["buildLegacyBmpFile"]
@@ -203,11 +211,13 @@ flowchart TD
     WRITE -->|"失败"| ERR["failedWrites++ / StorageWriteErrorEvent"]
 ```
 
-默认最大待写请求数为 1024。入队会复制像素，调用者返回后不依赖 `FramePacket` 生命周期。队列满属于背压拒绝，只返回错误并计数；真正的磁盘失败还会发布错误事件。
+默认最大排队请求数为 1024。共享指针重载保留只读像素所有权，不复制像素；值/视图入口复制。实时容量拒绝返回错误并累计 `droppedRequests()`；真正的磁盘失败还发布错误事件。回放使用下述可取消等待入口。
 
 RAW/BMP 的成功计数必须在 `close()` 刷新及流状态检查后增加，缓冲关闭失败也发布 `StorageWriteErrorEvent`。`configureSession` 同样在 IMI 索引显式关闭成功后才更新会话和代次；索引失败保留原会话，可修复路径后重试，已创建的目录不回滚。这些检查不等于 fsync 或断电持久化保证。
 
-当前回放与实时来源都使用非阻塞存储准入：队列满或字节预算不足时拒绝新请求并累计 `droppedRequests()`，不会等待空位、重试或驱动回放暂停。处理帧数和回放结束状态不能作为完整归档证明。已接受请求由停止流程排空，写入错误另计；容量拒绝、停止/旧会话拒绝与磁盘失败须分别解释。无损回放的可取消等待、停止/失败唤醒和会话隔离尚未实现，不能用扩大队列替代。
+回放采用无损背压：RAW 在帧源线程等待，轨迹在处理线程等待；容量释放、取消、停止、重启或 writer 失败均唤醒等待者。等待时不持有会话锁，入口捕获的后端会话代次及队列 worker 代次共同防止旧帧写进新会话。单帧超过总预算或容量为零立即报错，不永久等待。实时采集继续非阻塞，队列满/字节不足拒绝新请求并计数，App 在累计拒绝数 1、2、4… 时发告警。
+
+`WriteAdmissionError` 区分取消、停止、旧会话、容量和写入/配置错误。显式停止回放或停止保存是有意截断，取消尚未接受的请求，已接受项仍排空；真实无损失败进入 Failed。正常 EOF 与单步完成须先 drain 处理器，再等待两后端 `waitUntilIdle()`；尾帧写入失败不能报告 Completed。完成只表示已启用保存且未截断的请求通过写入及显式关闭检查，不承诺 fsync、断电持久化或事务回滚。
 
 ### 轨迹文本写入链
 
@@ -215,20 +225,23 @@ RAW/BMP 的成功计数必须在 `close()` 刷新及流状态检查后增加，�
 sequenceDiagram
     participant Processor as ImageProcessor
     participant Bus as MessageBus
-    participant App as App 注册的订阅 lambda
+    participant App as App 注入的结果 sink
     participant Store as TrackDataStorageBackend
     participant Worker as 存储工作线程
     participant File as track data 文件
 
-    Processor->>Bus: emit(TrackResultEvent)
-    Bus->>App: 同步调用订阅者
-    alt Store 正在运行
-        App->>Store: enqueueTrackResult(event)
+    Processor->>App: deliverTrackResult(event, frameContext, token)
+    alt 帧入口存在保存会话
+        App->>Store: 按来源选择 blocking 或非阻塞准入
         Store->>Store: buildRecords(event)
         Store-->>Worker: 队列通知
         Worker->>File: 追加 formatLegacyTrackDataLine(record)
-    else 未运行
-        App-->>Bus: 跳过
+    else 帧入口未启用保存
+        App-->>Processor: 跳过
+    end
+    App-->>Processor: expected 结果
+    opt 准入成功或显式取消
+        Processor->>Bus: ProcessingCompleteEvent / TrackResultEvent
     end
 ```
 
@@ -288,7 +301,7 @@ stateDiagram-v2
 
 - 两个后端的会话配置和提交准入由同一会话锁保护。采集/跟踪回调在入口记录 sessionGeneration，提交时验证；停止和配置推进代次，旧代次请求返回错误，不能穿过切换边界写入新会话。
 - `requestStop()` 立即关闭准入；`stop()` 等待已接受请求排空。排空期间禁止 configureSession/start，join 不持有会话锁，错误回调仍可读取输出路径。
-- 原图队列同时限制 1024 个待写请求及默认 256 MiB RAW 缓冲容量（构造函数第三个参数可调整）。pendingBytes 包含正在写入的请求，按 vector capacity 计费；不包含文件编码临时缓冲或其他模块持有的图像。超过预算拒绝新请求并增加 droppedRequests，保持既有可丢帧策略。
+- 原图队列同时限制 1024 个排队请求及默认 256 MiB 已接受 RAW 缓冲容量（构造函数第三个参数可调整）。pendingBytes 包含正在写入的请求，按 vector capacity 计费；不包含编码临时缓冲、其他模块图像或尚未准入的调用方载荷。实时超预算拒绝并增加 droppedRequests，回放等待；等待不计容量丢弃。`waitingItems/peakWaitingItems` 观测准入等待者。实际链路每个后端各一个生产线程；通用 API 调用方必须限制并发等待者数量，不能用队列预算宣称任意数量调用者的内存有界。
 - writer 抛异常被计为失败并通知，普通单项失败后继续排空；通知回调再次抛异常不会逃出线程。请求搬移或构造诊断时发生无法处理的异常会关闭准入并释放剩余请求，failedWrites 可观察失败。
 - StorageViewModel 的 stopSaving 立即把 isSaving 置 false、isStopping 置 true，后台等待排空；排空期间的新启动请求只保留最后一个，完成后再配置并启动。“停止保存”会取消该待启动请求。应用 shutdown 必须等待排空并禁止完成回调重启服务。
 

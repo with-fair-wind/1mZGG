@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <exception>
+#include <stdexcept>
+#include <utility>
 
 #include "dss/core/concurrency/background_task.h"
 #include "dss/core/event/events.h"
@@ -41,7 +43,14 @@ void ImageProcessor::start() {
     }
     m_frameChannel.open();
     m_failed.store(false);
-    m_workerThread = std::jthread([this](std::stop_token token) {
+    std::stop_source resultCancellation;
+    {
+        std::scoped_lock lock(m_resultMutex);
+        m_resultCancellation = resultCancellation;
+    }
+    m_workerThread = std::jthread([this, resultCancellation](std::stop_token token) {
+        const std::stop_callback cancelResults(
+            token, [resultCancellation] mutable { resultCancellation.request_stop(); });
         Dss::Core::runBackgroundTask(m_bus, "image_processor", [this, token] {
             const WorkerFailureGuard failureGuard{m_failed};
             workerLoop(token);
@@ -133,6 +142,40 @@ auto ImageProcessor::droppedFrames() const -> uint64_t {
 
 bool ImageProcessor::isRunning() const {
     return m_running.load();
+}
+
+void ImageProcessor::setTrackResultSink(TrackResultSink sink) {
+    auto shared = sink ? std::make_shared<const TrackResultSink>(std::move(sink)) : nullptr;
+    {
+        std::scoped_lock lock(m_resultMutex);
+        m_resultSink.swap(shared);
+    }
+}
+
+void ImageProcessor::cancelPendingResults() {
+    std::stop_source cancellation;
+    {
+        std::scoped_lock lock(m_resultMutex);
+        cancellation = m_resultCancellation;
+    }
+    cancellation.request_stop();
+}
+
+void ImageProcessor::deliverTrackResult(const Dss::Core::TrackResultEvent& event,
+                                        const FramePacket& packet) {
+    std::shared_ptr<const TrackResultSink> sink;
+    std::stop_token token;
+    {
+        std::scoped_lock lock(m_resultMutex);
+        sink = m_resultSink;
+        token = m_resultCancellation.get_token();
+    }
+    if (sink && !token.stop_requested()) {
+        const auto result = (*sink)(event, packet, token);
+        if (!result) {
+            throw std::runtime_error(result.error());
+        }
+    }
 }
 
 void ImageProcessor::setProcessingStrategy(std::unique_ptr<IProcessingStrategy> strategy) {
@@ -251,10 +294,14 @@ void ImageProcessor::publishFrameResults(
     refreshEvent.displayStretchHigh = displayWindow.high;
     refreshEvent.displayStretchWindowValid = displayWindowValid;
     m_bus.emit(refreshEvent);
-    m_bus.emit(Dss::Core::ProcessingCompleteEvent{packet.frameSeq, displayStats});
-
+    std::optional<Dss::Core::TrackResultEvent> trackEvent;
     if (trackResults) {
-        m_bus.emit(Dss::Core::TrackResultEvent{packet.frameSeq, std::move(*trackResults)});
+        trackEvent = Dss::Core::TrackResultEvent{packet.frameSeq, std::move(*trackResults)};
+        deliverTrackResult(*trackEvent, packet);
+    }
+    m_bus.emit(Dss::Core::ProcessingCompleteEvent{packet.frameSeq, displayStats});
+    if (trackEvent) {
+        m_bus.emit(*trackEvent);
     }
 
     m_bus.emit(Dss::Core::RotatedFrameReadyEvent{packet.frameSeq});

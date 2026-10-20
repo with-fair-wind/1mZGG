@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <future>
 #include <latch>
 #include <memory>
@@ -568,4 +569,92 @@ TEST(ImageProcessor, FailedWorkerReleasesResourceAccounting) {
     EXPECT_EQ(resources.queuedBytes, 0U);
     EXPECT_EQ(resources.activeBytes, 0U);
     EXPECT_EQ(resources.completedItems, 0U);
+}
+
+TEST(ImageProcessor, TrackSinkFailureBypassesNotificationExceptionIsolation) {
+    Dss::Core::MessageBus bus;
+    bus.setExceptionHandler([](std::exception_ptr) {});
+    std::uint64_t generation = 0;
+    bool waited = false;
+    Dss::Processing::ImageProcessor processor(bus);
+    processor.setTrackingStrategy(
+        std::make_unique<Dss::Tracking::GeoTracker>(Dss::Core::TrackingSettings{}));
+    processor.setTrackResultSink(
+        [&](const auto&, const auto& packet, std::stop_token) -> std::expected<void, std::string> {
+            generation = packet.trackStorageGeneration.value_or(0);
+            waited = packet.waitForStorage;
+            return std::unexpected("archive admission failed");
+        });
+    processor.start();
+    Dss::Processing::FramePacket packet;
+    packet.trackStorageGeneration = 7;
+    packet.waitForStorage = true;
+    ASSERT_TRUE(processor.submitFrameBlocking(std::move(packet), {}));
+    processor.drain();
+    EXPECT_TRUE(processor.hasFailed());
+    EXPECT_EQ(generation, 7U);
+    EXPECT_TRUE(waited);
+}
+
+TEST(ImageProcessor, CancellingResultAdmissionPreservesDrainAndRestartResetsCancellation) {
+    Dss::Core::MessageBus bus;
+    std::promise<void> entered;
+    auto waiting = entered.get_future();
+    int calls = 0;
+    bool restartedWithLiveToken = false;
+    Dss::Processing::ImageProcessor processor(bus);
+    processor.setTrackingStrategy(
+        std::make_unique<Dss::Tracking::GeoTracker>(Dss::Core::TrackingSettings{}));
+    processor.setTrackResultSink(
+        [&](const auto&, const auto&, std::stop_token token) -> std::expected<void, std::string> {
+            if (++calls == 1) {
+                std::mutex mutex;
+                std::condition_variable_any cv;
+                std::unique_lock lock(mutex);
+                entered.set_value();
+                cv.wait(lock, token, [] { return false; });
+            } else {
+                restartedWithLiveToken = !token.stop_requested();
+            }
+            return {};
+        });
+    processor.start();
+    ASSERT_TRUE(processor.submitFrame({}));
+    ASSERT_EQ(waiting.wait_for(2s), std::future_status::ready);
+    processor.cancelPendingResults();
+    processor.drain();
+    EXPECT_FALSE(processor.hasFailed());
+    EXPECT_EQ(processor.resourceSnapshot().completedItems, 1U);
+    processor.start();
+    ASSERT_TRUE(processor.submitFrame({}));
+    processor.drain();
+    EXPECT_EQ(calls, 2);
+    EXPECT_TRUE(restartedWithLiveToken);
+}
+
+TEST(ImageProcessor, StopCancelsResultAdmissionBeforeJoiningWorker) {
+    Dss::Core::MessageBus bus;
+    std::promise<void> entered;
+    auto waiting = entered.get_future();
+    Dss::Processing::ImageProcessor processor(bus);
+    processor.setTrackingStrategy(
+        std::make_unique<Dss::Tracking::GeoTracker>(Dss::Core::TrackingSettings{}));
+    processor.setTrackResultSink(
+        [&](const auto&, const auto&, std::stop_token token) -> std::expected<void, std::string> {
+            std::mutex mutex;
+            std::condition_variable_any cv;
+            std::unique_lock lock(mutex);
+            entered.set_value();
+            cv.wait(lock, token, [] { return false; });
+            return {};
+        });
+    processor.start();
+    ASSERT_TRUE(processor.submitFrame({}));
+    ASSERT_EQ(waiting.wait_for(2s), std::future_status::ready);
+    auto stopped = std::async(std::launch::async, [&] { processor.stop(); });
+    const auto ready = stopped.wait_for(2s);
+    processor.cancelPendingResults();
+    stopped.get();
+    EXPECT_EQ(ready, std::future_status::ready);
+    EXPECT_FALSE(processor.hasFailed());
 }

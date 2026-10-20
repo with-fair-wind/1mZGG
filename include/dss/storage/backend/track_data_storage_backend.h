@@ -8,6 +8,7 @@
 #include <fstream>
 #include <mutex>
 #include <optional>
+#include <stop_token>
 #include <string>
 #include <utility>
 #include <vector>
@@ -103,7 +104,7 @@ public:
             return {};
         }
 
-        return m_writeQueue.start(
+        auto result = m_writeQueue.start(
             [this](const std::vector<TrackDataRecord>& records) { return writeRecords(records); },
             [this](const std::vector<TrackDataRecord>&, const std::string& message) {
                 if (m_bus != nullptr) {
@@ -114,6 +115,10 @@ public:
                     });
                 }
             });
+        if (result) {
+            m_sessionActive = true;
+        }
+        return result;
     }
 
     /** @brief 获取本组件的资源采样。 @return 轨迹写入队列的资源快照。 */
@@ -136,11 +141,19 @@ public:
         m_stopping = false;  ///< 由 m_sessionMutex 保护的异步停止状态。
     }
 
+    /// @brief 不关闭准入，等待本次启动已接受轨迹批次完成，磁盘失败返回错误。
+    /// @param token 取消完成等待，不中断已进入的文件 I/O。
+    /// @return 排空成功或类型化终止原因。
+    auto waitUntilIdle(std::stop_token token) -> std::expected<void, WriteAdmissionError> {
+        return m_writeQueue.waitUntilIdle(token);
+    }
+
     /// 关闭当前代次的准入，不等待写入完成。
     void requestStop() {
         std::scoped_lock lock(m_sessionMutex);
-        m_stopping = true;      ///< 由 m_sessionMutex 保护的异步停止状态。
-        ++m_sessionGeneration;  ///< 会话代数，停止/切换时递增，用于拒绝旧回调。
+        m_stopping = true;
+        m_sessionActive = false;  ///< 由 m_sessionMutex 保护的异步停止状态。
+        ++m_sessionGeneration;    ///< 会话代数，停止/切换时递增，用于拒绝旧回调。
         m_writeQueue.requestStop();
     }
 
@@ -148,6 +161,16 @@ public:
     /// @return 当前会话代数，供回调提交时校验。
     [[nodiscard]] auto sessionGeneration() const -> std::uint64_t {
         return m_sessionGeneration.load();  ///< 会话代数，停止/切换时递增，用于拒绝旧回调。
+    }
+
+    /// @brief 在同一会话锁内获取运行中会话，供帧入口冻结归档边界。
+    /// @return 保存已开启且未显式停止时返回代次；worker 失败仍保留代次以报告错误。
+    [[nodiscard]] auto activeSessionGeneration() const -> std::optional<std::uint64_t> {
+        std::scoped_lock lock(m_sessionMutex);
+        if (m_stopping || !m_sessionActive) {
+            return std::nullopt;
+        }
+        return m_sessionGeneration.load();
     }
 
     /** @brief 查询后台写入状态。 @return 工作线程运行时返回 true。 */
@@ -187,7 +210,7 @@ public:
      */
     auto configureSession(const ImageStorageNaming& naming) -> std::expected<void, std::string> {
         std::scoped_lock lock(m_sessionMutex);
-        if (isRunning() || m_stopping) {
+        if (isRunning() || m_stopping || m_sessionActive) {
             return std::unexpected(
                 "cannot configure session while track storage worker is running");
         }
@@ -243,6 +266,39 @@ public:
             return std::unexpected("track data storage queue is full");
         }
         return result;
+    }
+
+    /**
+     * @brief 无损提交轨迹批次；容量等待不持有会话锁。
+     * @param event 当前帧跟踪快照。
+     * @param token 取消尚未接受的请求，不撤销已接受写入。
+     * @param generation 在帧进入处理管线时捕获的会话代次。
+     * @return 成功入队或类型化终止原因；空有效记录不产生写入。
+     */
+    auto enqueueTrackResultBlocking(const Dss::Core::TrackResultEvent& event, std::stop_token token,
+                                    std::uint64_t generation)
+        -> std::expected<void, WriteAdmissionError> {
+        std::vector<TrackDataRecord> records;
+        std::uint64_t queueGeneration = 0;
+        {
+            std::scoped_lock lock(m_sessionMutex);
+            if (generation != m_sessionGeneration.load()) {
+                return std::unexpected(WriteAdmissionError::StaleSession);
+            }
+            if (!m_ready.load()) {
+                return std::unexpected(WriteAdmissionError::NotReady);
+            }
+            if (m_stopping || !m_sessionActive) {
+                return std::unexpected(WriteAdmissionError::Stopped);
+            }
+            records = buildRecords(event);
+            queueGeneration = m_writeQueue.generation();
+        }
+        if (records.empty()) {
+            return {};
+        }
+        const auto bytes = records.capacity() * sizeof(TrackDataRecord);
+        return m_writeQueue.enqueueBlocking(std::move(records), bytes, token, queueGeneration);
     }
 
 private:
@@ -322,9 +378,10 @@ private:
     mutable std::mutex m_sessionMutex;           ///< 会话配置与准入边界。
     std::mutex m_lifecycleMutex;                 ///< join 不持有会话锁。
     std::atomic<std::uint64_t> m_sessionGeneration{
-        0};                       ///< 会话代数，停止/切换时递增，用于拒绝旧回调。
-    bool m_stopping = false;      ///< 由 m_sessionMutex 保护的异步停止状态。
-    MessageBus* m_bus = nullptr;  ///< 非拥有事件总线指针
+        0};                        ///< 会话代数，停止/切换时递增，用于拒绝旧回调。
+    bool m_sessionActive = false;  ///< 逻辑保存状态，worker 失败不伪装成用户停止；会话锁保护。
+    bool m_stopping = false;       ///< 由 m_sessionMutex 保护的异步停止状态。
+    MessageBus* m_bus = nullptr;   ///< 非拥有事件总线指针
     AsyncWriteQueue<std::vector<TrackDataRecord>> m_writeQueue;  ///< 后台写入队列
 };
 

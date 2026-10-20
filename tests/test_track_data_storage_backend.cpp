@@ -300,3 +300,44 @@ TEST(TrackDataStorageBackend, ReportsBufferedCloseFailureOnFullDevice) {
     EXPECT_EQ(errors.front().message, "failed to write or close track data file");
 }
 #endif
+
+TEST(TrackDataStorageBackend, LosslessAdmissionHonorsCancellationAndCapturedSession) {
+    const auto dir = tempTrackStorageDir();
+    Dss::Storage::TrackDataStorageBackend backend(dir, 1);
+    ASSERT_TRUE(backend.init(dir));
+    ASSERT_TRUE(backend.start());
+    const auto generation = backend.activeSessionGeneration();
+    ASSERT_TRUE(generation);
+    std::stop_source cancelled;
+    cancelled.request_stop();
+    const auto cancelledWrite =
+        backend.enqueueTrackResultBlocking(trackEvent(), cancelled.get_token(), *generation);
+    ASSERT_FALSE(cancelledWrite);
+    EXPECT_EQ(cancelledWrite.error(), Dss::Storage::WriteAdmissionError::Cancelled);
+    ASSERT_TRUE(backend.enqueueTrackResultBlocking(trackEvent(), {}, *generation));
+    ASSERT_TRUE(backend.waitUntilIdle({}));
+    backend.requestStop();
+    EXPECT_FALSE(backend.activeSessionGeneration());
+    backend.stop();
+    ASSERT_TRUE(backend.start());
+    const auto stale = backend.enqueueTrackResultBlocking(trackEvent(), {}, *generation);
+    ASSERT_FALSE(stale);
+    EXPECT_EQ(stale.error(), Dss::Storage::WriteAdmissionError::StaleSession);
+    backend.stop();
+    EXPECT_EQ(backend.successfulWrites(), 1U);
+    EXPECT_EQ(backend.droppedRequests(), 0U);
+}
+
+TEST(TrackDataStorageBackend, DisabledCapacityCannotBlockLosslessProducer) {
+    const auto dir = tempTrackStorageDir();
+    Dss::Storage::TrackDataStorageBackend backend(dir, 0);
+    ASSERT_TRUE(backend.init(dir));
+    ASSERT_TRUE(backend.start());
+    const auto result =
+        backend.enqueueTrackResultBlocking(trackEvent(), {}, backend.sessionGeneration());
+    backend.stop();
+    ASSERT_FALSE(result);
+    EXPECT_EQ(result.error(), Dss::Storage::WriteAdmissionError::CapacityExceeded);
+    EXPECT_EQ(backend.droppedRequests(), 1U);
+    EXPECT_EQ(backend.resourceSnapshot().waitingItems, 0U);
+}

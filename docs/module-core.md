@@ -76,7 +76,7 @@ Core 模块是整个系统的基础层，提供所有其他模块共享的类型
 | `DisplayRefreshEvent` | `ImageProcessor` | `DisplayViewModel` → `ImageDisplay` |
 | `ProcessingCompleteEvent` | `ImageProcessor` | `DisplayViewModel` |
 | `RotatedFrameReadyEvent` | `ImageProcessor` | 存储/扩展订阅者 |
-| `TrackResultEvent` | `ImageProcessor` | `TrackingViewModel`、Storage、DataExchange bridge |
+| `TrackResultEvent` | `ImageProcessor` | `TrackingViewModel`、DataExchange bridge |
 | `ImageReadyForSendEvent` | `ImageProcessor` | ApplicationContext 图像发送桥 |
 | `ImageSendCompletedEvent` | `ImageSender` | 图像发送状态订阅者 |
 | `NetworkTransmissionErrorEvent` | `DataExchange` | `LogViewModel` / Logger |
@@ -263,7 +263,7 @@ flowchart LR
     DR --> RVM["ReplayViewModel"]
     PC --> DVM
     TR --> TVM["TrackingViewModel"]
-    TR --> TS["TrackDataStorageBackend 订阅"]
+    IP -->|"返回值 sink，非事件订阅"| TS["App 存储命令"]
     TR --> DX["TrackResultDataExchangeBridge"]
     MC["MasterControlChannel"] --> MCE["MasterControlEvent"]
     MCE --> MVM["MainViewModel"]
@@ -322,3 +322,5 @@ flowchart TD
 - `test_result_packet_utils.cpp`
 
 推荐源码顺序：`types.h` → `events.h` → `event_bus.h` → `service_registry.h` → `config_types.h` / `config.*` → `logger.*` → `result_packet_utils.*`。
+
+`ResourceSnapshot::waitingItems/peakWaitingItems` 由存储队列记录等待准入的调用者；其载荷仍属于调用方，不计入已接受队列字节预算。其他组件未实现该计数时保持零，不能据此断言没有其他等待。

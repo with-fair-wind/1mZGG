@@ -18,6 +18,8 @@ struct ResourceSnapshot {
     std::uint64_t lastWorkMicroseconds = 0;  ///< 最近一次工作耗时，微秒。
     std::uint64_t maxWorkMicroseconds = 0;   ///< 实例生命周期内单次工作耗时峰值，微秒。
     std::uint64_t lastStopMicroseconds = 0;  ///< 最近一次停止/排空耗时，微秒。
+    std::uint64_t waitingItems = 0;      ///< 等待准入的生产者数；其载荷仍归调用方，不计入队列预算。
+    std::uint64_t peakWaitingItems = 0;  ///< 显式提供等待指标的组件，其并发准入等待者峰值。
 };
 
 /**

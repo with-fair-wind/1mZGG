@@ -249,3 +249,59 @@ TEST(LocalImageStorageBackend, PreservesSessionWhenIndexCloseFailsAndAllowsRetry
     EXPECT_EQ(bytes, std::vector<std::uint8_t>(expected.begin(), expected.end()));
 }
 #endif
+
+TEST(LocalImageStorageBackend, LosslessSessionAdmissionPreservesPixelsAndRejectsStaleSession) {
+    const auto dir = tempStorageDir();
+    Dss::Storage::LocalImageStorageBackend backend(dir, 1);
+    ASSERT_TRUE(backend.init(dir));
+    Dss::Storage::ImageStorageNaming naming{};
+    naming.startTime = "20261020100000";
+    naming.targetId = "1";
+    naming.rootPath = dir;
+    ASSERT_TRUE(backend.configureSession(naming));
+    ASSERT_TRUE(backend.start());
+    const auto generation = backend.activeSessionGeneration();
+    ASSERT_TRUE(generation);
+    const auto pixels = std::make_shared<const std::vector<std::uint16_t>>(
+        std::vector<std::uint16_t>{0x1234, 0xABCD});
+    std::stop_source cancelled;
+    cancelled.request_stop();
+    const auto cancelledWrite = backend.enqueueSessionFrameBlocking(
+        1, metadata(), pixels, cancelled.get_token(), *generation);
+    ASSERT_FALSE(cancelledWrite);
+    EXPECT_EQ(cancelledWrite.error(), Dss::Storage::WriteAdmissionError::Cancelled);
+    ASSERT_TRUE(backend.enqueueSessionFrameBlocking(2, metadata(), pixels, {}, *generation));
+    ASSERT_TRUE(backend.waitUntilIdle({}));
+    backend.requestStop();
+    EXPECT_FALSE(backend.activeSessionGeneration());
+    backend.stop();
+    ASSERT_TRUE(backend.start());
+    const auto stale = backend.enqueueSessionFrameBlocking(3, metadata(), pixels, {}, *generation);
+    backend.stop();
+    ASSERT_FALSE(stale);
+    EXPECT_EQ(stale.error(), Dss::Storage::WriteAdmissionError::StaleSession);
+    EXPECT_EQ(backend.successfulWrites(), 1U);
+    EXPECT_EQ(backend.droppedRequests(), 0U);
+    const auto decoded = Dss::Storage::decodeRawImageFile(
+        readAllBytes(Dss::Storage::buildImageFilePath(naming, metadata(), 2)));
+    ASSERT_TRUE(decoded);
+    EXPECT_EQ(decoded->pixels, *pixels);
+}
+
+TEST(LocalImageStorageBackend, OversizedLosslessFrameRejectsWithoutWaiting) {
+    const auto dir = tempStorageDir();
+    Dss::Storage::LocalImageStorageBackend backend(dir, 1, 3);
+    ASSERT_TRUE(backend.init(dir));
+    Dss::Storage::ImageStorageNaming naming{};
+    naming.startTime = "20261020100000";
+    ASSERT_TRUE(backend.configureSession(naming));
+    ASSERT_TRUE(backend.start());
+    const auto pixels = std::make_shared<const std::vector<std::uint16_t>>(2, 42);
+    const auto result =
+        backend.enqueueSessionFrameBlocking(1, metadata(), pixels, {}, backend.sessionGeneration());
+    backend.stop();
+    ASSERT_FALSE(result);
+    EXPECT_EQ(result.error(), Dss::Storage::WriteAdmissionError::CapacityExceeded);
+    EXPECT_EQ(backend.droppedRequests(), 1U);
+    EXPECT_EQ(backend.pendingBytes(), 0U);
+}

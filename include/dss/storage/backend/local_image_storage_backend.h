@@ -10,6 +10,7 @@
 #include <mutex>
 #include <optional>
 #include <span>
+#include <stop_token>
 #include <string>
 #include <utility>
 #include <vector>
@@ -93,7 +94,7 @@ public:
             return {};
         }
 
-        return m_writeQueue.start(
+        auto result = m_writeQueue.start(
             [this](const SaveRawFrameRequest& request) { return writeFrame(request); },
             [this](const SaveRawFrameRequest& request, const std::string& message) {
                 if (m_bus != nullptr) {
@@ -104,6 +105,10 @@ public:
                     });
                 }
             });
+        if (result) {
+            m_sessionActive = true;
+        }
+        return result;
     }
 
     /** @brief 获取本组件的资源采样。 @return 图像写入队列的资源快照。 */
@@ -120,10 +125,18 @@ public:
         m_stopping = false;
     }
 
+    /// @brief 不关闭准入，等待本次启动已接受图像写完；磁盘失败返回错误。
+    /// @param token 可取消完成等待，不能中断已进入的文件 I/O。
+    /// @return 排空成功或类型化终止原因。
+    auto waitUntilIdle(std::stop_token token) -> std::expected<void, WriteAdmissionError> {
+        return m_writeQueue.waitUntilIdle(token);
+    }
+
     /// 关闭当前代次的提交准入；stop() 随后负责等待排空。
     void requestStop() {
         std::scoped_lock lock(m_sessionMutex);
         m_stopping = true;
+        m_sessionActive = false;
         ++m_sessionGeneration;
         m_writeQueue.requestStop();
     }
@@ -138,6 +151,16 @@ public:
     /// @return 等待及正在写入请求的载荷总字节数。
     [[nodiscard]] auto pendingBytes() const -> std::size_t {
         return m_writeQueue.pendingBytes();
+    }
+
+    /// @brief 在同一会话锁内获取运行中会话，供帧入口冻结归档边界。
+    /// @return 保存已开启且未显式停止时返回代次；worker 失败仍保留代次以报告错误。
+    [[nodiscard]] auto activeSessionGeneration() const -> std::optional<std::uint64_t> {
+        std::scoped_lock lock(m_sessionMutex);
+        if (m_stopping || !m_sessionActive) {
+            return std::nullopt;
+        }
+        return m_sessionGeneration.load();
     }
 
     /** @brief 查询后台写入状态。 @return 工作线程运行时返回 true。 */
@@ -195,7 +218,7 @@ public:
      */
     auto configureSession(ImageStorageNaming naming) -> std::expected<void, std::string> {
         std::scoped_lock lock(m_sessionMutex);
-        if (isRunning() || m_stopping) {
+        if (isRunning() || m_stopping || m_sessionActive) {
             return std::unexpected("cannot configure session while storage worker is running");
         }
         naming.rootPath = m_baseDir;
@@ -257,6 +280,49 @@ public:
         }
         const auto path = buildImageFilePath(*m_sessionNaming, metadata, sequence);
         return enqueueRawFrameLocked(path, metadata, std::move(pixels));
+    }
+
+    /**
+     * @brief 无损提交会话帧，容量不足时可取消等待；只在独立生产线程调用。
+     * @param sequence 会话内帧序号。
+     * @param metadata RAW 元数据。
+     * @param pixels 不可变共享像素；等待期间由调用方保留。
+     * @param token 取消准入等待，已接受请求仍由 stop 排空。
+     * @param generation 帧源入口捕获的会话代次。
+     * @return 成功入队或类型化终止原因；等待不持有会话锁。
+     */
+    auto enqueueSessionFrameBlocking(std::uint64_t sequence, RawImageMetadata metadata,
+                                     std::shared_ptr<const std::vector<std::uint16_t>> pixels,
+                                     std::stop_token token, std::uint64_t generation)
+        -> std::expected<void, WriteAdmissionError> {
+        SaveRawFrameRequest request;
+        std::uint64_t queueGeneration = 0;
+        {
+            std::scoped_lock lock(m_sessionMutex);
+            if (generation != m_sessionGeneration.load()) {
+                return std::unexpected(WriteAdmissionError::StaleSession);
+            }
+            if (!m_ready.load()) {
+                return std::unexpected(WriteAdmissionError::NotReady);
+            }
+            if (!m_sessionNaming) {
+                return std::unexpected(WriteAdmissionError::NoSession);
+            }
+            if (m_stopping || !m_sessionActive) {
+                return std::unexpected(WriteAdmissionError::Stopped);
+            }
+            if (!pixels || pixels->empty()) {
+                return std::unexpected(WriteAdmissionError::InvalidRequest);
+            }
+            request = {
+                buildImageFilePath(*m_sessionNaming, metadata, sequence),
+                metadata,
+                std::move(pixels),
+            };
+            queueGeneration = m_writeQueue.generation();
+        }
+        const auto bytes = request.pixels->capacity() * sizeof(std::uint16_t);
+        return m_writeQueue.enqueueBlocking(std::move(request), bytes, token, queueGeneration);
     }
 
     /**
@@ -408,8 +474,9 @@ private:
     mutable std::mutex m_sessionMutex;                  ///< 会话路径和提交准入共同加锁。
     std::mutex m_lifecycleMutex;                        ///< 序列化 start/stop，join 时不持会话锁。
     std::atomic<std::uint64_t> m_sessionGeneration{0};  ///< 拒绝旧会话的在途提交。
-    bool m_stopping = false;                            ///< 排空完成前禁止重新配置。
-    MessageBus* m_bus = nullptr;                        ///< 非拥有事件总线指针
+    bool m_sessionActive = false;  ///< 逻辑保存状态，worker 失败不伪装成用户停止；会话锁保护。
+    bool m_stopping = false;       ///< 排空完成前禁止重新配置。
+    MessageBus* m_bus = nullptr;   ///< 非拥有事件总线指针
     AsyncWriteQueue<SaveRawFrameRequest> m_writeQueue;  ///< 后台写入队列
 };
 

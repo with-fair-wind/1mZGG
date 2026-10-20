@@ -28,6 +28,8 @@ Processing 模块实现图像处理管线，负责帧数据的缓冲、分发、
 | `width` / `height` | `uint32_t` | 图像尺寸 |
 | `frameSeq` | `uint64_t` | 帧序号 |
 | `metadata` | `ExposureDisplayData` | 曝光同步元数据 |
+| `trackStorageGeneration` | `optional<uint64_t>` | 帧入口的轨迹保存会话，空表示当时未保存 |
+| `waitForStorage` | `bool` | 回放等待轨迹准入；实时非阻塞 |
 
 ### 2. FrameView / MutableFrameView (`frame_view.h`)
 
@@ -185,7 +187,8 @@ flowchart LR
     CUDA["dss_gpu_cuda（可选）"] --> PROC
     ACQ["dss_acquisition_qt"] -->|"FramePacket"| PROC
     UI["UI"] --> PROC
-    PROC -->|"TrackResultEvent"| APP["App/Storage/Network"]
+    PROC -->|"TrackResultEvent"| APP["UI/Network"]
+    PROC -->|"TrackResultSink 返回准入结果"| STORE["App 注入的存储命令"]
 ```
 
 ### 关键类关系
@@ -264,6 +267,7 @@ sequenceDiagram
     participant Pipeline as ProcessingPipeline
     participant Strategy as IProcessingStrategy
     participant Tracker as ITrackingStrategy
+    participant Store as App 注入的 TrackResultSink
     participant Bus as MessageBus
 
     alt 实时采集 DropIfBusy
@@ -298,6 +302,10 @@ sequenceDiagram
         Processor->>Processor: 从 RAW 生成 8 位显示图
     end
     Processor->>Bus: DisplayRefreshEvent
+    opt 结果非空且配置 sink
+        Processor->>Store: 结果、帧会话和独立取消令牌
+        Store-->>Processor: 准入成功 / 显式截断 / 错误
+    end
     Processor->>Bus: ProcessingCompleteEvent
     opt 结果非空
         Processor->>Bus: TrackResultEvent
@@ -375,3 +383,5 @@ stateDiagram-v2
 `FramePacket::backendDisplayRequired` 在独立策略调用时默认为 true；处理器统一构建显示时设为 false。OpenCV/CUDA 据此跳过无用的显示转换，Diff 的差分掩码仍用于检测。通道 clear 会释放槽位载荷，停止和异常退出不再保留未消费 RAW 缓冲。
 
 `hasFailed()` 保留最近一次处理线程的失败终态，下一次 start 清除。回放在 source EOF 后 drain 处理器并检查该状态，尾帧处理失败不能显示为成功完成。
+
+`setTrackResultSink()` 注入有返回值的存储命令，回调在结果互斥锁外执行；配置使用共享只读 callable 快照，避免每帧复制。不能在回调内重入处理器生命周期。准入失败抛至既有线程边界并保留 `hasFailed()`，不发布该帧的 ProcessingComplete/TrackResult 通知。`cancelPendingResults()` 非阻塞地取消尚未接受的结果等待；每次 start 创建新令牌，worker 停止也取消等待，先唤醒再 join。正常 EOF 的 drain 不取消结果，帧源自然结束也不会取消它。ProcessingComplete 表示处理及必要轨迹准入完成；ReplaySession 的正常完成另等待实际存储关闭，不是 fsync 保证。

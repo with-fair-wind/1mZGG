@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -39,6 +40,8 @@ struct FramePacket {
     std::vector<Dss::Core::MeasuredBlob> targetBlobs;           ///< 检测到的目标光斑
     std::vector<Dss::Core::MeasuredBlob> validatedTargetBlobs;  ///< 校验通过的目标光斑
     std::vector<Dss::Core::MeasuredBlob> starBlobs;             ///< 检测到的恒星光斑
+    std::optional<std::uint64_t> trackStorageGeneration;  ///< 帧入口冻结的归档会话；空表示未启用。
+    bool waitForStorage = false;         ///< 回放允许等待存储容量，实时帧只尝试一次。
     bool backendDisplayRequired = true;  ///< 独立调用默认生成显示；处理器统一拉伸时关闭。
 };
 

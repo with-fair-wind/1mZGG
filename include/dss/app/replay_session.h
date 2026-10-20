@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <expected>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -59,7 +60,7 @@ public:
         Finished,
         Error,
     };
-    /// 在同一锁内取得的一致快照；终态发布前已完成源停止和处理器回收。
+    /// 一致状态快照；EOF/Ready 在配置的归档完成屏障后发布，停止可取消未准入的归档。
     struct Snapshot {
         State state = State::Idle;     ///< 当前生命周期状态。
         Notice notice = Notice::None;  ///< 最近状态的展示含义。
@@ -75,18 +76,23 @@ public:
         }
     };
 
+    /// EOF/单步完成前的可取消归档完成屏障；停止不必等当前文件 I/O 返回。
+    using CompletionBarrier = std::function<std::expected<void, std::string>(std::stop_token)>;
+
     /**
      * @brief 创建服务及其串行工作线程。
      * @param bus 借用的事件总线，发布 GrabStarted/GrabStopped。
      * @param source 非空回放帧源。
      * @param processor 非空处理器。
      * @param coordinator 可选帧源协调器，回放前切换至 Replay。
+     * @param completionBarrier 可选存储完成屏障；失败阻止 Completed/Ready，不能重入生命周期。
      * @throws std::invalid_argument source 或 processor 为空。
      */
     ReplaySession(Dss::Core::MessageBus& bus,
                   std::shared_ptr<Dss::Acquisition::ImageSequenceFrameSource> source,
                   std::shared_ptr<Dss::Processing::ImageProcessor> processor,
-                  std::shared_ptr<Dss::Acquisition::FrameSourceCoordinator> coordinator = {});
+                  std::shared_ptr<Dss::Acquisition::FrameSourceCoordinator> coordinator = {},
+                  CompletionBarrier completionBarrier = {});
     /// 取消并 join；可能等待当前解码或处理回调返回。
     ~ReplaySession();
 
@@ -141,6 +147,10 @@ private:
     /// @param command 已接受的指令。
     /// @param token 当前指令的取消令牌。
     void execute(Command command, std::stop_token token);
+    /// @brief 等待可选存储屏障；取消后保留 Stopping，交由停止/关闭分支收口。
+    /// @param token 当前命令或 EOF 完成操作的取消令牌。
+    /// @return 未取消且屏障完成时为 true；屏障失败抛至服务线程边界。
+    auto finishAcceptedWrites(std::stop_token token) -> bool;
     /// 停止全部相关源，保证随后 drain/reset 不再有生产者。
     void stopSources();
     /// 连续运行前检查取消并发布开始事件。
@@ -159,6 +169,7 @@ private:
     std::shared_ptr<Dss::Acquisition::ImageSequenceFrameSource> m_source;     ///< 回放源。
     std::shared_ptr<Dss::Processing::ImageProcessor> m_processor;             ///< 处理器。
     std::shared_ptr<Dss::Acquisition::FrameSourceCoordinator> m_coordinator;  ///< 可选协调器。
+    CompletionBarrier m_completionBarrier;       ///< 构造后不变，只在服务线程执行。
     mutable std::mutex m_mutex;                  ///< 保护快照、指令、关闭/停止标志和取消源。
     std::condition_variable m_wake;              ///< 命令与停止唤醒。
     Snapshot m_snapshot;                         ///< 最近发布的一致快照。

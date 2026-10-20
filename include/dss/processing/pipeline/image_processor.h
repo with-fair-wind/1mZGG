@@ -1,10 +1,13 @@
 #pragma once
 
 #include <atomic>
+#include <expected>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <stop_token>
+#include <string>
 #include <thread>
 
 #include "dss/core/event/message_bus.h"
@@ -14,6 +17,10 @@
 #include "dss/processing/pipeline/processing_pipeline.h"
 #include "dss/processing/strategy/i_processing_strategy.h"
 #include "dss/tracking/strategy/i_tracking_strategy.h"
+
+namespace Dss::Core {
+struct TrackResultEvent;
+}
 
 namespace Dss::Processing {
 
@@ -68,6 +75,15 @@ public:
     /// 队列与工作线程分别采样，运行中允许存在短暂的跨快照时间差。
     /// @return 队列与工作线程分别采样的资源计数，不是全局原子快照。
     [[nodiscard]] auto resourceSnapshot() const -> Dss::Core::ResourceSnapshot;
+
+    /// 有返回值的轨迹下游入口；失败使当前处理任务进入失败终态，不经通知总线吞掉错误。
+    using TrackResultSink = std::function<std::expected<void, std::string>(
+        const Dss::Core::TrackResultEvent&, const FramePacket&, std::stop_token)>;
+    /// @brief 配置轨迹存储入口；回调在处理线程执行，不持有配置锁。
+    /// @param sink 可为空；捕获资源须存活至当前回调返回，不能重入本处理器启停。
+    void setTrackResultSink(TrackResultSink sink);
+    /// @brief 取消本次启动尚未进入下游的结果；保留处理队列供 drain，start 后重置。
+    void cancelPendingResults();
 
     /// 最近一次 start 后是否异常退出；详细原因通过 BackgroundTaskErrorEvent 发布。
     /// @return 最近一次启动的处理线程发生异常时为 true。
@@ -143,12 +159,21 @@ private:
     void publishFrameResults(FramePacket& packet, ProcessingResult& procResult,
                              std::optional<std::vector<Dss::Core::TargetInfo>> trackResults);
 
+    /// @brief 在处理完成与跟踪事实通知前完成一次有返回值的轨迹准入；回调失败向 worker 顶层传播。
+    /// @param event 当前跟踪结果。
+    /// @param packet 携带帧入口归档会话及等待策略。
+    void deliverTrackResult(const Dss::Core::TrackResultEvent& event, const FramePacket& packet);
+
     /**
      * @brief 在处理线程中获取当前显示拉伸设置。
      * @return 线程安全复制的设置快照。
      */
     [[nodiscard]] auto currentDisplayStretchSettings() const -> DisplayStretchSettings;
 
+    std::mutex m_resultMutex;  ///< 保护结果入口与本次启动的取消源。
+    std::shared_ptr<const TrackResultSink>
+        m_resultSink;                               ///< 每次配置分配一次，不在每帧复制 callable。
+    std::stop_source m_resultCancellation;          ///< 取消下游等待，独立于正常 EOF 的帧源回收。
     mutable std::mutex m_resourceMutex;             ///< 保护处理线程活动项与耗时指标。
     Dss::Core::ResourceSnapshot m_resources;        ///< 处理线程活动载荷、完成数和耗时。
     MessageBus& m_bus;                              ///< 事件消息总线

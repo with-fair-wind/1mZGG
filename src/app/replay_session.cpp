@@ -22,11 +22,13 @@ void requireSuccess(const std::expected<void, std::string>& result) {
 ReplaySession::ReplaySession(Dss::Core::MessageBus& bus,
                              std::shared_ptr<Dss::Acquisition::ImageSequenceFrameSource> source,
                              std::shared_ptr<Dss::Processing::ImageProcessor> processor,
-                             std::shared_ptr<Dss::Acquisition::FrameSourceCoordinator> coordinator)
+                             std::shared_ptr<Dss::Acquisition::FrameSourceCoordinator> coordinator,
+                             CompletionBarrier completionBarrier)
     : m_bus(bus),
       m_source(std::move(source)),
       m_processor(std::move(processor)),
-      m_coordinator(std::move(coordinator)) {
+      m_coordinator(std::move(coordinator)),
+      m_completionBarrier(std::move(completionBarrier)) {
     if (!m_source || !m_processor) {
         throw std::invalid_argument("Replay services are not registered");
     }
@@ -92,7 +94,7 @@ void ReplaySession::stop() {
     std::stop_source cancel;
     {
         std::scoped_lock lock(m_mutex);
-        if (m_closed || m_stopRequested || m_snapshot.state == State::Stopping) {
+        if (m_closed || m_stopRequested) {
             return;
         }
         // 终态上的停止不能抹掉 Failed，后续 start 仍须重新加载。
@@ -106,6 +108,7 @@ void ReplaySession::stop() {
         cancel = m_cancel;
     }
     cancel.request_stop();  // stop_callback 可能执行用户代码，不能持有状态锁。
+    m_processor->cancelPendingResults();
     m_wake.notify_one();
 }
 
@@ -118,6 +121,7 @@ void ReplaySession::shutdown() {
         cancel = m_cancel;
     }
     cancel.request_stop();
+    m_processor->cancelPendingResults();
     m_wake.notify_one();
     if (m_worker.joinable()) {
         m_worker.join();
@@ -164,7 +168,18 @@ void ReplaySession::beginPlayback(std::stop_token token) {
     publish(State::Running, Notice::Playing);
 }
 
+auto ReplaySession::finishAcceptedWrites(std::stop_token token) -> bool {
+    if (token.stop_requested()) {
+        return false;
+    }
+    if (m_completionBarrier) {
+        requireSuccess(m_completionBarrier(token));
+    }
+    return !token.stop_requested();
+}
+
 void ReplaySession::execute(Command command, std::stop_token token) {
+    m_processor->cancelPendingResults();
     stopSources();
     m_processor->drain();
     notifyStopped();
@@ -231,7 +246,9 @@ void ReplaySession::execute(Command command, std::stop_token token) {
     if (m_processor->hasFailed()) {
         throw std::runtime_error("processing failed; see diagnostics");
     }
-    publish(State::Idle, Notice::Ready);
+    if (finishAcceptedWrites(token)) {
+        publish(State::Idle, Notice::Ready);
+    }
 }
 
 void ReplaySession::finishStopRequest() {
@@ -258,12 +275,14 @@ void ReplaySession::finishStopRequest() {
 void ReplaySession::pollCompletion() {
     const auto completion = m_source->completion();
     if (completion || m_processor->hasFailed()) {
+        std::stop_token token;
         {
             std::scoped_lock lock(m_mutex);
             // 查询 EOF 期间可能收到普通命令；已接受的命令优先，不能覆盖其 Loading。
             if (m_closed || m_pending || m_stopRequested || m_snapshot.state != State::Running) {
                 return;
             }
+            token = m_cancel.get_token();
             m_snapshot.state = State::Stopping;
             m_snapshot.notice = Notice::Stopping;
             ++m_snapshot.revision;
@@ -271,6 +290,9 @@ void ReplaySession::pollCompletion() {
         stopSources();
         m_processor->drain();
         notifyStopped();
+        if (!m_processor->hasFailed() && !finishAcceptedWrites(token)) {
+            return;
+        }
         std::string error;
         if (m_processor->hasFailed()) {
             error = "processing failed; see diagnostics";

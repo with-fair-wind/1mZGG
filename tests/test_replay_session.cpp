@@ -358,3 +358,82 @@ TEST_F(ReplayApplicationSession, StopCancelsLosslessSingleStepSubmission) {
     EXPECT_FALSE(processor->isRunning());
     EXPECT_EQ(started.load(), 0);
 }
+
+TEST_F(ReplayApplicationSession, NaturalEofWaitsForStorageCompletionBarrier) {
+    auto gate = std::make_shared<Gate>();
+    const ReleaseGate release(*gate);
+    session->shutdown();
+    session =
+        std::make_unique<Session>(bus, source, processor, nullptr,
+                                  [gate](std::stop_token) -> std::expected<void, std::string> {
+                                      gate->enter();
+                                      return {};
+                                  });
+    ASSERT_TRUE(select({frame("barrier.raw")}));
+    ASSERT_TRUE(session->start());
+    ASSERT_TRUE(gate->waitEntered());
+    EXPECT_EQ(processed.load(), 1);
+    EXPECT_EQ(session->snapshot().state, State::Stopping);
+    EXPECT_FALSE(session->start());
+    gate->release();
+    ASSERT_TRUE(waitUntil([&] { return session->snapshot().state == State::Completed; }));
+}
+
+TEST_F(ReplayApplicationSession, StopCancelsEofStorageBarrierAndRestartCanComplete) {
+    auto entered = std::make_shared<std::promise<void>>();
+    auto waiting = entered->get_future();
+    auto visits = std::make_shared<std::atomic<int>>(0);
+    session->shutdown();
+    session = std::make_unique<Session>(
+        bus, source, processor, nullptr,
+        [entered, visits](std::stop_token token) -> std::expected<void, std::string> {
+            if (visits->fetch_add(1) == 0) {
+                std::mutex mutex;
+                std::condition_variable_any cv;
+                std::unique_lock lock(mutex);
+                entered->set_value();
+                cv.wait(lock, token, [] { return false; });
+            }
+            return {};
+        });
+    ASSERT_TRUE(select({frame("cancel-barrier.raw")}));
+    ASSERT_TRUE(session->start());
+    ASSERT_EQ(waiting.wait_for(3s), std::future_status::ready);
+    session->stop();
+    ASSERT_TRUE(settled());
+    EXPECT_EQ(session->snapshot().state, State::Idle);
+    ASSERT_TRUE(session->start());
+    ASSERT_TRUE(waitUntil([&] { return session->snapshot().state == State::Completed; }));
+    EXPECT_EQ(visits->load(), 2);
+}
+
+TEST_F(ReplayApplicationSession, StorageBarrierFailureCannotPublishCompleted) {
+    session->shutdown();
+    session = std::make_unique<Session>(bus, source, processor, nullptr,
+                                        [](std::stop_token) -> std::expected<void, std::string> {
+                                            return std::unexpected("archive flush failed");
+                                        });
+    ASSERT_TRUE(select({frame("failed-barrier.raw")}));
+    ASSERT_TRUE(session->start());
+    ASSERT_TRUE(waitUntil([&] { return session->snapshot().state == State::Failed; }));
+    EXPECT_EQ(session->snapshot().error, "archive flush failed");
+}
+
+TEST_F(ReplayApplicationSession, SingleStepWaitsForStorageCompletionBarrier) {
+    auto gate = std::make_shared<Gate>();
+    const ReleaseGate release(*gate);
+    session->shutdown();
+    session =
+        std::make_unique<Session>(bus, source, processor, nullptr,
+                                  [gate](std::stop_token) -> std::expected<void, std::string> {
+                                      gate->enter();
+                                      return {};
+                                  });
+    ASSERT_TRUE(select({frame("step-barrier.raw")}));
+    ASSERT_TRUE(session->step());
+    ASSERT_TRUE(gate->waitEntered());
+    EXPECT_EQ(session->snapshot().state, State::Loading);
+    gate->release();
+    ASSERT_TRUE(settled());
+    EXPECT_EQ(session->snapshot().notice, Session::Notice::Ready);
+}

@@ -6,6 +6,7 @@
 #include <iterator>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -32,6 +33,7 @@
 #include "dss/storage/backend/i_storage_backend.h"
 #include "dss/storage/backend/local_image_storage_backend.h"
 #include "dss/storage/backend/track_data_storage_backend.h"
+#include "dss/tracking/strategy/i_tracking_strategy.h"
 
 namespace {
 
@@ -99,6 +101,21 @@ protected:
     event.targets.push_back(std::move(target));
     return event;
 }
+
+/// @brief 为每帧返回确定性有效目标，只验证编排和归档，不验证跟踪精度。
+class FrameFixtureTracker final : public Dss::Tracking::ITrackingStrategy {
+public:
+    auto track(const Dss::Core::FrameMeasurements& measurements)
+        -> std::vector<Dss::Core::TargetInfo> override {
+        auto target = trackEvent().targets.front();
+        target.frameInfos.front().frameSeq = measurements.frameSeq;
+        return {std::move(target)};
+    }
+    [[nodiscard]] auto mode() const -> Dss::Core::TrackMode override {
+        return Dss::Core::TrackMode::Geo;
+    }
+    void reset() override {}
+};
 
 /// @brief 暴露字节注入与解码计数的测试工作线程,用于验证串口流式重同步。
 class ResyncSerialWorker final : public Dss::Comm::SerialWorkerBase {
@@ -318,8 +335,18 @@ TEST(ApplicationContextServices, RoutesTrackResultsToTrackDataStorage) {
     ASSERT_TRUE(trackDataStorage->init(dir).has_value());
     ASSERT_TRUE(trackDataStorage->start().has_value());
 
-    context.bus().emit(trackEvent());
-
+    const auto processor =
+        context.registry().get<Dss::Processing::ImageProcessor>("image_processor");
+    processor->setTrackingStrategy(std::make_unique<FrameFixtureTracker>());
+    Dss::Processing::FramePacket packet;
+    packet.frameSeq = 9;
+    packet.trackStorageGeneration = trackDataStorage->activeSessionGeneration();
+    packet.waitForStorage = true;
+    processor->start();
+    ASSERT_TRUE(processor->submitFrameBlocking(std::move(packet), {}));
+    processor->drain();
+    EXPECT_FALSE(processor->hasFailed());
+    ASSERT_TRUE(trackDataStorage->waitUntilIdle({}));
     trackDataStorage->stop();
 
     ASSERT_TRUE(std::filesystem::exists(trackDataStorage->outputPath()));
@@ -531,4 +558,142 @@ TEST(SerialResync, ClearsAccumulatorOnCloseBeforeNextSession) {
     EXPECT_EQ(worker.decodedCount(), 1);
     // close 清了 → 新帧干净解码,无重同步错误;若残留则会触发 TailMismatch 事件
     EXPECT_TRUE(errors.empty());
+}
+
+TEST(ApplicationContextServices, ReplayCompletedIncludesRawAndTrackArchives) {
+    Dss::App::ApplicationContext context;
+    context.registerCommunicationServices();
+    const auto dir = tempContextTrackStorageDir();
+    const auto imageStorage =
+        context.registry().get<Dss::Storage::LocalImageStorageBackend>("image_storage");
+    const auto trackStorage =
+        context.registry().get<Dss::Storage::TrackDataStorageBackend>("track_data_storage");
+    ASSERT_TRUE(imageStorage->init(dir / "images"));
+    ASSERT_TRUE(trackStorage->init(dir / "tracks"));
+    Dss::Storage::ImageStorageNaming naming{};
+    naming.startTime = "20261020100000";
+    naming.targetId = "1";
+    ASSERT_TRUE(imageStorage->configureSession(naming));
+    ASSERT_TRUE(trackStorage->configureSession(naming));
+    ASSERT_TRUE(imageStorage->start());
+    ASSERT_TRUE(trackStorage->start());
+    const auto processor =
+        context.registry().get<Dss::Processing::ImageProcessor>("image_processor");
+    processor->setTrackingStrategy(std::make_unique<FrameFixtureTracker>());
+    const auto bytes = Dss::Storage::buildRawImageFile({.width = 2, .height = 1},
+                                                       std::vector<std::uint16_t>{10, 20});
+    const auto input = dir / "input.raw";
+    {
+        std::ofstream out(input, std::ios::binary);
+        // 字节文件格式的标准字符视图。
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+        out.write(reinterpret_cast<const char*>(bytes.data()),
+                  static_cast<std::streamsize>(bytes.size()));
+    }
+    const auto replay = context.registry().get<Dss::App::ReplaySession>("replay_session");
+    ASSERT_TRUE(replay->selectFiles(std::vector<std::filesystem::path>(12, input)));
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
+    while (replay->snapshot().busy() && std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::yield();
+    }
+    ASSERT_TRUE(replay->start());
+    while (replay->snapshot().state != Dss::App::ReplaySession::State::Completed &&
+           replay->snapshot().state != Dss::App::ReplaySession::State::Failed &&
+           std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::yield();
+    }
+    const auto snapshot = replay->snapshot();
+    EXPECT_EQ(snapshot.state, Dss::App::ReplaySession::State::Completed) << snapshot.error;
+    EXPECT_EQ(imageStorage->successfulWrites(), 12U);
+    EXPECT_EQ(trackStorage->successfulWrites(), 12U);
+    EXPECT_EQ(imageStorage->droppedRequests(), 0U);
+    EXPECT_EQ(trackStorage->droppedRequests(), 0U);
+    EXPECT_EQ(imageStorage->resourceSnapshot().queuedItems, 0U);
+    EXPECT_EQ(imageStorage->resourceSnapshot().activeItems, 0U);
+    EXPECT_EQ(trackStorage->resourceSnapshot().queuedItems, 0U);
+    EXPECT_EQ(trackStorage->resourceSnapshot().activeItems, 0U);
+    context.shutdown();
+}
+
+TEST(ApplicationContextServices, LastRawWriteFailureCannotPublishReplayCompleted) {
+    Dss::App::ApplicationContext context;
+    context.registerCommunicationServices();
+    const auto dir = tempContextTrackStorageDir();
+    const auto storage =
+        context.registry().get<Dss::Storage::LocalImageStorageBackend>("image_storage");
+    ASSERT_TRUE(storage->init(dir / "images"));
+    Dss::Storage::ImageStorageNaming naming{};
+    naming.rootPath = dir / "images";
+    naming.startTime = "20261020110000";
+    naming.targetId = "1";
+    ASSERT_TRUE(storage->configureSession(naming));
+    Dss::Storage::RawImageMetadata metadata{};
+    metadata.width = 2;
+    metadata.height = 1;
+    metadata.exposure.timestamp = {.year = 2026, .month = 10, .day = 20, .hour = 11};
+    // 回放序号从 0 开始，文件路径被目录占用，真实 writer 打开失败。
+    ASSERT_TRUE(
+        std::filesystem::create_directory(Dss::Storage::buildImageFilePath(naming, metadata, 0)));
+    const auto input = dir / "failure.raw";
+    const auto bytes =
+        Dss::Storage::buildRawImageFile(metadata, std::vector<std::uint16_t>{10, 20});
+    {
+        std::ofstream out(input, std::ios::binary);
+        // 文件格式边界的字符字节视图。
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+        out.write(reinterpret_cast<const char*>(bytes.data()),
+                  static_cast<std::streamsize>(bytes.size()));
+    }
+    ASSERT_TRUE(storage->start());
+    const auto replay = context.registry().get<Dss::App::ReplaySession>("replay_session");
+    ASSERT_TRUE(replay->selectFiles({input}));
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
+    while (replay->snapshot().busy() && std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::yield();
+    }
+    ASSERT_TRUE(replay->start());
+    while (replay->snapshot().state != Dss::App::ReplaySession::State::Completed &&
+           replay->snapshot().state != Dss::App::ReplaySession::State::Failed &&
+           std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::yield();
+    }
+    EXPECT_EQ(replay->snapshot().state, Dss::App::ReplaySession::State::Failed);
+    EXPECT_NE(replay->snapshot().error.find("storage writer failed"), std::string::npos);
+    EXPECT_EQ(storage->successfulWrites(), 0U);
+    EXPECT_EQ(storage->failedWrites(), 1U);
+    context.shutdown();
+}
+
+TEST(ApplicationContextServices, QueuedOldFrameCannotWriteIntoRestartedTrackSession) {
+    Dss::App::ApplicationContext context;
+    context.registerCommunicationServices();
+    const auto storage =
+        context.registry().get<Dss::Storage::TrackDataStorageBackend>("track_data_storage");
+    ASSERT_TRUE(storage->init(tempContextTrackStorageDir()));
+    ASSERT_TRUE(storage->start());
+    const auto oldGeneration = storage->activeSessionGeneration();
+    ASSERT_TRUE(oldGeneration);
+    storage->stop();
+    ASSERT_TRUE(storage->start());
+    const auto processor =
+        context.registry().get<Dss::Processing::ImageProcessor>("image_processor");
+    processor->setTrackingStrategy(std::make_unique<FrameFixtureTracker>());
+    Dss::Processing::FramePacket oldFrame;
+    oldFrame.trackStorageGeneration = oldGeneration;
+    oldFrame.waitForStorage = true;
+    processor->start();
+    ASSERT_TRUE(processor->submitFrameBlocking(std::move(oldFrame), {}));
+    processor->drain();
+    EXPECT_FALSE(processor->hasFailed());
+    EXPECT_EQ(storage->successfulWrites(), 0U);
+    Dss::Processing::FramePacket newFrame;
+    newFrame.trackStorageGeneration = storage->activeSessionGeneration();
+    newFrame.waitForStorage = true;
+    processor->start();
+    ASSERT_TRUE(processor->submitFrameBlocking(std::move(newFrame), {}));
+    processor->drain();
+    ASSERT_TRUE(storage->waitUntilIdle({}));
+    EXPECT_EQ(storage->successfulWrites(), 1U);
+    EXPECT_EQ(storage->droppedRequests(), 0U);
+    context.shutdown();
 }

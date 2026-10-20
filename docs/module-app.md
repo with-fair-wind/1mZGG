@@ -209,7 +209,7 @@ sequenceDiagram
     end
     Ctx->>Coord: setFrameCallback(...)
     Ctx->>Reg: 注册 frame_source
-    Ctx->>Bus: 订阅 TrackResultEvent → 轨迹存储
+    Ctx->>Ctx: 注入处理器 TrackResultSink → 轨迹存储
     Ctx->>Reg: 注册 RuntimeDiagnostics
 ```
 
@@ -218,17 +218,18 @@ sequenceDiagram
 ```mermaid
 flowchart TD
     SOURCE["活动 IFrameSource"] --> CB["Coordinator 转发 FrameCallback"]
-    CB --> CHECK{"图像存储正在运行<br/>且 rawImage 非空？"}
+    CB --> SNAP["捕获两个保存会话代次和来源策略"]
+    SNAP --> CHECK{"图像保存会话存在<br/>且 rawImage 非空？"}
     CHECK -->|"是"| META["从 FramePacket 构造 RawImageMetadata"]
-    META --> ENQ["LocalImageStorageBackend::enqueueSessionFrame"]
-    CHECK -->|"否"| SUBMIT["ImageProcessor::submitFrame"]
+    META --> ENQ["RAW：回放等待预算 / 实时尝试准入"]
+    CHECK -->|"否"| SUBMIT["处理：回放可取消等待 / 实时尝试准入"]
     ENQ --> SUBMIT
     SUBMIT --> QUEUE{"处理队列有空间？"}
     QUEUE -->|"是"| WORKER["ImageProcessor 工作线程"]
     QUEUE -->|"否"| DROP["droppedFrames++"]
 ```
 
-Raw 存储在处理前入队，因此保存的是采集原始像素；轨迹数据则由 `TrackResultEvent` 订阅者异步入队。两者的启用状态都由 UI 显式控制。
+RAW 在处理前准入，保存采集原始像素；轨迹由组合根注入的返回值 sink 准入，再发布结果通知。两者启用状态由 UI 显式控制。帧入口固定会话代次，旧排队帧不能写入重启后的保存会话；未启用保存的帧不会在处理时补入新会话。存储影响回放成功与否，不能放进会隔离订阅异常的 MessageBus 通知链。
 
 ### 跟踪结果到网络交换
 
@@ -274,12 +275,12 @@ stateDiagram-v2
 
 - 实际生命周期由 ViewModel 的业务命令驱动；Registry 中对象析构时，各具体服务仍以 `close()` / `stop()` 兜底。
 - `open/close` 与 `start/stop` 由服务内部生命周期锁串行化，周期线程使用可由 `stop_token` 中断的等待。
-- **关机顺序**：`main()` 在 `QApplication::exec()` 返回后先调用 `MainViewModel::shutdown()`，关闭 ReplaySession 并 join 服务线程；随后调用 `ApplicationContext::shutdown()`。组合根在所有服务和订阅仍存活时显式关闭外部输入，再次幂等关闭 ReplaySession，再停止并 join 帧源、处理器，排空存储并关闭网络服务；最后释放组合根订阅、注册表和停止回调持有的服务引用。外部 shared_ptr 不会使停止动作失效。析构仅作幂等兜底，不能用注册表元素析构顺序代替生命周期协议。COW 派发中的退订不是等待屏障，必须先结束生产线程再销毁订阅者。
+- **关机顺序**：`main()` 在 `QApplication::exec()` 返回后先调用 `MainViewModel::shutdown()`，关闭 ReplaySession 并 join 服务线程；随后调用 `ApplicationContext::shutdown()`。组合根在所有服务和订阅仍存活时显式关闭外部输入，先 requestStop 两个存储后端以唤醒等待生产者，再次幂等关闭 ReplaySession，再停止并 join 帧源、处理器，排空存储并关闭网络服务；最后释放组合根订阅、注册表和停止回调持有的服务引用。外部 shared_ptr 不会使停止动作失效。析构仅作幂等兜底，不能用注册表元素析构顺序代替生命周期协议。COW 派发中的退订不是等待屏障，必须先结束生产线程再销毁订阅者。
 
 ### 线程、错误与诊断
 
 - App 中 ReplaySession 拥有串行命令线程；组合根创建的 Processing、Acquisition、Storage、Comm、Network 服务各自管理线程。
-- 帧回调可能来自回放线程或 Sapera SDK 回调线程；回调只做有界入队，不应添加阻塞 UI 操作。
+- 帧回调可能来自回放线程或 Sapera SDK 回调线程；回放可取消地等待存储/处理预算，实时只尝试有界入队，不应添加阻塞 UI 操作。
 - `RuntimeDiagnostics` 用原子计数统计网络、串口、存储错误，并通过注入的 reader 读取处理丢帧、存储计数及处理/存储/图像发送资源快照。字节口径与压力验证见 [资源验证](resource-validation.md)。
 - 配置加载失败返回 `unexpected`；文件日志配置失败只记录警告，不让整体配置加载失败。
 - 注册表名称错误通常表现为 ViewModel 获取服务失败，测试应同时覆盖具体类型和接口类型查询。
@@ -308,7 +309,9 @@ stateDiagram-v2
 
 `selectFiles/start/step/seek` 的成功返回只表示命令被接受，不能立即接下一条命令。读取一致的 `snapshot()` 判断完成；界面额外等待其快照被映射，避免排队的旧状态覆盖新操作。命令槽容量为一，停止意图单独保存并优先处理。停止请求通过 stop_token 取消单步无损提交等待，不在状态锁内执行回调、源启停或 join。
 
-普通暂停先停止生产者再 drain，保留策略历史；换序列、后退、定位及 EOF 重播清理历史。运行中的定位完成后恢复连续播放。单步也在返回空闲前 drain，因此“单步完成”包含处理完成。服务线程每 25 ms 检查连续回放 EOF/失败；正常结束同样先 drain，再检查 `ImageProcessor::hasFailed()`，末帧失败不能成为 Completed。已发生的失败不会被随后 stop 抹掉。
+显式停止先取消尚未准入结果、停止生产者再 drain，保留策略历史；换序列、后退、定位及 EOF 重播清理历史。运行中的定位完成后恢复连续播放。单步返回 Ready、自然 EOF 返回 Completed 前，先 drain 并检查 `ImageProcessor::hasFailed()`，再调用注入的存储完成屏障等待 RAW/轨迹写入关闭；尾帧写入失败进入 Failed。服务线程每 25 ms 检查连续回放 EOF/失败。
+
+处理器结果等待令牌独立于帧源令牌，避免自然 EOF 停止帧源时取消已接受帧的轨迹。显式 stop/shutdown、换序列或重新定位会取消旧结果准入，停止保存也会唤醒等待；这些是有意截断，已接受存储项继续排空。EOF 屏障处于 Stopping 时仍可接受显式停止。已发生的失败不会被随后 stop 抹掉。
 
 `shutdown()` 先封闭命令入口、请求取消，再 join；它是允许阻塞的最终关闭屏障，析构作幂等兜底。文件读取/解码和已进入的处理回调不支持强制中断，取消及关闭仍须等待它们返回。服务独占回放生命周期操作；不允许其他线程直接启停/reset 相同依赖对象。
 

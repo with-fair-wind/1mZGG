@@ -5,7 +5,7 @@
  * @file
  * @brief GEO 多目标、实际文件写入和 UDP 回环基线。
  * @details 参数：新建输出目录、帧数、目标数、RAW 边长、RAW 帧数、可选帧周期（微秒）。
- * 末尾可追加 PROFILE_WRITES（0/1），显式启用有开销的 writer 阶段计时。
+ * 末尾可追加 PROFILE_WRITES、LOSSLESS_WRITES（各 0/1），启用阶段计时及可取消等待入口。
  * RAW 帧数可为 0（仅轨迹）或等于总帧数（持续 RAW）；约每秒采样资源。
  * 每个 UDP 报文等待一次接收并逐字节核验，测量受控负载延迟，不代表链路饱和吞吐。
  * 文件由生产存储后端写入并保留；未执行 fsync，不代表断电持久化或裸盘带宽。
@@ -17,6 +17,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -91,6 +92,8 @@ Json memory() {
 Json queue(const Dss::Core::ResourceSnapshot& snapshot) {
     return {
         {"queued_items", snapshot.queuedItems},
+        {"waiting_items", snapshot.waitingItems},
+        {"peak_waiting_items", snapshot.peakWaitingItems},
         {"queued_bytes", snapshot.queuedBytes},
         {"active_bytes", snapshot.activeBytes},
         {"peak_queued_bytes", snapshot.peakQueuedBytes},
@@ -192,6 +195,61 @@ auto writerProfileJson(const Dss::Storage::TrackWriterProfileSnapshot& profile) 
     };
 }
 
+/// @brief 按选定过载策略提交一批轨迹；无损准入失败使基准失败。
+/// @param tracks 运行中的轨迹后端。
+/// @param event 跟踪结果批次。
+/// @param lossless 是否等待队列容量。
+/// @return 已接受时为 true；实时容量拒绝时为 false。
+auto submitTrackArchive(Dss::Storage::TrackDataStorageBackend& tracks,
+                        const Dss::Core::TrackResultEvent& event, bool lossless) -> bool {
+    if (lossless) {
+        require(
+            tracks.enqueueTrackResultBlocking(event, {}, tracks.sessionGeneration()).has_value(),
+            "lossless track admission failed");
+        return true;
+    }
+    return tracks.enqueueTrackResult(event).has_value();
+}
+
+/// @brief 无损模式为 RAW 使用正式会话路径；实时模式保持既有直接文件名。
+/// @param images 已初始化的后端。
+/// @param lossless 是否启用无损准入。
+void startImageArchive(Dss::Storage::LocalImageStorageBackend& images, bool lossless) {
+    if (lossless) {
+        Dss::Storage::ImageStorageNaming naming{};
+        naming.startTime = "20260922000000";
+        naming.targetId = "baseline";
+        naming.observatoryId = "0";
+        require(images.configureSession(naming).has_value(), "image session setup failed");
+    }
+    require(images.start().has_value(), "image storage start failed");
+}
+
+/// @brief 提交确定性 RAW 像素；两模式都保留调用方像素并交给后端独立保有。
+/// @param images 运行中的图像后端。
+/// @param index 像素模式及文件序号。
+/// @param side 图像边长。
+/// @param lossless 是否等待存储容量。
+/// @return 已接受时为 true，实时容量拒绝时为 false。
+auto submitRawArchive(Dss::Storage::LocalImageStorageBackend& images, int index, int side,
+                      bool lossless) -> bool {
+    Dss::Storage::RawImageMetadata metadata;
+    metadata.width = side;
+    metadata.height = side;
+    const std::vector<std::uint16_t> pixels(static_cast<std::size_t>(side) * side,
+                                            static_cast<std::uint16_t>(index));
+    if (lossless) {
+        auto shared = std::make_shared<const std::vector<std::uint16_t>>(pixels);
+        require(images
+                    .enqueueSessionFrameBlocking(index, metadata, std::move(shared), {},
+                                                 images.sessionGeneration())
+                    .has_value(),
+                "lossless image admission failed");
+        return true;
+    }
+    return images.enqueueRawFrame(std::to_string(index) + ".raw", metadata, pixels).has_value();
+}
+
 /// @brief 核对两个存储后端已完成所有接受请求且没有剩余载荷。
 /// @param tracks 已停止的轨迹后端。
 /// @param images 已停止的图像后端。
@@ -214,16 +272,17 @@ void verifyDrainedWrites(const Dss::Storage::TrackDataStorageBackend& tracks,
 int main(int argc, char** argv) try {
     QCoreApplication app(argc, argv);
     try {
-        require(argc >= 6 && argc <= 8,
+        require(argc >= 6 && argc <= 9,
                 "usage: dss_tracking_io_baseline NEW_OUTPUT_DIR FRAMES TARGETS RAW_SIDE RAW_FRAMES "
-                "[FRAME_PERIOD_US [PROFILE_WRITES]]");
+                "[FRAME_PERIOD_US [PROFILE_WRITES [LOSSLESS_WRITES]]]");
         const auto output = std::filesystem::absolute(argv[1]);
         const int frames = number(argv[2], 1000000);
         const int targetCount = number(argv[3], 16);
         const int side = number(argv[4], 6144);
         const int rawFrames = number(argv[5], frames, 0);
         const int framePeriodUs = argc >= 7 ? number(argv[6], 1000000, 0) : 0;
-        const bool profileWrites = argc == 8 && number(argv[7], 1, 0) != 0;
+        const bool profileWrites = argc >= 8 && number(argv[7], 1, 0) != 0;
+        const bool losslessWrites = argc == 9 && number(argv[8], 1, 0) != 0;
         require(frames >= 4 && rawFrames <= frames, "require FRAMES >= 4 and RAW_FRAMES <= FRAMES");
         require(std::filesystem::create_directory(output),
                 "output directory must be new and its parent must exist");
@@ -235,6 +294,7 @@ int main(int argc, char** argv) try {
             {"raw_side", side},
             {"raw_frames", rawFrames},
             {"profile_writes", profileWrites},
+            {"lossless_storage", losslessWrites},
             {"qt_version", qVersion()},
             {"compiler", DSS_BASELINE_COMPILER},
 #ifdef NDEBUG
@@ -259,8 +319,8 @@ int main(int argc, char** argv) try {
         Dss::Storage::LocalImageStorageBackend images(output / "raw");
         require(tracks.init(output / "tracks").has_value() && tracks.start().has_value(),
                 "track storage start failed");
-        require(images.init(output / "raw").has_value() && images.start().has_value(),
-                "image storage start failed");
+        require(images.init(output / "raw").has_value(), "image storage initialization failed");
+        startImageArchive(images, losslessWrites);
         Dss::Core::TrackingSettings settings;
         settings.searchRadius = 20;
         settings.opticParams.imageWidth = (frames * 5) + (targetCount * 100) + 1000;
@@ -313,19 +373,12 @@ int main(int argc, char** argv) try {
                 // NOLINTEND(cppcoreguidelines-pro-type-reinterpret-cast)
                 udpTimes.push_back(elapsed(udpStart));
                 ++received;
-                if (tracks.enqueueTrackResult({frame.frameSeq, targets})) {
+                if (submitTrackArchive(tracks, {frame.frameSeq, targets}, losslessWrites)) {
                     ++trackAccepted;
                 }
             }
-            if (index < rawFrames) {
-                Dss::Storage::RawImageMetadata metadata;
-                metadata.width = side;
-                metadata.height = side;
-                const std::vector<std::uint16_t> pixels(static_cast<std::size_t>(side) * side,
-                                                        static_cast<std::uint16_t>(index));
-                if (images.enqueueRawFrame(std::to_string(index) + ".raw", metadata, pixels)) {
-                    ++rawAccepted;
-                }
+            if (index < rawFrames && submitRawArchive(images, index, side, losslessWrites)) {
+                ++rawAccepted;
             }
             frameTimes.push_back(elapsed(frameStart));
             waitForNextFrame(start, index, framePeriodUs);

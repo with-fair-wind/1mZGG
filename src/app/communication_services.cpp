@@ -1,7 +1,12 @@
+#include <bit>
 #include <stdexcept>
+#include <stop_token>
+#include <string>
+#include <string_view>
 
 #include "dss/app/application_context.h"
 #include "dss/core/config/config.h"
+#include "dss/core/logger.h"
 
 #ifdef DSS_BUILD_APP
 #include <memory>
@@ -35,6 +40,120 @@
 #endif
 
 namespace Dss::App {
+
+#ifdef DSS_BUILD_APP
+namespace {
+/// @brief 取消/停止是显式归档截断；配置或磁盘失败必须进入回放失败状态。
+auto storageAdmissionResult(std::expected<void, Dss::Storage::WriteAdmissionError> result)
+    -> std::expected<void, std::string> {
+    if (result) {
+        return {};
+    }
+    using Error = Dss::Storage::WriteAdmissionError;
+    if (result.error() == Error::Cancelled || result.error() == Error::Stopped ||
+        result.error() == Error::StaleSession) {
+        return {};
+    }
+    return std::unexpected(std::string{Dss::Storage::writeAdmissionErrorMessage(result.error())});
+}
+
+/// @brief 按累计拒绝数的 1、2、4… 次发告警，避免实时过载逐帧刷日志。
+void warnStorageRejection(std::string_view backend, std::uint64_t before, std::uint64_t after) {
+    if (after > before && std::has_single_bit(after)) {
+        Dss::Core::Logger::instance().warn("{} storage capacity rejected requests: {}", backend,
+                                           after);
+    }
+}
+
+/// @brief 从帧源线程按策略提交 RAW；等待取消只影响尚未接受的请求。
+auto storeSourceFrame(Dss::Storage::LocalImageStorageBackend& storage,
+                      const Dss::Processing::FramePacket& packet,
+                      Dss::Acquisition::FrameDeliveryContext context, std::uint64_t generation)
+    -> std::expected<void, std::string> {
+    Dss::Storage::RawImageMetadata metadata{};
+    metadata.width = packet.width;
+    metadata.height = packet.height;
+    metadata.exposure = packet.metadata;
+    metadata.exposureTimeMilliseconds = static_cast<double>(packet.metadata.exposureTime) * 1000.0;
+    metadata.frameFrequency = packet.metadata.frameFrequency;
+    if (context.policy == Dss::Acquisition::FrameDeliveryPolicy::Lossless) {
+        return storageAdmissionResult(storage.enqueueSessionFrameBlocking(
+            packet.frameSeq, metadata, packet.rawImage, context.stopToken, generation));
+    }
+    const auto before = storage.droppedRequests();
+    const auto result =
+        storage.enqueueSessionFrame(packet.frameSeq, metadata, packet.rawImage, generation);
+    if (!result) {
+        warnStorageRejection("image", before, storage.droppedRequests());
+    }
+    return {};
+}
+
+/// @brief 把帧入口的归档代次和策略固定到处理包，避免排队旧帧写入新会话。
+auto makeStoredFrameCallback(std::shared_ptr<Dss::Processing::ImageProcessor> processor,
+                             std::shared_ptr<Dss::Storage::LocalImageStorageBackend> images,
+                             std::shared_ptr<Dss::Storage::TrackDataStorageBackend> tracks)
+    -> Dss::Acquisition::IFrameSource::FrameCallback {
+    return [processor = std::move(processor), images = std::move(images),
+            tracks = std::move(tracks)](Dss::Processing::FramePacket packet,
+                                        Dss::Acquisition::FrameDeliveryContext context) {
+        const auto imageGeneration = images->activeSessionGeneration();
+        packet.trackStorageGeneration = tracks->activeSessionGeneration();
+        packet.waitForStorage = context.policy == Dss::Acquisition::FrameDeliveryPolicy::Lossless;
+        if (imageGeneration && packet.rawImage && !packet.rawImage->empty()) {
+            if (const auto result = storeSourceFrame(*images, packet, context, *imageGeneration);
+                !result) {
+                throw std::runtime_error(result.error());
+            }
+        }
+        if (packet.waitForStorage) {
+            return processor->submitFrameBlocking(std::move(packet), context.stopToken);
+        }
+        return processor->submitFrame(std::move(packet));
+    };
+}
+
+/// @brief 轨迹准入有返回值，真实无损失败交回处理线程，不交由通知订阅吞掉。
+auto makeTrackStorageSink(std::shared_ptr<Dss::Storage::TrackDataStorageBackend> storage)
+    -> Dss::Processing::ImageProcessor::TrackResultSink {
+    return [storage = std::move(storage)](
+               const Dss::Core::TrackResultEvent& event, const Dss::Processing::FramePacket& packet,
+               std::stop_token token) -> std::expected<void, std::string> {
+        if (!packet.trackStorageGeneration) {
+            return {};
+        }
+        if (packet.waitForStorage) {
+            return storageAdmissionResult(
+                storage->enqueueTrackResultBlocking(event, token, *packet.trackStorageGeneration));
+        }
+        const auto before = storage->droppedRequests();
+        const auto result = storage->enqueueTrackResult(event, packet.trackStorageGeneration);
+        if (!result) {
+            warnStorageRejection("track", before, storage->droppedRequests());
+        }
+        return {};
+    };
+}
+
+/// @brief EOF/单步先等待图像、再等待轨迹完成，停止保存则有意结束该屏障。
+auto makeStorageCompletionBarrier(std::shared_ptr<Dss::Storage::LocalImageStorageBackend> images,
+                                  std::shared_ptr<Dss::Storage::TrackDataStorageBackend> tracks)
+    -> ReplaySession::CompletionBarrier {
+    return [images = std::move(images),
+            tracks = std::move(tracks)](std::stop_token token) -> std::expected<void, std::string> {
+        if (images->activeSessionGeneration()) {
+            if (const auto result = storageAdmissionResult(images->waitUntilIdle(token)); !result) {
+                return result;
+            }
+        }
+        if (tracks->activeSessionGeneration()) {
+            return storageAdmissionResult(tracks->waitUntilIdle(token));
+        }
+        return {};
+    };
+}
+}  // namespace
+#endif
 
 // 组合根集中声明服务所有权与接线，保留初始化顺序。
 // NOLINTNEXTLINE(readability-function-size)
@@ -131,36 +250,8 @@ void ApplicationContext::registerCommunicationServices() {
                                                                liveSource);
 #endif
     frameSource->setFrameCallback(
-        [imageProcessor, localImageStorage](Dss::Processing::FramePacket packet,
-                                            Dss::Acquisition::FrameDeliveryContext context) {
-            const auto storageGeneration = localImageStorage->sessionGeneration();
-            if (localImageStorage->isRunning() && packet.rawImage && !packet.rawImage->empty()) {
-                Dss::Storage::RawImageMetadata metadata{};
-                metadata.width = packet.width;
-                metadata.height = packet.height;
-                metadata.exposure = packet.metadata;
-                metadata.exposureTimeMilliseconds =
-                    static_cast<double>(packet.metadata.exposureTime) * 1000.0;
-                metadata.frameFrequency = packet.metadata.frameFrequency;
-                // 容量拒绝计入后端计数，写入失败由存储诊断事件报告；不阻塞帧投递。
-                // NOLINTNEXTLINE(bugprone-unused-return-value)
-                (void)localImageStorage->enqueueSessionFrame(packet.frameSeq, metadata,
-                                                             packet.rawImage, storageGeneration);
-            }
-            if (context.policy == Dss::Acquisition::FrameDeliveryPolicy::Lossless) {
-                return imageProcessor->submitFrameBlocking(std::move(packet), context.stopToken);
-            }
-            return imageProcessor->submitFrame(std::move(packet));
-        });
-    m_connections.push_back(m_bus.subscribe<Dss::Core::TrackResultEvent>(
-        [trackDataStorage](const Dss::Core::TrackResultEvent& event) {
-            const auto generation = trackDataStorage->sessionGeneration();
-            if (trackDataStorage->isRunning()) {
-                // 非阻塞轨迹准入的拒绝已有计数，写入错误通过事件报告。
-                // NOLINTNEXTLINE(bugprone-unused-return-value)
-                (void)trackDataStorage->enqueueTrackResult(event, generation);
-            }
-        }));
+        makeStoredFrameCallback(imageProcessor, localImageStorage, trackDataStorage));
+    imageProcessor->setTrackResultSink(makeTrackStorageSink(trackDataStorage));
 
     auto runtimeDiagnostics = std::make_shared<Dss::App::RuntimeDiagnostics>(
         m_bus,
@@ -195,8 +286,9 @@ void ApplicationContext::registerCommunicationServices() {
                                                                replaySource);
     m_registry.registerService<Dss::Storage::LocalImageStorageBackend>(ServiceKey::imageStorage,
                                                                        localImageStorage);
-    auto replaySession =
-        std::make_shared<ReplaySession>(m_bus, replaySource, imageProcessor, frameSource);
+    auto replaySession = std::make_shared<ReplaySession>(
+        m_bus, replaySource, imageProcessor, frameSource,
+        makeStorageCompletionBarrier(localImageStorage, trackDataStorage));
     m_registry.registerService<ReplaySession>(ServiceKey::replaySession, replaySession);
     m_stopServices = [display, exposure, masterControl, servo, atmosReceiver, frameSource,
                       replaySource, imageProcessor, localImageStorage, trackDataStorage,
@@ -207,6 +299,8 @@ void ApplicationContext::registerCommunicationServices() {
         display->close();
         servo->close();
         atmosReceiver->close();
+        localImageStorage->requestStop();
+        trackDataStorage->requestStop();
         replaySession->shutdown();
         frameSource->stop();
         replaySource->stop();  // 自然结束后也 join，不能只检查 isRunning。

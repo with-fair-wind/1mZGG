@@ -151,7 +151,7 @@ DSS_QT/
 1. 先读 `src/main.cpp`，确认进程级组合顺序。
 2. 读 `ApplicationContext`、`ServiceRegistry`、`BasicMessageBus`，弄清对象从哪里来、如何被找到、事件如何同步分发。
 3. 沿主帧路径阅读：`IFrameSource` → `FrameSourceCoordinator` → 帧回调 → `ImageProcessor` → 处理/跟踪策略。
-4. 沿结果扇出阅读：`DisplayRefreshEvent`、`ProcessingCompleteEvent`、`TrackResultEvent` 分别流向 UI、存储和数据交换。
+4. 沿结果扇出阅读：`DisplayRefreshEvent`、`ProcessingCompleteEvent`、`TrackResultEvent` 分别通知 UI 和数据交换；存储由 App 注入处理器的返回值 sink 准入。
 5. 最后读串口、UDP、GPU 和 UI 控件；它们是边界适配层，不应反向定义核心数据模型。
 6. 修改代码前回到对应模块文档的“线程与所有权”“错误路径”“测试入口”，确认跨线程和回滚约束。
 
@@ -189,6 +189,7 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant UI as ReplayViewModel
+    participant Session as ReplaySession
     participant Source as IFrameSource
     participant Callback as App 帧回调
     participant RawStore as LocalImageStorageBackend
@@ -200,11 +201,12 @@ sequenceDiagram
     participant TrackStore as TrackDataStorageBackend
     participant Bridge as TrackResultDataExchangeBridge
 
-    UI->>Processor: start()
-    UI->>Source: start()
+    UI->>Session: start()
+    Session->>Processor: start()
+    Session->>Source: start()
     Source->>Callback: FrameCallback(FramePacket, FrameDeliveryContext)
-    opt 图像存储正在运行且 rawImage 非空
-        Callback->>RawStore: enqueueSessionFrame()
+    opt 图像保存会话存在且 rawImage 非空
+        Callback->>RawStore: 回放等待预算 / 实时尝试准入
     end
     alt 离线回放 Lossless
         Callback->>Processor: submitFrameBlocking(packet, stop_token)
@@ -220,10 +222,12 @@ sequenceDiagram
     end
     Processor->>Bus: emit(DisplayRefreshEvent)
     Bus->>Display: onDisplayRefresh()
+    opt 跟踪结果非空且帧入口启用保存
+        Processor->>TrackStore: App sink 返回准入结果
+    end
     Processor->>Bus: emit(ProcessingCompleteEvent)
     opt 跟踪结果非空
         Processor->>Bus: emit(TrackResultEvent)
-        Bus->>TrackStore: enqueueTrackResult()（仅运行时）
         Bus->>Bridge: onTrackResult()
     end
     Processor->>Bus: emit(RotatedFrameReadyEvent)
@@ -278,7 +282,7 @@ flowchart TB
 |---|---|---|
 | 编译/链接依赖 | `dss_processing → dss_tracking → dss_core` | 看 `target_link_libraries` |
 | 直接运行时调用 | `ReplayViewModel → IFrameSource::start()` | 看成员调用与注册表查询 |
-| 事件依赖 | `ImageProcessor → TrackResultEvent → Storage/Bridge/UI` | 搜索 `emit<事件>` 与 `subscribe<事件>` |
+| 事件依赖 | `ImageProcessor → TrackResultEvent → Bridge/UI` | 搜索 `emit<事件>` 与 `subscribe<事件>` |
 
 ### 事件总线关键扇出
 
@@ -286,7 +290,7 @@ flowchart TB
 |---|---|---|---|
 | `DisplayRefreshEvent` | `ImageProcessor` | `DisplayViewModel`、`ReplayViewModel` | 通常来自处理线程 |
 | `ProcessingCompleteEvent` | `ImageProcessor` | `DisplayViewModel` | 通常来自处理线程 |
-| `TrackResultEvent` | `ImageProcessor` | `TrackingViewModel`、轨迹存储订阅、数据交换桥 | 通常来自处理线程 |
+| `TrackResultEvent` | `ImageProcessor` | `TrackingViewModel`、数据交换桥 | 通常来自处理线程 |
 | `MasterControlEvent` | `MasterControlChannel` | `MainViewModel`、数据交换桥 | 来自串口工作线程 |
 | `ExposureSyncEvent` | `ExposureChannel` | 业务订阅者 | 来自串口工作线程 |
 | `SerialFrameErrorEvent` / `SerialDecodeErrorEvent` | Comm | 诊断服务、日志/运行时诊断 | 来自串口工作线程 |
@@ -323,3 +327,5 @@ flowchart TB
 每份模块文档末尾都给出：本模块一跳依赖、关键类图、主要调用栈、线程/错误路径、扩展点、测试入口和推荐源码顺序。跨模块追踪时，优先按“调用方文档 → 被调用模块文档 → 对应测试”三步走。
 
 跨模块验收范围见 [验证覆盖矩阵](validation-matrix.md)，后续实施顺序见 [实施计划](implementation-plan.md)。性能数值以 [资源验证](resource-validation.md) 的实际场景和限制为准。
+
+存储是影响回放结果的命令：App 在 RAW 帧入口和轨迹结果 sink 固定保存会话代次，回放可取消地等待预算，实时容量满则拒绝、计数并按累计 1、2、4… 告警。正常 EOF/单步先排空处理再等待 RAW/轨迹实际写入关闭，尾帧错误进入 Failed；显式停止或停止保存是有意截断，已接受项仍排空。详见 [存储](module-storage.md) 与 [回放编排](module-app.md)。
