@@ -62,8 +62,8 @@ Sapera/CUDA 的命令、门槛和结果回填表见 [硬件验证](hardware-vali
 
 ## 当前验收基线
 
-- 当前已提交基线 `729908f`：2026-10-15 的 MSVC Release、Code quality、Windows core/Qt ASan、Linux TSan 与最新稳定工具链工作流均通过；完整执行范围和链接见 [验证矩阵](validation-matrix.md)。
-- 2026-10-20 本机 Windows 默认 Qt/OpenCV Debug/PCH、Release/PCH 均 272/272 CTest 通过；Qt ASan 134/134，包含窗口销毁、writer 阶段统计和目录恢复。Linux /dev/full 回归已添加但未在本机运行。此前 Release/无 PCH 的 266/266 结果保留为历史快照，未作为本轮同配置复测。Qt 测试部分按可执行文件注册，CTest 数量不等于 GoogleTest 用例数。
+- 远端已验证快照 `2a56908`：2026-10-20 的 MSVC Release、Code quality、Windows core/Qt ASan、Linux TSan 与最新稳定工具链工作流均通过；完整执行范围和链接见 [验证矩阵](validation-matrix.md)。
+- 2026-10-20 本机 Windows 默认 Qt/OpenCV Debug/PCH、Release/PCH 均 272/272 CTest 通过；扩展后的 Qt ASan 141/141，包含窗口销毁、writer 阶段统计、目录恢复及图像失败恢复。远端快照中的轨迹 /dev/full 已由 Linux TSan 验证；图像/索引平台用例由扩展后的入口执行，Windows 本机不执行。此前 Release/无 PCH 的 266/266 结果保留为历史快照，未作为本轮同配置复测。Qt 测试部分按可执行文件注册，CTest 数量不等于 GoogleTest 用例数。
 - Sapera 和 CUDA 都是显式启用能力，默认配置必须继续保持无硬件安全。
 - 硬件验收未执行前，不把 Sapera 标记为“硬件验证完成”，也不在 UI 暴露 CUDA 模式。
 

@@ -197,13 +197,17 @@ flowchart TD
     WORKER --> FORMAT{"扩展名/格式"}
     FORMAT -->|"BMP"| BMP["buildLegacyBmpFile"]
     FORMAT -->|"RAW"| RAW["buildRawImageFile"]
-    BMP --> WRITE["ofstream 二进制写入"]
+    BMP --> WRITE["ofstream 二进制写入并显式关闭"]
     RAW --> WRITE
     WRITE -->|"成功"| OK["successfulWrites++"]
     WRITE -->|"失败"| ERR["failedWrites++ / StorageWriteErrorEvent"]
 ```
 
 默认最大待写请求数为 1024。入队会复制像素，调用者返回后不依赖 `FramePacket` 生命周期。队列满属于背压拒绝，只返回错误并计数；真正的磁盘失败还会发布错误事件。
+
+RAW/BMP 的成功计数必须在 `close()` 刷新及流状态检查后增加，缓冲关闭失败也发布 `StorageWriteErrorEvent`。`configureSession` 同样在 IMI 索引显式关闭成功后才更新会话和代次；索引失败保留原会话，可修复路径后重试，已创建的目录不回滚。这些检查不等于 fsync 或断电持久化保证。
+
+当前回放与实时来源都使用非阻塞存储准入：队列满或字节预算不足时拒绝新请求并累计 `droppedRequests()`，不会等待空位、重试或驱动回放暂停。处理帧数和回放结束状态不能作为完整归档证明。已接受请求由停止流程排空，写入错误另计；容量拒绝、停止/旧会话拒绝与磁盘失败须分别解释。无损回放的可取消等待、停止/失败唤醒和会话隔离尚未实现，不能用扩大队列替代。
 
 ### 轨迹文本写入链
 

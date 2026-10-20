@@ -188,9 +188,10 @@ public:
         return buildSessionPath(*m_sessionNaming);
     }
     /**
-     * @brief 配置会话命名并创建目录及 IFM 索引。
+     * @brief 配置会话命名并创建目录及 IMI 索引。
      * @param naming 会话命名信息；根目录会被替换为当前后端根目录。
-     * @return 配置成功时为空；工作线程运行或文件创建失败时返回错误描述。
+     * @return 索引写入和显式关闭成功后配置会话；工作线程运行或文件操作失败时返回错误描述。
+     * @note 失败保留原会话及代次，但已创建的目录不会回滚；不保证断电持久化。
      */
     auto configureSession(ImageStorageNaming naming) -> std::expected<void, std::string> {
         std::scoped_lock lock(m_sessionMutex);
@@ -209,8 +210,10 @@ public:
             return std::unexpected("failed to open image session index: " + indexPath.string());
         }
         index << buildIfmContent(naming);
+        index.close();
         if (!index) {
-            return std::unexpected("failed to write image session index: " + indexPath.string());
+            return std::unexpected("failed to write or close image session index: " +
+                                   indexPath.string());
         }
         m_sessionNaming = std::move(naming);
         ++m_sessionGeneration;
@@ -343,7 +346,8 @@ private:
     /**
      * @brief 编码并写入一个 RAW 或兼容 BMP 帧。
      * @param request 包含目标路径、元数据及像素副本的写入请求。
-     * @return 写入成功时为空；目录、编码或文件写入失败时返回错误描述。
+     * @return 编码、写入及显式关闭均成功时为空；目录、编码或文件操作失败时返回错误描述。
+     * @note 关闭检查包含缓冲刷新，不等于 fsync 或断电持久化保证。
      */
     auto writeFrame(const SaveRawFrameRequest& request) const -> std::expected<void, std::string> {
         std::error_code error;
@@ -391,8 +395,9 @@ private:
         // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
         output.write(reinterpret_cast<const char*>(bytes.data()),
                      static_cast<std::streamsize>(bytes.size()));
+        output.close();
         if (!output) {
-            return std::unexpected("failed to write storage file");
+            return std::unexpected("failed to write or close storage file");
         }
         return {};
     }

@@ -135,6 +135,22 @@ TEST(LocalImageStorageBackend, PublishesWriteErrors) {
     ASSERT_EQ(errors.size(), 1U);
     EXPECT_EQ(errors.front().backend, "image_storage");
     EXPECT_EQ(backend.failedWrites(), 1U);
+    EXPECT_EQ(backend.successfulWrites(), 0U);
+    EXPECT_EQ(backend.resourceSnapshot().completedItems, 1U);
+    EXPECT_EQ(backend.pendingBytes(), 0U);
+
+    ASSERT_TRUE(std::filesystem::remove(dir / "blocked"));
+    ASSERT_TRUE(backend.start());
+    ASSERT_TRUE(backend.enqueueRawFrame("blocked/frame.raw", metadata(), pixels));
+    backend.stop();
+    EXPECT_EQ(errors.size(), 1U);
+    EXPECT_EQ(backend.failedWrites(), 1U);
+    EXPECT_EQ(backend.successfulWrites(), 1U);
+    EXPECT_EQ(backend.resourceSnapshot().completedItems, 2U);
+    EXPECT_EQ(backend.pendingBytes(), 0U);
+    const auto decoded = Dss::Storage::decodeRawImageFile(readAllBytes(dir / "blocked/frame.raw"));
+    ASSERT_TRUE(decoded);
+    EXPECT_EQ(decoded->pixels, pixels);
 }
 
 TEST(LocalImageStorageBackend, RejectsOldGenerationAfterSessionSwitch) {
@@ -171,3 +187,65 @@ TEST(LocalImageStorageBackend, RejectsFrameLargerThanByteBudget) {
     EXPECT_EQ(backend.pendingBytes(), 0U);
     backend.stop();
 }
+
+#ifdef __linux__
+TEST(LocalImageStorageBackend, ReportsBufferedCloseFailureOnFullDevice) {
+    const auto dir = tempStorageDir();
+    Dss::Core::MessageBus bus;
+    std::vector<Dss::Core::StorageWriteErrorEvent> errors;
+    auto connection = bus.subscribe<Dss::Core::StorageWriteErrorEvent>(
+        [&errors](const auto& event) { errors.push_back(event); });
+    Dss::Storage::LocalImageStorageBackend backend(dir);
+    backend.setBus(&bus);
+    ASSERT_TRUE(backend.init(dir));
+    ASSERT_TRUE(std::filesystem::exists("/dev/full"));
+    const auto outputPath = dir / "frame.raw";
+    std::filesystem::create_symlink("/dev/full", outputPath);
+    ASSERT_TRUE(backend.start());
+    // 小图可先进入流缓冲；关闭时才暴露的 ENOSPC 也必须计为失败。
+    ASSERT_TRUE(backend.enqueueRawFrame("frame.raw", metadata(),
+                                        std::vector<std::uint16_t>{0x1234, 0xABCD}));
+    backend.stop();
+    EXPECT_EQ(backend.successfulWrites(), 0U);
+    EXPECT_EQ(backend.failedWrites(), 1U);
+    EXPECT_EQ(backend.resourceSnapshot().completedItems, 1U);
+    EXPECT_EQ(backend.resourceSnapshot().queuedItems, 0U);
+    EXPECT_EQ(backend.resourceSnapshot().activeItems, 0U);
+    EXPECT_EQ(backend.pendingBytes(), 0U);
+    ASSERT_EQ(errors.size(), 1U);
+    EXPECT_EQ(errors.front().backend, "image_storage");
+    EXPECT_EQ(errors.front().path, outputPath.string());
+    EXPECT_EQ(errors.front().message, "failed to write or close storage file");
+}
+
+TEST(LocalImageStorageBackend, PreservesSessionWhenIndexCloseFailsAndAllowsRetry) {
+    const auto dir = tempStorageDir();
+    Dss::Storage::LocalImageStorageBackend backend(dir);
+    ASSERT_TRUE(backend.init(dir));
+    Dss::Storage::ImageStorageNaming naming{};
+    naming.startTime = "first";
+    naming.targetId = "1";
+    ASSERT_TRUE(backend.configureSession(naming));
+    const auto previousPath = backend.sessionPath();
+    const auto previousGeneration = backend.sessionGeneration();
+    naming.startTime = "second";
+    const auto indexPath = dir / Dss::Storage::buildIfmFileName(naming);
+    ASSERT_TRUE(std::filesystem::exists("/dev/full"));
+    std::filesystem::create_symlink("/dev/full", indexPath);
+    const auto result = backend.configureSession(naming);
+    ASSERT_FALSE(result);
+    EXPECT_EQ(result.error(),
+              "failed to write or close image session index: " + indexPath.string());
+    EXPECT_EQ(backend.sessionPath(), previousPath);
+    EXPECT_EQ(backend.sessionGeneration(), previousGeneration);
+
+    ASSERT_TRUE(std::filesystem::remove(indexPath));
+    ASSERT_TRUE(backend.configureSession(naming));
+    EXPECT_NE(backend.sessionPath(), previousPath);
+    EXPECT_EQ(backend.sessionGeneration(), previousGeneration + 1);
+    naming.rootPath = dir;
+    const auto bytes = readAllBytes(indexPath);
+    const auto expected = Dss::Storage::buildIfmContent(naming);
+    EXPECT_EQ(bytes, std::vector<std::uint8_t>(expected.begin(), expected.end()));
+}
+#endif

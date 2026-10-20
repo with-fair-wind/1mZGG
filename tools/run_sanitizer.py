@@ -91,6 +91,7 @@ def main():
                "test_geo_tracker", "test_leo_tracker", "test_sc_tracker", "test_manual_tracker",
                "test_tracking_candidate_utils", "test_tracking_lifecycle_utils",
                "test_tracking_prediction_utils", "test_track_data_storage_backend",
+               "test_local_image_storage_backend",
                "test_track_result_data_exchange_bridge"]
     if qt:
         targets += ["test_main_window_lifetime", "test_log_view_model",
@@ -100,7 +101,8 @@ def main():
     run(["cmake", "--build", build, "--parallel", args.jobs, "--target", *targets], root, env)
     pattern = (r"^(BoundedChannel(Test)?|AsyncWriteQueue|ImageProcessor|GeoTracker|LeoTracker|"
                r"ScTracker|ManualTracker|TrackingCandidateUtils|TrackingLifecycleUtils|"
-               r"TrackingPredictionUtils|TrackDataStorageBackend|TrackResultDataExchangeBridge)\.")
+               r"TrackingPredictionUtils|TrackDataStorageBackend|LocalImageStorageBackend|"
+               r"TrackResultDataExchangeBridge)\.")
     pattern += r"|^test_event_headers$"
     if qt:
         pattern += (r"|^(test_main_window_lifetime|test_log_view_model|test_replay_session|"
