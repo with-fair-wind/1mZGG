@@ -1,7 +1,10 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <numeric>
+#include <stdexcept>
 #include <string>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -173,3 +176,127 @@ TEST(TrackDataStorageBackend, RejectsOldGenerationAfterSessionSwitch) {
     backend.stop();
     EXPECT_EQ(backend.successfulWrites(), 1U);
 }
+
+TEST(TrackDataStorageBackend, ReportsWriteFailureAndCanRestartAfterPathIsRepaired) {
+    const auto dir = tempTrackStorageDir();
+    Dss::Core::MessageBus bus;
+    std::vector<Dss::Core::StorageWriteErrorEvent> errors;
+    auto connection = bus.subscribe<Dss::Core::StorageWriteErrorEvent>(
+        [&errors](const auto& event) { errors.push_back(event); });
+    Dss::Storage::TrackDataStorageBackend backend(dir);
+    backend.setBus(&bus);
+    ASSERT_TRUE(backend.init(dir));
+    ASSERT_TRUE(std::filesystem::create_directory(backend.outputPath()));
+    ASSERT_TRUE(backend.start());
+    ASSERT_TRUE(backend.enqueueTrackResult(trackEvent()));
+    backend.stop();
+
+    ASSERT_EQ(errors.size(), 1U);
+    EXPECT_EQ(errors.front().backend, "track_data_storage");
+    EXPECT_EQ(errors.front().path, backend.outputPath().string());
+    EXPECT_FALSE(errors.front().message.empty());
+    EXPECT_EQ(backend.failedWrites(), 1U);
+    EXPECT_EQ(backend.successfulWrites(), 0U);
+    EXPECT_EQ(backend.resourceSnapshot().completedItems, 1U);
+    EXPECT_EQ(backend.resourceSnapshot().queuedItems, 0U);
+    EXPECT_EQ(backend.resourceSnapshot().activeItems, 0U);
+
+    ASSERT_TRUE(std::filesystem::remove(backend.outputPath()));
+    ASSERT_TRUE(backend.start());
+    ASSERT_TRUE(backend.enqueueTrackResult(trackEvent()));
+    backend.stop();
+    EXPECT_EQ(errors.size(), 1U);
+    EXPECT_EQ(backend.failedWrites(), 1U);
+    EXPECT_EQ(backend.successfulWrites(), 1U);
+    EXPECT_EQ(backend.resourceSnapshot().completedItems, 2U);
+    EXPECT_FALSE(readAllText(backend.outputPath()).empty());
+}
+
+TEST(TrackDataStorageBackend, WriterProfilingIsDisabledByDefault) {
+    const auto dir = tempTrackStorageDir();
+    Dss::Storage::TrackDataStorageBackend backend(dir);
+    ASSERT_TRUE(backend.init(dir));
+    ASSERT_TRUE(backend.start());
+    ASSERT_TRUE(backend.enqueueTrackResult(trackEvent()));
+    backend.stop();
+    EXPECT_EQ(backend.successfulWrites(), 1U);
+    const auto timing = backend.writerProfile();
+    EXPECT_EQ(timing.batches, 0U);
+    EXPECT_EQ(std::accumulate(timing.total.begin(), timing.total.end(), std::uint64_t{0}), 0U);
+}
+
+TEST(TrackDataStorageBackend, WriterProfilingCountsFailureRecoveryAndAccumulatesAcrossStarts) {
+    const auto dir = tempTrackStorageDir();
+    Dss::Storage::TrackDataStorageBackend backend(dir, 1024, true);
+    ASSERT_TRUE(backend.init(dir));
+    ASSERT_TRUE(std::filesystem::create_directory(backend.outputPath()));
+    ASSERT_TRUE(backend.start());
+    ASSERT_TRUE(backend.enqueueTrackResult(trackEvent()));
+    backend.stop();
+    const auto failed = backend.writerProfile();
+    EXPECT_EQ(failed.batches, 1U);
+    EXPECT_EQ(backend.failedWrites(), 1U);
+
+    ASSERT_TRUE(std::filesystem::remove(backend.outputPath()));
+    ASSERT_TRUE(backend.start());
+    ASSERT_TRUE(backend.enqueueTrackResult(trackEvent()));
+    backend.stop();
+    const auto completed = backend.writerProfile();
+    EXPECT_EQ(completed.batches, 2U);
+    EXPECT_EQ(backend.successfulWrites(), 1U);
+    EXPECT_GT(std::accumulate(completed.total.begin(), completed.total.end(), std::uint64_t{0}),
+              0U);
+    for (std::size_t index = 0; index < completed.total.size(); ++index) {
+        EXPECT_GE(completed.total[index], failed.total[index]);
+        EXPECT_GE(completed.total[index], completed.maximum[index]);
+    }
+}
+
+TEST(TrackDataStorageBackend, RecreatesRemovedOutputDirectoryBeforeWriting) {
+    const auto dir = tempTrackStorageDir();
+    Dss::Storage::TrackDataStorageBackend backend(dir);
+    ASSERT_TRUE(backend.init(dir));
+    ASSERT_TRUE(backend.start());
+    ASSERT_TRUE(std::filesystem::remove(dir));
+    ASSERT_TRUE(backend.enqueueTrackResult(trackEvent()));
+    backend.stop();
+    EXPECT_EQ(backend.successfulWrites(), 1U);
+    EXPECT_EQ(backend.failedWrites(), 0U);
+    EXPECT_FALSE(readAllText(backend.outputPath()).empty());
+}
+
+TEST(TrackDataStorageBackend, WriterProfileRecordsAttemptDuringExceptionUnwinding) {
+    Dss::Storage::TrackWriterProfile profile;
+    EXPECT_THROW(
+        {
+            Dss::Storage::TrackWriterProfile::Batch batch(&profile);
+            batch.begin(Dss::Storage::TrackWriterPhase::Format);
+            throw std::runtime_error("profile unwind");
+        },
+        std::runtime_error);
+    EXPECT_EQ(profile.snapshot().batches, 1U);
+}
+
+#ifdef __linux__
+TEST(TrackDataStorageBackend, ReportsBufferedCloseFailureOnFullDevice) {
+    const auto dir = tempTrackStorageDir();
+    Dss::Core::MessageBus bus;
+    std::vector<Dss::Core::StorageWriteErrorEvent> errors;
+    auto connection = bus.subscribe<Dss::Core::StorageWriteErrorEvent>(
+        [&errors](const auto& event) { errors.push_back(event); });
+    Dss::Storage::TrackDataStorageBackend backend(dir, 1024, true);
+    backend.setBus(&bus);
+    ASSERT_TRUE(backend.init(dir));
+    ASSERT_TRUE(std::filesystem::exists("/dev/full"));
+    std::filesystem::create_symlink("/dev/full", backend.outputPath());
+    ASSERT_TRUE(backend.start());
+    // 单行小于流缓冲，真实 ENOSPC 可延迟到关闭/刷新时才出现。
+    ASSERT_TRUE(backend.enqueueTrackResult(trackEvent()));
+    backend.stop();
+    EXPECT_EQ(backend.successfulWrites(), 0U);
+    EXPECT_EQ(backend.failedWrites(), 1U);
+    EXPECT_EQ(backend.writerProfile().batches, 1U);
+    ASSERT_EQ(errors.size(), 1U);
+    EXPECT_EQ(errors.front().message, "failed to write or close track data file");
+}
+#endif

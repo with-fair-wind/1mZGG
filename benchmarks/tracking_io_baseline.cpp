@@ -5,6 +5,8 @@
  * @file
  * @brief GEO 多目标、实际文件写入和 UDP 回环基线。
  * @details 参数：新建输出目录、帧数、目标数、RAW 边长、RAW 帧数、可选帧周期（微秒）。
+ * 末尾可追加 PROFILE_WRITES（0/1），显式启用有开销的 writer 阶段计时。
+ * RAW 帧数可为 0（仅轨迹）或等于总帧数（持续 RAW）；约每秒采样资源。
  * 每个 UDP 报文等待一次接收并逐字节核验，测量受控负载延迟，不代表链路饱和吞吐。
  * 文件由生产存储后端写入并保留；未执行 fsync，不代表断电持久化或裸盘带宽。
  */
@@ -88,6 +90,9 @@ Json memory() {
 
 Json queue(const Dss::Core::ResourceSnapshot& snapshot) {
     return {
+        {"queued_items", snapshot.queuedItems},
+        {"queued_bytes", snapshot.queuedBytes},
+        {"active_bytes", snapshot.activeBytes},
         {"peak_queued_bytes", snapshot.peakQueuedBytes},
         {"completed_items", snapshot.completedItems},
         {"max_work_us", snapshot.maxWorkMicroseconds},
@@ -96,10 +101,10 @@ Json queue(const Dss::Core::ResourceSnapshot& snapshot) {
     };
 }
 
-int number(char* value, int maximum) {
+int number(char* value, int maximum, int minimum = 1) {
     std::size_t consumed = 0;
     const auto result = std::stoi(value, &consumed);
-    require(consumed == std::string(value).size() && result >= 1 && result <= maximum,
+    require(consumed == std::string(value).size() && result >= minimum && result <= maximum,
             "argument outside supported range");
     return result;
 }
@@ -152,6 +157,56 @@ void waitForNextFrame(Clock::time_point start, int index, int periodUs) {
     std::this_thread::sleep_until(
         start + std::chrono::microseconds{(static_cast<std::int64_t>(index) + 1) * periodUs});
 }
+/// @brief 约每秒记录一次队列和进程资源，避免每帧构造 JSON。
+/// @param samples 保存所有已记录快照的数组。
+/// @param start 负载计时起点。
+/// @param lastSample 上次采样时间，成功追加后更新。
+/// @param frameSequence 本次已提交的帧序号。
+/// @param tracks 已启动的轨迹存储后端。
+/// @param images 已启动的图像存储后端。
+void recordResourceSample(Json& samples, Clock::time_point start, Clock::time_point& lastSample,
+                          int frameSequence, const Dss::Storage::TrackDataStorageBackend& tracks,
+                          const Dss::Storage::LocalImageStorageBackend& images) {
+    const auto now = Clock::now();
+    if (now - lastSample < std::chrono::seconds{1}) {
+        return;
+    }
+    samples.push_back({
+        {"frame", frameSequence},
+        {"elapsed_us", elapsed(start)},
+        {"track_queue", queue(tracks.resourceSnapshot())},
+        {"raw_queue", queue(images.resourceSnapshot())},
+        {"memory", memory()},
+    });
+    lastSample = now;
+}
+/// @brief 以阶段名称和纳秒数组序列化固定大小的 writer 统计。
+/// @param profile 停止后获取的稳定统计。
+/// @return 供基准报告保存的 JSON 对象。
+auto writerProfileJson(const Dss::Storage::TrackWriterProfileSnapshot& profile) -> Json {
+    return {
+        {"batches", profile.batches},
+        {"stage_names", {"path_lock_and_copy", "directory", "open", "format", "append", "close"}},
+        {"total_ns", profile.total},
+        {"maximum_ns", profile.maximum},
+    };
+}
+
+/// @brief 核对两个存储后端已完成所有接受请求且没有剩余载荷。
+/// @param tracks 已停止的轨迹后端。
+/// @param images 已停止的图像后端。
+/// @param trackAccepted 本轮接受的轨迹批次数。
+/// @param rawAccepted 本轮接受的图像请求数。
+void verifyDrainedWrites(const Dss::Storage::TrackDataStorageBackend& tracks,
+                         const Dss::Storage::LocalImageStorageBackend& images,
+                         std::size_t trackAccepted, std::size_t rawAccepted) {
+    const auto track = tracks.resourceSnapshot();
+    const auto raw = images.resourceSnapshot();
+    require(track.completedItems == trackAccepted && raw.completedItems == rawAccepted &&
+                track.queuedItems == 0 && track.activeItems == 0 && raw.queuedItems == 0 &&
+                raw.activeItems == 0,
+            "write queue did not drain");
+}
 }  // namespace
 
 // 基准场景的初始化、运行与报告按执行顺序集中声明。
@@ -159,15 +214,16 @@ void waitForNextFrame(Clock::time_point start, int index, int periodUs) {
 int main(int argc, char** argv) try {
     QCoreApplication app(argc, argv);
     try {
-        require(argc == 6 || argc == 7,
+        require(argc >= 6 && argc <= 8,
                 "usage: dss_tracking_io_baseline NEW_OUTPUT_DIR FRAMES TARGETS RAW_SIDE RAW_FRAMES "
-                "[FRAME_PERIOD_US]");
+                "[FRAME_PERIOD_US [PROFILE_WRITES]]");
         const auto output = std::filesystem::absolute(argv[1]);
         const int frames = number(argv[2], 1000000);
         const int targetCount = number(argv[3], 16);
         const int side = number(argv[4], 6144);
-        const int rawFrames = number(argv[5], 256);
-        const int framePeriodUs = argc == 7 ? number(argv[6], 1000000) : 0;
+        const int rawFrames = number(argv[5], frames, 0);
+        const int framePeriodUs = argc >= 7 ? number(argv[6], 1000000, 0) : 0;
+        const bool profileWrites = argc == 8 && number(argv[7], 1, 0) != 0;
         require(frames >= 4 && rawFrames <= frames, "require FRAMES >= 4 and RAW_FRAMES <= FRAMES");
         require(std::filesystem::create_directory(output),
                 "output directory must be new and its parent must exist");
@@ -178,6 +234,7 @@ int main(int argc, char** argv) try {
             {"frame_period_us", framePeriodUs},
             {"raw_side", side},
             {"raw_frames", rawFrames},
+            {"profile_writes", profileWrites},
             {"qt_version", qVersion()},
             {"compiler", DSS_BASELINE_COMPILER},
 #ifdef NDEBUG
@@ -198,7 +255,7 @@ int main(int argc, char** argv) try {
         endpoint.remotePort = receiver.localPort();
         Dss::Network::DataExchange exchange(bus);
         require(exchange.open(endpoint, endpoint).has_value(), "data exchange open failed");
-        Dss::Storage::TrackDataStorageBackend tracks(output / "tracks");
+        Dss::Storage::TrackDataStorageBackend tracks(output / "tracks", 1024, profileWrites);
         Dss::Storage::LocalImageStorageBackend images(output / "raw");
         require(tracks.init(output / "tracks").has_value() && tracks.start().has_value(),
                 "track storage start failed");
@@ -221,7 +278,9 @@ int main(int argc, char** argv) try {
         std::size_t rawAccepted = 0;
         std::size_t received = 0;
         std::vector<std::string> targetIds;
+        Json resourceSamples = Json::array();
         const auto start = Clock::now();
+        auto lastSample = start;
         for (int index = 0; index < frames; ++index) {
             const auto frameStart = Clock::now();
             auto frame = makeSyntheticFrame(index, targetCount);
@@ -270,6 +329,7 @@ int main(int argc, char** argv) try {
             }
             frameTimes.push_back(elapsed(frameStart));
             waitForNextFrame(start, index, framePeriodUs);
+            recordResourceSample(resourceSamples, start, lastSample, index + 1, tracks, images);
         }
         const auto stopStart = Clock::now();
         tracks.stop();
@@ -284,6 +344,7 @@ int main(int argc, char** argv) try {
         require(
             tracks.successfulWrites() == trackAccepted && images.successfulWrites() == rawAccepted,
             "accepted write lost");
+        verifyDrainedWrites(tracks, images, trackAccepted, rawAccepted);
         std::size_t trackLines = 0;
         std::ifstream records(tracks.outputPath());
         for (std::string line; std::getline(records, line);) {
@@ -296,6 +357,7 @@ int main(int argc, char** argv) try {
                 fileBytes += entry.file_size();
             }
         }
+        result["writer_profile"] = writerProfileJson(tracks.writerProfile());
         result.update({
             {"tracking", percentiles(trackTimes)},
             {"udp_round_trip", percentiles(udpTimes)},
@@ -315,6 +377,7 @@ int main(int argc, char** argv) try {
             {"track_queue", queue(tracks.resourceSnapshot())},
             {"raw_queue", queue(images.resourceSnapshot())},
             {"memory_end", memory()},
+            {"resource_samples", std::move(resourceSamples)},
         });
         std::ofstream report(output / "report.json");
         report << result.dump(2) << '\n';

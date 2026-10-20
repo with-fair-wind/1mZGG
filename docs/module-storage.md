@@ -269,6 +269,7 @@ stateDiagram-v2
 - `init`、`configureSession`、`start`、`enqueue` 均返回 `expected`，UI 将错误转换为状态文本。
 - 队列满增加 dropped 计数，但当前 App 帧回调忽略返回值；应通过 `RuntimeDiagnostics` 观察。
 - 磁盘创建、打开、编码、写入失败发布 `StorageWriteErrorEvent`，由 `ErrorDiagnostics` 和 `RuntimeDiagnostics` 订阅。
+- 轨迹 writer 路径被目录占用时的实际打开失败已有回归：请求计为失败、发布一次错误事件并排空；停止、修复路径后可重新启动并成功归档。该测试不等于模拟了操作系统磁盘满或断电。
 - 轨迹存储启动失败时 UI 会停止已经启动的图像存储，保证不会出现“界面显示保存成功但只启一半”。
 
 ### 扩展、测试与阅读顺序
@@ -288,3 +289,13 @@ stateDiagram-v2
 - StorageViewModel 的 stopSaving 立即把 isSaving 置 false、isStopping 置 true，后台等待排空；排空期间的新启动请求只保留最后一个，完成后再配置并启动。“停止保存”会取消该待启动请求。应用 shutdown 必须等待排空并禁止完成回调重启服务。
 
 TrackManager 和事件总线公共扩展接口保持兼容；此轮没有因缺少在线调用就删除可能独立消费的接口。
+
+### 轨迹 writer 快速路径与可选阶段计时
+
+轨迹后端仍按每个已接受批次打开、追加并关闭文件，不合并不同请求，不持有跨批次文件句柄，也不改变文本格式、准入预算或成功计数单位。`init` / `configureSession` 已准备目录，正常写入直接打开文件；打开失败时才修复目录、清除流状态并重试一次。外部移除空目录后的恢复、路径阻塞错误与后续恢复均有回归。
+
+成功计数在显式 `close()` 及流状态检查之后增加，关闭时才暴露的缓冲写入错误不再被析构隐藏；失败继续发布 `StorageWriteErrorEvent`。这不是 fsync、事务或断电持久化保证。Linux 的 `/dev/full` 回归使用真实 ENOSPC；Windows 本机不执行该平台测试，不能将它描述为本机磁盘满验收。
+
+构造 `TrackDataStorageBackend(path, maxPendingRequests, true)` 可启用阶段计时，默认第三参为 false。`writerProfile()` 返回固定大小的累计统计：Path（锁等待与路径复制）、Directory、Open、Format、Append、Close 的纳秒总和、单批阶段最大值及尝试批次数。没有逐帧历史、用户回调或后台采样线程；关闭时不读取阶段计时时钟。计时器只允许同一个 writer 更新，统计跨启停累计。
+
+这些是墙钟区间，包含调度与测量开销；Format/Append 对一批所有记录求和，失败时析构清理计入当时阶段。它们不是纯 CPU 耗时、纯锁等待或服务时间分位数；不同阶段最大值也不一定来自同一批次。运行中各原子字段可来自不同时刻，stop/join 后的快照才是稳定最终值。正常业务不应为了读取统计而开启计时。

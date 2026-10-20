@@ -48,7 +48,7 @@ void MainWindow::setupControlPage() {
     sequenceRow->addWidget(replayStateLabel);
     sequenceRow->addWidget(replayProgress, 1);
 
-    connect(btnSelectSequence, &QPushButton::clicked, [this, replay] {
+    connect(btnSelectSequence, &QPushButton::clicked, m_controlPage, [this, replay] {
         const auto files = QFileDialog::getOpenFileNames(
             this, "Select Image Sequence", QString(),
             "Image Sequence (*.bmp *.png *.jpg *.jpeg *.tif *.tiff *.raw);;All Files (*)");
@@ -56,15 +56,15 @@ void MainWindow::setupControlPage() {
             replay->selectReplayFiles(files);
         }
     });
-    connect(replay, &ReplayViewModel::replayFrameCountChanged, [sequenceLabel](int count) {
-        sequenceLabel->setText(QString("Frames: %1").arg(count));
-    });
-    connect(replay, &ReplayViewModel::replayFrameCountChanged,
+    connect(
+        replay, &ReplayViewModel::replayFrameCountChanged, sequenceLabel,
+        [sequenceLabel](int count) { sequenceLabel->setText(QString("Frames: %1").arg(count)); });
+    connect(replay, &ReplayViewModel::replayFrameCountChanged, currentFrameLabel,
             [replay, currentFrameLabel](int count) {
                 currentFrameLabel->setText(
                     QString("Current: %1/%2").arg(replay->replayCurrentFrame()).arg(count));
             });
-    connect(replay, &ReplayViewModel::replayCurrentFrameChanged,
+    connect(replay, &ReplayViewModel::replayCurrentFrameChanged, currentFrameLabel,
             [replay, currentFrameLabel](int frame) {
                 currentFrameLabel->setText(
                     QString("Current: %1/%2").arg(frame).arg(replay->replayFrameCount()));
@@ -74,7 +74,7 @@ void MainWindow::setupControlPage() {
             [replayProgress](int count) { replayProgress->setRange(0, std::max(0, count - 1)); });
     connect(replay, &ReplayViewModel::replayCurrentFrameChanged, replayProgress,
             [replayProgress](int frame) { replayProgress->setValue(std::max(0, frame - 1)); });
-    connect(replayProgress, &QSlider::sliderReleased,
+    connect(replayProgress, &QSlider::sliderReleased, m_controlPage,
             [replay, replayProgress] { (void)replay->seekReplayFrame(replayProgress->value()); });
 
     auto* grabRow = new QHBoxLayout;
@@ -109,7 +109,7 @@ void MainWindow::setupControlPage() {
         replayProgress->setEnabled(!busy);
         replayStateLabel->setText(busy ? "Replay: Busy" : "Replay: Ready");
     };
-    connect(replay, &ReplayViewModel::replayBusyChanged, refreshReplayBusyState);
+    connect(replay, &ReplayViewModel::replayBusyChanged, m_controlPage, refreshReplayBusyState);
     refreshReplayBusyState(replay->replayBusy());
 
     auto* processingRow = new QHBoxLayout;
@@ -122,7 +122,7 @@ void MainWindow::setupControlPage() {
     processingCombo->addItems({"None", "OpenCV", "Diff"});
     processingRow->addWidget(processingCombo);
 
-    connect(processingCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+    connect(processingCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), m_controlPage,
             [processing](int index) {
                 static constexpr int modeMap[] = {0, 3, 1};
                 if (index >= 0 && index < 3) {
@@ -140,12 +140,13 @@ void MainWindow::setupControlPage() {
     modeCombo->addItems({"Init", "GEO", "SC", "LEO", "Manual"});
     modeRow->addWidget(modeCombo);
 
-    connect(modeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [tracking](int index) {
-        static constexpr int modeMap[] = {-1, 0, 3, 4, 5};
-        if (index >= 0 && index < 5) {
-            tracking->setTrackMode(modeMap[index]);
-        }
-    });
+    connect(modeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), m_controlPage,
+            [tracking](int index) {
+                static constexpr int modeMap[] = {-1, 0, 3, 4, 5};
+                if (index >= 0 && index < 5) {
+                    tracking->setTrackMode(modeMap[index]);
+                }
+            });
 
     auto* expRow = new QHBoxLayout;
     expRow->addWidget(new QLabel("Exposure (ms):"));
@@ -160,7 +161,7 @@ void MainWindow::setupControlPage() {
     expRow->addWidget(expSlider);
     expRow->addWidget(expLabel);
 
-    connect(expSlider, &QSlider::valueChanged, [this, expLabel](int val) {
+    connect(expSlider, &QSlider::valueChanged, m_controlPage, [this, expLabel](int val) {
         expLabel->setText(QString::number(val));
         m_mainViewModel.setExposure(val);
     });
@@ -172,7 +173,7 @@ void MainWindow::setupControlPage() {
     auto* chkSave = new QCheckBox("Save Data");
 #endif
     saveRow->addWidget(chkSave);
-    connect(chkSave, &QCheckBox::toggled, [storage](bool checked) {
+    connect(chkSave, &QCheckBox::toggled, m_controlPage, [storage](bool checked) {
         if (checked) {
             storage->startSaving();
         } else {
@@ -198,7 +199,7 @@ void MainWindow::setupControlPage() {
     statsLabel->setObjectName("stats_label");
     layout->addWidget(statsLabel);
 
-    connect(display, &DisplayViewModel::imageStatsUpdated,
+    connect(display, &DisplayViewModel::imageStatsUpdated, statsLabel,
             [statsLabel](double minVal, double maxVal, double avg, double stdDev) {
                 statsLabel->setText(QString("Min: %1 | Max: %2 | Avg: %3 | Std: %4")
                                         .arg(minVal, 0, 'f', 1)

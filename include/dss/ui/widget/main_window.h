@@ -22,6 +22,7 @@ class ImageDisplay;
 class GpuImageDisplay;
 
 /// 应用主窗口，组织可停靠、浮动和分组显示的功能页面。
+/// @note mainViewModel 必须晚于窗口销毁；页面回调随相应页面或控件销毁而断开。
 #ifdef DSS_HAS_ELA
 class MainWindow : public ElaWindow
 #else
@@ -33,7 +34,7 @@ class MainWindow : public QMainWindow
 public:
     /**
      * @brief 构造主窗口
-     * @param mainViewModel UI 层主 ViewModel 引用
+     * @param mainViewModel 非拥有 UI 层主 ViewModel 引用，必须存活至窗口销毁之后
      * @param parent Qt 父窗口
      */
     explicit MainWindow(MainViewModel& mainViewModel, QWidget* parent = nullptr);

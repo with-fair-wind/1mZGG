@@ -1,22 +1,24 @@
 # 验证覆盖矩阵
 
-更新：2026-10-12。这里区分已经运行的证据、已配置但尚未运行的入口，以及需要外部设备或参考数据的验收。CTest 条目与 GoogleTest 用例不是同一计数口径：部分 Qt 测试按可执行文件整体注册。
+更新：2026-10-20。这里区分已经运行的证据、已配置但尚未运行的入口，以及需要外部设备或参考数据的验收。CTest 条目与 GoogleTest 用例不是同一计数口径：部分 Qt 测试按可执行文件整体注册。
 
 | 层级 | 覆盖范围与入口 | 当前证据 | 不覆盖的内容 |
 |---|---|---|---|
 | 纯核心回归 | 有界通道、异步写入、处理异常、GEO/LEO/SC/Manual、累计历史、目标退休与归档；普通 CTest 与 sanitizer core 目标 | 本机全量回归及远端核心 ASan/TSan 已执行；结果见下表和执行证据 | 科学精度、真实采集和 UI 交互 |
-| Qt 集成 | ReplaySession 状态机、回放/主 VM、资源显示与存储 VM、网络协议及生命周期；默认 Qt/OpenCV Debug 配置 | 本机 Debug 266/266（26.22 秒）、Release 无 PCH 266/266（13.99 秒）；包含显示在途批次重置、UDP 生命周期、帧源停止异常、事件引用与 NaN 边界及 Qt 槽元数据回归 | 人工视觉检查、GPU 驱动和实际设备行为 |
+| Qt 集成 | ReplaySession 状态机、回放/主 VM、资源显示与存储 VM、网络协议及生命周期；默认 Qt/OpenCV Debug 配置 | 2026-10-20 本机 Windows Debug/PCH 272/272（40.77 秒）、Release/PCH 272/272（26.32 秒）；包含窗口销毁、轨迹计时默认关闭、异常展开、跨启停累计及目录移除/恢复。Linux 专属 /dev/full 未在本机执行；既有 Release/无 PCH 结果仍为历史快照 | 人工视觉检查、GPU 驱动和实际设备行为 |
 | Windows 核心 ASan | 公共脚本省略 `--qt-prefix`，13 个目标，项目和 Conan 依赖插桩 | 2026-10-12 真实 runner 109/109（9.90 秒），依赖与项目均为 Clang 23.1.2 | 数据竞争、Qt 生命周期和预编译外部库内部 |
-| Windows Qt ASan | 公共脚本传入 `--qt-prefix`，核心加帧源协调器、回放服务/VM/主 VM/显示 VM/日志 VM、UdpChannel、DataExchange、ImageSender，共 22 个目标 | 2026-10-10 本机 128/128（36.22 秒），依赖与项目均为 Clang 23.1.3；同日远端 128/128（15.43 秒）；退出超时的证据边界见下文 | 全量 Qt/UI、OpenCV、预编译 Qt DLL 内部、数据竞争 |
+| Windows Qt ASan | 公共脚本传入 `--qt-prefix`，核心加帧源协调器、回放服务/VM/主 VM/显示 VM/日志 VM、UdpChannel、DataExchange、ImageSender 与独立窗口销毁回归，共 23 个目标 | 2026-10-20 本机 134/134（51.16 秒），依赖与项目均为 Clang 23.1.3，Qt 6.11.1；包含独立窗口销毁、轨迹计时/恢复与异常展开，无 ASan 报告。远端当前已提交基线通过，新增覆盖尚待提交后的 runner 验证 | 全量 Qt/UI、OpenCV、预编译 Qt DLL 内部、数据竞争 |
 | Linux TSan | 公共脚本 `--sanitizer thread`；Ubuntu 24.04 / GCC 14 核心任务 | 2026-10-12 真实 runner 109/109（2.04 秒） | Qt 套件未纳入此任务；未执行路径的数据竞争 |
 | Windows Release CI | MSVC / Qt 6.8.0 / OpenCV；全量回归及部署目录检查 | 2026-10-12 真实 runner 266/266（8.41 秒），部署检查及产物上传成功 | 安装包的人工交互验收与真实设备测试 |
 | 最新稳定工具链 | 独立 Windows Qt ASan；LLVM/Conan/CMake/Ninja 滚动，Qt 6.8.0 固定，依赖缓存隔离 | 2026-10-12 真实 runner 128/128（16.16 秒）；LLVM 23.1.3 / Conan 2.33.0 / CMake 4.4.4 / Ninja 1.13.2，版本与日志产物上传成功 | 整机所有工具最新版、本机 Scoop 环境完全复刻、自动升级基线 |
-| Release 真实 I/O | 生产 GEO、文件 writer、DataExchange 和 UDP 回环，逐字节核验报文与接受请求归档 | 10,000 帧无节流和固定 500 帧/s 场景已运行，指标及拒绝数见资源验证 | 跨机交付、断电持久化、长期满负载 RAW、生产帧率保证 |
-| 格式与静态分析 | `format-check` 扫描 Git 跟踪的项目 C/C++ 文件；`tidy-check` 先将 103 个活动头文件作为主文件检查冗余 include，再扫描默认配置中的 140 个源文件 | 既有固定 LLVM 23.1.3 门禁已通过；本轮新增独立头文件检查，本机格式与完整 clang-tidy 通过，Debug/PCH、Release/无 PCH 及 Release/PCH 的头文件检查均 103/103 无诊断，三种配置回归各 266/266；真实 Git/Ninja 正反例已验证 clang-cl/clang++ 的 PCH 参数处理及构建依赖不足时提前退出。远端新增覆盖须以本轮提交的工作流结果为准 | 非默认硬件配置、第三方/生成文件、所有潜在缺陷的证明；宏参数与有原因的局部例外见 README |
-| Doxygen | 全项目文档生成；补齐参数、返回值、资源预算、队列与停止契约 | 本轮原 67 条警告已消除，生成零警告；未通过抑制诊断达成 | 注释业务语义的形式化证明或全部文档永不偏移 |
+| Release 真实 I/O | 生产 GEO、文件 writer、DataExchange 和 UDP 回环，逐字节核验报文与接受请求归档 | 2026-10-19 增加 100～1000 帧/s 扫描及 1000 帧/s 的 60 万帧、10 分钟场景，599,997 个轨迹批次零拒绝；512 RAW 全程 3000 帧，6144 突发接受 4/16 帧。实际归档字段和全部 RAW 像素独立核验通过；writer 曾有 410 ms 长尾；2026-10-20 增加阶段计时和目录快速路径，三对交替负载单批已测阶段成本中位数降低约 37%，固定负载归档逐字节一致，详见资源验证 | 跨机交付、断电持久化、长期满负载 RAW、生产帧率保证 |
+| 格式与静态分析 | 默认编译数据库的 141 个源文件及 104 个活动头文件；宏与局部例外见 README | 2026-10-20 格式通过；103 个已跟踪头文件门禁通过，尚未跟踪的新计时头文件用实际 Ninja 消费者参数、移除 PCH 后独立完整分析通过。修复枚举末尾逗号、冗余初始化和基准复杂度诊断后，按同一共享规则及 warning 即失败参数，以 4 个进程复核全部 141 个源码，141/141 通过。新文件另经格式检查。远端仅确认已提交基线，本轮尚未提交 | 非默认硬件/其他平台条件编译、第三方/生成文件及未执行路径；不能证明不存在所有缺陷 |
+| Doxygen | 全项目文档生成；补齐参数、返回值、资源预算、队列与停止契约 | 既有 67 条警告已消除；2026-10-20 补充 writer 阶段计时、关闭检查和恢复契约后重新生成，零警告 | 注释业务语义的形式化证明或全部文档永不偏移 |
 | 真实设备与科学验收 | Sapera、串口命令/应答、断连恢复、CUDA 数值与性能、观测黄金数据 | 尚待设备、标定数据和业务容差 | 不得用合成序列、模拟端或 ASan 通过替代 |
 
 ## 执行与证据
+
+- 当前已提交基线 `729908f` 的四个工作流均在 2026-10-15 成功： [MSVC Release CI](https://github.com/with-fair-wind/1mZGG/actions/runs/38702277874)、[Code quality](https://github.com/with-fair-wind/1mZGG/actions/runs/38702277880)、[Windows core/Qt ASan 与 Linux TSan](https://github.com/with-fair-wind/1mZGG/actions/runs/38702277866)、[Latest stable toolchain](https://github.com/with-fair-wind/1mZGG/actions/runs/38702277930)。这确认独立头文件检查与许可产物校验已经过真实 runner；不代表本轮未提交的变更已由远端验收。
 
 - 代码质量：需要 Python 3.9+ 和 Ninja，先完成当前配置的全量构建，再运行 `cmake --build --preset clang-cl-debug --target format-check tidy-check`；单独验证头文件门禁可在 VS/LLVM 环境运行 `python -B -m unittest discover -s tests -p test_include_check.py`。工作流入口为 [Code quality](https://github.com/with-fair-wind/1mZGG/actions/workflows/quality.yml)，其 runner 结果须按具体提交核对，不能由本机通过推断。
 - 正常构建与回归：`cmake --build build/clang-cl-debug --parallel 4`，随后 `ctest --test-dir build/clang-cl-debug --output-on-failure --no-tests=error --timeout 90`；Doxygen 用 `cmake --build build/clang-cl-debug --target doxygen`。
@@ -28,3 +30,5 @@
 
 
 后续执行顺序与尚未满足的外部条件见 [实施计划](implementation-plan.md)。本文记录指定验证快照，不将本地日志或工作流配置视为远端 runner 已通过。
+
+Linux `/dev/full` 回归验证缓冲写入可能直到关闭时才返回 ENOSPC，并核对失败计数与错误事件。测试仅编译于 Linux，会由既有核心 sanitizer 入口按测试名前缀选入；本轮在 Windows 执行验证，Linux 用例不计为已运行或远端通过。

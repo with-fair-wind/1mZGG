@@ -24,11 +24,11 @@ python tools/run_sanitizer.py --sanitizer thread --build-dir build/ci-thread --h
 
 ## 覆盖与持续集成
 
-核心套件构建 13 个目标，覆盖事件模板的引用类别和多播值复制、有界通道、异步写入队列、处理异常、四种跟踪器及候选/预测/生命周期辅助函数、轨迹存储和结果网络映射。可选 Qt 套件再增加 FrameSourceCoordinator、ReplaySession、回放/主/显示/日志 ViewModel（含槽元数据）、UdpChannel、DataExchange、ImageSender，共 22 个目标。CTest 每项超时 90 秒、无匹配测试即失败；生成构建目录中的 `sanitizer-results.xml` 和 `Testing/Temporary` 日志。
+核心套件构建 13 个目标，覆盖事件模板的引用类别和多播值复制、有界通道、异步写入队列、处理异常、四种跟踪器及候选/预测/生命周期辅助函数、轨迹存储和结果网络映射。可选 Qt 套件再增加 FrameSourceCoordinator、ReplaySession、回放/主/显示/日志 ViewModel（含槽元数据）、UdpChannel、DataExchange、ImageSender，并包含独立的窗口销毁回归，共 23 个目标。CTest 每项超时 90 秒、无匹配测试即失败；生成构建目录中的 `sanitizer-results.xml` 和 `Testing/Temporary` 日志。
 
 `.github/workflows/sanitizers.yml` 配置 Windows core/qt ASan 矩阵与 Linux core TSan，在目标分支推送、PR 或手动触发时运行。Windows 固定 LLVM 23.1.2（官方 MSI 校验 SHA-256 后解包），Qt 固定为 6.8.0 / MSVC 2022，安装 qtcharts、qtserialport；每项保留独立 JUnit 和日志，失败不取消其他矩阵项。普通 MSVC Release CI 继续运行全量回归。
 
-ASan 不检测数据竞争；TSan 也不能代替内存和业务正确性测试。预编译 Qt DLL 内部未插桩；可选 Qt 套件不代表全量 UI、OpenCV、真实相机、CUDA 或生产网络验收。完整边界见 [验证矩阵](validation-matrix.md)。
+ASan 不检测数据竞争；TSan 也不能代替内存和业务正确性测试。预编译 Qt DLL 内部未插桩；窗口回归仅验证 ViewModel 晚于页面销毁时的直接/排队更新与拉伸定时器，不使用原生 Dock 或 GPU 断言。可选 Qt 套件不代表全量 UI、OpenCV、真实相机、CUDA 或生产网络验收。完整边界见 [验证矩阵](validation-matrix.md)。
 
 UDP、DataExchange、ImageSender 测试使用共同的 `QCoreApplication` 入口，应用对象先于 socket 等 Qt 对象构造，并在全部测试和工作线程结束后销毁。回调引用的 promise 也必须晚于通道销毁，涵盖断言提前退出路径；用独立进程重复运行才能验证进程清理，GoogleTest 输出通过本身不证明进程已退出。
 
@@ -55,6 +55,10 @@ UDP、DataExchange、ImageSender 测试使用共同的 `QCoreApplication` 入口
 
 ## 最新本机结果
 
-2026-10-12，Windows x64 / clang-cl 23.1.3 / VS 18/v145 / Qt 6.11.1：项目及 Conan 插桩依赖使用同一编译器，公共 Qt 入口 **128/128 CTest 通过，36.22 秒**，无 ASan 报告。新增覆盖事件右值引用与多播值复制、帧源停止异常和 Qt 槽元数据；Manual 非有限边界回归也在此套件中执行。普通 Qt/OpenCV Debug 全量 **266/266，26.22 秒**，Doxygen 零警告。
+2026-10-20，Windows x64 / clang-cl 23.1.3 / VS 18/v145 / Qt 6.11.1：项目及 Conan 插桩依赖使用同一编译器，公共 Qt 入口 **134/134 CTest 通过，51.16 秒**，无 ASan 报告。覆盖独立窗口生命周期及新增 writer 默认关闭、失败恢复/跨启停累计、目录移除恢复与计时异常展开回归。普通 Qt/OpenCV Debug/PCH **272/272，40.77 秒**，Release/PCH **272/272，26.32 秒**，Doxygen 零警告。
 
-JUnit 位于 `build/clang-cl-asan-replay/sanitizer-results.xml`，CTest 日志位于相同目录的 `Testing/Temporary`；这些是被忽略的本机产物，其他环境应运行公共入口生成自己的证据。当前核心入口包含 13 个目标，Qt 入口共 22 个目标；历史 runner 的测试数量不能当作扩展后套件的结果。本机 Qt 版本与 CI 不同，远端证据及配置边界见 [验证矩阵](validation-matrix.md)。
+Linux `/dev/full` 关闭失败回归已加入 TrackDataStorageBackend；原有 Linux 核心 TSan 入口会按前缀选入。本轮在 Windows 执行验证，未运行此例或本轮 Linux TSan；Windows 的成功不得替代该平台证据。
+
+新增窗口目标在普通 Release 初次运行时因部署目录缺少 offscreen 插件而超时；日志明确报告无法初始化平台插件。测试现从实际链接 SDK 的插件目录加载，原超时不扩大，修正后普通与 ASan 独立进程均通过。此环境问题与此前窗口销毁后实际访问已释放控件的问题分别保留回归和证据。
+
+JUnit 位于 `build/clang-cl-asan-replay/sanitizer-results.xml`，CTest 日志位于相同目录的 `Testing/Temporary`；这些是被忽略的本机产物，其他环境应运行公共入口生成自己的证据。当前核心入口包含 13 个目标，Qt 入口共 23 个目标；历史 runner 的测试数量不能当作扩展后套件的结果。本机 Qt 版本与 CI 不同，远端证据及配置边界见 [验证矩阵](validation-matrix.md)。

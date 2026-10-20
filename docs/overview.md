@@ -6,7 +6,7 @@
 
 DSS_QT 是一套用于天文观测的实时图像采集、处理、跟踪与通信系统。系统通过高帧率相机采集星空图像，经过图像处理管线（统计分析、阈值分割、连通域检测）提取目标信息，再由跟踪算法（GEO/LEO/SC/Manual 四种模式）计算目标轨迹，最终将修正数据通过串口/网络发送给伺服系统和上位机。
 
-现代 CMake 模块化架构已成为唯一运行与开发主线；`oldsrc/` 只读归档仅用于行为对照。剩余工作集中在可选硬件验收、Manual 历史语义和少量产品能力。
+现代 CMake 模块化架构已成为唯一运行与开发主线；`oldsrc/` 只读归档仅用于行为对照。剩余工作包括持续存储负载、协议与科学计算契约、真实设备验收、Manual 历史语义及尚未完成的产品能力，顺序见 [实施计划](implementation-plan.md)。
 
 ## 技术栈
 
@@ -20,8 +20,8 @@ DSS_QT 是一套用于天文观测的实时图像采集、处理、跟踪与通�
 | 测试框架 | Google Test |
 | 日志 | spdlog + 事件总线 |
 | 配置 | nlohmann_json (JSON) |
-| 代码质量 | clang-format、clang-tidy、IWYU |
-| CI | GitHub Actions (MSVC Release) |
+| 代码质量 | clang-format、clang-tidy（含 Include Cleaner） |
+| CI | MSVC Release、独立格式/静态分析、Windows ASan、Linux TSan、最新稳定工具链兼容性 |
 
 ## 架构设计原则
 

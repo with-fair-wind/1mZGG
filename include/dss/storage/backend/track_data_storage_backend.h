@@ -17,6 +17,7 @@
 #include "dss/core/result/result_packet_utils.h"
 #include "dss/storage/backend/i_storage_backend.h"
 #include "dss/storage/detail/async_write_queue.h"
+#include "dss/storage/diagnostics/track_writer_profile.h"
 #include "dss/storage/format/image_storage_format.h"
 #include "dss/storage/format/track_data_storage_format.h"
 
@@ -36,10 +37,14 @@ public:
      * @brief 构造跟踪数据存储后端。
      * @param baseDir 默认存储根目录。
      * @param maxPendingRequests 写入队列允许的最大待处理批次数。
+     * @param profileWrites 是否记录固定容量阶段计时；默认关闭，不读取计时时钟。
      */
     explicit TrackDataStorageBackend(std::filesystem::path baseDir,
-                                     std::size_t maxPendingRequests = 1024)
-        : m_baseDir(std::move(baseDir)), m_writeQueue(maxPendingRequests) {}
+                                     std::size_t maxPendingRequests = 1024,
+                                     bool profileWrites = false)
+        : m_profileWrites(profileWrites),
+          m_baseDir(std::move(baseDir)),
+          m_writeQueue(maxPendingRequests) {}
 
     /// @brief 停止后台写入线程后销毁后端。
     ~TrackDataStorageBackend() override {
@@ -114,6 +119,12 @@ public:
     /** @brief 获取本组件的资源采样。 @return 轨迹写入队列的资源快照。 */
     [[nodiscard]] auto resourceSnapshot() const -> Dss::Core::ResourceSnapshot {
         return m_writeQueue.resourceSnapshot();
+    }
+
+    /// @brief 获取可选的 writer 阶段统计，计数跨启停累计。
+    /// @return 默认关闭时为全零；运行中各字段可来自不同时刻，stop 后稳定。
+    [[nodiscard]] auto writerProfile() const -> TrackWriterProfileSnapshot {
+        return m_writerProfile.snapshot();
     }
 
     /// 停止后台写入工作线程并等待其退出
@@ -265,34 +276,51 @@ private:
     /**
      * @brief 将记录批次追加到当前输出文件。
      * @param records 待格式化并写入的数据记录。
-     * @return 写入成功时为空；目录或文件操作失败时返回错误描述。
+     * @return 格式化、追加和显式关闭均成功时为空；目录或文件操作失败时返回错误描述。
+     * @note 每批仍打开和关闭文件；关闭检查不等于 fsync 或断电持久化保证。
      */
     auto writeRecords(const std::vector<TrackDataRecord>& records) const
         -> std::expected<void, std::string> {
-        std::error_code error;
-        std::filesystem::create_directories(outputPath().parent_path(), error);
-        if (error) {
-            return std::unexpected("failed to create track data directory: " + error.message());
-        }
-
-        std::ofstream output(outputPath(), std::ios::app);
+        TrackWriterProfile::Batch timing(m_profileWrites ? &m_writerProfile : nullptr);
+        const auto path = outputPath();
+        timing.begin(TrackWriterPhase::Open);
+        std::ofstream output(path, std::ios::app);
         if (!output) {
-            return std::unexpected("failed to open track data file");
+            // init/configureSession 已准备目录；仅在打开失败时修复外部移除的目录。
+            timing.begin(TrackWriterPhase::Directory);
+            std::error_code error;
+            std::filesystem::create_directories(path.parent_path(), error);
+            if (error) {
+                return std::unexpected("failed to create track data directory: " + error.message());
+            }
+            timing.begin(TrackWriterPhase::Open);
+            output.clear();
+            output.open(path, std::ios::app);
+            if (!output) {
+                return std::unexpected("failed to open track data file");
+            }
         }
         for (const auto& record : records) {
-            output << formatLegacyTrackDataLine(record) << '\n';
+            timing.begin(TrackWriterPhase::Format);
+            const auto line = formatLegacyTrackDataLine(record);
+            timing.begin(TrackWriterPhase::Append);
+            output << line << '\n';
         }
+        timing.begin(TrackWriterPhase::Close);
+        output.close();
         if (!output) {
-            return std::unexpected("failed to write track data file");
+            return std::unexpected("failed to write or close track data file");
         }
         return {};
     }
 
-    std::filesystem::path m_baseDir;            ///< 存储根目录
-    std::atomic<bool> m_ready{false};           ///< 是否已完成初始化
-    std::filesystem::path m_sessionOutputPath;  ///< 当前会话 GAE 输出路径
-    mutable std::mutex m_sessionMutex;          ///< 会话配置与准入边界。
-    std::mutex m_lifecycleMutex;                ///< join 不持有会话锁。
+    const bool m_profileWrites;                  ///< 构造后不变，默认关闭阶段统计。
+    mutable TrackWriterProfile m_writerProfile;  ///< 单 writer 更新的固定容量统计。
+    std::filesystem::path m_baseDir;             ///< 存储根目录
+    std::atomic<bool> m_ready{false};            ///< 是否已完成初始化
+    std::filesystem::path m_sessionOutputPath;   ///< 当前会话 GAE 输出路径
+    mutable std::mutex m_sessionMutex;           ///< 会话配置与准入边界。
+    std::mutex m_lifecycleMutex;                 ///< join 不持有会话锁。
     std::atomic<std::uint64_t> m_sessionGeneration{
         0};                       ///< 会话代数，停止/切换时递增，用于拒绝旧回调。
     bool m_stopping = false;      ///< 由 m_sessionMutex 保护的异步停止状态。

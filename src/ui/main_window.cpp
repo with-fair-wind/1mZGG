@@ -34,7 +34,6 @@ constexpr auto kDockTabConfiguredProperty = "dss_dock_tab_configured";
 constexpr auto kHiddenDockTitleBarObjectName = "hidden_tabified_dock_title_bar";
 constexpr auto kFloatingGeometryInitializedProperty = "dss_floating_geometry_initialized";
 
-/// @brief 将日志快照按级别颜色渲染到文本控件。
 /// @brief 为内容较高的页面创建可滚动容器，避免页面最小高度撑大主窗口。
 /// @param content 页面内容。
 /// @return 可直接注册到主导航的滚动区域。

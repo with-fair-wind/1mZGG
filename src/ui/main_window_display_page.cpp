@@ -121,6 +121,7 @@ void MainWindow::setupDisplayPage() {
     enum class StretchEditedBound { Low, High };
     constexpr int kStretchPreviewIntervalMs = 40;
     auto* stretchThrottleTimer = new QTimer(m_displayPage);
+    stretchThrottleTimer->setObjectName("display_stretch_preview_timer");
     stretchThrottleTimer->setSingleShot(true);
     auto lastStretchApply = std::make_shared<QElapsedTimer>();
     auto lastEditedBound = std::make_shared<StretchEditedBound>(StretchEditedBound::Low);
@@ -155,42 +156,43 @@ void MainWindow::setupDisplayPage() {
         }
     };
 
-    connect(stretchThrottleTimer, &QTimer::timeout, applyStretchNow);
-    connect(autoStretch, &QCheckBox::toggled, [refreshStretchEnabled, applyStretchNow](bool) {
-        refreshStretchEnabled();
-        applyStretchNow();
-    });
-    connect(lowSlider, &QSlider::valueChanged,
+    connect(stretchThrottleTimer, &QTimer::timeout, m_displayPage, applyStretchNow);
+    connect(autoStretch, &QCheckBox::toggled, m_displayPage,
+            [refreshStretchEnabled, applyStretchNow](bool) {
+                refreshStretchEnabled();
+                applyStretchNow();
+            });
+    connect(lowSlider, &QSlider::valueChanged, m_displayPage,
             [lowSpin, lastEditedBound, scheduleStretchPreview](int value) {
                 *lastEditedBound = StretchEditedBound::Low;
                 const QSignalBlocker blocker(lowSpin);
                 lowSpin->setValue(value);
                 scheduleStretchPreview();
             });
-    connect(lowSlider, &QSlider::sliderReleased, applyStretchNow);
-    connect(lowSpin, QOverload<int>::of(&QSpinBox::valueChanged),
+    connect(lowSlider, &QSlider::sliderReleased, m_displayPage, applyStretchNow);
+    connect(lowSpin, QOverload<int>::of(&QSpinBox::valueChanged), m_displayPage,
             [lowSlider, lastEditedBound, scheduleStretchPreview](int value) {
                 *lastEditedBound = StretchEditedBound::Low;
                 const QSignalBlocker blocker(lowSlider);
                 lowSlider->setValue(value);
                 scheduleStretchPreview();
             });
-    connect(highSlider, &QSlider::valueChanged,
+    connect(highSlider, &QSlider::valueChanged, m_displayPage,
             [highSpin, lastEditedBound, scheduleStretchPreview](int value) {
                 *lastEditedBound = StretchEditedBound::High;
                 const QSignalBlocker blocker(highSpin);
                 highSpin->setValue(value);
                 scheduleStretchPreview();
             });
-    connect(highSlider, &QSlider::sliderReleased, applyStretchNow);
-    connect(highSpin, QOverload<int>::of(&QSpinBox::valueChanged),
+    connect(highSlider, &QSlider::sliderReleased, m_displayPage, applyStretchNow);
+    connect(highSpin, QOverload<int>::of(&QSpinBox::valueChanged), m_displayPage,
             [highSlider, lastEditedBound, scheduleStretchPreview](int value) {
                 *lastEditedBound = StretchEditedBound::High;
                 const QSignalBlocker blocker(highSlider);
                 highSlider->setValue(value);
                 scheduleStretchPreview();
             });
-    connect(display, &DisplayViewModel::displayStretchChanged,
+    connect(display, &DisplayViewModel::displayStretchChanged, m_displayPage,
             [autoStretch, syncStretchControls, refreshStretchEnabled](bool autoScale, int low,
                                                                       int high) {
                 const QSignalBlocker autoBlocker(autoStretch);

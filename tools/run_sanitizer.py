@@ -93,16 +93,19 @@ def main():
                "test_tracking_prediction_utils", "test_track_data_storage_backend",
                "test_track_result_data_exchange_bridge"]
     if qt:
-        targets += ["test_log_view_model", "test_frame_source_coordinator", "test_replay_session", "test_replay_view_model", "test_main_view_model", "test_display_view_model",
-                    "test_udp_channel", "test_data_exchange", "test_image_sender"]
+        targets += ["test_main_window_lifetime", "test_log_view_model",
+                    "test_frame_source_coordinator", "test_replay_session", "test_replay_view_model",
+                    "test_main_view_model", "test_display_view_model", "test_udp_channel",
+                    "test_data_exchange", "test_image_sender"]
     run(["cmake", "--build", build, "--parallel", args.jobs, "--target", *targets], root, env)
     pattern = (r"^(BoundedChannel(Test)?|AsyncWriteQueue|ImageProcessor|GeoTracker|LeoTracker|"
                r"ScTracker|ManualTracker|TrackingCandidateUtils|TrackingLifecycleUtils|"
                r"TrackingPredictionUtils|TrackDataStorageBackend|TrackResultDataExchangeBridge)\.")
     pattern += r"|^test_event_headers$"
     if qt:
-        pattern += (r"|^(test_log_view_model|test_replay_session|test_replay_view_model|test_main_view_model|"
-                    r"test_display_view_model|test_udp_channel)$|^(DataExchange|ImageSender|UdpChannel|FrameSourceCoordinator)\.")
+        pattern += (r"|^(test_main_window_lifetime|test_log_view_model|test_replay_session|"
+                    r"test_replay_view_model|test_main_view_model|test_display_view_model|"
+                    r"test_udp_channel)$|^(DataExchange|ImageSender|UdpChannel|FrameSourceCoordinator)\.")
     run(["ctest", "--test-dir", build, "--output-on-failure", "--no-tests=error",
          "--timeout", "90", "--output-junit", "sanitizer-results.xml", "-R", pattern], root, env)
 

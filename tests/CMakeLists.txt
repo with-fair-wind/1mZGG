@@ -185,6 +185,20 @@ if(TARGET dss_ui_qt)
         test_main_window_layout.cpp
         dss_ui_qt
     )
+    dss_add_qt_test(test_main_window_lifetime
+        test_main_window_lifetime.cpp
+        dss_ui_qt
+    )
+    # Window teardown needs Widgets but no native Dock/OpenGL assertions.
+    set_tests_properties(test_main_window_lifetime PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;DSS_DISABLE_GPU_IMAGE_DISPLAY=1"
+    )
+    if(WIN32 AND DSS_QT_RUNTIME_BIN_DIR)
+        # The app bundle contains only qwindows; load offscreen from the linked Qt SDK.
+        set_property(TEST test_main_window_lifetime APPEND PROPERTY ENVIRONMENT_MODIFICATION
+            "QT_PLUGIN_PATH=path_list_prepend:${DSS_QT_RUNTIME_BIN_DIR}/../plugins"
+        )
+    endif()
     dss_add_qt_test(test_wheel_guarded_spin_box
         test_wheel_guarded_spin_box.cpp
         dss_ui_qt

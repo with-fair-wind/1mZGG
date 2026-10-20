@@ -148,7 +148,7 @@ cmake --build --preset clang-cl-debug --target tidy-check
 
 复杂度规则忽略宏展开及宏参数（包括 GoogleTest 的测试体），普通函数的阈值仍为 30。Qt 槽标记、公共枚举 ABI 和必要的平台转换使用带原因的局部例外，不关闭整类检查；`tidy` 的自动修改必须审查并运行回归测试，特别注意引用类别、NaN 比较和 Qt 元对象。
 
-`.github/workflows/quality.yml` 在推送、PR 和手动触发时运行独立质量门禁：LLVM 23.1.3、Conan 2.32.0、CMake 4.4.3、Ninja 1.13.2、Qt 6.8.0；启用默认 Qt/OpenCV 和测试，使用 Ninja 并禁用 PCH，先验证格式与规则配置，执行真实 Git/Ninja 小项目回归（验证 clang-cl/clang++ 的 PCH 参数处理、未构建时提前停止，以及仅头文件中的冗余 include 会使门禁失败、清理后通过），再构建并运行 `format-check`/`tidy-check`。默认配置当前覆盖 140 个源文件及 103 个活动头文件；4 个未启用的 GPU 头文件会明确报告为未检查。失败日志与工具版本保留 14 天。工具升级通过版本更新提交验证，最新稳定工具链兼容性任务继续独立运行。
+`.github/workflows/quality.yml` 在推送、PR 和手动触发时运行独立质量门禁：LLVM 23.1.3、Conan 2.32.0、CMake 4.4.3、Ninja 1.13.2、Qt 6.8.0；启用默认 Qt/OpenCV 和测试，使用 Ninja 并禁用 PCH，先验证格式与规则配置，执行真实 Git/Ninja 小项目回归（验证 clang-cl/clang++ 的 PCH 参数处理、未构建时提前停止，以及仅头文件中的冗余 include 会使门禁失败、清理后通过），再构建并运行 `format-check`/`tidy-check`。默认配置当前覆盖 141 个源文件及 104 个活动头文件；4 个未启用的 GPU 头文件会明确报告为未检查。失败日志与工具版本保留 14 天。工具升级通过版本更新提交验证，最新稳定工具链兼容性任务继续独立运行。
 
 ## 文档索引
 

@@ -436,6 +436,8 @@ Network 与 DataExchange 分开管理：普通单端点服务由 `NetworkViewMod
 ### 线程、所有权与信号规则
 
 - QObject 子 ViewModel 由 `MainViewModel` 父子树拥有；后端服务由 Registry 的 `shared_ptr` 拥有。
+- `MainWindow` 非拥有 `MainViewModel`，后者必须存活至窗口销毁之后。回放进度和统计更新绑定目标控件，显示拉伸及多控件回调绑定所属页面 context；页面销毁后不再接收更新。单纯隐藏或关闭但尚未销毁的窗口不等于回调已断开，后台服务仍按原 shutdown 顺序停止。
+- `test_main_window_lifetime` 独立于原生 Dock/驱动断言，覆盖窗口销毁后直接与排队发布、活动拉伸定时器销毁及窗口重建；该目标纳入 Qt ASan；Windows 从实际链接的 Qt SDK 加载 offscreen 插件，不依赖应用部署目录只含 qwindows 的裁剪结果。不能据此宣称已覆盖全部 UI 生命周期。
 - 每个订阅型 ViewModel 保存 `ScopedConnection`，析构时自动断开 MessageBus。
 - 断开连接不会等待 COW 快照中的回调；销毁 ViewModel 前须完成 `MainViewModel::shutdown()` 和 `ApplicationContext::shutdown()`，确保所有生产者已退出。
 - 从处理/串口/存储线程进入的 MessageBus handler 不会自动切回 UI 线程；handler 应只处理线程安全状态，然后通过 Qt queued signal/invoke 更新 Widget。
@@ -448,7 +450,7 @@ ViewModel 把后端 `expected` 错误统一转换成 `statusTextChanged`，MainW
 
 重点测试：
 
-- `test_main_view_model.cpp`、`test_main_window_layout.cpp`
+- `test_main_view_model.cpp`、`test_main_window_layout.cpp`、`test_main_window_lifetime.cpp`
 - `test_replay_view_model.cpp`、`test_display_view_model.cpp`、`test_processing_view_model.cpp`、`test_tracking_view_model.cpp`、`test_storage_view_model.cpp`
 - `test_serial_port_view_model.cpp`、`test_network_view_model.cpp`、`test_data_exchange_view_model.cpp`
 - `test_image_display.cpp`、`test_wheel_guarded_spin_box.cpp`
